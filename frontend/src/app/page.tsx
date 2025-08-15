@@ -131,4 +131,16 @@ export default function Home() {
                         />
                       </svg>
                       <span className="font-medium">Error</span>
-                    <
+                    </div>
+                    <div className="mt-2 font-mono text-sm">{error}</div>
+                  </div>
+                )}
+                <OutputPane output={output} error={error} />
+              </div>
+            </div>
+          </ResizablePanel>
+        </ResizablePanelGroup>
+      </div>
+    </div>
+  );
+}

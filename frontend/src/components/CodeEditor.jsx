@@ -10,7 +10,7 @@ export default function CodeEditor({ code, setCode, disabled, onRun, onDownload,
   const showToast = (message) => {
     setShowWarning(message);
     setTimeout(() => setShowWarning(false), 2000);
-  };
+  }; 
 
   const handleEditorMount = (editor) => {
     editor.onKeyDown((e) => {

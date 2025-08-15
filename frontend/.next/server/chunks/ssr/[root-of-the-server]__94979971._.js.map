@@ -1,0 +1,7 @@
+{
+  "version": 3,
+  "sources": [],
+  "sections": [
+    {"offset": {"line": 6, "column": 0}, "map": {"version":3,"sources":[],"names":[],"mappings":"","debugId":null}},
+    {"offset": {"line": 18, "column": 0}, "map": {"version":3,"sources":["file:///C:/SIDDHIVINAYAK%20SAWANT/mini-project/project/frontend/src/app/page.tsx"],"sourcesContent":["import { ThemeProvider } from \"@/components/theme-provider\"\n\nexport default function RootLayout({ children }: RootLayoutProps) {\n  return (\n    <html lang=\"en\" suppressHydrationWarning>\n      <head />\n      <body className=\"h-screen bg-gradient-to-br from-slate-100 via-purple-50 to-slate-100 dark:from-slate-900 dark:via-purple-900 dark:to-slate-900 transition-colors duration-300\">\n        <ThemeProvider\n          attribute=\"class\"\n          defaultTheme=\"system\"\n          enableSystem\n          disableTransitionOnChange\n        >\n          {/* Make sure all pages, including the editor, fill the height */}\n          <div className=\"h-full flex flex-col\">\n            {children}\n          </div>\n        </ThemeProvider>\n      </body>\n    </html>\n  )\n}\n"],"names":[],"mappings":";;;;AAAA;;;AAEe,SAAS,WAAW,EAAE,QAAQ,EAAmB;IAC9D,qBACE,8OAAC;QAAK,MAAK;QAAK,wBAAwB;;0BACtC,8OAAC;;;;;0BACD,8OAAC;gBAAK,WAAU;0BACd,cAAA,8OAAC,uIAAA,CAAA,gBAAa;oBACZ,WAAU;oBACV,cAAa;oBACb,YAAY;oBACZ,yBAAyB;8BAGzB,cAAA,8OAAC;wBAAI,WAAU;kCACZ;;;;;;;;;;;;;;;;;;;;;;AAMb","debugId":null}}]
+}
