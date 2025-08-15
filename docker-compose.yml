@@ -1,0 +1,17 @@
+version: "3.9"
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: codeguard-backend
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./backend:/app
+      - /var/run/docker.sock:/var/run/docker.sock  # allow backend to run Python containers
+      - ./backend/tmp:/app/tmp
+    environment:
+      - NODE_ENV=development
+    command: ["node", "src/server.js"]
