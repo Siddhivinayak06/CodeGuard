@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useTheme } from "next-themes";
 import Editor from "@monaco-editor/react";
 
-export default function CodeEditor({ code, setCode, disabled, onRun, onDownload, loading, locked }) {
+export default function CodeEditor({ code, setCode, disabled, onRun, onDownload, loading, locked, isFullscreen = true }) {
   const [showWarning, setShowWarning] = useState(false);
   const { theme } = useTheme();
 
@@ -35,7 +35,7 @@ export default function CodeEditor({ code, setCode, disabled, onRun, onDownload,
         <div className="flex items-center gap-2">
           <span className="text-gray-700 dark:text-gray-300 text-sm font-medium">Python Editor</span>
         </div>
-        
+
         <div className="flex items-center gap-2">
           {loading && (
             <div className="flex items-center gap-2 px-3 py-1 text-xs text-blue-600 dark:text-blue-400">
@@ -43,12 +43,12 @@ export default function CodeEditor({ code, setCode, disabled, onRun, onDownload,
               <span>Running...</span>
             </div>
           )}
-          
+
           <button
             onClick={onRun}
-            disabled={locked || loading}
+            disabled={locked || loading || !isFullscreen}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-sm font-medium transition-colors ${
-              locked || loading
+              locked || loading || !isFullscreen
                 ? "text-gray-400 dark:text-gray-500 cursor-not-allowed"
                 : "text-white bg-green-600 hover:bg-green-700 dark:bg-green-700 dark:hover:bg-green-600"
             }`}
@@ -58,12 +58,12 @@ export default function CodeEditor({ code, setCode, disabled, onRun, onDownload,
             </svg>
             Run Code
           </button>
-          
+
           <button
             onClick={onDownload}
-            disabled={locked || loading}
+            disabled={locked || loading || !isFullscreen}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-sm font-medium transition-colors ${
-              locked || loading
+              locked || loading || !isFullscreen
                 ? "text-gray-400 dark:text-gray-500 cursor-not-allowed"
                 : "text-white bg-blue-600 hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-600"
             }`}
@@ -81,11 +81,11 @@ export default function CodeEditor({ code, setCode, disabled, onRun, onDownload,
         <Editor
           height="100%"
           language="python"
-          theme={theme === 'dark' ? 'vs-dark' : 'light'}
+          theme={theme === "dark" ? "vs-dark" : "light"}
           value={code}
           onChange={(value) => setCode(value)}
           options={{
-            readOnly: disabled,
+            readOnly: disabled || locked || !isFullscreen,
             minimap: { enabled: false },
             fontSize: 14,
             fontFamily: "'Cascadia Code', 'Fira Code', 'Courier New', monospace",
@@ -98,14 +98,14 @@ export default function CodeEditor({ code, setCode, disabled, onRun, onDownload,
             bracketPairColorization: { enabled: true },
             guides: {
               indentation: true,
-              bracketPairs: true
+              bracketPairs: true,
             },
             renderWhitespace: "selection",
             wordWrap: "on",
             lineNumbers: "on",
             folding: true,
             foldingStrategy: "indentation",
-            showFoldingControls: "always"
+            showFoldingControls: "always",
           }}
           onMount={handleEditorMount}
         />
@@ -116,7 +116,11 @@ export default function CodeEditor({ code, setCode, disabled, onRun, onDownload,
         <div className="absolute top-16 right-4 bg-orange-500 text-white px-4 py-2 rounded shadow-lg text-sm font-medium z-50">
           <div className="flex items-center gap-2">
             <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-              <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+              <path
+                fillRule="evenodd"
+                d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z"
+                clipRule="evenodd"
+              />
             </svg>
             {showWarning}
           </div>
