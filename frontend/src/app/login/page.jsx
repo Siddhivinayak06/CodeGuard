@@ -1,19 +1,28 @@
 "use client";
 import { useState } from "react";
+import { useRouter } from "next/navigation";
+import axios from "axios";
 import { useAuth } from "@/context/AuthContext";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const router = useRouter();
   const { login } = useAuth();
 
   const handleLogin = async (e) => {
     e.preventDefault();
-    if (email && password) {
-      login({ email });
-    } else {
-      setError("Invalid credentials");
+    try {
+      const res = await axios.post("http://localhost:5000/auth/login", {
+        email,
+        password,
+      });
+      login(res.data.user); // store user in context
+      localStorage.setItem("token", res.data.token); // save JWT
+      router.push("/"); // redirect to main editor page
+    } catch (err) {
+      setError(err.response?.data?.error || "Login failed");
     }
   };
 
@@ -24,7 +33,7 @@ export default function LoginPage() {
         className="p-6 border rounded w-96"
       >
         <h1 className="text-xl font-semibold mb-4">Login</h1>
-        {error && <p className="mb-2">{error}</p>}
+        {error && <p className="mb-2 text-red-500">{error}</p>}
         <input
           type="email"
           placeholder="Email"
@@ -39,7 +48,7 @@ export default function LoginPage() {
           value={password}
           onChange={(e) => setPassword(e.target.value)}
         />
-        <button className="w-full p-2 border rounded">
+        <button className="w-full p-2 border rounded bg-blue-500 text-white">
           Login
         </button>
       </form>

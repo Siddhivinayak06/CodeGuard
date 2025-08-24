@@ -1,7 +1,6 @@
 "use client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { useAuth } from "@/context/AuthContext"; // optional (for auto-login mock)
 
 export default function RegisterPage() {
   const [name, setName] = useState("");
@@ -12,14 +11,14 @@ export default function RegisterPage() {
   const [submitting, setSubmitting] = useState(false);
 
   const router = useRouter();
-  const { login } = useAuth(); // optional: auto-login after register
 
-  const handleSubmit = async (e) => {
+  // 🔹 real register function
+  const handleRegister = async (e) => {
     e.preventDefault();
     setError("");
 
-    // simple client-side validation
-    if (!name.trim() || !email.trim() || !password.trim() || !confirm.trim()) {
+    // client validation
+    if (!name || !email || !password || !confirm) {
       setError("All fields are required");
       return;
     }
@@ -34,27 +33,21 @@ export default function RegisterPage() {
 
     setSubmitting(true);
     try {
-      // ---------- OPTION A: Mock registration + auto-login (no backend) ----------
-      // Remove this block if you switch to API below
-      login({ email, name });
-      router.push("/"); // go to editor
-      // --------------------------------------------------------------------------
+      const res = await fetch("http://localhost:5000/auth/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, email, password }),
+      });
 
-      // ---------- OPTION B: Use backend API (uncomment to use) ----------
-      // const res = await fetch("http://localhost:5000/auth/register", {
-      //   method: "POST",
-      //   headers: { "Content-Type": "application/json" },
-      //   body: JSON.stringify({ name, email, password }),
-      // });
-      // if (!res.ok) {
-      //   const data = await res.json().catch(() => ({}));
-      //   throw new Error(data?.error || "Registration failed");
-      // }
-      // // Redirect to login (or auto-login if your API returns a token)
-      // router.push("/login");
-      // -------------------------------------------------------------------
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Registration failed");
+      }
+
+      alert("Registration successful! Please login.");
+      router.push("/login");
     } catch (err) {
-      setError(err.message || "Registration failed");
+      setError(err.message);
     } finally {
       setSubmitting(false);
     }
@@ -62,10 +55,10 @@ export default function RegisterPage() {
 
   return (
     <div className="flex items-center justify-center min-h-screen">
-      <form onSubmit={handleSubmit} className="p-6 border rounded w-96">
+      <form onSubmit={handleRegister} className="p-6 border rounded w-96">
         <h1 className="text-xl font-semibold mb-4">Create an account</h1>
 
-        {error && <p className="mb-2">{error}</p>}
+        {error && <p className="mb-2 text-red-500">{error}</p>}
 
         <label className="block mb-1">Full name</label>
         <input
@@ -105,7 +98,7 @@ export default function RegisterPage() {
 
         <button
           type="submit"
-          className="w-full p-2 border rounded disabled:opacity-60"
+          className="w-full p-2 border rounded bg-blue-500 text-white disabled:opacity-60"
           disabled={submitting}
         >
           {submitting ? "Creating account..." : "Register"}
