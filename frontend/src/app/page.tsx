@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import axios from "axios";
 import CodeEditor from "../components/CodeEditor";
 import OutputPane from "../components/OutputPane";
@@ -11,12 +11,35 @@ import {
   ResizablePanelGroup,
 } from "@/components/ui/resizable";
 
+import { useAuth } from "@/context/AuthContext";  // ✅ import AuthContext
+import { useRouter } from "next/navigation";
+
 export default function Home() {
-  const [code, setCode] = useState("# Welcome to Python Code Editor\n# Write your Python code here\n\nprint('Hello, World!')\n");
+  const [code, setCode] = useState(
+    "# Welcome to Python Code Editor\n# Write your Python code here\n\nprint('Hello, World!')\n"
+  );
   const [output, setOutput] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const { violations, locked } = useProctoring(3);
+
+  const { user, logout } = useAuth();  // ✅ auth context
+  const router = useRouter();
+
+  // ✅ Redirect to login if not logged in
+  useEffect(() => {
+    if (!user) {
+      router.push("/login");
+    }
+  }, [user, router]);
+
+  // ✅ Auto logout when violations reach 3
+  useEffect(() => {
+    if (violations >= 3) {
+      logout();
+      router.push("/login");
+    }
+  }, [violations, logout, router]);
 
   const runCode = async () => {
     setLoading(true);
@@ -60,7 +83,7 @@ export default function Home() {
             Python Code Editor
           </h1>
         </div>
-        
+
         <div className="flex items-center gap-4">
           {locked && (
             <div className="px-3 py-1 text-sm bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 rounded">
@@ -68,9 +91,22 @@ export default function Home() {
             </div>
           )}
           <div className="text-sm text-gray-600 dark:text-gray-400">
-            Violations: <span className="text-red-600 dark:text-red-400 font-semibold">{violations}</span>/3
+            Violations:{" "}
+            <span className="text-red-600 dark:text-red-400 font-semibold">
+              {violations}
+            </span>
+            /3
           </div>
           <ModeToggle />
+          {/* ✅ Logout button */}
+          {user && (
+            <button
+              onClick={logout}
+              className="px-3 py-1 bg-red-500 text-white text-sm rounded"
+            >
+              Logout
+            </button>
+          )}
         </div>
       </div>
 
