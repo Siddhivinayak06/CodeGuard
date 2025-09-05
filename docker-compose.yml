@@ -11,7 +11,7 @@ services:
     volumes:
       - ./backend:/app                        # backend source code
       - /var/run/docker.sock:/var/run/docker.sock   # allow backend to run Docker
-      - /tmp:/tmp                             # ✅ use system /tmp (simple + consistent)
+      - /tmp:/tmp                             # ✅ system tmp (shared with runner)
     environment:
       - NODE_ENV=development
       - PORT=5000
@@ -37,6 +37,22 @@ services:
       - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  # ✅ Custom Python runtime
+  python-runtime:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.python
+    image: codeguard-python
+    restart: unless-stopped
+
+  # ✅ Custom C runtime
+  c-runtime:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.c
+    image: codeguard-c
     restart: unless-stopped
 
 volumes:

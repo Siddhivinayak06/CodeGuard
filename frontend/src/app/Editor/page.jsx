@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import axios from "axios";
 import CodeEditor from "../../components/CodeEditor";
 import OutputPane from "../../components/OutputPane";
@@ -11,10 +11,8 @@ import {
   ResizablePanelGroup,
 } from "@/components/ui/resizable";
 
-import { useAuth } from "@/context/AuthContext";  // ✅ import AuthContext
-import { useRouter } from "next/navigation";
-
 export default function Home() {
+  const [lang, setLang] = useState("python"); // ✅ default: Python
   const [code, setCode] = useState(
     "# Welcome to Python Code Editor\n# Write your Python code here\n\nprint('Hello, World!')\n"
   );
@@ -23,30 +21,15 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const { violations, locked } = useProctoring(3);
 
-  const { user, logout } = useAuth();  // ✅ auth context
-  const router = useRouter();
-
-  // ✅ Redirect to login if not logged in
-  useEffect(() => {
-    if (!user) {
-      router.push("/login");
-    }
-  }, [user, router]);
-
-  // ✅ Auto logout when violations reach 3
-  useEffect(() => {
-    if (violations >= 3) {
-      logout();
-      router.push("/login");
-    }
-  }, [violations, logout, router]);
-
   const runCode = async () => {
     setLoading(true);
     setError("");
     setOutput("");
     try {
-      const res = await axios.post("http://localhost:5000/execute", { code });
+      const res = await axios.post("http://localhost:5000/execute", {
+        code,
+        lang, // ✅ send language to backend
+      });
       setOutput(res.data.output);
       setError(res.data.error);
     } catch {
@@ -60,7 +43,7 @@ export default function Home() {
     try {
       const res = await axios.post(
         "http://localhost:5000/export-pdf",
-        { code, output },
+        { code, output, lang }, // ✅ include lang in PDF export
         { responseType: "blob" }
       );
       const url = window.URL.createObjectURL(new Blob([res.data]));
@@ -78,9 +61,9 @@ export default function Home() {
     <div className="h-screen flex flex-col bg-gray-100 dark:bg-gray-900">
       {/* Title Bar */}
       <div className="h-12 bg-white dark:bg-gray-800 flex items-center justify-between px-6 border-b border-gray-200 dark:border-gray-700">
-        <div>
+        <div className="flex items-center gap-4">
           <h1 className="text-xl font-semibold text-gray-800 dark:text-gray-200">
-            Python Code Editor
+            Code Editor
           </h1>
         </div>
 
@@ -98,15 +81,6 @@ export default function Home() {
             /3
           </div>
           <ModeToggle />
-          {/* ✅ Logout button */}
-          {user && (
-            <button
-              onClick={logout}
-              className="px-3 py-1 bg-red-500 text-white text-sm rounded"
-            >
-              Logout
-            </button>
-          )}
         </div>
       </div>
 
@@ -124,6 +98,8 @@ export default function Home() {
                 onDownload={downloadPdf}
                 loading={loading}
                 locked={locked}
+                lang={lang}       // ✅ current language
+                setLang={setLang} // ✅ pass setter
               />
             </ResizablePanel>
 

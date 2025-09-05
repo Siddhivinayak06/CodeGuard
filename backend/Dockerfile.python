@@ -1,0 +1,13 @@
+# Custom Python runtime for safe execution
+FROM python:3.11-slim
+
+# Install safe/common libraries
+RUN pip install --no-cache-dir \
+    numpy \
+    pandas \
+    matplotlib \
+    seaborn \
+    scipy \
+    scikit-learn
+
+WORKDIR /app

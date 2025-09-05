@@ -1,8 +1,29 @@
 import { useState } from "react";
 import { useTheme } from "next-themes";
 import Editor from "@monaco-editor/react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Button } from "@/components/ui/button";
+import { ChevronDown } from "lucide-react";
 
-export default function CodeEditor({ code, setCode, disabled, onRun, onDownload, loading, locked, isFullscreen = true }) {
+export default function CodeEditor({
+  code,
+  setCode,
+  disabled,
+  onRun,
+  onDownload,
+  loading,
+  locked,
+  lang,
+  setLang,
+  isFullscreen = true,
+}) {
   const [showWarning, setShowWarning] = useState(false);
   const { theme } = useTheme();
 
@@ -28,12 +49,52 @@ export default function CodeEditor({ code, setCode, disabled, onRun, onDownload,
     });
   };
 
+  // ✅ Starter templates
+  const templates = {
+    python: "# Python Hello World\nprint('Hello, World!')\n",
+    c: "/* C Hello World */\n#include <stdio.h>\n\nint main() {\n    printf(\"Hello, World!\\n\");\n    return 0;\n}\n",
+  };
+
+  const switchLanguage = (newLang) => {
+    setLang(newLang);
+    // ✅ Insert starter template only if editor is empty
+    if (!code.trim()) {
+      setCode(templates[newLang]);
+    }
+  };
+
   return (
     <div className="h-full flex flex-col bg-white dark:bg-gray-900">
-      {/* Action Bar */}
+      {/* Toolbar */}
       <div className="flex items-center justify-between bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 py-2">
-        <div className="flex items-center gap-2">
-          <span className="text-gray-700 dark:text-gray-300 text-sm font-medium">Python Editor</span>
+        <div className="flex items-center gap-3">
+          {/* ✅ Language Dropdown */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="outline"
+                size="sm"
+                className="flex items-center gap-2 text-sm"
+              >
+                {lang === "python" ? "Python" : "C"}
+                <ChevronDown className="w-4 h-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent>
+              <DropdownMenuLabel>Select Language</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => switchLanguage("python")}>
+                Python
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => switchLanguage("c")}>
+                C
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          <span className="text-gray-700 dark:text-gray-300 text-sm font-medium">
+            {lang === "python" ? "Python Editor" : "C Editor"}
+          </span>
         </div>
 
         <div className="flex items-center gap-2">
@@ -44,6 +105,7 @@ export default function CodeEditor({ code, setCode, disabled, onRun, onDownload,
             </div>
           )}
 
+          {/* Run Button */}
           <button
             onClick={onRun}
             disabled={locked || loading || !isFullscreen}
@@ -53,12 +115,10 @@ export default function CodeEditor({ code, setCode, disabled, onRun, onDownload,
                 : "text-white bg-green-600 hover:bg-green-700 dark:bg-green-700 dark:hover:bg-green-600"
             }`}
           >
-            <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" />
-            </svg>
             Run Code
           </button>
 
+          {/* Export PDF Button */}
           <button
             onClick={onDownload}
             disabled={locked || loading || !isFullscreen}
@@ -68,9 +128,6 @@ export default function CodeEditor({ code, setCode, disabled, onRun, onDownload,
                 : "text-white bg-blue-600 hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-600"
             }`}
           >
-            <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-              <path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd" />
-            </svg>
             Export PDF
           </button>
         </div>
@@ -80,7 +137,7 @@ export default function CodeEditor({ code, setCode, disabled, onRun, onDownload,
       <div className="flex-1">
         <Editor
           height="100%"
-          language="python"
+          language={lang}
           theme={theme === "dark" ? "vs-dark" : "light"}
           value={code}
           onChange={(value) => setCode(value)}
@@ -88,7 +145,8 @@ export default function CodeEditor({ code, setCode, disabled, onRun, onDownload,
             readOnly: disabled || locked || !isFullscreen,
             minimap: { enabled: false },
             fontSize: 14,
-            fontFamily: "'Cascadia Code', 'Fira Code', 'Courier New', monospace",
+            fontFamily:
+              "'Cascadia Code', 'Fira Code', 'Courier New', monospace",
             lineHeight: 1.5,
             padding: { top: 20, bottom: 20 },
             scrollBeyondLastLine: false,
@@ -96,10 +154,7 @@ export default function CodeEditor({ code, setCode, disabled, onRun, onDownload,
             cursorSmoothCaretAnimation: "on",
             renderLineHighlight: "gutter",
             bracketPairColorization: { enabled: true },
-            guides: {
-              indentation: true,
-              bracketPairs: true,
-            },
+            guides: { indentation: true, bracketPairs: true },
             renderWhitespace: "selection",
             wordWrap: "on",
             lineNumbers: "on",
@@ -114,16 +169,7 @@ export default function CodeEditor({ code, setCode, disabled, onRun, onDownload,
       {/* Warning Toast */}
       {showWarning && (
         <div className="absolute top-16 right-4 bg-orange-500 text-white px-4 py-2 rounded shadow-lg text-sm font-medium z-50">
-          <div className="flex items-center gap-2">
-            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-              <path
-                fillRule="evenodd"
-                d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z"
-                clipRule="evenodd"
-              />
-            </svg>
-            {showWarning}
-          </div>
+          ⚠ {showWarning}
         </div>
       )}
     </div>
