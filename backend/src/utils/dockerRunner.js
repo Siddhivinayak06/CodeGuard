@@ -1,3 +1,4 @@
+// backend/src/utils/dockerRunner.js
 const { spawn } = require("child_process");
 const path = require("path");
 const fs = require("fs");
@@ -9,25 +10,22 @@ const DOCKER_BIN =
 
 module.exports = function runPythonCode(code) {
   return new Promise((resolve, reject) => {
-    const tmpDir = path.join(__dirname, "../../tmp");
-    if (!fs.existsSync(tmpDir)) fs.mkdirSync(tmpDir, { recursive: true });
-
+    // Always use /tmp inside backend container
+    const tmpDir = "/tmp";
     const codeFile = path.join(tmpDir, "code.py");
+
+    // Write Python code to /tmp/code.py
     fs.writeFileSync(codeFile, code);
 
     const args = [
       "run",
       "--rm",
-      "--network",
-      "none",
-      "-m",
-      "128m",
+      "--network", "none",
+      "-m", "128m",
       "--cpus=0.5",
-      "-v",
-      `${tmpDir}:/app`,
+      "-v", `${tmpDir}:/tmp`,  // ✅ mount host /tmp to container /tmp
       "python:3",
-      "python",
-      "/app/code.py",
+      "python", "/tmp/code.py" // ✅ run file inside container
     ];
 
     console.log("🔹 Running command:", DOCKER_BIN, args.join(" "));

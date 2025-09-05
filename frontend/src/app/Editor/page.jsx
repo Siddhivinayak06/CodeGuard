@@ -1,10 +1,10 @@
 "use client";
 import { useState, useEffect } from "react";
 import axios from "axios";
-import CodeEditor from "../components/CodeEditor";
-import OutputPane from "../components/OutputPane";
-import useProctoring from "../hooks/useProctoring";
-import { ModeToggle } from "../components/ModeToggle";
+import CodeEditor from "../../components/CodeEditor";
+import OutputPane from "../../components/OutputPane";
+import useProctoring from "../../hooks/useProctoring";
+import { ModeToggle } from "../../components/ModeToggle";
 import {
   ResizableHandle,
   ResizablePanel,
