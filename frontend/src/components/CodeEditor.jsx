@@ -32,7 +32,8 @@ export default function CodeEditor({
     setTimeout(() => setShowWarning(false), 2000);
   };
 
-  const handleEditorMount = (editor) => {
+  const handleEditorMount = (editor, monaco) => {
+    // disable copy/paste + right-click
     editor.onKeyDown((e) => {
       const key = e.code || e.keyCode;
       if (e.ctrlKey || e.metaKey) {
@@ -47,6 +48,63 @@ export default function CodeEditor({
       e.preventDefault();
       showToast("Right-click is disabled!");
     });
+
+    // ✅ Register autocomplete suggestions for Python
+    monaco.languages.registerCompletionItemProvider("python", {
+      provideCompletionItems: () => ({
+        suggestions: [
+          {
+            label: "print",
+            kind: monaco.languages.CompletionItemKind.Function,
+            insertText: "print(${1:msg})",
+            insertTextRules:
+              monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+            documentation: "Prints output to the console",
+          },
+          {
+            label: "def",
+            kind: monaco.languages.CompletionItemKind.Snippet,
+            insertText: "def ${1:func_name}(${2:args}):\n    ${3:pass}",
+            insertTextRules:
+              monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+            documentation: "Define a Python function",
+          },
+          {
+            label: "for loop",
+            kind: monaco.languages.CompletionItemKind.Snippet,
+            insertText: "for ${1:item} in ${2:iterable}:\n    ${3:pass}",
+            documentation: "Python for loop",
+          },
+        ],
+      }),
+    });
+
+    // ✅ Register autocomplete suggestions for C
+    monaco.languages.registerCompletionItemProvider("c", {
+      provideCompletionItems: () => ({
+        suggestions: [
+          {
+            label: "#include <stdio.h>",
+            kind: monaco.languages.CompletionItemKind.Snippet,
+            insertText: "#include <stdio.h>\n",
+            documentation: "Standard I/O library",
+          },
+          {
+            label: "main",
+            kind: monaco.languages.CompletionItemKind.Snippet,
+            insertText:
+              "int main() {\n    printf(\"Hello, World!\\n\");\n    return 0;\n}",
+            documentation: "C main function template",
+          },
+          {
+            label: "printf",
+            kind: monaco.languages.CompletionItemKind.Function,
+            insertText: "printf(\"${1:text}\\n\");",
+            documentation: "Print text to console",
+          },
+        ],
+      }),
+    });
   };
 
   // ✅ Starter templates
@@ -57,7 +115,6 @@ export default function CodeEditor({
 
   const switchLanguage = (newLang) => {
     setLang(newLang);
-    // ✅ Insert starter template only if editor is empty
     if (!code.trim()) {
       setCode(templates[newLang]);
     }
@@ -141,28 +198,23 @@ export default function CodeEditor({
           theme={theme === "dark" ? "vs-dark" : "light"}
           value={code}
           onChange={(value) => setCode(value)}
+          onMount={handleEditorMount}
           options={{
             readOnly: disabled || locked || !isFullscreen,
             minimap: { enabled: false },
             fontSize: 14,
             fontFamily:
               "'Cascadia Code', 'Fira Code', 'Courier New', monospace",
-            lineHeight: 1.5,
-            padding: { top: 20, bottom: 20 },
-            scrollBeyondLastLine: false,
-            smoothScrolling: true,
-            cursorSmoothCaretAnimation: "on",
-            renderLineHighlight: "gutter",
-            bracketPairColorization: { enabled: true },
-            guides: { indentation: true, bracketPairs: true },
-            renderWhitespace: "selection",
             wordWrap: "on",
             lineNumbers: "on",
+            autoClosingBrackets: "always",
+            autoClosingQuotes: "always",
+            quickSuggestions: true, // ✅ autocomplete popup while typing
+            suggestOnTriggerCharacters: true, // ✅ show on dot, etc.
+            parameterHints: { enabled: true }, // ✅ show function params
+            tabSize: 4,
             folding: true,
-            foldingStrategy: "indentation",
-            showFoldingControls: "always",
           }}
-          onMount={handleEditorMount}
         />
       </div>
 
