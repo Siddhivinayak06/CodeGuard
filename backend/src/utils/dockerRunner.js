@@ -72,9 +72,12 @@ module.exports = function runCode(code, lang = "python", stdinInput = "") {
     docker.stderr.on("data", (data) => (stderr += data.toString()));
 
     docker.on("close", (exitCode) => {
+      // ✅ Remove temp folder/file references from error
+      const cleanError = stderr.replace(/\/tmp\/[a-f0-9\-]+\/code\.(py|c)/g, "");
+
       resolve({
         output: stdout.trim(),
-        error: stderr.trim(),
+        error: cleanError.trim(),
         exitCode,
       });
 
