@@ -17,10 +17,11 @@ module.exports = function runCode(code, lang = "python", stdinInput = "") {
       const uniqueId = uuidv4();
       const escapedCode = code.replace(/\r/g, ""); // remove CR from Windows endings
 
+      // ✅ Pipe stdinInput directly into python process
       const cmd = `
         mkdir -p /tmp/${uniqueId} &&
         printf "%s" '${escapedCode.replace(/'/g, "'\\''")}' > /tmp/${uniqueId}/code.py &&
-        timeout 5 python /tmp/${uniqueId}/code.py
+        printf "%s" '${stdinInput.replace(/'/g, "'\\''")}' | timeout 5 python /tmp/${uniqueId}/code.py
       `;
 
       docker = spawn("docker", [
@@ -41,11 +42,12 @@ module.exports = function runCode(code, lang = "python", stdinInput = "") {
       const uniqueId = uuidv4();
       const escapedCode = code.replace(/\r/g, "");
 
+      // ✅ Pipe stdinInput directly into compiled C program
       const cmd = `
         mkdir -p /tmp/${uniqueId} &&
         printf "%s" '${escapedCode.replace(/'/g, "'\\''")}' > /tmp/${uniqueId}/code.c &&
         gcc /tmp/${uniqueId}/code.c -o /tmp/${uniqueId}/a.out &&
-        timeout 5 /tmp/${uniqueId}/a.out
+        printf "%s" '${stdinInput.replace(/'/g, "'\\''")}' | timeout 5 /tmp/${uniqueId}/a.out
       `;
 
       docker = spawn("docker", [
@@ -64,11 +66,6 @@ module.exports = function runCode(code, lang = "python", stdinInput = "") {
       console.log("🔹 Running C code with Docker");
     } else {
       return reject(new Error("Unsupported language"));
-    }
-
-    if (stdinInput) {
-      docker.stdin.write(stdinInput + "\n");
-      docker.stdin.end();
     }
 
     docker.stdout.on("data", (data) => (stdout += data.toString()));

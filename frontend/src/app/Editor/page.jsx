@@ -3,6 +3,7 @@ import { useState } from "react";
 import axios from "axios";
 import CodeEditor from "../../components/CodeEditor";
 import OutputPane from "../../components/OutputPane";
+import InputPane from "../../components/InputPane"; // ✅ import InputPane
 import useProctoring from "../../hooks/useProctoring";
 import { ModeToggle } from "../../components/ModeToggle";
 import {
@@ -16,6 +17,7 @@ export default function Home() {
   const [code, setCode] = useState(
     "# Welcome to Python Code Editor\n# Write your Python code here\n\nprint('Hello, World!')\n"
   );
+  const [input, setInput] = useState(""); // ✅ new state for stdin
   const [output, setOutput] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -28,7 +30,8 @@ export default function Home() {
     try {
       const res = await axios.post("http://localhost:5000/execute", {
         code,
-        lang, // ✅ send language to backend
+        lang,
+        stdinInput: input, // ✅ send custom input to backend
       });
       setOutput(res.data.output);
       setError(res.data.error);
@@ -43,7 +46,7 @@ export default function Home() {
     try {
       const res = await axios.post(
         "http://localhost:5000/export-pdf",
-        { code, output, lang }, // ✅ include lang in PDF export
+        { code, output, lang },
         { responseType: "blob" }
       );
       const url = window.URL.createObjectURL(new Blob([res.data]));
@@ -89,7 +92,7 @@ export default function Home() {
         <div className="h-full rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700">
           <ResizablePanelGroup direction="vertical" className="h-full">
             {/* Editor Panel */}
-            <ResizablePanel defaultSize={70} minSize={30}>
+            <ResizablePanel defaultSize={60} minSize={30}>
               <CodeEditor
                 code={code}
                 setCode={setCode}
@@ -98,16 +101,28 @@ export default function Home() {
                 onDownload={downloadPdf}
                 loading={loading}
                 locked={locked}
-                lang={lang}       // ✅ current language
-                setLang={setLang} // ✅ pass setter
+                lang={lang}
+                setLang={setLang}
               />
             </ResizablePanel>
 
             <ResizableHandle className="bg-gray-200 dark:bg-gray-700 hover:bg-blue-500 dark:hover:bg-blue-600 transition-colors duration-200" />
 
-            {/* Output Panel */}
-            <ResizablePanel defaultSize={30} minSize={20}>
-              <OutputPane output={output} error={error} />
+            {/* Input + Output Split */}
+            <ResizablePanel defaultSize={40} minSize={20}>
+              <ResizablePanelGroup direction="horizontal">
+                {/* Input Pane */}
+                <ResizablePanel defaultSize={20} minSize={10}>
+                  <InputPane onChange={setInput} />
+                </ResizablePanel>
+
+                <ResizableHandle className="bg-gray-200 dark:bg-gray-700 hover:bg-blue-500 dark:hover:bg-blue-600 transition-colors duration-200" />
+
+                {/* Output Pane */}
+                <ResizablePanel defaultSize={50} minSize={20}>
+                  <OutputPane output={output} error={error} />
+                </ResizablePanel>
+              </ResizablePanelGroup>
             </ResizablePanel>
           </ResizablePanelGroup>
         </div>
