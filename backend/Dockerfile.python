@@ -1,5 +1,7 @@
-# Custom Python runtime for safe execution
 FROM python:3.11-slim
+
+# Install timeout command
+RUN apt-get update && apt-get install -y coreutils && rm -rf /var/lib/apt/lists/*
 
 # Install safe/common libraries
 RUN pip install --no-cache-dir \

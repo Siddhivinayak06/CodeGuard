@@ -12,12 +12,13 @@ module.exports = function runCode(code, lang = "python", stdinInput = "") {
     let stdout = "";
     let stderr = "";
 
-    if (lang === "python") {
-      // Python part (unique folder per execution)
-      const uniqueId = uuidv4();
-      const escapedCode = code.replace(/\r/g, ""); // remove CR from Windows endings
+    const MAX_OUTPUT = 10000; // 10 KB max output to prevent flooding
+    let timedOut = false;
 
-      // ✅ Pipe stdinInput directly into python process
+    if (lang === "python") {
+      const uniqueId = uuidv4();
+      const escapedCode = code.replace(/\r/g, "");
+
       const cmd = `
         mkdir -p /tmp/${uniqueId} &&
         printf "%s" '${escapedCode.replace(/'/g, "'\\''")}' > /tmp/${uniqueId}/code.py &&
@@ -36,13 +37,10 @@ module.exports = function runCode(code, lang = "python", stdinInput = "") {
         cmd,
       ], { shell: false });
 
-      console.log("🔹 Running Python code with Docker in unique folder");
     } else if (lang === "c") {
-      // C part (unique folder, root user)
       const uniqueId = uuidv4();
       const escapedCode = code.replace(/\r/g, "");
 
-      // ✅ Pipe stdinInput directly into compiled C program
       const cmd = `
         mkdir -p /tmp/${uniqueId} &&
         printf "%s" '${escapedCode.replace(/'/g, "'\\''")}' > /tmp/${uniqueId}/code.c &&
@@ -63,28 +61,45 @@ module.exports = function runCode(code, lang = "python", stdinInput = "") {
         cmd,
       ], { shell: false });
 
-      console.log("🔹 Running C code with Docker");
     } else {
       return reject(new Error("Unsupported language"));
     }
 
-    docker.stdout.on("data", (data) => (stdout += data.toString()));
+    // ✅ Truncate stdout if it exceeds MAX_OUTPUT to prevent crashes
+    docker.stdout.on("data", (data) => {
+      stdout += data.toString();
+      if (stdout.length > MAX_OUTPUT) {
+        stdout = stdout.slice(0, MAX_OUTPUT) + "\n[Output truncated]";
+        timedOut = true;
+        docker.kill();
+      }
+    });
+
     docker.stderr.on("data", (data) => (stderr += data.toString()));
 
     docker.on("close", (exitCode) => {
-      // ✅ Remove temp folder/file references from error
-      const cleanError = stderr.replace(/\/tmp\/[a-f0-9\-]+\/code\.(py|c)/g, "");
+      if (timedOut && stdout.includes("[Output truncated]")) {
+        resolve({
+          output: stdout.trim(),
+          error: "Time Limit Exceeded (possible infinite loop)",
+          exitCode: 124,
+        });
+        return;
+      }
+
+      let cleanError = stderr
+        .replace(/\/tmp\/[a-f0-9\-]+\/code\.(py|c)/g, "")
+        .replace(/File ""(, )?/g, "");
+
+      if (exitCode === 124) {
+        cleanError = "Time Limit Exceeded (possible infinite loop)";
+      }
 
       resolve({
         output: stdout.trim(),
         error: cleanError.trim(),
         exitCode,
       });
-
-      // optional cleanup (disabled if you want to debug)
-      // try {
-      //   fs.rmSync(`/tmp/${uniqueId}`, { recursive: true, force: true });
-      // } catch {}
     });
 
     docker.on("error", (err) => {
