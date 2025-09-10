@@ -11,9 +11,9 @@ services:
     volumes:
       - ./backend:/app
       - /var/run/docker.sock:/var/run/docker.sock
-      - codeguard_tmp:/app/tmp   # shared volume
+      - codeguard_tmp:/app/tmp
     environment:
-      - NODE_ENV=development
+      - NODE_ENV=production
       - PORT=5000
       - DB_USER=postgres
       - DB_PASSWORD=postgres
@@ -23,7 +23,6 @@ services:
       - SESSION_SECRET=supersecret
     depends_on:
       - db
-    command: ["node", "src/server.js"]
     restart: unless-stopped
 
   db:
@@ -46,7 +45,7 @@ services:
     container_name: codeguard-python
     volumes:
       - codeguard_tmp:/code
-    command: tail -f /dev/null   # keep alive
+    command: tail -f /dev/null
 
   c-runtime:
     build:
@@ -55,7 +54,7 @@ services:
     container_name: codeguard-c
     volumes:
       - codeguard_tmp:/code
-    command: tail -f /dev/null   # keep alive
+    command: tail -f /dev/null
 
 volumes:
   pgdata:
