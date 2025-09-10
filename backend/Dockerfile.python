@@ -13,3 +13,6 @@ RUN pip install --no-cache-dir \
     scikit-learn
 
 WORKDIR /app
+# Create a non-root user for running code
+RUN useradd -m runner
+USER runner
