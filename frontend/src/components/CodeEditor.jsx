@@ -33,79 +33,116 @@ export default function CodeEditor({
   };
 
   const handleEditorMount = (editor, monaco) => {
-    // disable copy/paste + right-click
-    editor.onKeyDown((e) => {
-      const key = e.code || e.keyCode;
-      if (e.ctrlKey || e.metaKey) {
-        if (["KeyV", "KeyC", "KeyX"].includes(key)) {
-          e.preventDefault();
-          showToast("Clipboard actions are disabled!");
-        }
+  // Disable copy/paste/cut/select-all + shift+arrows
+  editor.onKeyDown((e) => {
+    const key = e.code || e.keyCode;
+
+    if (e.ctrlKey || e.metaKey) {
+      if (["KeyV", "KeyC", "KeyX", "KeyA"].includes(key)) {
+        e.preventDefault();
+        showToast(
+          key === "KeyA"
+            ? "Select All is disabled!"
+            : "Clipboard actions are disabled!"
+        );
       }
-    });
+    }
 
-    editor.onContextMenu((e) => {
+    // ❌ Block Shift + Arrow keys (keyboard selection)
+    if (e.shiftKey && ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(key)) {
       e.preventDefault();
-      showToast("Right-click is disabled!");
-    });
+      showToast("Selection with keyboard is disabled!");
+    }
+  });
 
-    // ✅ Register autocomplete suggestions for Python
-    monaco.languages.registerCompletionItemProvider("python", {
-      provideCompletionItems: () => ({
-        suggestions: [
-          {
-            label: "print",
-            kind: monaco.languages.CompletionItemKind.Function,
-            insertText: "print(${1:msg})",
-            insertTextRules:
-              monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
-            documentation: "Prints output to the console",
-          },
-          {
-            label: "def",
-            kind: monaco.languages.CompletionItemKind.Snippet,
-            insertText: "def ${1:func_name}(${2:args}):\n    ${3:pass}",
-            insertTextRules:
-              monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
-            documentation: "Define a Python function",
-          },
-          {
-            label: "for loop",
-            kind: monaco.languages.CompletionItemKind.Snippet,
-            insertText: "for ${1:item} in ${2:iterable}:\n    ${3:pass}",
-            documentation: "Python for loop",
-          },
-        ],
-      }),
-    });
+  // ❌ Block right-click
+  editor.onContextMenu((e) => {
+    e.preventDefault();
+    showToast("Right-click is disabled!");
+  });
 
-    // ✅ Register autocomplete suggestions for C
-    monaco.languages.registerCompletionItemProvider("c", {
-      provideCompletionItems: () => ({
-        suggestions: [
-          {
-            label: "#include <stdio.h>",
-            kind: monaco.languages.CompletionItemKind.Snippet,
-            insertText: "#include <stdio.h>\n",
-            documentation: "Standard I/O library",
-          },
-          {
-            label: "main",
-            kind: monaco.languages.CompletionItemKind.Snippet,
-            insertText:
-              "int main() {\n    printf(\"Hello, World!\\n\");\n    return 0;\n}",
-            documentation: "C main function template",
-          },
-          {
-            label: "printf",
-            kind: monaco.languages.CompletionItemKind.Function,
-            insertText: "printf(\"${1:text}\\n\");",
-            documentation: "Print text to console",
-          },
-        ],
-      }),
-    });
-  };
+  // ❌ Block mouse selection
+  editor.onMouseDown((e) => {
+    e.event.preventDefault();
+    
+  });
+
+  // ✅ IntelliSense for Python
+  monaco.languages.registerCompletionItemProvider("python", {
+    provideCompletionItems: () => ({
+      suggestions: [
+        {
+          label: "print",
+          kind: monaco.languages.CompletionItemKind.Function,
+          insertText: "print(${1:msg})",
+          insertTextRules:
+            monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+          documentation: "Print output to the console",
+        },
+        {
+          label: "def",
+          kind: monaco.languages.CompletionItemKind.Snippet,
+          insertText: "def ${1:function_name}(${2:args}):\n    ${3:pass}",
+          insertTextRules:
+            monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+          documentation: "Define a Python function",
+        },
+        {
+          label: "for loop",
+          kind: monaco.languages.CompletionItemKind.Snippet,
+          insertText: "for ${1:item} in ${2:iterable}:\n    ${3:pass}",
+          documentation: "Python for loop",
+        },
+        {
+          label: "if statement",
+          kind: monaco.languages.CompletionItemKind.Snippet,
+          insertText: "if ${1:condition}:\n    ${2:pass}",
+          documentation: "Python if condition",
+        },
+      ],
+    }),
+  });
+
+  // ✅ IntelliSense for C
+  monaco.languages.registerCompletionItemProvider("c", {
+    provideCompletionItems: () => ({
+      suggestions: [
+        {
+          label: "#include <stdio.h>",
+          kind: monaco.languages.CompletionItemKind.Snippet,
+          insertText: "#include <stdio.h>\n",
+          documentation: "Standard Input/Output library",
+        },
+        {
+          label: "main",
+          kind: monaco.languages.CompletionItemKind.Snippet,
+          insertText:
+            "int main() {\n    printf(\"Hello, World!\\n\");\n    return 0;\n}",
+          documentation: "C main function",
+        },
+        {
+          label: "printf",
+          kind: monaco.languages.CompletionItemKind.Function,
+          insertText: "printf(\"${1:text}\\n\");",
+          documentation: "Print text to console",
+        },
+        {
+          label: "for loop",
+          kind: monaco.languages.CompletionItemKind.Snippet,
+          insertText:
+            "for(int ${1:i} = 0; ${1:i} < ${2:n}; ${1:i}++) {\n    ${3:/* code */}\n}",
+          documentation: "C for loop",
+        },
+        {
+          label: "if statement",
+          kind: monaco.languages.CompletionItemKind.Snippet,
+          insertText: "if(${1:condition}) {\n    ${2:/* code */}\n}",
+          documentation: "C if condition",
+        },
+      ],
+    }),
+  });
+};
 
   // ✅ Starter templates
   const templates = {

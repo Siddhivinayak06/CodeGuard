@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import axios from "axios";
+import api from "../../libs/api";   // ✅ centralized axios
 import { useAuth } from "@/context/AuthContext";
 
 export default function LoginPage() {
@@ -14,13 +14,10 @@ export default function LoginPage() {
   const handleLogin = async (e) => {
     e.preventDefault();
     try {
-      const res = await axios.post("http://localhost:5000/auth/login", {
-        email,
-        password,
-      });
-      login(res.data.user); // store user in context
-      localStorage.setItem("token", res.data.token); // save JWT
-      router.push("/"); // redirect to main editor page
+      const res = await api.post("/auth/login", { email, password }); // ✅ cleaner
+      login(res.data.user);
+      localStorage.setItem("token", res.data.token);
+      router.push("/");
     } catch (err) {
       setError(err.response?.data?.error || "Login failed");
     }
@@ -64,12 +61,12 @@ export default function LoginPage() {
           Login
         </button>
 
-        <p className="mt-4 text-sm text-center text-gray-600 dark:text-gray-400">
+        {/* <p className="mt-4 text-sm text-center text-gray-600 dark:text-gray-400">
           Don’t have an account?{" "}
           <a href="/register" className="text-blue-600 dark:text-blue-400 hover:underline">
             Register
           </a>
-        </p>
+        </p> */}
       </form>
     </div>
   );

@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import api from "../../libs/api"; // ✅ centralized axios instance
 
 export default function RegisterPage() {
   const [name, setName] = useState("");
@@ -16,6 +17,7 @@ export default function RegisterPage() {
     e.preventDefault();
     setError("");
 
+    // ✅ validations
     if (!name || !email || !password || !confirm) {
       setError("All fields are required");
       return;
@@ -31,21 +33,12 @@ export default function RegisterPage() {
 
     setSubmitting(true);
     try {
-      const res = await fetch("http://localhost:5000/auth/register", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, email, password }),
-      });
-
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || "Registration failed");
-      }
+      const res = await api.post("/auth/register", { name, email, password }); // ✅ clean call
 
       alert("Registration successful! Please login.");
       router.push("/login");
     } catch (err) {
-      setError(err.message);
+      setError(err.response?.data?.error || "Registration failed");
     } finally {
       setSubmitting(false);
     }
