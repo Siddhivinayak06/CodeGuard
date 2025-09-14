@@ -1,16 +1,19 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import axios from "axios";
-import CodeEditor from "../../components/CodeEditor";
-import OutputPane from "../../components/OutputPane";
-import InputPane from "../../components/InputPane"; // ✅ import InputPane
-import useProctoring from "../../hooks/useProctoring";
-import { ModeToggle } from "../../components/ModeToggle";
+import CodeEditor from "@/components/CodeEditor";
+import OutputPane from "@/components/OutputPane";
+import InputPane from "@/components/InputPane"; // ✅ import InputPane
+import useProctoring from "@/hooks/useProctoring";
+import { ModeToggle } from "@/components/ModeToggle";
+import { useAuth } from "@/context/AuthContext";
+import { useRouter } from "next/navigation";
 import {
   ResizableHandle,
   ResizablePanel,
   ResizablePanelGroup,
 } from "@/components/ui/resizable";
+
 
 export default function Home() {
   const [lang, setLang] = useState("python"); // ✅ default: Python
@@ -22,7 +25,24 @@ export default function Home() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const { violations, locked } = useProctoring(3);
+  
+  const { user, logout } = useAuth();
+  const router = useRouter();
 
+  // Redirect to login if not logged in
+  useEffect(() => {
+    if (!user) {
+      router.push("/login");
+    }
+  }, [user, router]);
+
+  // Auto logout on 3 violations
+  useEffect(() => {
+    if (violations >= 3) {
+      logout();
+      router.push("/login");
+    }
+  }, [violations, logout, router]);
   const runCode = async () => {
     setLoading(true);
     setError("");
