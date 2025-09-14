@@ -1,6 +1,21 @@
 version: "3.9"
 
 services:
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: codeguard-frontend
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env
+    environment:
+      - PORT=3000
+    depends_on:
+      - backend
+    restart: unless-stopped
+
   backend:
     build:
       context: ./backend
@@ -8,14 +23,13 @@ services:
     container_name: codeguard-backend
     ports:
       - "5000:5000"
-    volumes:
-      - ./backend:/app
-      - /var/run/docker.sock:/var/run/docker.sock
-      - codeguard_tmp:/app/tmp
     env_file:
-      - .env   # ✅ load environment variables (not pushed to GitHub)
+      - .env
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
     depends_on:
-      - db
+      db:
+        condition: service_healthy   # ✅ Wait for DB health
     restart: unless-stopped
 
   db:
@@ -29,28 +43,23 @@ services:
       - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
+    healthcheck:                     # ✅ Added healthcheck
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      retries: 10
+      start_period: 10s
     restart: unless-stopped
 
   python-runtime:
     build:
       context: ./backend
       dockerfile: Dockerfile.python
-    container_name: codeguard-python
-    volumes:
-      - codeguard_tmp:/code
-    command: tail -f /dev/null
+    image: codeguard-python
     restart: unless-stopped
 
   c-runtime:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile.c
-    container_name: codeguard-c
-    volumes:
-      - codeguard_tmp:/code
-    command: tail -f /dev/null
+    image: gcc:latest
     restart: unless-stopped
 
 volumes:
   pgdata:
-  codeguard_tmp:

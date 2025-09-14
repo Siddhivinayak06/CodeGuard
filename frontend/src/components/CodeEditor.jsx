@@ -137,19 +137,17 @@ provideCompletionItems: (model, position) => {
         }
       });
     }
-
     editor.onDidPaste(() => {
       showToast("Pasting is not allowed!");
-      editor.trigger("keyboard", "undo");
+       editor.trigger("keyboard", "undo");
     });
-
-    editor.onKeyDown((e) => {
-      if ((e.ctrlKey || e.metaKey) && ["KeyV", "KeyC", "KeyX"].includes(e.code)) {
+  editor.onKeyDown((e) => {
+    if ((e.ctrlKey || e.metaKey) && ["KeyV", "KeyC", "KeyX"].includes(e.code)) {
         e.preventDefault();
         showToast("Clipboard actions are disabled!");
       }
-     
-    });
+});
+
 editor.addAction({
   id: "editor.action.clipboardCopyWithSyntaxHighlightingAction",
   label: "Copy with Syntax Highlighting",
@@ -196,7 +194,7 @@ editor.addAction({
 
   // Starter templates
   const templates = {
-    python: "# Python Hello World\nprint('Hello, World!')\n",
+    python: "# Welcome to Python Code Editor\n# Write your Python code here\n\nprint('Hello, World!')\n",
     c: "/* C Hello World */\n#include <stdio.h>\n\nint main() {\n    printf(\"Hello, World!\\n\");\n    return 0;\n}\n",
   };
 

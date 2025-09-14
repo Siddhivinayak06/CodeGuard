@@ -5,7 +5,7 @@ const bcrypt = require("bcryptjs");
 async function createUser(name, email, password) {
   const hashed = await bcrypt.hash(password, 10);
   const query = `
-    INSERT INTO users (name, email, password)
+    INSERT INTO users (name, email, password_hash)
     VALUES ($1, $2, $3)
     RETURNING id, name, email
   `;
