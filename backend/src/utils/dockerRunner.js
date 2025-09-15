@@ -55,7 +55,7 @@ module.exports = function runCode(code, lang = "python", stdinInput = "") {
         "-m", "128m",
         "--cpus=0.5",
         "-u", "0:0",
-        "gcc:latest",
+        "codeguard-c",
         "sh",
         "-c",
         cmd,

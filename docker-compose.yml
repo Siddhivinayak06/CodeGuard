@@ -5,12 +5,13 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
-    container_name: codeguard-frontend
+    image: codeguard-frontend
     ports:
-      - "3000:3000"
+      - "3000:3000"          # public, Coolify domain points here
     env_file:
       - .env
     environment:
+      - NODE_ENV=production
       - PORT=3000
     depends_on:
       - backend
@@ -20,45 +21,48 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    container_name: codeguard-backend
-    ports:
-      - "5000:5000"
+    image: codeguard-backend
+    expose:
+      - "5000"               # internal only
     env_file:
       - .env
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     depends_on:
       db:
-        condition: service_healthy   # ✅ Wait for DB health
+        condition: service_healthy
     restart: unless-stopped
 
   db:
     image: postgres:15
-    container_name: codeguard-db
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: codeguard
-    ports:
-      - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
-    healthcheck:                     # ✅ Added healthcheck
+    healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 5s
       retries: 10
       start_period: 10s
     restart: unless-stopped
+    # ❌ No ports exposed → internal-only database
 
   python-runtime:
     build:
       context: ./backend
       dockerfile: Dockerfile.python
     image: codeguard-python
+    command: tail -f /dev/null
     restart: unless-stopped
 
   c-runtime:
-    image: gcc:latest
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.c
+    image: codeguard-c
+    command: tail -f /dev/null
     restart: unless-stopped
 
 volumes:

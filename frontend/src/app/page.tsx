@@ -7,6 +7,8 @@ import InputPane from "../components/InputPane"; // ✅ import InputPane
 import useProctoring from "../hooks/useProctoring";
 import { ModeToggle } from "../components/ModeToggle";
 import { useAuth } from "@/context/AuthContext";
+import api from "../libs/api";   // ✅ centralized axios
+
 import { useRouter } from "next/navigation";
 import {
   ResizableHandle,
@@ -48,7 +50,7 @@ export default function Home() {
     setError("");
     setOutput("");
     try {
-      const res = await axios.post("http://localhost:5000/execute", {
+      const res = await api.post("/execute", {
         code,
         lang,
         stdinInput: input, // ✅ send custom input to backend
@@ -64,8 +66,8 @@ export default function Home() {
 
   const downloadPdf = async () => {
     try {
-      const res = await axios.post(
-        "http://localhost:5000/export-pdf",
+      const res = await api.post(
+        "/export-pdf",
         { code, output, lang },
         { responseType: "blob" }
       );
