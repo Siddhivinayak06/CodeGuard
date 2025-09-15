@@ -142,7 +142,7 @@ export default function Home() {
 
                 {/* Output Pane */}
                 <ResizablePanel defaultSize={50} minSize={20}>
-                  <OutputPane output={output} error={error} />
+                  <OutputPane output={output} error={error} language={lang} />
                 </ResizablePanel>
               </ResizablePanelGroup>
             </ResizablePanel>
