@@ -24,6 +24,9 @@ export default function CodeEditor({
   locked,
   lang,
   setLang,
+   // Add these two
+  showInput,       // ✅ new prop
+  setShowInput,    // ✅ new prop
   isFullscreen = true,
 }) {
   const [showWarning, setShowWarning] = useState(false);
@@ -254,6 +257,17 @@ editor.addAction({
               <span>Running...</span>
             </div>
           )}
+
+            {/* ✅ Toggle Input Button */}
+  <button
+    onClick={() => setShowInput(!showInput)}
+    className="px-3 py-1 text-sm rounded bg-gray-200 dark:bg-gray-700 
+               text-gray-700 dark:text-gray-300 hover:bg-gray-300 
+               dark:hover:bg-gray-600 transition"
+  >
+    {showInput ? "Hide Input" : "Show Input"}
+  </button>
+
           <button
             onClick={onRun}
             disabled={locked || loading || !isFullscreen}
@@ -291,7 +305,7 @@ editor.addAction({
             readOnly: disabled || locked || !isFullscreen,
             contextmenu: false, // custom menu
             minimap: { enabled: false },
-            fontSize: 14,
+            fontSize: 16,
             fontFamily: "'Cascadia Code', 'Fira Code', 'Courier New', monospace",
             wordWrap: "on",
             lineNumbers: "on",
@@ -307,26 +321,28 @@ editor.addAction({
           }}
         />
 
-        {/* Custom Context Menu */}
-        {showContextMenu && (
-          <div
-            className="absolute bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md shadow-lg z-50 w-56"
-            style={{ top: contextMenuPos.y, left: contextMenuPos.x }}
-          >
-            <button
-              className="block px-4 py-2 w-full text-left text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none text-sm font-sans"
-              onClick={() => handleMenuClick("changeAll")}
-            >
-              Change All Occurrences
-            </button>
-            <button
-              className="block px-4 py-2 w-full text-left text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none text-sm font-sans"
-              onClick={() => handleMenuClick("commandPalette")}
-            >
-              Command Palette
-            </button>
-          </div>
-        )}
+{/* Custom Context Menu */}
+{showContextMenu && (
+  <div
+    className="absolute bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md shadow-lg z-50 w-56"
+    style={{ top: contextMenuPos.y, left: contextMenuPos.x }}
+  >
+    <button
+      className="block px-4 py-2 w-full text-left text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none text-sm font-sans"
+      onClick={() => handleMenuClick("changeAll")}
+    >
+      Change All Occurrences
+    </button>
+
+    <button
+      className="block px-4 py-2 w-full text-left text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none text-sm font-sans"
+      onClick={() => handleMenuClick("commandPalette")}
+    >
+      Command Palette
+    </button>
+  </div>
+)}
+
 
 
       </div>

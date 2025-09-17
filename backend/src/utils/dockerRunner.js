@@ -19,11 +19,33 @@ module.exports = function runCode(code, lang = "python", stdinInput = "") {
       const uniqueId = uuidv4();
       const escapedCode = code.replace(/\r/g, "");
 
+      // Prepare stdin lines
+      const inputLines = stdinInput.split("\n").map(l => l.replace(/'/g, "'\\''"));
+
+      // Wrap code to simulate input echo
+      const wrappedCode = `
+_inputs = ${JSON.stringify(inputLines)}
+_input_index = 0
+def input(prompt=""):
+    global _input_index
+    if prompt:
+        print(prompt, end="")
+    if _input_index < len(_inputs):
+        val = _inputs[_input_index]
+        print(val)
+        _input_index += 1
+        return val
+    return ""
+${escapedCode}
+`;
+
+      // Docker command
       const cmd = `
-        mkdir -p /tmp/${uniqueId} &&
-        printf "%s" '${escapedCode.replace(/'/g, "'\\''")}' > /tmp/${uniqueId}/code.py &&
-        printf "%s" '${stdinInput.replace(/'/g, "'\\''")}' | timeout 5 python /tmp/${uniqueId}/code.py
-      `;
+mkdir -p /tmp/${uniqueId} &&
+printf "%s" '${wrappedCode.replace(/'/g, "'\\''")}' > /tmp/${uniqueId}/code.py &&
+timeout 5 python /tmp/${uniqueId}/code.py
+`;
+
 
       docker = spawn("docker", [
         "run",
