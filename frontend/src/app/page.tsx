@@ -1,13 +1,11 @@
 "use client";
-import { useState, useEffect } from "react";
-import api from "../libs/api"; // ✅ centralized axios
-import CodeEditor from "../components/CodeEditor";
-import OutputPane from "../components/OutputPane";
-import InputPane from "../components/InputPane";
-import useProctoring from "../hooks/useProctoring";
-import { ModeToggle } from "../components/ModeToggle";
-import { useAuth } from "@/context/AuthContext";
-import { useRouter } from "next/navigation";
+import { useState } from "react";
+import api from "@/libs/api"; // ✅ centralized axios
+import CodeEditor from "@/components/CodeEditor";
+import OutputPane from "@/components/OutputPane";
+import InputPane from "@/components/InputPane";
+import useProctoring from "@/hooks/useProctoring";
+import { ModeToggle } from "@/components/ModeToggle";
 import {
   ResizableHandle,
   ResizablePanel,
@@ -25,22 +23,6 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const { violations, locked } = useProctoring(3);
   const [showInput, setShowInput] = useState(true); // ✅ toggle state
-
-  const { user, logout } = useAuth();
-  const router = useRouter();
-
-  // Redirect if not logged in
-  useEffect(() => {
-    if (!user) router.push("/login");
-  }, [user, router]);
-
-  // Auto logout on 3 violations
-  useEffect(() => {
-    if (violations >= 3) {
-      logout();
-      router.push("/login");
-    }
-  }, [violations, logout, router]);
 
   const runCode = async () => {
     setLoading(true);
@@ -61,7 +43,7 @@ export default function Home() {
     try {
       const res = await api.post(
         "/export-pdf",
-        { code, output, lang, user: user?.name }, // ✅ send username/email
+        { code, output, lang }, // ✅ removed user info
         { responseType: "blob" }
       );
       const url = window.URL.createObjectURL(new Blob([res.data]));
@@ -108,6 +90,51 @@ export default function Home() {
         <div className="h-full rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700">
           <ResizablePanelGroup direction="vertical" className="h-full">
             {/* Editor Panel */}
+            <ResizablePanel defaultSize={60} minSize={30}>
+              <CodeEditor
+                code={code}
+                setCode={setCode}
+                disabled={locked}
+                onRun={runCode}
+                onDownload={downloadPdf}
+                loading={loading}
+                locked={locked}
+                lang={lang}
+                setLang={setLang}
+                showInput={showInput}       // ✅ pass toggle props
+                setShowInput={setShowInput} // ✅ pass toggle props
+              />
+            </ResizablePanel>
+
+            <ResizableHandle className="bg-gray-200 dark:bg-gray-700 hover:bg-blue-500 dark:hover:bg-blue-600 transition-colors duration-200" />
+
+            {/* Input + Output */}
+            <ResizablePanel defaultSize={40} minSize={20}>
+              {showInput ? (
+                <ResizablePanelGroup direction="horizontal">
+                  {/* Input Pane */}
+                  <ResizablePanel defaultSize={20} minSize={10}>
+                    <InputPane onChange={setInput} />
+                  </ResizablePanel>
+
+                  <ResizableHandle className="bg-gray-200 dark:bg-gray-700 hover:bg-blue-500 dark:hover:bg-blue-600 transition-colors duration-200" />
+
+                  {/* Output Pane */}
+                  <ResizablePanel defaultSize={50} minSize={20}>
+                    <OutputPane output={output} error={error} language={lang} />
+                  </ResizablePanel>
+                </ResizablePanelGroup>
+              ) : (
+                // ✅ Auto-expand Output if Input hidden
+                <OutputPane output={output} error={error} language={lang} />
+              )}
+            </ResizablePanel>
+          </ResizablePanelGroup>
+        </div>
+      </div>
+    </div>
+  );
+}
             <ResizablePanel defaultSize={60} minSize={30}>
               <CodeEditor
                 code={code}
