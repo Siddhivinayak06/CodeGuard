@@ -59,25 +59,49 @@ timeout 5 python /tmp/${uniqueId}/code.py
         cmd,
       ], { shell: false });
 
-   } else if (lang === "c") {
+} else if (lang === "c") {
   const uniqueId = uuidv4();
   const escapedCode = code.replace(/\r/g, "");
 
-  // 👇 Split stdin into lines (like we did for Python)
-  const inputLines = stdinInput.split("\n");
+  // 👇 Split stdin into lines
+  const inputLines = stdinInput.split("\n").map(l => l.replace(/"/g, '\\"'));
 
-  // 👇 Build a shell script to feed inputs one by one with echo
-  const inputScript = inputLines
-    .map(line => `echo "${line}"`)
-    .join(" && ");
+  // 👇 Wrap user code: redefine scanf
+  const wrappedCode = `
+#include <stdio.h>
+#include <stdarg.h>
+
+int _input_index = 0;
+char *_inputs[] = { ${inputLines.map(l => `"${l}"`).join(", ")} };
+
+int my_scanf(const char *fmt, ...) {
+    va_list args;
+    va_start(args, fmt);
+
+    int ret = 0;
+    if (_input_index < sizeof(_inputs)/sizeof(_inputs[0])) {
+        // Echo input like the user typed it
+        printf("%s\\n", _inputs[_input_index]);
+
+        // Parse input string into variables
+        ret = vsscanf(_inputs[_input_index], fmt, args);
+        _input_index++;
+    }
+
+    va_end(args);
+    return ret;
+}
+
+#define scanf my_scanf
+
+${escapedCode}
+`;
 
   const cmd = `
     mkdir -p /tmp/${uniqueId} &&
-    printf "%s" '${escapedCode.replace(/'/g, "'\\''")}' > /tmp/${uniqueId}/code.c &&
+    printf "%s" '${wrappedCode.replace(/'/g, "'\\''")}' > /tmp/${uniqueId}/code.c &&
     gcc /tmp/${uniqueId}/code.c -o /tmp/${uniqueId}/a.out -lm &&
-    (
-      ${inputScript}
-    ) | timeout 5 /tmp/${uniqueId}/a.out
+    timeout 5 /tmp/${uniqueId}/a.out
   `;
 
   docker = spawn("docker", [
