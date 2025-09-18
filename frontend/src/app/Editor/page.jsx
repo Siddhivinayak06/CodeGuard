@@ -1,11 +1,11 @@
 "use client";
 import { useState, useEffect } from "react";
-import api from "../libs/api"; // ✅ centralized axios
-import CodeEditor from "../components/CodeEditor";
-import OutputPane from "../components/OutputPane";
-import InputPane from "../components/InputPane";
-import useProctoring from "../hooks/useProctoring";
-import { ModeToggle } from "../components/ModeToggle";
+import api from "../../libs/api"; // ✅ centralized axios
+import CodeEditor from "../../components/CodeEditor";
+import OutputPane from "../../components/OutputPane";
+import InputPane from "../../components/InputPane";
+import useProctoring from "../../hooks/useProctoring";
+import { ModeToggle } from "../../components/ModeToggle";
 import { useAuth } from "@/context/AuthContext";
 import { useRouter } from "next/navigation";
 import {
