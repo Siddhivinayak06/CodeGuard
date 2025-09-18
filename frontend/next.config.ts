@@ -1,11 +1,13 @@
 import type { NextConfig } from "next";
 
+const backendUrl = process.env.BACKEND_URL || "http://localhost:5000";
+
 const nextConfig: NextConfig = {
   async rewrites() {
     return [
       {
         source: "/api/:path*",
-        destination: "http://backend:5000/:path*", // internal Docker network
+        destination: `${backendUrl}/:path*`,
       },
     ];
   },
