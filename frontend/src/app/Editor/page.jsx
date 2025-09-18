@@ -1,13 +1,11 @@
 "use client";
-import { useState, useEffect } from "react";
-import api from "../../libs/api"; // ✅ centralized axios
-import CodeEditor from "../../components/CodeEditor";
-import OutputPane from "../../components/OutputPane";
-import InputPane from "../../components/InputPane";
-import useProctoring from "../../hooks/useProctoring";
-import { ModeToggle } from "../../components/ModeToggle";
-import { useAuth } from "@/context/AuthContext";
-import { useRouter } from "next/navigation";
+import { useState } from "react";
+import api from "@/libs/api"; // ✅ centralized axios
+import CodeEditor from "@/components/CodeEditor";
+import OutputPane from "@/components/OutputPane";
+import InputPane from "@/components/InputPane";
+import useProctoring from "@/hooks/useProctoring";
+import { ModeToggle } from "@/components/ModeToggle";
 import {
   ResizableHandle,
   ResizablePanel,
@@ -25,22 +23,6 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const { violations, locked } = useProctoring(3);
   const [showInput, setShowInput] = useState(true); // ✅ toggle state
-
-  const { user, logout } = useAuth();
-  const router = useRouter();
-
-  // Redirect if not logged in
-  useEffect(() => {
-    if (!user) router.push("/login");
-  }, [user, router]);
-
-  // Auto logout on 3 violations
-  useEffect(() => {
-    if (violations >= 3) {
-      logout();
-      router.push("/login");
-    }
-  }, [violations, logout, router]);
 
   const runCode = async () => {
     setLoading(true);
@@ -61,7 +43,7 @@ export default function Home() {
     try {
       const res = await api.post(
         "/export-pdf",
-        { code, output, lang, user: user?.name }, // ✅ send username/email
+        { code, output, lang }, // ✅ removed user info
         { responseType: "blob" }
       );
       const url = window.URL.createObjectURL(new Blob([res.data]));
