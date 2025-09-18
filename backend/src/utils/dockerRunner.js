@@ -59,31 +59,42 @@ timeout 5 python /tmp/${uniqueId}/code.py
         cmd,
       ], { shell: false });
 
-    } else if (lang === "c") {
-      const uniqueId = uuidv4();
-      const escapedCode = code.replace(/\r/g, "");
+   } else if (lang === "c") {
+  const uniqueId = uuidv4();
+  const escapedCode = code.replace(/\r/g, "");
 
-      const cmd = `
-        mkdir -p /tmp/${uniqueId} &&
-        printf "%s" '${escapedCode.replace(/'/g, "'\\''")}' > /tmp/${uniqueId}/code.c &&
-        gcc /tmp/${uniqueId}/code.c -o /tmp/${uniqueId}/a.out -lm &&
-        printf "%s" '${stdinInput.replace(/'/g, "'\\''")}' | timeout 5 /tmp/${uniqueId}/a.out
-      `;
+  // 👇 Split stdin into lines (like we did for Python)
+  const inputLines = stdinInput.split("\n");
 
-      docker = spawn("docker", [
-        "run",
-        "--rm",
-        "--network", "none",
-        "-m", "128m",
-        "--cpus=0.5",
-        "-u", "0:0",
-        "codeguard-c",
-        "sh",
-        "-c",
-        cmd,
-      ], { shell: false });
+  // 👇 Build a shell script to feed inputs one by one with echo
+  const inputScript = inputLines
+    .map(line => `echo "${line}"`)
+    .join(" && ");
 
-    } else {
+  const cmd = `
+    mkdir -p /tmp/${uniqueId} &&
+    printf "%s" '${escapedCode.replace(/'/g, "'\\''")}' > /tmp/${uniqueId}/code.c &&
+    gcc /tmp/${uniqueId}/code.c -o /tmp/${uniqueId}/a.out -lm &&
+    (
+      ${inputScript}
+    ) | timeout 5 /tmp/${uniqueId}/a.out
+  `;
+
+  docker = spawn("docker", [
+    "run",
+    "--rm",
+    "--network", "none",
+    "-m", "128m",
+    "--cpus=0.5",
+    "-u", "0:0",
+    "codeguard-c",
+    "sh",
+    "-c",
+    cmd,
+  ], { shell: false });
+}
+
+    else {
       return reject(new Error("Unsupported language"));
     }
 
