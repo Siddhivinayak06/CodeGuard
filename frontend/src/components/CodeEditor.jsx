@@ -24,10 +24,12 @@ export default function CodeEditor({
   locked,
   lang,
   setLang,
+    showInputToggle, // or false if you want to hide the button
    // Add these two
   showInput,       // ✅ new prop
   setShowInput,    // ✅ new prop
   isFullscreen = true,
+  terminalRef, // ✅ optional
 }) {
   const [showWarning, setShowWarning] = useState(false);
   const [contextMenuPos, setContextMenuPos] = useState({ x: 0, y: 0 });
@@ -200,11 +202,17 @@ editor.addAction({
     python: "# Welcome to Python Code Editor\n# Write your Python code here\n\nprint('Hello, World!')\n",
     c: "/* C Hello World */\n#include <stdio.h>\n\nint main() {\n    printf(\"Hello, World!\\n\");\n    return 0;\n}\n",
   };
+const switchLanguage = (newLang) => {
+  setLang(newLang);
+  if (!code.trim()) setCode(templates[newLang]);
 
-  const switchLanguage = (newLang) => {
-    setLang(newLang);
-    if (!code.trim()) setCode(templates[newLang]);
-  };
+  if (terminalRef?.current?.socket?.readyState === WebSocket.OPEN) {
+    terminalRef.current.socket.send(JSON.stringify({ type: "lang", lang: newLang }));
+  }
+};
+
+
+  
 
   // Handle custom context menu option clicks
   const handleMenuClick = (action) => {
@@ -258,7 +266,8 @@ editor.addAction({
             </div>
           )}
 
-            {/* ✅ Toggle Input Button */}
+{/* ✅ Toggle Input Button */}
+{showInputToggle && (
   <button
     onClick={() => setShowInput(!showInput)}
     className="px-3 py-1 text-sm rounded bg-gray-200 dark:bg-gray-700 
@@ -267,6 +276,9 @@ editor.addAction({
   >
     {showInput ? "Hide Input" : "Show Input"}
   </button>
+)}
+
+ 
 
           <button
             onClick={onRun}
