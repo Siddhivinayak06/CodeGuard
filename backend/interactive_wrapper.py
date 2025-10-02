@@ -1,5 +1,5 @@
-# backend/interactive_wrapper.py
 import sys
+import signal
 
 # --- Custom input that flushes prompt properly ---
 def custom_input(prompt=""):
@@ -9,7 +9,13 @@ def custom_input(prompt=""):
 
 __builtins__.input = custom_input
 
-# --- Read code from stdin (sent by WebSocket server) ---
+# --- Timeout handler ---
+def timeout_handler(signum, frame):
+    raise TimeoutError("⏱️ Code execution timed out!")
+
+signal.signal(signal.SIGALRM, timeout_handler)
+
+# --- Read code from stdin ---
 buffer = []
 
 print("✅ Interactive Python ready. Waiting for code...\n", flush=True)
@@ -26,7 +32,11 @@ while True:
         buffer.clear()
         if code:
             try:
+                signal.alarm(5)  # ⏱️ 5-second timeout
                 exec(code, {"__name__": "__main__"})
+                signal.alarm(0)  # cancel alarm
+            except TimeoutError as e:
+                print(e, flush=True)
             except Exception as e:
                 print(f"❌ Error: {e}", flush=True)
         print("✅ Code execution finished.\n", flush=True)

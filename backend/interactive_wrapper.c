@@ -6,6 +6,11 @@
 #include <sys/stat.h>
 #include <errno.h>
 #include <termios.h>
+#include <signal.h>
+#include <sys/types.h>
+ 
+#include <time.h>
+
 
 #define MAX_LINE 4096
 #define CODE_FILE "/app/workspace/user_code.c"
@@ -70,17 +75,44 @@ int compile_code() {
 void run_code() {
     printf("\n");
     fflush(stdout);
-    
- 
-    
-    int status = system(EXEC_FILE);
-    
-    // Disable echo after program finishes
-    disable_echo();
-    
-    printf("\n✅ Program finished (exit code: %d)\n", WEXITSTATUS(status));
-    fflush(stdout);
+
+    pid_t pid = fork();
+    if (pid == 0) {
+        // Child process: execute the program
+        execl(EXEC_FILE, EXEC_FILE, NULL);
+        // If execl fails
+        printf("❌ Failed to execute program\n");
+        fflush(stdout);
+        exit(1);
+    } else if (pid > 0) {
+        // Parent process: wait with timeout
+        int status;
+        time_t start = time(NULL);
+        while (1) {
+            pid_t result = waitpid(pid, &status, WNOHANG);
+            if (result == pid) break; // finished
+            if (difftime(time(NULL), start) > 5.0) { // 5 sec timeout
+                kill(pid, SIGKILL);
+                printf("\n⏱️ Program killed due to timeout\n");
+                fflush(stdout);
+                break;
+            }
+            usleep(100000); // 0.1 sec sleep
+        }
+
+        // Disable echo after program finishes
+        disable_echo();
+
+        if (WIFEXITED(status)) {
+            printf("\n✅ Program finished (exit code: %d)\n", WEXITSTATUS(status));
+        }
+        fflush(stdout);
+    } else {
+        printf("❌ Failed to fork process\n");
+        fflush(stdout);
+    }
 }
+
 
 int main() {
     char line[MAX_LINE];
