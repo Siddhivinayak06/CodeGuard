@@ -9,6 +9,7 @@ interface InteractiveTerminalProps {
   wsUrl?: string;
   fontSize?: number;
   fontFamily?: string;
+    onOutput?: (data: string) => void; // ✅ new prop
 }
 
 export interface InteractiveTerminalHandle {
@@ -18,7 +19,7 @@ export interface InteractiveTerminalHandle {
 const InteractiveTerminal = forwardRef<
   InteractiveTerminalHandle,
   InteractiveTerminalProps
->(({ wsUrl, fontSize = 16, fontFamily = "monospace" }, ref) => {
+>(({ wsUrl, fontSize = 16, fontFamily = "monospace", onOutput  }, ref) => {
   const terminalRef = useRef<HTMLDivElement | null>(null);
   const term = useRef<Terminal | null>(null);
   const fitAddon = useRef<FitAddon>(new FitAddon());
@@ -26,6 +27,7 @@ const InteractiveTerminal = forwardRef<
   const inputBuffer = useRef<string>("");
 
   const currentLang = useRef<string>("python"); // default
+ 
 
   const wsEndpoint =
     wsUrl ||
@@ -77,6 +79,8 @@ const InteractiveTerminal = forwardRef<
         const data = msg.data ?? msg;
         term.current.write(data.replace(/\r?\n/g, "\r\n"));
         term.current.scrollToBottom();
+          // ✅ this uses onOutput
+  if (onOutput) onOutput(data);
       }
     };
 

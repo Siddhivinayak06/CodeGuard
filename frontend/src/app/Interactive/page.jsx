@@ -4,6 +4,8 @@ import dynamic from "next/dynamic"; // ✅ import dynamic
 import CodeEditor from "@/components/CodeEditor";
 import useProctoring from "@/hooks/useProctoring";
 import { ModeToggle } from "@/components/ModeToggle";
+import { useAuth } from "@/context/AuthContext";
+import api from "@/libs/api"; // ✅ centralized axios
 import {
   ResizableHandle,
   ResizablePanel,
@@ -27,26 +29,54 @@ export default function Home() {
   const interactiveTerminalRef = useRef(null);
 
  const terminalRef = useRef(null); // ✅ should be defined at the top of the parent component
+const [interactiveOutput, setInteractiveOutput] = useState("");
+const { user } = useAuth();
 
+const downloadPdf = async () => {
+  console.log("downloadPdf clicked"); // ✅ first check if function is triggered
+console.log("Current interactiveOutput:", interactiveOutput);
+  if (!interactiveOutput) {
+    console.log("No interactive output captured yet!"); // ✅ check output
+    alert("No output captured yet!");
+    return;
+  }
 
-  const downloadPdf = async () => {
-    try {
-      const res = await fetch("/export-pdf", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ code, lang }),
-      });
-      const blob = await res.blob();
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.setAttribute("download", "code_output.pdf");
-      document.body.appendChild(link);
-      link.click();
-    } catch {
-      console.error("PDF generation failed");
-    }
-  };
+  try {
+    console.log("Sending POST request to /export-pdf with:", {
+      code,
+      output: interactiveOutput,
+        user: user?.name || "Anonymous", // ✅ now pulls from logged-in user
+
+    });
+
+    const res = await api.post(
+      "/export-pdf",
+      {
+        code,                     // code from editor
+        output: interactiveOutput, // captured terminal output
+        user: user?.name || "Anonymous", // ✅ now pulls from logged-in user
+      },
+      { responseType: "blob" } // important for PDFs
+    );
+
+    console.log("Response received from backend:", res);
+
+    const url = window.URL.createObjectURL(new Blob([res.data]));
+    console.log("Blob URL created:", url);
+
+    const link = document.createElement("a");
+    link.href = url;
+    link.setAttribute("download", "interactive_code_output.pdf");
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+
+    console.log("Download triggered successfully");
+
+  } catch (err) {
+    console.error("Interactive PDF generation failed", err);
+  }
+};
 
   return (
     <div className="h-screen flex flex-col bg-gray-100 dark:bg-gray-900">
@@ -114,6 +144,7 @@ export default function Home() {
                 wsUrl="ws://localhost:5001"
                   fontSize={16}           // ⬅️ change this number
                   fontFamily="Fira Code, monospace"
+                 onOutput={(data) => setInteractiveOutput(prev => prev + data)}
               />
             </ResizablePanel>
           </ResizablePanelGroup>
