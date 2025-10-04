@@ -104,7 +104,7 @@ void run_code() {
         disable_echo();
 
         if (WIFEXITED(status)) {
-            printf("\n✅ Program finished (exit code: %d)\n", WEXITSTATUS(status));
+            printf("\n...Program finished with exit code %d\n", WEXITSTATUS(status));
         }
         fflush(stdout);
     } else {
@@ -133,7 +133,6 @@ int main() {
         return 1;
     }
     
-    printf("✅ Ready\n");
     fflush(stdout);
     
     while (fgets(line, sizeof(line), stdin)) {
