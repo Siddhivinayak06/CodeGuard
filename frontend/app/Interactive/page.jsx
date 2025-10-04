@@ -5,6 +5,8 @@ import CodeEditor from "@/components/CodeEditor";
 import useProctoring from "@/hooks/useProctoring";
 import { ModeToggle } from "@/components/ModeToggle";
 import axios from "axios";
+
+import { generatePdfClient } from "@/lib/ClientPdf";
 import {
   ResizableHandle,
   ResizablePanel,
@@ -30,50 +32,26 @@ export default function Home() {
  const terminalRef = useRef(null); // ✅ should be defined at the top of the parent component
 const [interactiveOutput, setInteractiveOutput] = useState("");
 
+// inside Home component
 const downloadPdf = async () => {
-  console.log("downloadPdf clicked");
-  console.log("Current interactiveOutput:", interactiveOutput);
-
   if (!interactiveOutput) {
-    console.log("No interactive output captured yet!");
     alert("No output captured yet!");
     return;
   }
 
   try {
-    console.log("Sending POST request to /export-pdf with:", {
+    await generatePdfClient({
       code,
       output: interactiveOutput,
-      user: "Anonymous", // ✅ Replaced with static string
+      user: "Anonymous", // replace with user email if needed
+      filename: "interactive_code_output.pdf",
     });
-
-    const res = await axios.post(
-      "/export-pdf",
-      {
-        code,
-        output: interactiveOutput,
-        user: "Anonymous", // ✅ No auth dependency
-      },
-      { responseType: "blob" }
-    );
-
-    console.log("Response received from backend:", res);
-
-    const url = window.URL.createObjectURL(new Blob([res.data]));
-    console.log("Blob URL created:", url);
-
-    const link = document.createElement("a");
-    link.href = url;
-    link.setAttribute("download", "interactive_code_output.pdf");
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-
-    console.log("Download triggered successfully");
   } catch (err) {
-    console.error("Interactive PDF generation failed", err);
+    console.error("PDF generation failed:", err);
+    alert("PDF generation failed!");
   }
 };
+
 
   return (
     <div className="h-screen flex flex-col bg-gray-100 dark:bg-gray-900">
@@ -117,7 +95,7 @@ const downloadPdf = async () => {
                 onDownload={downloadPdf}
                 locked={locked}
                 lang={lang}
-                setLang={setLang}
+                onLangChange={setLang}
                 showInputToggle={false}
                 terminalRef={terminalRef}
                   onRun={() => {
@@ -139,10 +117,11 @@ const downloadPdf = async () => {
               <InteractiveTerminal
                 ref={interactiveTerminalRef}
                 wsUrl="ws://localhost:5001"
-                  fontSize={16}           // ⬅️ change this number
-                  fontFamily="Fira Code, monospace"
-                 onOutput={(data) => setInteractiveOutput(prev => prev + data)}
+                fontSize={16}
+                fontFamily="Fira Code, monospace"
+                onOutput={(data) => setInteractiveOutput(prev => prev + data)}
               />
+
             </ResizablePanel>
           </ResizablePanelGroup>
         </div>
