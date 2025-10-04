@@ -91,7 +91,7 @@ void run_code() {
         while (1) {
             pid_t result = waitpid(pid, &status, WNOHANG);
             if (result == pid) break; // finished
-            if (difftime(time(NULL), start) > 5.0) { // 5 sec timeout
+            if (difftime(time(NULL), start) > 7.0) { // 5 sec timeout
                 kill(pid, SIGKILL);
                 printf("\n⏱️ Program killed due to timeout\n");
                 fflush(stdout);

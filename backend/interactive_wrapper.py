@@ -11,7 +11,7 @@ __builtins__.input = custom_input
 
 # --- Timeout handler ---
 def timeout_handler(signum, frame):
-    raise TimeoutError("⏱️ Code execution timed out!")
+    raise TimeoutError("\n⏱️ Code execution timed out!")
 
 signal.signal(signal.SIGALRM, timeout_handler)
 
@@ -32,13 +32,13 @@ while True:
         buffer.clear()
         if code:
             try:
-                signal.alarm(5)  # ⏱️ 5-second timeout
+                signal.alarm(7)  # ⏱️ 5-second timeout
                 exec(code, {"__name__": "__main__"})
                 signal.alarm(0)  # cancel alarm
             except TimeoutError as e:
                 print(e, flush=True)
             except Exception as e:
                 print(f"❌ Error: {e}", flush=True)
-        print("✅ Code execution finished.\n", flush=True)
+        print("\n✅ Code execution finished.\n", flush=True)
     else:
         buffer.append(line)
