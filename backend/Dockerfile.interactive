@@ -1,0 +1,39 @@
+FROM node:20-bookworm
+
+# Install build tools + docker CLI
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        build-essential \
+        python3 \
+        python3-dev \
+        curl \
+        git \
+        pkg-config \
+        libffi-dev \
+        libssl-dev \
+        libtool \
+        docker.io \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Copy interactive package.json and lockfile
+COPY package.interactive.json /app/package.json
+COPY package-lock.json* /app/
+
+
+# Install dependencies
+RUN npm install
+
+# Copy source code
+COPY src /app/src
+
+# Create non-root user
+RUN useradd -m -u 1001 -s /bin/bash runner && \
+    chown -R runner:runner /app
+
+USER runner
+WORKDIR /app
+
+EXPOSE 5001
+CMD ["npm", "start"]
