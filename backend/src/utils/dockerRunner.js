@@ -19,11 +19,33 @@ module.exports = function runCode(code, lang = "python", stdinInput = "") {
       const uniqueId = uuidv4();
       const escapedCode = code.replace(/\r/g, "");
 
+      // Prepare stdin lines
+      const inputLines = stdinInput.split("\n").map(l => l.replace(/'/g, "'\\''"));
+
+      // Wrap code to simulate input echo
+      const wrappedCode = `
+_inputs = ${JSON.stringify(inputLines)}
+_input_index = 0
+def input(prompt=""):
+    global _input_index
+    if prompt:
+        print(prompt, end="")
+    if _input_index < len(_inputs):
+        val = _inputs[_input_index]
+        print(val)
+        _input_index += 1
+        return val
+    return ""
+${escapedCode}
+`;
+
+      // Docker command
       const cmd = `
-        mkdir -p /tmp/${uniqueId} &&
-        printf "%s" '${escapedCode.replace(/'/g, "'\\''")}' > /tmp/${uniqueId}/code.py &&
-        printf "%s" '${stdinInput.replace(/'/g, "'\\''")}' | timeout 5 python /tmp/${uniqueId}/code.py
-      `;
+mkdir -p /tmp/${uniqueId} &&
+printf "%s" '${wrappedCode.replace(/'/g, "'\\''")}' > /tmp/${uniqueId}/code.py &&
+timeout 5 python /tmp/${uniqueId}/code.py
+`;
+
 
       docker = spawn("docker", [
         "run",
@@ -37,31 +59,66 @@ module.exports = function runCode(code, lang = "python", stdinInput = "") {
         cmd,
       ], { shell: false });
 
-    } else if (lang === "c") {
-      const uniqueId = uuidv4();
-      const escapedCode = code.replace(/\r/g, "");
+} else if (lang === "c") {
+  const uniqueId = uuidv4();
+  const escapedCode = code.replace(/\r/g, "");
 
-      const cmd = `
-        mkdir -p /tmp/${uniqueId} &&
-        printf "%s" '${escapedCode.replace(/'/g, "'\\''")}' > /tmp/${uniqueId}/code.c &&
-        gcc /tmp/${uniqueId}/code.c -o /tmp/${uniqueId}/a.out &&
-        printf "%s" '${stdinInput.replace(/'/g, "'\\''")}' | timeout 5 /tmp/${uniqueId}/a.out
-      `;
+  // 👇 Split stdin into lines
+  const inputLines = stdinInput.split("\n").map(l => l.replace(/"/g, '\\"'));
 
-      docker = spawn("docker", [
-        "run",
-        "--rm",
-        "--network", "none",
-        "-m", "128m",
-        "--cpus=0.5",
-        "-u", "0:0",
-        "gcc:latest",
-        "sh",
-        "-c",
-        cmd,
-      ], { shell: false });
+  // 👇 Wrap user code: redefine scanf
+  const wrappedCode = `
+#include <stdio.h>
+#include <stdarg.h>
 
-    } else {
+int _input_index = 0;
+char *_inputs[] = { ${inputLines.map(l => `"${l}"`).join(", ")} };
+
+int my_scanf(const char *fmt, ...) {
+    va_list args;
+    va_start(args, fmt);
+
+    int ret = 0;
+    if (_input_index < sizeof(_inputs)/sizeof(_inputs[0])) {
+        // Echo input like the user typed it
+        printf("%s\\n", _inputs[_input_index]);
+
+        // Parse input string into variables
+        ret = vsscanf(_inputs[_input_index], fmt, args);
+        _input_index++;
+    }
+
+    va_end(args);
+    return ret;
+}
+
+#define scanf my_scanf
+
+${escapedCode}
+`;
+
+  const cmd = `
+    mkdir -p /tmp/${uniqueId} &&
+    printf "%s" '${wrappedCode.replace(/'/g, "'\\''")}' > /tmp/${uniqueId}/code.c &&
+    gcc /tmp/${uniqueId}/code.c -o /tmp/${uniqueId}/a.out -lm &&
+    timeout 5 /tmp/${uniqueId}/a.out
+  `;
+
+  docker = spawn("docker", [
+    "run",
+    "--rm",
+    "--network", "none",
+    "-m", "128m",
+    "--cpus=0.5",
+    "-u", "0:0",
+    "codeguard-c",
+    "sh",
+    "-c",
+    cmd,
+  ], { shell: false });
+}
+
+    else {
       return reject(new Error("Unsupported language"));
     }
 

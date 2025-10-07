@@ -1,14 +1,22 @@
-FROM node:18
-
-# Install Docker CLI
-RUN apt-get update && apt-get install -y docker.io && rm -rf /var/lib/apt/lists/*
+# Lightweight Node.js Alpine
+FROM node:20-alpine
 
 WORKDIR /app
 
-COPY package*.json ./
-RUN npm install --production
+# Install build tools for native modules (node-pty, etc.)
+RUN apk add --no-cache python3 make g++ bash docker-cli
 
+ENV PYTHON=/usr/bin/python3
+
+# Copy package files and install all dependencies (dev needed for build)
+COPY package*.json ./
+RUN npm install --legacy-peer-deps
+
+# Copy source code
 COPY . .
 
+# Expose backend port
 EXPOSE 5000
+
+# Start backend server
 CMD ["node", "src/server.js"]

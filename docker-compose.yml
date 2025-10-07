@@ -1,43 +1,89 @@
+
 version: "3.9"
 
 services:
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        - NEXT_PUBLIC_BACKEND_URL=http://localhost:5002
+        - NEXT_PUBLIC_INTERACTIVE_WS_URL=ws://localhost:5001
+        - NEXT_PUBLIC_SUPABASE_URL=https://cfthcwqfrvrcgexvxxoz.supabase.co
+        - NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNmdGhjd3FmcnZyY2dleHZ4eG96Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTkyMzQ5MTEsImV4cCI6MjA3NDgxMDkxMX0.zbVwgPka5_unGdsoR75SpfKrbd25eg9qN4FLpIsKwA8
+    image: codeguard-frontend
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - BACKEND_URL=http://backend:5002
+      - NEXT_PUBLIC_INTERACTIVE_WS_URL=ws://localhost:5001
+      - NEXT_PUBLIC_BACKEND_URL=http://localhost:5002
+      - NEXT_PUBLIC_SUPABASE_URL=https://cfthcwqfrvrcgexvxxoz.supabase.co
+      - NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNmdGhjd3FmcnZyY2dleHZ4eG96Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTkyMzQ5MTEsImV4cCI6MjA3NDgxMDkxMX0.zbVwgPka5_unGdsoR75SpfKrbd25eg9qN4FLpIsKwA8
+    depends_on:
+      - backend
+      - interactive-backend
+    restart: unless-stopped
+
   backend:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    container_name: codeguard-backend
+    image: codeguard-backend
     ports:
-      - "5000:5000"
-    volumes:
-      - ./backend:/app
-      - /var/run/docker.sock:/var/run/docker.sock
-      - codeguard_tmp:/app/tmp
+      - "5002:5000"
     env_file:
-      - .env   # ✅ load environment variables (not pushed to GitHub)
-    depends_on:
-      - db
+      - .env
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    # depends_on:
+    #   db:
+    #     condition: service_healthy
     restart: unless-stopped
 
-  db:
-    image: postgres:15
-    container_name: codeguard-db
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: codeguard
+  interactive-backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.interactive
+    image: codeguard-interactive-backend
+    command: ["node", "src/interactiveserver.js"]
     ports:
-      - "5432:5432"
+      - "5001:5001"
+    expose:
+      - "5001"
+    env_file:
+      - .env
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./workspace:/app/workspace
+    user: root
     restart: unless-stopped
+     
+
+  # db:
+  #   image: postgres:15
+  #   environment:
+  #     POSTGRES_USER: postgres
+  #     POSTGRES_PASSWORD: postgres
+  #     POSTGRES_DB: codeguard
+  #   volumes:
+  #     - pgdata:/var/lib/postgresql/data
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "pg_isready -U postgres"]
+  #     interval: 5s
+  #     retries: 10
+  #     start_period: 10s
+  #   restart: unless-stopped
 
   python-runtime:
     build:
       context: ./backend
       dockerfile: Dockerfile.python
-    container_name: codeguard-python
-    volumes:
-      - codeguard_tmp:/code
+    image: codeguard-python
     command: tail -f /dev/null
     restart: unless-stopped
 
@@ -45,12 +91,9 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile.c
-    container_name: codeguard-c
-    volumes:
-      - codeguard_tmp:/code
+    image: codeguard-c
     command: tail -f /dev/null
     restart: unless-stopped
 
 volumes:
   pgdata:
-  codeguard_tmp:

@@ -2,7 +2,7 @@ const PDFDocument = require("pdfkit");
 const path = require("path");
 const fs = require("fs");
 
-module.exports = function generatePdf(code, output) {
+module.exports = function generatePdf(code, output, user = "Anonymous") {
   const tmpDir = path.join(__dirname, "../../tmp");
   if (!fs.existsSync(tmpDir)) fs.mkdirSync(tmpDir);
 
@@ -13,6 +13,11 @@ module.exports = function generatePdf(code, output) {
 
   doc.fontSize(18).text("Code Submission", { underline: true });
   doc.moveDown();
+
+  // ✅ Add username/email
+  doc.fontSize(12).text(`Submitted by: ${user}`, { italic: true });
+  doc.moveDown();
+
   doc.fontSize(12).text("Code:", { bold: true });
   doc.moveDown(0.5);
   doc.font("Courier").text(code, { lineGap: 4 });
@@ -31,3 +36,4 @@ module.exports = function generatePdf(code, output) {
     stream.on("finish", () => resolve(pdfPath));
   });
 };
+

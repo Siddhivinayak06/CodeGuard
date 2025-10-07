@@ -12,7 +12,12 @@ RUN pip install --no-cache-dir \
     scipy \
     scikit-learn
 
+# Set working directory
 WORKDIR /app
+
+# Copy wrapper script into the container
+COPY interactive_wrapper.py /app/
+
 # Create a non-root user for running code
 RUN useradd -m runner
 USER runner
