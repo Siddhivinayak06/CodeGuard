@@ -56,6 +56,7 @@ export default function Navbar() {
           { name: "Dashboard", href: "/dashboard/student" },
           { name: "Practicals", href: "/student/practicals" },
           { name: "Submissions", href: "/student/submissions" },
+          { name: "Compiler", href: "/Interactive" },
         ];
 
   return (

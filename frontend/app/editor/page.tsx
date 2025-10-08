@@ -68,16 +68,18 @@ export default function EditorPage() {
     if (!practicalId) return;
     const fetchPractical = async () => {
       try {
-        const res = await fetch(
-          `${process.env.NEXT_PUBLIC_API_URL}/api/student/practical/${practicalId}`
-        );
+        const res = await fetch(`/api/student/practical/${practicalId}`);
+        if (!res.ok) {
+          const err = await res.json();
+          console.error("Failed to load practical:", err.error);
+          return;
+        }
         const data = await res.json();
         setPractical(data);
-        setCode(data?.starter_code || "# Start coding here...\n");
-        setLang(data?.language || "python");
       } catch (err) {
-        console.error("Failed to load practical:", err);
+        console.error("Fetch error:", err);
       }
+
     };
     fetchPractical();
   }, [practicalId]);
@@ -189,58 +191,71 @@ export default function EditorPage() {
         </div>
       </div>
 
-      {/* Description */}
-      {practical?.description && (
-        <div className="bg-white/10 dark:bg-gray-800/30 border-b border-gray-700/40 px-6 py-2 text-gray-700 dark:text-gray-300 text-sm">
-          {practical.description}
-        </div>
-      )}
+      {/* Main Content */}
+      <div className="flex-1 p-4 h-full">
+        <ResizablePanelGroup direction="horizontal" className="h-full">
+          {/* Left panel: Practical Description */}
+          <ResizablePanel defaultSize={30} minSize={20}>
+            <div className="h-full p-4 overflow-auto bg-white/10 dark:bg-gray-800/30 border border-gray-200 dark:border-gray-700 rounded-lg">
+              <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-2">
+                Practical Question
+              </h2>
+              <div className="text-gray-700 dark:text-gray-300 text-sm whitespace-pre-wrap">
+                {practical?.description || "No description available."}
+              </div>
+            </div>
+          </ResizablePanel>
 
-      {/* Code Editor */}
-      <div className="flex-1 p-4">
-        <div className="h-full rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700">
-          <ResizablePanelGroup direction="vertical" className="h-full">
-            <ResizablePanel defaultSize={60} minSize={30}>
-              <CodeEditor
-                code={code}
-                setCode={setCode}
-                disabled={locked}
-                onRun={runCode}
-                onDownload={downloadPdf}
-                onSubmit={handleSubmit} // ✅ add submit action
-                loading={loading}
-                locked={locked}
-                lang={lang}
-                onLangChange={setLang}
-                showInput={showInput}
-                setShowInput={setShowInput}
-                showInputToggle={showInputToggle}
-                terminalRef={terminalRef}
-              />
-            </ResizablePanel>
+          <ResizableHandle className="bg-gray-200 dark:bg-gray-700 hover:bg-blue-500 dark:hover:bg-blue-600 transition-colors duration-200" />
 
-            <ResizableHandle className="bg-gray-200 dark:bg-gray-700 hover:bg-blue-500 dark:hover:bg-blue-600 transition-colors duration-200" />
+          {/* Right panel: Code Editor + Output/Input */}
+          <ResizablePanel defaultSize={70} minSize={50}>
+            <div className="h-full rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700">
+              <ResizablePanelGroup direction="vertical" className="h-full">
+                <ResizablePanel defaultSize={60} minSize={30}>
+                  <CodeEditor
+                    code={code}
+                    setCode={setCode}
+                    disabled={locked}
+                    onRun={runCode}
+                    onDownload={downloadPdf}
+                    onSubmit={handleSubmit}
+                    loading={loading}
+                    locked={locked}
+                    lang={lang}
+                    onLangChange={setLang}
+                    showInput={showInput}
+                    setShowInput={setShowInput}
+                    showInputToggle={showInputToggle}
+                    terminalRef={terminalRef}
+                  />
+                </ResizablePanel>
 
-            <ResizablePanel defaultSize={40} minSize={20}>
-              {showInput ? (
-                <ResizablePanelGroup direction="horizontal">
-                  <ResizablePanel defaultSize={20} minSize={10}>
-                    <InputPane onChange={setInput} />
-                  </ResizablePanel>
+                <ResizableHandle className="bg-gray-200 dark:bg-gray-700 hover:bg-blue-500 dark:hover:bg-blue-600 transition-colors duration-200" />
 
-                  <ResizableHandle className="bg-gray-200 dark:bg-gray-700 hover:bg-blue-500 dark:hover:bg-blue-600 transition-colors duration-200" />
+                <ResizablePanel defaultSize={40} minSize={20}>
+                  {showInput ? (
+                    <ResizablePanelGroup direction="horizontal">
+                      <ResizablePanel defaultSize={20} minSize={10}>
+                        <InputPane onChange={setInput} />
+                      </ResizablePanel>
 
-                  <ResizablePanel defaultSize={50} minSize={20}>
+                      <ResizableHandle className="bg-gray-200 dark:bg-gray-700 hover:bg-blue-500 dark:hover:bg-blue-600 transition-colors duration-200" />
+
+                      <ResizablePanel defaultSize={50} minSize={20}>
+                        <OutputPane output={output} error={errorOutput} language={lang} />
+                      </ResizablePanel>
+                    </ResizablePanelGroup>
+                  ) : (
                     <OutputPane output={output} error={errorOutput} language={lang} />
-                  </ResizablePanel>
-                </ResizablePanelGroup>
-              ) : (
-                <OutputPane output={output} error={errorOutput} language={lang} />
-              )}
-            </ResizablePanel>
-          </ResizablePanelGroup>
-        </div>
+                  )}
+                </ResizablePanel>
+              </ResizablePanelGroup>
+            </div>
+          </ResizablePanel>
+        </ResizablePanelGroup>
       </div>
+
 
       {/* Footer Submit Button */}
       <div className="p-4 flex justify-end border-t border-gray-200 dark:border-gray-700 bg-white/30 dark:bg-gray-900/30 backdrop-blur-sm">

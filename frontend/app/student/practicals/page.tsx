@@ -10,46 +10,120 @@ import type { User } from "@supabase/supabase-js";
 export default function StudentPracticals() {
   const router = useRouter();
   const supabase = useMemo(() => createClient(), []);
-  const mountedRef = useRef(true);
+  const mountedRef = useRef<boolean>(false);
 
   const [user, setUser] = useState<User | null>(null);
   const [practicals, setPracticals] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState<boolean>(true);
 
-  // ✅ Auth
+  // Auth — set mountedRef explicitly
   useEffect(() => {
+    mountedRef.current = true;
+
     const fetchUser = async () => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) router.push("/auth/login");
-      else if (mountedRef.current) setUser(user);
+      try {
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+
+        if (!user) {
+          router.push("/auth/login");
+          return;
+        }
+        if (mountedRef.current) setUser(user);
+      } catch (err) {
+        console.error("Auth fetch error:", err);
+        router.push("/auth/login");
+      }
     };
+
     fetchUser();
+
     return () => {
       mountedRef.current = false;
     };
   }, [router, supabase]);
 
-  // ✅ Fetch practicals
+  // Helper: get access token from supabase client
+  const getAccessToken = async (): Promise<string | null> => {
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      return session?.access_token ?? null;
+    } catch (err) {
+      console.error("Error getting session token:", err);
+      return null;
+    }
+  };
+
+  // Fetch practicals (cancellable)
   useEffect(() => {
-    if (!user) return;
+    if (!user?.id) return;
+
+    const controller = new AbortController();
+    const signal = controller.signal;
+
     const fetchPracticals = async () => {
       setLoading(true);
       try {
+        const token = await getAccessToken();
+        const headers: Record<string, string> = {
+          "Content-Type": "application/json",
+        };
+        if (token) headers["Authorization"] = `Bearer ${token}`;
+
+        // Use your API endpoint — keep same URL but include token
         const res = await fetch(
-          `${process.env.NEXT_PUBLIC_API_URL}/api/student/practicals/${user.id}`
+          `${process.env.NEXT_PUBLIC_API_URL}/api/student/practicals/${encodeURIComponent(user.id)}`,
+          { method: "GET", headers, signal }
         );
-        const data = await res.json();
-        setPracticals(data || []);
-      } catch (err) {
-        console.error("Failed to load practicals:", err);
+
+        if (!res.ok) {
+          // Try to read server message for better error logs
+          const text = await res.text().catch(() => null);
+          throw new Error(`Failed to fetch practicals: ${res.status} ${text ?? ""}`);
+        }
+
+        const payload = await res.json().catch(() => null);
+
+        // Support both shapes: raw array OR { success: true, data: [...] }
+        let items: any[] = [];
+        if (Array.isArray(payload)) {
+          items = payload;
+        } else if (payload && Array.isArray(payload.data)) {
+          items = payload.data;
+        } else if (payload && payload.success && Array.isArray(payload.items)) {
+          // some APIs use items
+          items = payload.items;
+        } else {
+          // fallback: try payload?.data?.rows etc.
+          items = payload?.data ?? [];
+        }
+
+        if (!signal.aborted && mountedRef.current) {
+          setPracticals(items);
+        }
+      } catch (err: any) {
+        if (err.name === "AbortError") {
+          // fetch was aborted — not an error to show
+          console.debug("Practicals fetch aborted");
+        } else {
+          console.error("Failed to load practicals:", err);
+        }
       } finally {
-        setLoading(false);
+        if (!signal.aborted && mountedRef.current) {
+          setLoading(false);
+        }
       }
     };
+
     fetchPracticals();
-  }, [user]);
+
+    return () => {
+      controller.abort();
+    };
+  }, [user?.id, supabase]);
 
   if (!user)
     return (
@@ -97,7 +171,7 @@ export default function StudentPracticals() {
                       <Button
                         size="sm"
                         onClick={() =>
-                          router.push(`/editor?practicalId=${p.id}&subject=${p.subject_id}`)
+                          router.push(`/editor?practicalId=${encodeURIComponent(p.id)}&subject=${encodeURIComponent(p.subject_id)}`)
                         }
                       >
                         Open in Editor

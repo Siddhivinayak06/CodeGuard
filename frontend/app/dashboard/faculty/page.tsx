@@ -6,18 +6,32 @@ import { createClient } from "@/lib/supabase/client";
 import Navbar from "@/components/Navbar";
 import type { User } from "@supabase/supabase-js";
 
+// Define types
+type Subject = {
+  id: string;
+  name: string;
+  practical_count?: number;
+};
+
+type Practical = {
+  id: string;
+  title: string;
+  deadline?: string;
+  submission_count?: number;
+};
+
 export default function FacultyDashboard() {
   const router = useRouter();
   const mountedRef = useRef(true);
   const supabase = useMemo(() => createClient(), []);
 
   const [user, setUser] = useState<User | null>(null);
-  const [subjects, setSubjects] = useState<any[]>([]);
-  const [selected, setSelected] = useState<number | null>(null);
-  const [practicals, setPracticals] = useState<any[]>([]);
+  const [subjects, setSubjects] = useState<Subject[]>([]);
+  const [selected, setSelected] = useState<string | null>(null);
+  const [practicals, setPracticals] = useState<Practical[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // ✅ Auth check and user fetch
+  // ✅ Auth check
   useEffect(() => {
     mountedRef.current = true;
 
@@ -40,13 +54,12 @@ export default function FacultyDashboard() {
     };
 
     fetchUser();
-
     return () => {
       mountedRef.current = false;
     };
   }, [router, supabase]);
 
-  // ✅ Fetch subjects for logged-in faculty
+  // ✅ Fetch subjects safely
   useEffect(() => {
     if (!user?.id) return;
 
@@ -57,9 +70,12 @@ export default function FacultyDashboard() {
           `${process.env.NEXT_PUBLIC_API_URL}/api/faculty/subjects/${user.id}`
         );
         const data = await res.json();
-        setSubjects(data || []);
+
+        // Ensure we always have an array
+        setSubjects(Array.isArray(data) ? data : []);
       } catch (err) {
         console.error("Failed to load subjects:", err);
+        setSubjects([]);
       } finally {
         setLoading(false);
       }
@@ -68,17 +84,20 @@ export default function FacultyDashboard() {
     fetchSubjects();
   }, [user?.id]);
 
-  // ✅ Load practicals when a subject is selected
-  const loadPracticals = async (subjectId: number) => {
+  // ✅ Load practicals safely
+  const loadPracticals = async (subjectId: string) => {
     setSelected(subjectId);
     try {
       const res = await fetch(
         `${process.env.NEXT_PUBLIC_API_URL}/api/faculty/practicals/${subjectId}`
       );
       const data = await res.json();
-      setPracticals(data || []);
+
+      // Ensure we always have an array
+      setPracticals(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error("Failed to load practicals:", err);
+      setPracticals([]);
     }
   };
 
@@ -92,10 +111,8 @@ export default function FacultyDashboard() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-100 dark:from-gray-900 dark:via-gray-950 dark:to-black">
-      {/* ✅ Shared Navbar */}
       <Navbar />
 
-      {/* Main Content */}
       <div className="pt-24 px-6 md:px-12">
         <h1 className="text-3xl font-extrabold mb-8 text-gray-800 dark:text-gray-100">
           👩‍🏫 Faculty Dashboard
@@ -125,7 +142,7 @@ export default function FacultyDashboard() {
                     {s.name}
                   </h3>
                   <p className="text-sm text-gray-500 dark:text-gray-400">
-                    {s.practical_count || 0} Practicals
+                    {s.practical_count ?? 0} Practicals
                   </p>
                 </div>
               ))}
@@ -149,6 +166,7 @@ export default function FacultyDashboard() {
                           <th className="px-4 py-3 text-left">Title</th>
                           <th className="px-4 py-3 text-left">Deadline</th>
                           <th className="px-4 py-3 text-left">Submissions</th>
+                          <th className="px-4 py-3 text-left">Actions</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -163,7 +181,19 @@ export default function FacultyDashboard() {
                                 ? new Date(p.deadline).toLocaleDateString()
                                 : "—"}
                             </td>
-                            <td className="px-4 py-3">{p.submission_count}</td>
+                            <td className="px-4 py-3">{p.submission_count ?? 0}</td>
+                            <td className="px-4 py-3">
+                              <button
+                                onClick={() =>
+                                  router.push(
+                                    `/faculty/submissions?practical=${p.id}`
+                                  )
+                                }
+                                className="px-3 py-1 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 transition"
+                              >
+                                View Submissions
+                              </button>
+                            </td>
                           </tr>
                         ))}
                       </tbody>

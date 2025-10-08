@@ -39,7 +39,7 @@ export default function FacultySubmissions() {
       setLoading(true);
       try {
         const res = await fetch(
-          `${process.env.NEXT_PUBLIC_API_URL}/api/faculty/submissions/${user.id}?practical=${practicalId}`
+          `${process.env.NEXT_PUBLIC_API_URL}/api/faculty/submissions/${practicalId}`
         );
         const data = await res.json();
         setSubmissions(data || []);

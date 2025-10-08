@@ -1,7 +1,8 @@
 "use client"
 
 import type React from "react"
-
+import { useState } from "react"
+import { useRouter } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -9,11 +10,12 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
-import { useState } from "react"
 import { GraduationCap } from "lucide-react"
 
 export default function RegisterPage() {
+  const router = useRouter()
+  const supabase = createClient()
+
   const [formData, setFormData] = useState({
     email: "",
     password: "",
@@ -23,7 +25,6 @@ export default function RegisterPage() {
   })
   const [error, setError] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
-  const router = useRouter()
 
   const handleInputChange = (field: string, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }))
@@ -31,38 +32,40 @@ export default function RegisterPage() {
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault()
-    const supabase = createClient()
-    setIsLoading(true)
     setError(null)
 
     if (formData.password !== formData.confirmPassword) {
       setError("Passwords do not match")
-      setIsLoading(false)
       return
     }
 
     if (formData.password.length < 6) {
       setError("Password must be at least 6 characters long")
-      setIsLoading(false)
       return
     }
 
+    setIsLoading(true)
+
     try {
-      const { error } = await supabase.auth.signUp({
+      const { error: signUpError } = await supabase.auth.signUp({
         email: formData.email,
         password: formData.password,
         options: {
-          emailRedirectTo: process.env.NEXT_PUBLIC_DEV_SUPABASE_REDIRECT_URL || `${window.location.origin}/success`,
+          emailRedirectTo:
+            process.env.NEXT_PUBLIC_DEV_SUPABASE_REDIRECT_URL ||
+            `${window.location.origin}/auth/verify-email`,
           data: {
             name: formData.name,
-            role: formData.role,
+            role: formData.role, // This will be stored in raw_user_meta_data and used by the trigger
           },
         },
       })
-      if (error) throw error
+
+      if (signUpError) throw signUpError
+
       router.push("/auth/verify-email")
-    } catch (error: unknown) {
-      setError(error instanceof Error ? error.message : "An error occurred")
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "An unexpected error occurred")
     } finally {
       setIsLoading(false)
     }
@@ -74,7 +77,7 @@ export default function RegisterPage() {
         <div className="flex flex-col items-center mb-8">
           <div className="flex items-center gap-2 mb-4">
             <GraduationCap className="h-8 w-8 text-blue-600" />
-            <h1 className="text-2xl font-bold text-gray-900">Registeration Portal</h1>
+            <h1 className="text-2xl font-bold text-gray-900">Registration Portal</h1>
           </div>
           <p className="text-gray-600 text-center">Create your account to get started</p>
         </div>
@@ -98,6 +101,7 @@ export default function RegisterPage() {
                   className="h-11"
                 />
               </div>
+
               <div className="space-y-2">
                 <Label htmlFor="email">Email Address</Label>
                 <Input
@@ -110,6 +114,7 @@ export default function RegisterPage() {
                   className="h-11"
                 />
               </div>
+
               <div className="space-y-2">
                 <Label htmlFor="role">Role</Label>
                 <Select value={formData.role} onValueChange={(value) => handleInputChange("role", value)}>
@@ -118,11 +123,13 @@ export default function RegisterPage() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="student">Student</SelectItem>
-                    <SelectItem value="teacher">Teacher</SelectItem>
+                    <SelectItem value="faculty">Faculty</SelectItem>
                     <SelectItem value="admin">Admin</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
+
+
               <div className="space-y-2">
                 <Label htmlFor="password">Password</Label>
                 <Input
@@ -134,6 +141,7 @@ export default function RegisterPage() {
                   className="h-11"
                 />
               </div>
+
               <div className="space-y-2">
                 <Label htmlFor="confirmPassword">Confirm Password</Label>
                 <Input
@@ -145,13 +153,16 @@ export default function RegisterPage() {
                   className="h-11"
                 />
               </div>
+
               {error && (
                 <div className="p-3 text-sm text-red-600 bg-red-50 border border-red-200 rounded-md">{error}</div>
               )}
+
               <Button type="submit" className="w-full h-11 bg-blue-600 hover:bg-blue-700" disabled={isLoading}>
                 {isLoading ? "Creating Account..." : "Create Account"}
               </Button>
             </form>
+
             <div className="mt-6 text-center text-sm text-gray-600">
               Already have an account?{" "}
               <Link

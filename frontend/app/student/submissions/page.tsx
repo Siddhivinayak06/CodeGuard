@@ -9,51 +9,106 @@ import type { User } from "@supabase/supabase-js";
 export default function StudentSubmissions() {
   const router = useRouter();
   const supabase = useMemo(() => createClient(), []);
-  const mountedRef = useRef(true);
+  const mountedRef = useRef<boolean>(false);
 
   const [user, setUser] = useState<User | null>(null);
   const [submissions, setSubmissions] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState<boolean>(true);
 
-  // ✅ Auth
+  // ✅ Auth check
   useEffect(() => {
+    mountedRef.current = true;
+
     const fetchUser = async () => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) router.push("/auth/login");
-      else if (mountedRef.current) setUser(user);
+      try {
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+
+        if (!user) {
+          router.push("/auth/login");
+          return;
+        }
+
+        if (mountedRef.current) setUser(user);
+      } catch (err) {
+        console.error("Auth fetch error:", err);
+        router.push("/auth/login");
+      }
     };
+
     fetchUser();
+
     return () => {
       mountedRef.current = false;
     };
   }, [router, supabase]);
 
-  // ✅ Fetch submissions
+  // ✅ Helper to get access token
+  const getAccessToken = async (): Promise<string | null> => {
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      return session?.access_token ?? null;
+    } catch (err) {
+      console.error("Failed to get session token:", err);
+      return null;
+    }
+  };
+
+  // ✅ Fetch submissions (cancellable)
   useEffect(() => {
-    if (!user) return;
+    if (!user?.id) return;
+
+    const controller = new AbortController();
+    const signal = controller.signal;
+
     const fetchSubmissions = async () => {
       setLoading(true);
       try {
+        const token = await getAccessToken();
+        const headers: Record<string, string> = { "Content-Type": "application/json" };
+        if (token) headers["Authorization"] = `Bearer ${token}`;
+
         const res = await fetch(
-          `${process.env.NEXT_PUBLIC_API_URL}/api/student/submissions/${user.id}`
+          `${process.env.NEXT_PUBLIC_API_URL}/api/student/submissions/${encodeURIComponent(user.id)}`,
+          { headers, signal }
         );
-        const data = await res.json();
-        setSubmissions(data || []);
-      } catch (err) {
-        console.error("Failed to load submissions:", err);
+
+        if (!res.ok) {
+          const text = await res.text().catch(() => "");
+          throw new Error(`Failed to fetch submissions: ${res.status} ${text}`);
+        }
+
+        const payload = await res.json().catch(() => null);
+
+        const items: any[] = Array.isArray(payload)
+          ? payload
+          : payload?.data ?? [];
+
+        if (!signal.aborted && mountedRef.current) {
+          setSubmissions(items);
+        }
+      } catch (err: any) {
+        if (err.name === "AbortError") console.debug("Fetch aborted");
+        else console.error("Failed to load submissions:", err);
       } finally {
-        setLoading(false);
+        if (!signal.aborted && mountedRef.current) setLoading(false);
       }
     };
+
     fetchSubmissions();
-  }, [user]);
+
+    return () => {
+      controller.abort();
+    };
+  }, [user?.id, supabase]);
 
   if (!user)
     return (
       <div className="flex items-center justify-center min-h-screen bg-gray-50 dark:bg-gray-900">
-        <p className="text-gray-500 dark:text-gray-400">Loading...</p>
+        <p className="text-gray-500 dark:text-gray-400 text-lg">Loading...</p>
       </div>
     );
 
@@ -101,7 +156,7 @@ export default function StudentSubmissions() {
                       {s.status}
                     </td>
                     <td className="px-4 py-3">
-                      {new Date(s.created_at).toLocaleString()}
+                      {s.created_at ? new Date(s.created_at).toLocaleString() : "—"}
                     </td>
                   </tr>
                 ))}
