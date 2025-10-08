@@ -132,7 +132,6 @@ export default function StudentSubmissions() {
                 <tr>
                   <th className="px-4 py-3 text-left">Practical</th>
                   <th className="px-4 py-3 text-left">Language</th>
-                  <th className="px-4 py-3 text-left">Status</th>
                   <th className="px-4 py-3 text-left">Submitted At</th>
                 </tr>
               </thead>
@@ -144,17 +143,6 @@ export default function StudentSubmissions() {
                   >
                     <td className="px-4 py-3">{s.practical_title}</td>
                     <td className="px-4 py-3">{s.language}</td>
-                    <td
-                      className={`px-4 py-3 font-semibold ${
-                        s.status === "Success"
-                          ? "text-green-600"
-                          : s.status === "Pending"
-                          ? "text-yellow-600"
-                          : "text-red-600"
-                      }`}
-                    >
-                      {s.status}
-                    </td>
                     <td className="px-4 py-3">
                       {s.created_at ? new Date(s.created_at).toLocaleString() : "—"}
                     </td>

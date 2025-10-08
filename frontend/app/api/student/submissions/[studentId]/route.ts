@@ -1,14 +1,14 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { supabaseAdmin } from "@/lib/supabase/service"; // ✅ server-side client
 
-// ✅ GET /api/student/submissions/:studentId
-export async function GET(req: Request, { params }: { params: { studentId: string } }) {
-  const supabase = createClient();
+export async function GET(
+  req: Request,
+  { params }: { params: { studentId: string } }
+) {
   const { studentId } = params;
 
   try {
-    // Fetch all submissions for this student
-    const { data, error } = await supabase
+    const { data, error } = await supabaseAdmin
       .from("submissions")
       .select(`
         id,
@@ -22,7 +22,6 @@ export async function GET(req: Request, { params }: { params: { studentId: strin
 
     if (error) throw error;
 
-    // Flatten nested structure (for easier frontend use)
     const formatted = data.map((s) => ({
       id: s.id,
       practical_title: s.practicals?.title || "Unknown",

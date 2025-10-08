@@ -150,7 +150,6 @@ export default function StudentDashboard() {
                       <tr>
                         <th className="px-4 py-3 text-left">Practical</th>
                         <th className="px-4 py-3 text-left">Language</th>
-                        <th className="px-4 py-3 text-left">Status</th>
                         <th className="px-4 py-3 text-left">Submitted At</th>
                       </tr>
                     </thead>
@@ -162,15 +161,6 @@ export default function StudentDashboard() {
                         >
                           <td className="px-4 py-3">{s.practical_title}</td>
                           <td className="px-4 py-3">{s.language || "N/A"}</td>
-                          <td
-                            className={`px-4 py-3 font-medium ${
-                              s.status === "Success"
-                                ? "text-green-600"
-                                : "text-red-600"
-                            }`}
-                          >
-                            {s.status || "Pending"}
-                          </td>
                           <td className="px-4 py-3">
                             {s.created_at
                               ? new Date(s.created_at).toLocaleString()

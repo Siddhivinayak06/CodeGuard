@@ -120,7 +120,6 @@ export default function EditorPage() {
         body: JSON.stringify({
           student_id: user.id,
           practical_id: practicalId,
-          subject_id: subjectId,
           code,
           language: lang,
           output,
@@ -130,7 +129,7 @@ export default function EditorPage() {
 
       if (!res.ok) throw new Error("Submission failed");
       alert("✅ Submission successful!");
-      router.push("/dashboard/student/submissions");
+      router.push("/student/submissions");
     } catch (err) {
       console.error(err);
       alert("❌ Submission failed. Please try again.");

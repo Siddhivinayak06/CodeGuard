@@ -1,34 +1,6 @@
-
 version: "3.9"
 
 services:
-  frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-      args:
-        - NEXT_PUBLIC_BACKEND_URL=http://localhost:5002
-        - NEXT_PUBLIC_INTERACTIVE_WS_URL=ws://localhost:5001
-        - NEXT_PUBLIC_SUPABASE_URL=https://cfthcwqfrvrcgexvxxoz.supabase.co
-        - NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNmdGhjd3FmcnZyY2dleHZ4eG96Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTkyMzQ5MTEsImV4cCI6MjA3NDgxMDkxMX0.zbVwgPka5_unGdsoR75SpfKrbd25eg9qN4FLpIsKwA8
-    image: codeguard-frontend
-    ports:
-      - "3000:3000"
-    env_file:
-      - .env
-    environment:
-      - NODE_ENV=production
-      - PORT=3000
-      - BACKEND_URL=http://backend:5002
-      - NEXT_PUBLIC_INTERACTIVE_WS_URL=ws://localhost:5001
-      - NEXT_PUBLIC_BACKEND_URL=http://localhost:5002
-      - NEXT_PUBLIC_SUPABASE_URL=https://cfthcwqfrvrcgexvxxoz.supabase.co
-      - NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNmdGhjd3FmcnZyY2dleHZ4eG96Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTkyMzQ5MTEsImV4cCI6MjA3NDgxMDkxMX0.zbVwgPka5_unGdsoR75SpfKrbd25eg9qN4FLpIsKwA8
-    depends_on:
-      - backend
-      - interactive-backend
-    restart: unless-stopped
-
   backend:
     build:
       context: ./backend
@@ -40,9 +12,6 @@ services:
       - .env
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-    # depends_on:
-    #   db:
-    #     condition: service_healthy
     restart: unless-stopped
 
   interactive-backend:
@@ -63,21 +32,6 @@ services:
     user: root
     restart: unless-stopped
      
-
-  # db:
-  #   image: postgres:15
-  #   environment:
-  #     POSTGRES_USER: postgres
-  #     POSTGRES_PASSWORD: postgres
-  #     POSTGRES_DB: codeguard
-  #   volumes:
-  #     - pgdata:/var/lib/postgresql/data
-  #   healthcheck:
-  #     test: ["CMD-SHELL", "pg_isready -U postgres"]
-  #     interval: 5s
-  #     retries: 10
-  #     start_period: 10s
-  #   restart: unless-stopped
 
   python-runtime:
     build:
