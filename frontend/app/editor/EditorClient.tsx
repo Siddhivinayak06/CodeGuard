@@ -24,7 +24,6 @@ export default function EditorClient() {
   const searchParams = useSearchParams();
   const mountedRef = useRef(true);
 
-  // Extract params from query
   const practicalId = searchParams?.get("practicalId");
   const subjectId = searchParams?.get("subject");
 
@@ -38,7 +37,6 @@ export default function EditorClient() {
   const [showInput, setShowInput] = useState(true);
   const [showInputToggle, setShowInputToggle] = useState(true);
   const terminalRef = useRef(null);
-
   const [practical, setPractical] = useState<any>(null);
 
   const supabase = useMemo(
@@ -47,7 +45,6 @@ export default function EditorClient() {
   );
   const [user, setUser] = useState<User | null>(null);
 
-  // Auth check
   useEffect(() => {
     mountedRef.current = true;
     const fetchUser = async () => {
@@ -67,7 +64,6 @@ export default function EditorClient() {
     };
   }, [router, supabase]);
 
-  // Fetch practical details
   useEffect(() => {
     if (!practicalId) return;
     const fetchPractical = async () => {
@@ -87,14 +83,12 @@ export default function EditorClient() {
     fetchPractical();
   }, [practicalId]);
 
-  // Sign out
   const handleSignOut = async () => {
     if (!supabase) return;
     await supabase.auth.signOut();
     router.push("/auth/login");
   };
 
-  // Run code
   const runCode = async () => {
     setLoading(true);
     setError("");
@@ -113,7 +107,6 @@ export default function EditorClient() {
     }
   };
 
-  // Submit code
   const handleSubmit = async () => {
     if (!user || !practicalId) return;
     try {
@@ -139,7 +132,6 @@ export default function EditorClient() {
     }
   };
 
-  // Download PDF
   const downloadPdf = async () => {
     try {
       await generatePdfClient({
@@ -157,6 +149,7 @@ export default function EditorClient() {
   };
 
   if (!user) return <div>Loading...</div>;
+
 
   return (
     <div className="h-screen flex flex-col bg-gray-100 dark:bg-gray-900">
