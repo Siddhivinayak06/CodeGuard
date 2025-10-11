@@ -104,10 +104,10 @@ export default function AdminSubjects() {
       if (token) headers["Authorization"] = `Bearer ${token}`;
 
       const [subjRes, facRes] = await Promise.all([
-        fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/admin/subjects`, { headers }).then((r) =>
+        fetch(`/api/admin/subjects`, { headers }).then((r) =>
           r.json().catch(() => [])
         ),
-        fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/admin/faculty`, { headers }).then((r) =>
+        fetch(`/api/admin/faculty`, { headers }).then((r) =>
           r.json().catch(() => [])
         ),
       ]);
@@ -139,7 +139,7 @@ export default function AdminSubjects() {
 
     try {
       const method = isEditing ? "PUT" : "POST";
-      const endpoint = `${process.env.NEXT_PUBLIC_API_URL}/api/admin/subjects`;
+      const endpoint = `/api/admin/subjects`;
       const body = {
         id: form.id || undefined,
         subject_name: form.subject_name,
@@ -176,7 +176,7 @@ export default function AdminSubjects() {
       const headers: Record<string, string> = { "Content-Type": "application/json" };
       if (token) headers["Authorization"] = `Bearer ${token}`;
 
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/admin/subjects?id=${encodeURIComponent(id)}`, {
+      const res = await fetch(`/api/admin/subjects?id=${encodeURIComponent(id)}`, {
         method: "DELETE",
         headers,
       });

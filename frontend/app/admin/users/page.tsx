@@ -96,7 +96,7 @@ export default function AdminUsers() {
       const headers: Record<string, string> = { "Content-Type": "application/json" };
       if (token) headers["Authorization"] = `Bearer ${token}`;
 
-      const payload = await safeFetchJson(`${process.env.NEXT_PUBLIC_API_URL}/api/admin/users`, { headers });
+      const payload = await safeFetchJson(`/api/admin/users`, { headers });
       const arr = (payload && (payload as any).data) ?? payload ?? [];
 
       if (!Array.isArray(arr)) {
@@ -161,7 +161,7 @@ export default function AdminUsers() {
       const headers: Record<string, string> = { "Content-Type": "application/json" };
       if (token) headers["Authorization"] = `Bearer ${token}`;
 
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/admin/users/${encodeURIComponent(id)}`, {
+      const res = await fetch(`/api/admin/users/${encodeURIComponent(id)}`, {
         method: "DELETE",
         headers,
       });
