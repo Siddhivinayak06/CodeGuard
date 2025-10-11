@@ -20,13 +20,15 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@
 
 type Subject = {
   id: string;
-  name: string;
+  subject_name: string;
+  subject_code: string;
+  semester?: string;
   faculty_id?: string;
   faculty_name?: string;
 };
 
 type Faculty = {
-  id: string;
+  uid: string;
   name?: string;
   email: string;
 };
@@ -41,32 +43,32 @@ export default function AdminSubjects() {
   const [faculty, setFaculty] = useState<Faculty[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Modal state
   const [open, setOpen] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
-  const [form, setForm] = useState({ id: "", name: "", faculty_id: "" });
+  const [form, setForm] = useState({
+    id: "",
+    subject_name: "",
+    subject_code: "",
+    semester: "",
+    faculty_id: "",
+  });
 
-  // -----------------------------------------
-  // lifecycle: auth check (same pattern as dashboard/admin)
-  // -----------------------------------------
+  // Auth check
   useEffect(() => {
     mountedRef.current = true;
 
     const fetchUser = async () => {
       try {
-        // supabase v2 returns { data: { user } }
         const {
           data: { user },
           error,
         } = await supabase.auth.getUser();
-
         if (error) throw error;
 
         if (!user) {
           router.push("/auth/login");
           return;
         }
-
         if (mountedRef.current) setUser(user);
       } catch (err) {
         console.error("Auth fetch error:", err);
@@ -75,15 +77,11 @@ export default function AdminSubjects() {
     };
 
     fetchUser();
-
     return () => {
       mountedRef.current = false;
     };
   }, [router, supabase]);
 
-  // -----------------------------------------
-  // helper: get access token (used for API calls)
-  // -----------------------------------------
   const getAccessToken = async (): Promise<string | null> => {
     try {
       const {
@@ -96,12 +94,8 @@ export default function AdminSubjects() {
     }
   };
 
-  // -----------------------------------------
-  // Fetch subjects and faculty (use token + mountedRef guards)
-  // -----------------------------------------
   const fetchData = async () => {
-    if (!user) return;
-    if (!mountedRef.current) return;
+    if (!user || !mountedRef.current) return;
 
     setLoading(true);
     try {
@@ -109,13 +103,12 @@ export default function AdminSubjects() {
       const headers: Record<string, string> = { "Content-Type": "application/json" };
       if (token) headers["Authorization"] = `Bearer ${token}`;
 
-      // resilient parsing so if server returns non-JSON we don't crash
       const [subjRes, facRes] = await Promise.all([
         fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/admin/subjects`, { headers }).then((r) =>
-          r.json().catch(() => ({}))
+          r.json().catch(() => [])
         ),
         fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/admin/faculty`, { headers }).then((r) =>
-          r.json().catch(() => ({}))
+          r.json().catch(() => [])
         ),
       ]);
 
@@ -132,29 +125,26 @@ export default function AdminSubjects() {
 
   useEffect(() => {
     fetchData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user]); // refetch when user becomes available
+  }, [user]);
 
-  // -----------------------------------------
-  // Form handlers
-  // -----------------------------------------
   const handleChange = (key: string, value: string) => {
     setForm((prev) => ({ ...prev, [key]: value }));
   };
 
   const handleSave = async () => {
-    if (!form.name.trim()) {
-      alert("Subject name is required");
+    if (!form.subject_name.trim() || !form.subject_code.trim()) {
+      alert("Subject name and code are required");
       return;
     }
 
     try {
       const method = isEditing ? "PUT" : "POST";
       const endpoint = `${process.env.NEXT_PUBLIC_API_URL}/api/admin/subjects`;
-
       const body = {
         id: form.id || undefined,
-        subject_name: form.name,
+        subject_name: form.subject_name,
+        subject_code: form.subject_code,
+        semester: form.semester || undefined,
         faculty_id: form.faculty_id || undefined,
       };
 
@@ -162,21 +152,15 @@ export default function AdminSubjects() {
       const headers: Record<string, string> = { "Content-Type": "application/json" };
       if (token) headers["Authorization"] = `Bearer ${token}`;
 
-      const res = await fetch(endpoint, {
-        method,
-        headers,
-        body: JSON.stringify(body),
-      });
-
+      const res = await fetch(endpoint, { method, headers, body: JSON.stringify(body) });
       const payload = await res.json().catch(() => ({}));
       if (!res.ok || payload?.success === false) throw new Error(payload?.error || "Operation failed");
 
       if (!mountedRef.current) return;
 
       setOpen(false);
-      setForm({ id: "", name: "", faculty_id: "" });
+      setForm({ id: "", subject_name: "", subject_code: "", semester: "", faculty_id: "" });
       setIsEditing(false);
-      // update by re-fetching to keep state consistent
       fetchData();
     } catch (err: any) {
       console.error("Save failed:", err);
@@ -208,9 +192,6 @@ export default function AdminSubjects() {
     }
   };
 
-  // -----------------------------------------
-  // UI
-  // -----------------------------------------
   if (!user)
     return (
       <div className="flex items-center justify-center min-h-screen bg-gray-50 dark:bg-gray-900">
@@ -226,7 +207,7 @@ export default function AdminSubjects() {
           <h1 className="text-3xl font-extrabold text-gray-800 dark:text-gray-100">📚 Manage Subjects</h1>
           <Button
             onClick={() => {
-              setForm({ id: "", name: "", faculty_id: "" });
+              setForm({ id: "", subject_name: "", subject_code: "", semester: "", faculty_id: "" });
               setIsEditing(false);
               setOpen(true);
             }}
@@ -244,7 +225,9 @@ export default function AdminSubjects() {
             <table className="w-full bg-white/40 dark:bg-gray-800/40 border border-gray-200/50 dark:border-gray-700/50">
               <thead className="bg-gray-100/70 dark:bg-gray-700/50">
                 <tr>
-                  <th className="px-4 py-3 text-left">Subject</th>
+                  <th className="px-4 py-3 text-left">Name</th>
+                  <th className="px-4 py-3 text-left">Code</th>
+                  <th className="px-4 py-3 text-left">Semester</th>
                   <th className="px-4 py-3 text-left">Faculty</th>
                   <th className="px-4 py-3 text-left">Actions</th>
                 </tr>
@@ -255,7 +238,9 @@ export default function AdminSubjects() {
                     key={s.id}
                     className="border-t border-gray-200/40 dark:border-gray-700/40 hover:bg-gray-50/60 dark:hover:bg-gray-800/60 transition"
                   >
-                    <td className="px-4 py-3">{s.name ?? s.subject_name}</td>
+                    <td className="px-4 py-3">{s.subject_name}</td>
+                    <td className="px-4 py-3">{s.subject_code}</td>
+                    <td className="px-4 py-3">{s.semester || "—"}</td>
                     <td className="px-4 py-3">{s.faculty_name || "—"}</td>
                     <td className="px-4 py-3 space-x-3">
                       <button
@@ -263,7 +248,9 @@ export default function AdminSubjects() {
                         onClick={() => {
                           setForm({
                             id: s.id,
-                            name: s.name ?? (s as any).subject_name,
+                            subject_name: s.subject_name,
+                            subject_code: s.subject_code,
+                            semester: s.semester || "",
                             faculty_id: s.faculty_id || "",
                           });
                           setIsEditing(true);
@@ -284,7 +271,6 @@ export default function AdminSubjects() {
         )}
       </div>
 
-      {/* Add/Edit Modal */}
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
@@ -294,7 +280,32 @@ export default function AdminSubjects() {
           <div className="space-y-4 mt-4">
             <div>
               <Label htmlFor="name">Subject Name</Label>
-              <Input id="name" value={form.name} onChange={(e) => handleChange("name", e.target.value)} placeholder="Enter subject name" />
+              <Input
+                id="name"
+                value={form.subject_name}
+                onChange={(e) => handleChange("subject_name", e.target.value)}
+                placeholder="Enter subject name"
+              />
+            </div>
+
+            <div>
+              <Label htmlFor="code">Subject Code</Label>
+              <Input
+                id="code"
+                value={form.subject_code}
+                onChange={(e) => handleChange("subject_code", e.target.value)}
+                placeholder="Enter subject code"
+              />
+            </div>
+
+            <div>
+              <Label htmlFor="semester">Semester</Label>
+              <Input
+                id="semester"
+                value={form.semester}
+                onChange={(e) => handleChange("semester", e.target.value)}
+                placeholder="Enter semester"
+              />
             </div>
 
             <div>
@@ -305,7 +316,7 @@ export default function AdminSubjects() {
                 </SelectTrigger>
                 <SelectContent>
                   {faculty.map((f) => (
-                    <SelectItem key={f.id} value={f.id}>
+                    <SelectItem key={f.uid} value={f.uid}>
                       {f.name || f.email}
                     </SelectItem>
                   ))}

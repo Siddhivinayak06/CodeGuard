@@ -4,6 +4,8 @@ import { useEffect, useState, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import Navbar from "@/components/Navbar";
+import { Button } from "@/components/ui/button";
+import { generatePdfClient } from "@/lib/ClientPdf";
 import type { User } from "@supabase/supabase-js";
 
 export default function StudentSubmissions() {
@@ -14,6 +16,8 @@ export default function StudentSubmissions() {
   const [user, setUser] = useState<User | null>(null);
   const [submissions, setSubmissions] = useState<any[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
+  const [viewingSubmission, setViewingSubmission] = useState<{ code: string; output: string } | null>(null);
+  const [pdfLoading, setPdfLoading] = useState<boolean>(false);
 
   // ✅ Auth check
   useEffect(() => {
@@ -44,20 +48,7 @@ export default function StudentSubmissions() {
     };
   }, [router, supabase]);
 
-  // ✅ Helper to get access token
-  const getAccessToken = async (): Promise<string | null> => {
-    try {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      return session?.access_token ?? null;
-    } catch (err) {
-      console.error("Failed to get session token:", err);
-      return null;
-    }
-  };
-
-  // ✅ Fetch submissions (cancellable)
+  // ✅ Fetch submissions
   useEffect(() => {
     if (!user?.id) return;
 
@@ -67,29 +58,21 @@ export default function StudentSubmissions() {
     const fetchSubmissions = async () => {
       setLoading(true);
       try {
-        const token = await getAccessToken();
-        const headers: Record<string, string> = { "Content-Type": "application/json" };
-        if (token) headers["Authorization"] = `Bearer ${token}`;
-
         const res = await fetch(
-          `${process.env.NEXT_PUBLIC_API_URL}/api/student/submissions/${encodeURIComponent(user.id)}`,
-          { headers, signal }
+          `${process.env.NEXT_PUBLIC_API_URL}/api/student/submissions/${encodeURIComponent(
+            user.id
+          )}`,
+          { signal }
         );
 
-        if (!res.ok) {
-          const text = await res.text().catch(() => "");
-          throw new Error(`Failed to fetch submissions: ${res.status} ${text}`);
-        }
+        if (!res.ok) throw new Error("Failed to fetch submissions");
 
-        const payload = await res.json().catch(() => null);
-
+        const payload = await res.json();
         const items: any[] = Array.isArray(payload)
           ? payload
           : payload?.data ?? [];
 
-        if (!signal.aborted && mountedRef.current) {
-          setSubmissions(items);
-        }
+        if (!signal.aborted && mountedRef.current) setSubmissions(items);
       } catch (err: any) {
         if (err.name === "AbortError") console.debug("Fetch aborted");
         else console.error("Failed to load submissions:", err);
@@ -104,6 +87,26 @@ export default function StudentSubmissions() {
       controller.abort();
     };
   }, [user?.id, supabase]);
+
+  // ✅ Download PDF
+  const handleDownloadPdf = async (submission: any) => {
+    if (!submission) return;
+    try {
+      setPdfLoading(true);
+      await generatePdfClient({
+        code: submission.code,
+        output: submission.output || "",
+        user: user?.email || "Anonymous",
+        filename: submission.practical_title
+          ? `${submission.practical_title.replace(/\s+/g, "_")}.pdf`
+          : "submission.pdf",
+      });
+    } catch (err) {
+      console.error("PDF generation failed:", err);
+    } finally {
+      setPdfLoading(false);
+    }
+  };
 
   if (!user)
     return (
@@ -132,7 +135,10 @@ export default function StudentSubmissions() {
                 <tr>
                   <th className="px-4 py-3 text-left">Practical</th>
                   <th className="px-4 py-3 text-left">Language</th>
+                  <th className="px-4 py-3 text-left">Status</th>
+                  <th className="px-4 py-3 text-left">Marks</th>
                   <th className="px-4 py-3 text-left">Submitted At</th>
+                  <th className="px-4 py-3 text-left">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -143,8 +149,29 @@ export default function StudentSubmissions() {
                   >
                     <td className="px-4 py-3">{s.practical_title}</td>
                     <td className="px-4 py-3">{s.language}</td>
+                    <td className="px-4 py-3">{s.status}</td>
+                    <td className="px-4 py-3">{s.marks_obtained ?? "—"}</td>
                     <td className="px-4 py-3">
                       {s.created_at ? new Date(s.created_at).toLocaleString() : "—"}
+                    </td>
+                    <td className="px-4 py-3 flex gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() =>
+                          setViewingSubmission({ code: s.code, output: s.output || "" })
+                        }
+                      >
+                        View
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        onClick={() => handleDownloadPdf(s)}
+                        disabled={pdfLoading}
+                      >
+                        {pdfLoading ? "Downloading..." : "Download PDF"}
+                      </Button>
                     </td>
                   </tr>
                 ))}
@@ -153,6 +180,36 @@ export default function StudentSubmissions() {
           </div>
         )}
       </div>
+
+      {/* Modal for viewing code and output */}
+      {viewingSubmission && (
+        <div className="fixed inset-0 flex items-center justify-center z-50 bg-black/50">
+          <div className="bg-white dark:bg-gray-900 rounded-xl p-6 w-11/12 max-w-3xl h-3/4 overflow-auto relative">
+            <h2 className="text-xl font-semibold mb-4 text-gray-800 dark:text-gray-100">
+              Submitted Code & Output
+            </h2>
+            <div className="mb-4">
+              <h3 className="font-semibold text-gray-700 dark:text-gray-300 mb-2">Code:</h3>
+              <pre className="bg-gray-100 dark:bg-gray-800 p-4 rounded-md overflow-auto whitespace-pre-wrap">
+                {viewingSubmission.code}
+              </pre>
+            </div>
+            <div>
+              <h3 className="font-semibold text-gray-700 dark:text-gray-300 mb-2">Output:</h3>
+              <pre className="bg-gray-100 dark:bg-gray-800 p-4 rounded-md overflow-auto whitespace-pre-wrap">
+                {viewingSubmission.output || "No output"}
+              </pre>
+            </div>
+            <Button
+              className="absolute top-4 right-4"
+              variant="destructive"
+              onClick={() => setViewingSubmission(null)}
+            >
+              Close
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -1,5 +1,6 @@
+// GET submissions for a student including code and output
 import { NextResponse } from "next/server";
-import { supabaseAdmin } from "@/lib/supabase/service"; // ✅ server-side client
+import { supabaseAdmin } from "@/lib/supabase/service";
 
 export async function GET(
   req: Request,
@@ -12,6 +13,8 @@ export async function GET(
       .from("submissions")
       .select(`
         id,
+        code,
+        output,
         language,
         status,
         created_at,
@@ -25,6 +28,8 @@ export async function GET(
     const formatted = data.map((s) => ({
       id: s.id,
       practical_title: s.practicals?.title || "Unknown",
+      code: s.code,
+      output: s.output,
       language: s.language,
       status: s.status,
       created_at: s.created_at,

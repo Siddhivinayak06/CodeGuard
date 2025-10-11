@@ -7,67 +7,110 @@ import Navbar from "@/components/Navbar";
 import { Button } from "@/components/ui/button";
 import type { User } from "@supabase/supabase-js";
 
+type Subject = {
+  id: number;
+  subject_name: string;
+  subject_code: string;
+  practical_count?: number;
+};
+
+type Practical = {
+  id: number;
+  title: string;
+  deadline: string | null;
+  submission_count?: number;
+};
+
 export default function FacultySubjects() {
   const router = useRouter();
   const supabase = useMemo(() => createClient(), []);
   const mountedRef = useRef(true);
 
   const [user, setUser] = useState<User | null>(null);
-  const [subjects, setSubjects] = useState<any[]>([]);
+  const [subjects, setSubjects] = useState<Subject[]>([]);
   const [selected, setSelected] = useState<number | null>(null);
-  const [practicals, setPracticals] = useState<any[]>([]);
+  const [practicals, setPracticals] = useState<Practical[]>([]);
   const [loading, setLoading] = useState(true);
 
   // ✅ Auth
-  useEffect(() => {
-    const fetchUser = async () => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) router.push("/auth/login");
-      else if (mountedRef.current) setUser(user);
-    };
-    fetchUser();
-    return () => {
-      mountedRef.current = false;
-    };
-  }, [router, supabase]);
+ useEffect(() => {
+  const fetchUser = async () => {
+    try {
+      const { data, error } = await supabase.auth.getUser();
+      if (error) throw error;
+      if (!data.user) {
+        router.push("/auth/login");
+        return;
+      }
+      setUser(data.user);
+    } catch (err) {
+      console.error("Failed to fetch user:", err);
+      router.push("/auth/login");
+    } finally {
+      setLoading(false);
+    }
+  };
+  fetchUser();
+}, [router, supabase]);
 
-  // ✅ Fetch subjects for faculty
+
+  // ✅ Fetch subjects for logged-in faculty
   useEffect(() => {
     if (!user) return;
     const fetchSubjects = async () => {
       setLoading(true);
       try {
-        const res = await fetch(
-          `${process.env.NEXT_PUBLIC_API_URL}/api/faculty/subjects/${user.id}`
-        );
-        const data = await res.json();
-        setSubjects(data || []);
+        const { data, error } = await supabase
+          .from("subjects")
+          .select(`id, subject_name, subject_code, practicals(id)`)
+          .eq("faculty_id", user.id);
+
+        if (error) throw error;
+
+        const formatted = (data || []).map((s: any) => ({
+          id: s.id,
+          subject_name: s.subject_name,
+          subject_code: s.subject_code,
+          practical_count: s.practicals?.length || 0,
+        }));
+
+        setSubjects(formatted);
       } catch (err) {
         console.error("Failed to load subjects:", err);
+        setSubjects([]);
       } finally {
         setLoading(false);
       }
     };
     fetchSubjects();
-  }, [user]);
+  }, [user, supabase]);
 
   // ✅ Load practicals for selected subject
   const loadPracticals = async (subjectId: number) => {
     setSelected(subjectId);
     try {
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/faculty/practicals/${subjectId}`
-      );
-      const data = await res.json();
-      setPracticals(data || []);
+      const { data, error } = await supabase
+        .from("practicals")
+        .select(`id, title, deadline, submissions(id)`)
+        .eq("subject_id", subjectId)
+        .order("deadline", { ascending: true });
+
+      if (error) throw error;
+
+      const formatted = (data || []).map((p: any) => ({
+        id: p.id,
+        title: p.title,
+        deadline: p.deadline,
+        submission_count: p.submissions?.length || 0,
+      }));
+
+      setPracticals(formatted);
     } catch (err) {
       console.error("Failed to load practicals:", err);
+      setPracticals([]);
     }
   };
 
-  // ✅ UI
   if (!user)
     return (
       <div className="flex items-center justify-center min-h-screen bg-gray-50 dark:bg-gray-900">
@@ -78,7 +121,6 @@ export default function FacultySubjects() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-100 dark:from-gray-900 dark:via-gray-950 dark:to-black">
       <Navbar />
-
       <div className="pt-24 px-6 md:px-12">
         <h1 className="text-3xl font-extrabold mb-8 text-gray-800 dark:text-gray-100">
           👩‍🏫 Faculty Subjects
@@ -101,7 +143,7 @@ export default function FacultySubjects() {
                 } hover:-translate-y-1`}
               >
                 <h3 className="font-semibold text-lg text-gray-800 dark:text-gray-200">
-                  {s.name}
+                  {s.subject_name}
                 </h3>
                 <p className="text-sm text-gray-500 dark:text-gray-400">
                   {s.practical_count || 0} Practicals
@@ -114,7 +156,7 @@ export default function FacultySubjects() {
         {selected && (
           <div className="mt-12">
             <h2 className="text-xl font-semibold mb-4 text-gray-800 dark:text-gray-200">
-              🧩 Practicals for {subjects.find((s) => s.id === selected)?.name}
+              🧩 Practicals for {subjects.find((s) => s.id === selected)?.subject_name}
             </h2>
             {practicals.length === 0 ? (
               <p className="text-gray-500 dark:text-gray-400">No practicals found.</p>

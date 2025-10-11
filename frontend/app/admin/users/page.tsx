@@ -38,6 +38,8 @@ export default function AdminUsers() {
     role: "student",
   });
 
+  const [selectedRole, setSelectedRole] = useState<"student" | "faculty" | "admin">("student");
+
   // ---------------------------
   // Auth check
   // ---------------------------
@@ -64,9 +66,6 @@ export default function AdminUsers() {
     return () => { mountedRef.current = false; };
   }, [router, supabase]);
 
-  // ---------------------------
-  // Helper: get access token
-  // ---------------------------
   const getAccessToken = async (): Promise<string | null> => {
     try {
       const { data: { session } } = await supabase.auth.getSession();
@@ -77,9 +76,6 @@ export default function AdminUsers() {
     }
   };
 
-  // ---------------------------
-  // Safe fetch JSON
-  // ---------------------------
   const safeFetchJson = async (url: string, opts?: RequestInit): Promise<ApiUsersResponse> => {
     const res = await fetch(url, opts);
     const text = await res.text();
@@ -92,9 +88,6 @@ export default function AdminUsers() {
     }
   };
 
-  // ---------------------------
-  // Load users
-  // ---------------------------
   const loadUsers = async () => {
     if (!user) return;
     setLoading(true);
@@ -124,49 +117,40 @@ export default function AdminUsers() {
     loadUsers();
   }, [user]);
 
-  // ---------------------------
-  // Form handling
-  // ---------------------------
   const handleChange = (key: string, value: string) => {
     setForm((prev) => ({ ...prev, [key]: value }));
   };
 
   async function handleSave(form: any) {
-  if (!form.id) {
-    console.error("User ID is missing!");
-    return;
+    if (!form.id) {
+      console.error("User ID is missing!");
+      return;
+    }
+
+    try {
+      const res = await fetch(`/api/admin/users/${form.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: form.email,
+          role: form.role,
+          name: form.name,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) throw new Error(data.error || "Save failed");
+
+      setUsers((prev) =>
+        prev.map((u) => (u.id === form.id ? { ...u, ...form } : u))
+      );
+
+      setOpen(false);
+    } catch (err) {
+      console.error("Save user failed:", err);
+    }
   }
-
-  try {
-    const res = await fetch(`/api/admin/users/${form.id}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        email: form.email,
-        role: form.role,
-        name: form.name,
-      }),
-    });
-
-    const data = await res.json();
-
-    if (!res.ok) throw new Error(data.error || "Save failed");
-
-    console.log("User updated:", data.user);
-
-    // Update the local users state
-    setUsers((prev) =>
-      prev.map((u) => (u.id === form.id ? { ...u, ...form } : u))
-    );
-
-    setOpen(false);
-  } catch (err) {
-    console.error("Save user failed:", err);
-  }
-}
-
-
-
 
   const handleDelete = async (id: string) => {
     if (!confirm("Are you sure you want to delete this user?")) return;
@@ -200,11 +184,73 @@ export default function AdminUsers() {
       </div>
     );
 
+  // ---------------------------
+  // Group users by role
+  // ---------------------------
+  const usersByRole: Record<string, any[]> = { student: [], faculty: [], admin: [] };
+  users.forEach((u) => {
+    const r = (u.role ?? "student").toLowerCase();
+    if (!usersByRole[r]) usersByRole[r] = [];
+    usersByRole[r].push(u);
+  });
+
+  const renderUserTable = (arr: any[]) => (
+    <div className="overflow-x-auto rounded-2xl shadow-md bg-white/50 dark:bg-gray-800/50">
+      {arr.length === 0 ? (
+        <p className="text-gray-500 dark:text-gray-400 p-4">No users found.</p>
+      ) : (
+        <table className="w-full mt-2 bg-white/40 dark:bg-gray-800/40 border border-gray-200/50 dark:border-gray-700/50">
+          <thead className="bg-gray-100/70 dark:bg-gray-700/50">
+            <tr>
+              <th className="px-4 py-3 text-left">Name</th>
+              <th className="px-4 py-3 text-left">Email</th>
+              <th className="px-4 py-3 text-left">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {arr.map((u) => (
+              <tr
+                key={u.id ?? u.uid ?? Math.random().toString()}
+                className="border-t border-gray-200/40 dark:border-gray-700/40 hover:bg-gray-50/60 dark:hover:bg-gray-800/60 transition"
+              >
+                <td className="px-4 py-3">{u.name || "—"}</td>
+                <td className="px-4 py-3">{u.email}</td>
+                <td className="px-4 py-3 space-x-3">
+                  <button
+                    className="text-blue-500 hover:underline"
+                    onClick={() => {
+                      setForm({
+                        id: String(u.id ?? u.uid ?? ""),
+                        name: u.name ?? "",
+                        email: u.email ?? "",
+                        role: u.role ?? "student",
+                      });
+                      setIsEditing(true);
+                      setOpen(true);
+                    }}
+                  >
+                    Edit
+                  </button>
+                  <button
+                    className="text-red-500 hover:underline"
+                    onClick={() => handleDelete(String(u.id ?? u.uid ?? ""))}
+                  >
+                    Delete
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </div>
+  );
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-100 dark:from-gray-900 dark:via-gray-950 dark:to-black">
       <Navbar />
       <div className="pt-24 px-6 md:px-12">
-        <div className="flex items-center justify-between mb-8">
+        <div className="flex items-center justify-between mb-4">
           <h1 className="text-3xl font-extrabold text-gray-800 dark:text-gray-100">
             👥 Manage Users
           </h1>
@@ -219,58 +265,23 @@ export default function AdminUsers() {
           </Button>
         </div>
 
+        {/* Role Filter Buttons */}
+        <div className="flex gap-4 mb-6">
+          {(["student", "faculty", "admin"] as const).map((role) => (
+            <Button
+              key={role}
+              variant={selectedRole === role ? "default" : "outline"}
+              onClick={() => setSelectedRole(role)}
+            >
+              {role.charAt(0).toUpperCase() + role.slice(1)}
+            </Button>
+          ))}
+        </div>
+
         {loading ? (
           <p className="text-gray-500 dark:text-gray-400">Loading users...</p>
-        ) : users.length === 0 ? (
-          <p className="text-gray-500 dark:text-gray-400">No users found.</p>
         ) : (
-          <div className="overflow-x-auto rounded-2xl shadow-md">
-            <table className="w-full bg-white/40 dark:bg-gray-800/40 border border-gray-200/50 dark:border-gray-700/50">
-              <thead className="bg-gray-100/70 dark:bg-gray-700/50">
-                <tr>
-                  <th className="px-4 py-3 text-left">Name</th>
-                  <th className="px-4 py-3 text-left">Email</th>
-                  <th className="px-4 py-3 text-left">Role</th>
-                  <th className="px-4 py-3 text-left">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {users.map((u) => (
-                  <tr
-                    key={u.id ?? u.uid ?? Math.random().toString()}
-                    className="border-t border-gray-200/40 dark:border-gray-700/40 hover:bg-gray-50/60 dark:hover:bg-gray-800/60 transition"
-                  >
-                    <td className="px-4 py-3">{u.name || "—"}</td>
-                    <td className="px-4 py-3">{u.email}</td>
-                    <td className="px-4 py-3 capitalize">{u.role}</td>
-                    <td className="px-4 py-3 space-x-3">
-                      <button
-                        className="text-blue-500 hover:underline"
-                        onClick={() => {
-                          setForm({
-                            id: String(u.id ?? u.uid ?? ""),
-                            name: u.name ?? "",
-                            email: u.email ?? "",
-                            role: u.role ?? "student",
-                          });
-                          setIsEditing(true);
-                          setOpen(true);
-                        }}
-                      >
-                        Edit
-                      </button>
-                      <button
-                        className="text-red-500 hover:underline"
-                        onClick={() => handleDelete(String(u.id ?? u.uid ?? ""))}
-                      >
-                        Delete
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          renderUserTable(usersByRole[selectedRole])
         )}
       </div>
 
@@ -310,7 +321,6 @@ export default function AdminUsers() {
           <DialogFooter className="mt-4">
             <Button variant="outline" onClick={() => setOpen(false)} disabled={busy}>Cancel</Button>
             <Button onClick={() => handleSave(form)}>Save</Button>
-
           </DialogFooter>
         </DialogContent>
       </Dialog>
