@@ -93,10 +93,10 @@ export default function AdminDashboard() {
         if (token) headers["Authorization"] = `Bearer ${token}`;
 
         const [statsRes, subjRes] = await Promise.all([
-          fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/admin/stats`, { headers }).then((r) =>
+          fetch(`/api/admin/stats`, { headers }).then((r) =>
             r.json().catch(() => ({}))
           ),
-          fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/admin/subjects`, { headers }).then((r) =>
+          fetch(`/api/admin/subjects`, { headers }).then((r) =>
             r.json().catch(() => [])
           ),
         ]);
@@ -161,7 +161,7 @@ export default function AdminDashboard() {
         return;
       }
 
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/admin/subjects`, {
+      const res = await fetch(`/api/admin/subjects`, {
         method,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
@@ -200,7 +200,7 @@ export default function AdminDashboard() {
       if (!user?.id) throw new Error("User not found");
 
       const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/admin/subjects?id=${encodeURIComponent(s.id)}&uid=${encodeURIComponent(user.id)}`,
+        `/api/admin/subjects?id=${encodeURIComponent(s.id)}&uid=${encodeURIComponent(user.id)}`,
         { method: "DELETE" }
       );
 
@@ -259,10 +259,10 @@ export default function AdminDashboard() {
                   const headers: Record<string, string> = { "Content-Type": "application/json" };
                   if (token) headers["Authorization"] = `Bearer ${token}`;
                   const [statsRes, subjRes] = await Promise.all([
-                    fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/admin/stats`, { headers }).then((r) =>
+                    fetch(`/api/admin/stats`, { headers }).then((r) =>
                       r.json().catch(() => ({}))
                     ),
-                    fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/admin/subjects`, { headers }).then((r) =>
+                    fetch(`/api/admin/subjects`, { headers }).then((r) =>
                       r.json().catch(() => [])
                     ),
                   ]);
