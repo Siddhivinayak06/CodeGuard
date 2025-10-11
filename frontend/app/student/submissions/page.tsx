@@ -48,44 +48,48 @@ export default function StudentSubmissions() {
     };
   }, [router, supabase]);
 
-  // ✅ Fetch submissions
+  // ✅ Fetch submissions directly from Supabase
   useEffect(() => {
     if (!user?.id) return;
-
-    const controller = new AbortController();
-    const signal = controller.signal;
 
     const fetchSubmissions = async () => {
       setLoading(true);
       try {
-        const res = await fetch(
-          `${process.env.NEXT_PUBLIC_API_URL}/api/student/submissions/${encodeURIComponent(
-            user.id
-          )}`,
-          { signal }
-        );
+        const { data, error } = await supabase
+          .from("submissions")
+          .select(`
+            id,
+            code,
+            output,
+            language,
+            status,
+            created_at,
+            practicals ( title )
+          `)
+          .eq("student_id", user.id)
+          .order("created_at", { ascending: false });
 
-        if (!res.ok) throw new Error("Failed to fetch submissions");
+        if (error) throw error;
 
-        const payload = await res.json();
-        const items: any[] = Array.isArray(payload)
-          ? payload
-          : payload?.data ?? [];
+        const formatted = data.map((s) => ({
+          id: s.id,
+          practical_title: s.practicals?.title || "Unknown",
+          code: s.code,
+          output: s.output,
+          language: s.language,
+          status: s.status,
+          created_at: s.created_at,
+        }));
 
-        if (!signal.aborted && mountedRef.current) setSubmissions(items);
+        if (mountedRef.current) setSubmissions(formatted);
       } catch (err: any) {
-        if (err.name === "AbortError") console.debug("Fetch aborted");
-        else console.error("Failed to load submissions:", err);
+        console.error("Supabase fetch error:", err);
       } finally {
-        if (!signal.aborted && mountedRef.current) setLoading(false);
+        if (mountedRef.current) setLoading(false);
       }
     };
 
     fetchSubmissions();
-
-    return () => {
-      controller.abort();
-    };
   }, [user?.id, supabase]);
 
   // ✅ Download PDF
@@ -150,7 +154,7 @@ export default function StudentSubmissions() {
                     <td className="px-4 py-3">{s.practical_title}</td>
                     <td className="px-4 py-3">{s.language}</td>
                     <td className="px-4 py-3">{s.status}</td>
-                    <td className="px-4 py-3">{s.marks_obtained ?? "—"}</td>
+                    <td className="px-4 py-3">—</td>
                     <td className="px-4 py-3">
                       {s.created_at ? new Date(s.created_at).toLocaleString() : "—"}
                     </td>

@@ -16,7 +16,7 @@ export default function StudentPracticals() {
   const [practicals, setPracticals] = useState<any[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
 
-  // Auth — set mountedRef explicitly
+  // 1️⃣ Fetch the logged-in user
   useEffect(() => {
     mountedRef.current = true;
 
@@ -24,15 +24,23 @@ export default function StudentPracticals() {
       try {
         const {
           data: { user },
+          error,
         } = await supabase.auth.getUser();
+
+        if (error) {
+          console.error("Supabase auth error:", error);
+          router.push("/auth/login");
+          return;
+        }
 
         if (!user) {
           router.push("/auth/login");
           return;
         }
+
         if (mountedRef.current) setUser(user);
       } catch (err) {
-        console.error("Auth fetch error:", err);
+        console.error("Unexpected auth error:", err);
         router.push("/auth/login");
       }
     };
@@ -44,20 +52,7 @@ export default function StudentPracticals() {
     };
   }, [router, supabase]);
 
-  // Helper: get access token from supabase client
-  const getAccessToken = async (): Promise<string | null> => {
-    try {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      return session?.access_token ?? null;
-    } catch (err) {
-      console.error("Error getting session token:", err);
-      return null;
-    }
-  };
-
-  // Fetch practicals (cancellable)
+  // 2️⃣ Fetch practicals directly from Supabase
   useEffect(() => {
     if (!user?.id) return;
 
@@ -66,55 +61,53 @@ export default function StudentPracticals() {
 
     const fetchPracticals = async () => {
       setLoading(true);
+
       try {
-        const token = await getAccessToken();
-        const headers: Record<string, string> = {
-          "Content-Type": "application/json",
-        };
-        if (token) headers["Authorization"] = `Bearer ${token}`;
+        const { data, error } = await supabase
+          .from("practicals")
+          .select(`
+            id,
+            title,
+            description,
+            language,
+            deadline,
+            subjects ( subject_name )
+          `)
+          .order("deadline", { ascending: true });
 
-        // Use your API endpoint — keep same URL but include token
-        const res = await fetch(
-          `${process.env.NEXT_PUBLIC_API_URL}/api/student/practicals/${encodeURIComponent(user.id)}`,
-          { method: "GET", headers, signal }
-        );
-
-        if (!res.ok) {
-          // Try to read server message for better error logs
-          const text = await res.text().catch(() => null);
-          throw new Error(`Failed to fetch practicals: ${res.status} ${text ?? ""}`);
+        if (error) {
+          console.error("Supabase fetch error:", error.message, error.details, error.hint);
+          setPracticals([]);
+          return;
         }
 
-        const payload = await res.json().catch(() => null);
-
-        // Support both shapes: raw array OR { success: true, data: [...] }
-        let items: any[] = [];
-        if (Array.isArray(payload)) {
-          items = payload;
-        } else if (payload && Array.isArray(payload.data)) {
-          items = payload.data;
-        } else if (payload && payload.success && Array.isArray(payload.items)) {
-          // some APIs use items
-          items = payload.items;
-        } else {
-          // fallback: try payload?.data?.rows etc.
-          items = payload?.data ?? [];
+        if (!data) {
+          setPracticals([]);
+          return;
         }
+
+        // Map to desired format
+        const formatted = data.map((p) => ({
+          id: p.id,
+          title: p.title,
+          description: p.description,
+          language: p.language,
+          deadline: p.deadline,
+          subject_id: p.subject_id,
+          subject_name: p.subjects?.subject_name || "Unknown",
+        }));
 
         if (!signal.aborted && mountedRef.current) {
-          setPracticals(items);
+          setPracticals(formatted);
         }
-      } catch (err: any) {
-        if (err.name === "AbortError") {
-          // fetch was aborted — not an error to show
-          console.debug("Practicals fetch aborted");
+      } catch (err) {
+        if ((err as any).name === "AbortError") {
+          console.debug("Fetch aborted");
         } else {
-          console.error("Failed to load practicals:", err);
+          console.error("Unexpected fetch error:", err);
         }
       } finally {
-        if (!signal.aborted && mountedRef.current) {
-          setLoading(false);
-        }
+        if (!signal.aborted && mountedRef.current) setLoading(false);
       }
     };
 
@@ -171,7 +164,11 @@ export default function StudentPracticals() {
                       <Button
                         size="sm"
                         onClick={() =>
-                          router.push(`/editor?practicalId=${encodeURIComponent(p.id)}&subject=${encodeURIComponent(p.subject_id)}`)
+                          router.push(
+                            `/editor?practicalId=${encodeURIComponent(
+                              p.id
+                            )}&subject=${encodeURIComponent(p.subject_id)}`
+                          )
                         }
                       >
                         Open in Editor

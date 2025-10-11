@@ -1,4 +1,3 @@
-// app/editor/EditorClient.tsx
 "use client";
 
 import React, { useCallback, useEffect, useRef, useState, useMemo } from "react";
@@ -39,16 +38,13 @@ export default function EditorClient() {
   const terminalRef = useRef(null);
   const [practical, setPractical] = useState<any>(null);
 
-  const supabase = useMemo(
-    () => (typeof window !== "undefined" ? createClient() : null),
-    []
-  );
+  const supabase = useMemo(() => createClient(), []);
   const [user, setUser] = useState<User | null>(null);
 
+  // ✅ Auth
   useEffect(() => {
     mountedRef.current = true;
     const fetchUser = async () => {
-      if (!supabase) return;
       try {
         const { data, error } = await supabase.auth.getUser();
         if (error || !data?.user) router.push("/auth/login");
@@ -64,24 +60,46 @@ export default function EditorClient() {
     };
   }, [router, supabase]);
 
+  // ✅ Fetch practical directly from Supabase
   useEffect(() => {
     if (!practicalId) return;
+
     const fetchPractical = async () => {
       try {
-        const res = await fetch(`/api/student/practical/${practicalId}`);
-        if (!res.ok) {
-          const err = await res.json();
-          console.error("Failed to load practical:", err.error);
-          return;
-        }
-        const data = await res.json();
-        setPractical(data);
-      } catch (err) {
-        console.error("Fetch error:", err);
+        const { data, error } = await supabase
+          .from("practicals")
+          .select(`
+            id,
+            title,
+            description,
+            language,
+            deadline,
+            subject_id,
+            subjects ( subject_name )
+          `)
+          .eq("id", practicalId)
+          .single();
+
+        if (error) throw error;
+
+        const formatted = {
+          id: data.id,
+          title: data.title,
+          description: data.description,
+          language: data.language,
+          deadline: data.deadline,
+          subject_id: data.subject_id,
+          subject_name: data.subjects?.subject_name || "Unknown",
+        };
+
+        if (mountedRef.current) setPractical(formatted);
+      } catch (err: any) {
+        console.error("Supabase fetch practical error:", err);
       }
     };
+
     fetchPractical();
-  }, [practicalId]);
+  }, [practicalId, supabase]);
 
   const handleSignOut = async () => {
     if (!supabase) return;
@@ -110,20 +128,16 @@ export default function EditorClient() {
   const handleSubmit = async () => {
     if (!user || !practicalId) return;
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/student/submit`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          student_id: user.id,
-          practical_id: practicalId,
-          code,
-          language: lang,
-          output,
-          status: errorOutput ? "Failed" : "Success",
-        }),
+      const res = await supabase.from("submissions").insert({
+        student_id: user.id,
+        practical_id: practicalId,
+        code,
+        language: lang,
+        output,
+        status: errorOutput ? "Failed" : "Success",
       });
 
-      if (!res.ok) throw new Error("Submission failed");
+      if (res.error) throw res.error;
       alert("✅ Submission successful!");
       router.push("/student/submissions");
     } catch (err) {
