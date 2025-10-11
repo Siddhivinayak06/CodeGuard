@@ -2,6 +2,7 @@
 const express = require("express");
 const cors = require("cors");
 const executeRoute = require("./routes/execute");
+const exportPdfRoute = require("./routes/exportPdf");
 
 const app = express();
 
@@ -18,6 +19,7 @@ app.use(express.json({ limit: "5mb" }));
 
 // Routes
 app.use("/execute", executeRoute);
+app.use("/export-pdf", exportPdfRoute);
 
 // Health check
 app.get("/health", (req,res)=>res.json({ status:"ok" }));

@@ -18,7 +18,7 @@ signal.signal(signal.SIGALRM, timeout_handler)
 # --- Read code from stdin ---
 buffer = []
 
-print("✅ Interactive Python ready. Waiting for code...\n", flush=True)
+print("", flush=True)
 
 while True:
     line = sys.stdin.readline()
@@ -39,6 +39,6 @@ while True:
                 print(e, flush=True)
             except Exception as e:
                 print(f"❌ Error: {e}", flush=True)
-        print("\n✅ Code execution finished.\n", flush=True)
+        print("\n...Code execution finished.\n", flush=True)
     else:
         buffer.append(line)
