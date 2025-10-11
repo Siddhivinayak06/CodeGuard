@@ -19,6 +19,7 @@ wss.on("connection", (ws) => {
   let lang = "python";       // default language
   let cCodeBuffer = [];      // buffer for C code collection
   let isCollectingCode = false;
+let suppressNextOutput = false;
 
   const startContainer = (newLang) => {
     console.log(`Starting container for language: ${newLang}`);
@@ -39,6 +40,7 @@ wss.on("connection", (ws) => {
     containerName = `interactive-${sessionId}-${newLang}`;
     cCodeBuffer = [];
     isCollectingCode = false;
+    suppressNextOutput = false; // Reset on language switch
 
     if (newLang === "python") {
       // Python remains unchanged
@@ -105,16 +107,31 @@ wss.on("connection", (ws) => {
           cols: 80,
           rows: 24,
           cwd: process.cwd(),
-          env: process.env
+          env: process.env,
+             
         });
 
         cProcess.onData(data => {
+          // If we are just sending code lines, don't echo them back
+  if (suppressNextOutput) {
+     // Skip code echo, but allow compilation and program output
+          if (suppressNextOutput) {
+            // Allow compilation messages and program output through
+            if (data.includes("✅") || data.includes("❌") || data.includes("...Program")) {
+              suppressNextOutput = false; // Stop suppressing when we see compilation result
+              ws.send(data);
+            }
+            return; // Skip echoed code lines
+          }
+    return; // skip sending code to client
+  }
           ws.send(data);
         });
 
         cProcess.onExit(({ exitCode }) => {
           console.log(`C wrapper exited with code ${exitCode}`);
-          ws.send(`\n⚠️ C wrapper process exited with code ${exitCode}\n`);
+          suppressNextOutput = false;
+ 
         });
       }, 1500);
     }
@@ -140,6 +157,8 @@ wss.on("connection", (ws) => {
 
       if (lang === "python" && pythonProcess) {
         if (parsed.type === "execute") {
+            // Send clear screen ANSI code before executing
+  ws.send("\x1b[2J\x1b[H");  // Clear screen and move cursor to top
           inputData.split("\n").forEach(line => pythonProcess.stdin.write(line + "\n"));
           pythonProcess.stdin.write("__RUN_CODE__\n");
         } else {
@@ -147,28 +166,26 @@ wss.on("connection", (ws) => {
         }
       } else if (lang === "c" && cProcess) {
         if (parsed.type === "execute") {
+                      // Send clear screen ANSI code before executing
+  ws.send("\x1b[2J\x1b[H");  // Clear screen and move cursor to top
           console.log("[C] Sending code to compile");
+
+           suppressNextOutput = true; // prevent echo of code
+
           cProcess.write("__CODE_START__\r");
           inputData.split("\n").forEach(line => {
-            cProcess.write(line + "\r");
+           cProcess.write(line + "\n");
+
           });
           cProcess.write("__RUN_CODE__\r");
         } else {
           console.log(`[C Input] ${inputData}`);
           cProcess.write(inputData + "\r");
         }
+
+ 
       }
-    } else if (parsed.type === "code_start" && lang === "c" && cProcess) {
-      isCollectingCode = true;
-      cCodeBuffer = [];
-      cProcess.write("__CODE_START__\r");
-    } else if (parsed.type === "code_line" && lang === "c" && cProcess && isCollectingCode) {
-      cCodeBuffer.push(parsed.data);
-      cProcess.write(parsed.data + "\r");
-    } else if (parsed.type === "run_code" && lang === "c" && cProcess && isCollectingCode) {
-      isCollectingCode = false;
-      cProcess.write("__RUN_CODE__\r");
-    }
+    }  
   });
 
   ws.on("close", () => {

@@ -4,45 +4,25 @@
 #include <unistd.h>
 #include <sys/wait.h>
 #include <sys/stat.h>
+#include <sys/resource.h>
 #include <errno.h>
 #include <termios.h>
 #include <signal.h>
 #include <sys/types.h>
- 
-#include <time.h>
-
 
 #define MAX_LINE 4096
 #define CODE_FILE "/app/workspace/user_code.c"
 #define EXEC_FILE "/app/workspace/user_program"
 #define ERROR_FILE "/app/workspace/compile_errors.txt"
+#define MAX_CPU_TIME 3
 
 void cleanup_files() {
     unlink(CODE_FILE);
     unlink(EXEC_FILE);
     unlink(ERROR_FILE);
 }
-
-void disable_echo() {
-    struct termios tty;
-    if (tcgetattr(STDIN_FILENO, &tty) == 0) {
-        tty.c_lflag &= ~(ECHO | ECHONL);  // Disable echo
-        tty.c_lflag &= ~ICANON;  // Disable canonical mode
-        tcsetattr(STDIN_FILENO, TCSANOW, &tty);
-    }
-}
-
-void enable_echo() {
-    struct termios tty;
-    if (tcgetattr(STDIN_FILENO, &tty) == 0) {
-        tty.c_lflag |= (ECHO | ICANON);  // Enable echo and canonical mode
-        tcsetattr(STDIN_FILENO, TCSANOW, &tty);
-    }
-}
-
-int compile_code() {
  
-    
+int compile_code() {
     char compile_cmd[512];
     snprintf(compile_cmd, sizeof(compile_cmd), 
              "gcc -o %s %s 2> %s", 
@@ -78,33 +58,42 @@ void run_code() {
 
     pid_t pid = fork();
     if (pid == 0) {
-        // Child process: execute the program
+        // Child process: Disable echo
+        struct termios tty;
+        if (tcgetattr(STDIN_FILENO, &tty) == 0) {
+            tty.c_lflag &= ~ECHO;
+            tcsetattr(STDIN_FILENO, TCSANOW, &tty);
+        }
+        
+        // Set CPU time limit
+        struct rlimit cpu_limit;
+        cpu_limit.rlim_cur = (rlim_t)MAX_CPU_TIME;
+        cpu_limit.rlim_max = (rlim_t)MAX_CPU_TIME;
+        
+        if (setrlimit(RLIMIT_CPU, &cpu_limit) != 0) {
+            fprintf(stderr, "Warning: Could not set CPU limit\n");
+        }
+        
+        // Execute the program
         execl(EXEC_FILE, EXEC_FILE, NULL);
-        // If execl fails
         printf("❌ Failed to execute program\n");
         fflush(stdout);
         exit(1);
     } else if (pid > 0) {
-        // Parent process: wait with timeout
+        // Parent process: simply wait
         int status;
-        time_t start = time(NULL);
-        while (1) {
-            pid_t result = waitpid(pid, &status, WNOHANG);
-            if (result == pid) break; // finished
-            if (difftime(time(NULL), start) > 7.0) { // 5 sec timeout
-                kill(pid, SIGKILL);
-                printf("\n⏱️ Program killed due to timeout\n");
-                fflush(stdout);
-                break;
-            }
-            usleep(100000); // 0.1 sec sleep
-        }
-
-        // Disable echo after program finishes
-        disable_echo();
+        waitpid(pid, &status, 0);
 
         if (WIFEXITED(status)) {
-            printf("\n✅ Program finished (exit code: %d)\n", WEXITSTATUS(status));
+            int exit_code = WEXITSTATUS(status);
+            printf("\n...Program finished with exit code %d\n", exit_code);
+        } else if (WIFSIGNALED(status)) {
+            int sig = WTERMSIG(status);
+            if (sig == SIGXCPU) {
+                printf("\n⏱️ Program killed - CPU time limit exceeded (infinite loop detected)\n");
+            } else {
+                printf("\n...Program killed due to timeout");
+            }
         }
         fflush(stdout);
     } else {
@@ -113,16 +102,11 @@ void run_code() {
     }
 }
 
-
 int main() {
     char line[MAX_LINE];
     FILE *code_file = NULL;
     int collecting_code = 0;
     
-    // Disable echo initially
-    disable_echo();
-    
-    // Unbuffered I/O
     setbuf(stdin, NULL);
     setbuf(stdout, NULL);
     setbuf(stderr, NULL);
@@ -133,14 +117,9 @@ int main() {
         return 1;
     }
     
-    printf("✅ Ready\n");
-    fflush(stdout);
-    
     while (fgets(line, sizeof(line), stdin)) {
-        // Remove trailing newline/carriage return
         line[strcspn(line, "\r\n")] = 0;
         
-        // Skip empty lines
         if (strlen(line) == 0) {
             continue;
         }
@@ -149,12 +128,15 @@ int main() {
             collecting_code = 1;
             cleanup_files();
             
+                
+
             code_file = fopen(CODE_FILE, "w");
             if (!code_file) {
                 printf("❌ Error: Could not create code file\n");
                 fflush(stdout);
                 collecting_code = 0;
             }
+            
             continue;
         }
         
@@ -166,6 +148,8 @@ int main() {
             
             collecting_code = 0;
             
+             
+
             struct stat st;
             if (stat(CODE_FILE, &st) != 0 || st.st_size == 0) {
                 printf("❌ Error: No code to compile\n");

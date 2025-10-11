@@ -5,6 +5,7 @@ import CodeEditor from "@/components/CodeEditor";
 import useProctoring from "@/hooks/useProctoring";
 import { ModeToggle } from "@/components/ModeToggle";
  import { ChevronDown } from "lucide-react";
+ 
 
 import { usePathname, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
@@ -48,6 +49,12 @@ useEffect(() => {
   else setCurrentMode("Static");
 }, [pathname]);
 
+// Add this after your existing useEffects
+useEffect(() => {
+  if (interactiveTerminalRef.current) {
+    interactiveTerminalRef.current.switchLanguage(lang);
+  }
+}, [lang]);
 const handleModeChange = (mode: "Static" | "Interactive", path: string) => {
   setCurrentMode(mode); // update dropdown immediately
   router.push(path);    // navigate to new page
@@ -180,6 +187,9 @@ const handleModeChange = (mode: "Static" | "Interactive", path: string) => {
                 terminalRef={terminalRef}
                 onRun={() => {
                   console.log("Run button clicked!"); // <- check this
+                // 🔑 Reset output for fresh run
+                    setInteractiveOutput("");  
+                    
                   if (interactiveTerminalRef.current) {
                     interactiveTerminalRef.current.startExecution(code, lang);
                   } else {

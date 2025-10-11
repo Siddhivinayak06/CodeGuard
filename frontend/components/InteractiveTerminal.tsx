@@ -15,6 +15,7 @@ interface InteractiveTerminalProps {
 
 export interface InteractiveTerminalHandle {
   startExecution: (code: string, lang: string) => void;
+    switchLanguage: (lang: string) => void; // Add this
 }
 
 const InteractiveTerminal = forwardRef<
@@ -131,6 +132,17 @@ const InteractiveTerminal = forwardRef<
         console.error("WebSocket not connected yet");
       }
     },
+  // Add this new method
+  switchLanguage: (lang: string) => {
+    if (socket.current?.readyState === WebSocket.OPEN && lang !== currentLang.current) {
+      term.current?.clear();
+      inputBuffer.current = "";
+      socket.current.send(JSON.stringify({ type: "lang", lang }));
+      currentLang.current = lang;
+    }
+  },
+    
+
   }));
 
   return (
