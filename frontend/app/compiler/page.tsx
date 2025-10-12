@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState, useMemo } from "react";
 import axios from "axios";
-import { useRouter } from "next/navigation";
+import { ChevronDown } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import CodeEditor from "@/components/CodeEditor";
 import OutputPane from "@/components/OutputPane";
@@ -10,6 +10,7 @@ import InputPane from "@/components/InputPane";
 import useProctoring from "@/hooks/useProctoring";
 import { ModeToggle } from "@/components/ModeToggle";
 import { generatePdfClient } from "@/lib/ClientPdf";
+import { usePathname, useRouter } from "next/navigation";
 import {
   ResizableHandle,
   ResizablePanel,
@@ -17,11 +18,12 @@ import {
 } from "@/components/ui/resizable";
 import { Button } from "@/components/ui/button"; // ✅ Make sure Button is imported
 import type { User } from "@supabase/supabase-js";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 
 export default function EditorPage() {
   const router = useRouter();
   const mountedRef = useRef(true);
-
+  const pathname = usePathname();
   const [lang, setLang] = useState("python");
   const [code, setCode] = useState(
     "# Welcome to Python Code Editor\n# Write your Python code here\n\nprint('Hello, World!')\n"
@@ -41,7 +43,13 @@ export default function EditorPage() {
   }, []);
 
   const [user, setUser] = useState<User | null>(null);
+const [currentMode, setCurrentMode] = useState("Static");
 
+  // Initialize mode based on current path
+  useEffect(() => {
+    if (pathname === "/Interactive") setCurrentMode("Interactive");
+    else setCurrentMode("Static");
+  }, [pathname]);
   useEffect(() => {
     mountedRef.current = true;
     const fetchUser = async () => {
@@ -63,6 +71,10 @@ export default function EditorPage() {
       mountedRef.current = false;
     };
   }, [router, supabase]);
+  const handleModeChange = (mode: "Static" | "Interactive", path: string) => {
+    setCurrentMode(mode); // update dropdown immediately
+    router.push(path);    // navigate to new page
+  };
 
   // ✅ Add this function
   const handleSignOut = async () => {
@@ -114,6 +126,25 @@ export default function EditorPage() {
           <h1 className="text-xl font-semibold text-gray-800 dark:text-gray-200">
             Code Editor
           </h1>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm" className="flex items-center gap-2 text-sm">
+                {currentMode} {/* Displays the current mode */}
+                <ChevronDown className="w-4 h-4" />
+              </Button>
+            </DropdownMenuTrigger>
+
+            <DropdownMenuContent>
+              <DropdownMenuLabel>Select Mode</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => handleModeChange("Static", "/compiler")}>
+                Static
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => handleModeChange("Interactive", "/Interactive")}>
+                Interactive
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
 
         <div className="flex items-center gap-4">

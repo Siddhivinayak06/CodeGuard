@@ -1,43 +1,47 @@
-// src/routes/execute.js
 const express = require("express");
 const router = express.Router();
-const runCode = require("../utils/dockerRunner"); // ✅ generic runner
+const runBatchCode = require("../utils/dockerRunner");
 
 router.post("/", async (req, res) => {
-  const { code, lang = "python", stdinInput = "" } = req.body;
+  const { code, lang = "python", batch = [] } = req.body;
 
-  if (!code) {
-    return res.status(400).json({ error: "No code provided." });
+  if (!code || !Array.isArray(batch) || batch.length === 0) {
+    return res.status(400).json({ error: "No code or test cases provided." });
   }
 
   try {
-    const result = await runCode(code, lang, stdinInput);
+    const runnerResults = await runBatchCode(code, lang, batch);
 
-    let cleanError = result.error;
+    const details = runnerResults.map((r, idx) => {
+      const tc = batch[idx];
+      let status = "failed";
 
-    if (cleanError) {
-      // 🧹 Remove file paths like /tmp/xyz/code.py or /usr/local/bin/...
-      cleanError = cleanError.replace(/\/[^\s:]+/g, "").trim();
+      if (r.stderr && r.stderr.toLowerCase().includes("compile")) status = "compile_error";
+      else if (r.stderr && r.stderr.toLowerCase().includes("timeout")) status = "time_limit_exceeded";
+      else if (r.stderr && r.stderr !== "") status = "runtime_error";
+      else status = "passed";
 
-      if (lang === "python") {
-        // Keep only last line (most useful error message)
-        cleanError = cleanError.split("\n").slice(-1)[0].trim();
-      }
-
-      if (lang === "c") {
-        // Keep only first 1–2 lines of compiler error
-        cleanError = cleanError.split("\n").slice(0, 2).join("\n").trim();
-      }
-    }
-
-    res.json({
-      output: result.output,
-      error: cleanError || "",
-      exitCode: result.exitCode,
+      return {
+        test_case_id: tc.id ?? idx + 1,
+        status,
+        time_ms: tc.time_limit_ms ?? null,
+        memory_kb: tc.memory_limit_kb ?? null,
+        stdout: r.stdout,
+        stderr: r.stderr
+      };
     });
+
+    const passed = details.filter(d => d.status === "passed").length;
+    const total = details.length;
+
+    let verdict = "accepted";
+    if (passed === 0) verdict = "wrong_answer";
+    else if (passed < total) verdict = "partial";
+
+    res.json({ verdict, details, results: details });
   } catch (err) {
-    console.error("❌ Execution error:", err.message);
-    res.status(500).json({ error: err.message || "Execution failed." });
+    console.error("Execution error:", err);
+    res.status(500).json({ error: "Execution failed." });
   }
 });
 

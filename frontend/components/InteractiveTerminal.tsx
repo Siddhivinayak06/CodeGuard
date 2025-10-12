@@ -24,7 +24,7 @@ const InteractiveTerminal = forwardRef<
 >(({ wsUrl, fontSize = 16, fontFamily = "monospace", onOutput, onMount  }, ref) => {
   const terminalRef = useRef<HTMLDivElement | null>(null);
   const term = useRef<Terminal | null>(null);
-  const fitAddon = useRef<FitAddon>(new FitAddon());
+  const fitAddon = useRef<FitAddon | null>(null);
   const socket = useRef<WebSocket | null>(null);
   const inputBuffer = useRef<string>("");
 
@@ -50,9 +50,16 @@ const InteractiveTerminal = forwardRef<
       },
     });
 
+    fitAddon.current = new FitAddon();
     term.current.loadAddon(fitAddon.current);
     term.current.open(terminalRef.current);
-    fitAddon.current.fit();
+
+    // Simple fit without retry - let it fail gracefully
+    try {
+      fitAddon.current.fit();
+    } catch (error) {
+      console.error("Initial terminal fit failed:", error);
+    }
 
     // WebSocket connection
     socket.current = new WebSocket(wsEndpoint);
@@ -85,7 +92,9 @@ const InteractiveTerminal = forwardRef<
       }
     };
 
-    socket.current.onerror = (err) => console.error("WebSocket error:", err);
+    socket.current.onclose = (event: CloseEvent) => {
+      console.log("WebSocket closed:", event.code, event.reason);
+    };
 
     // Handle typed input
     term.current.onData((data: string) => {
@@ -104,7 +113,15 @@ const InteractiveTerminal = forwardRef<
       }
     });
 
-    const handleResize = () => fitAddon.current.fit();
+    const handleResize = () => {
+      if (fitAddon.current) {
+        try {
+          fitAddon.current.fit();
+        } catch (error) {
+          console.error("Error fitting terminal on resize:", error);
+        }
+      }
+    };
     window.addEventListener("resize", handleResize);
 
     return () => {

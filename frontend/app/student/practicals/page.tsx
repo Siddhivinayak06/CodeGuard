@@ -71,6 +71,7 @@ export default function StudentPracticals() {
             description,
             language,
             deadline,
+            subject_id,
             subjects ( subject_name )
           `)
           .order("deadline", { ascending: true });
@@ -94,7 +95,7 @@ export default function StudentPracticals() {
           language: p.language,
           deadline: p.deadline,
           subject_id: p.subject_id,
-          subject_name: p.subjects?.subject_name || "Unknown",
+          subject_name: (p.subjects as any)?.subject_name || "Unknown",
         }));
 
         if (!signal.aborted && mountedRef.current) {

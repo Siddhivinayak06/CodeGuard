@@ -3,6 +3,14 @@
 import { useState, useMemo, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
 
+type TestCase = {
+  input: string;
+  expected_output: string;
+  is_hidden?: boolean;
+  time_limit_ms?: number;
+  memory_limit_kb?: number;
+};
+
 export default function PracticalForm({ editing, close, refresh }: any) {
   const supabase = useMemo(() => createClient(), []);
   const [subjects, setSubjects] = useState<any[]>([]);
@@ -24,15 +32,42 @@ export default function PracticalForm({ editing, close, refresh }: any) {
     max_marks: 100,
   };
 
-  const [form, setForm] = useState(editing || empty);
+  const emptyTestCase: TestCase = {
+    input: "",
+    expected_output: "",
+    is_hidden: false,
+    time_limit_ms: 2000,
+    memory_limit_kb: 65536,
+  };
+
+  const [form, setForm] = useState(editing?.practical || empty);
+  const [testCases, setTestCases] = useState<TestCase[]>(editing?.testCases || [emptyTestCase]);
 
   const save = async () => {
     try {
+      let practicalId: number;
       if (editing) {
-        await supabase.from("practicals").update(form).eq("id", editing.id);
+        const { data } = await supabase
+          .from("practicals")
+          .update(form)
+          .eq("id", editing.practical.id)
+          .select()
+          .single();
+        practicalId = data.id;
+        await supabase.from("test_cases").delete().eq("practical_id", practicalId); // remove old test cases
       } else {
-        await supabase.from("practicals").insert(form);
+        const { data } = await supabase.from("practicals").insert(form).select().single();
+        practicalId = data.id;
       }
+
+      if (testCases.length > 0) {
+        const tcsToInsert = testCases.map((tc: TestCase) => ({
+          ...tc,
+          practical_id: practicalId,
+        }));
+        await supabase.from("test_cases").insert(tcsToInsert);
+      }
+
       refresh();
       close();
     } catch (e) {
@@ -43,16 +78,16 @@ export default function PracticalForm({ editing, close, refresh }: any) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/40" onClick={close}></div>
-      <div className="relative bg-white dark:bg-gray-900 p-6 rounded-lg shadow-lg w-full max-w-lg">
+      <div className="relative bg-white dark:bg-gray-900 p-6 rounded-lg shadow-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto">
         <h3 className="font-semibold text-lg mb-4">{editing ? "Edit Practical" : "Add Practical"}</h3>
-        <div className="space-y-2">
+        <div className="space-y-3">
+          {/* Practical details */}
           <input
             value={form.title}
             onChange={(e) => setForm({ ...form, title: e.target.value })}
             placeholder="Title"
             className="w-full px-3 py-2 border rounded"
           />
-
           <select
             value={form.subject_id}
             onChange={(e) => setForm({ ...form, subject_id: parseInt(e.target.value) })}
@@ -61,32 +96,28 @@ export default function PracticalForm({ editing, close, refresh }: any) {
             <option value={0}>Select Subject</option>
             {subjects.map((s) => (
               <option key={s.id} value={s.id}>
-                {s.name}
+                {s.name || s.subject_name}
               </option>
             ))}
           </select>
-
           <textarea
             value={form.description}
             onChange={(e) => setForm({ ...form, description: e.target.value })}
             placeholder="Description"
             className="w-full px-3 py-2 border rounded h-24"
           />
-
           <input
             value={form.language}
             onChange={(e) => setForm({ ...form, language: e.target.value })}
             placeholder="Language"
             className="w-full px-3 py-2 border rounded"
           />
-
           <input
             type="datetime-local"
             value={form.deadline}
             onChange={(e) => setForm({ ...form, deadline: e.target.value })}
             className="w-full px-3 py-2 border rounded"
           />
-
           <input
             type="number"
             value={form.max_marks}
@@ -95,11 +126,56 @@ export default function PracticalForm({ editing, close, refresh }: any) {
             className="w-full px-3 py-2 border rounded"
           />
 
-          <div className="flex justify-end gap-2 mt-3">
+          {/* Test Cases */}
+          <div className="mt-4 space-y-2">
+            <h4 className="font-medium">Test Cases</h4>
+            {testCases.map((tc: TestCase, idx: number) => (
+              <div key={idx} className="flex flex-col md:flex-row gap-2 items-start border p-2 rounded">
+                <textarea
+                  value={tc.input}
+                  onChange={(e) =>
+                    setTestCases((prev) =>
+                      prev.map((t, i) => (i === idx ? { ...t, input: e.target.value } : t))
+                    )
+                  }
+                  placeholder="Input"
+                  className="w-full md:w-1/2 px-2 py-1 border rounded"
+                />
+                <textarea
+                  value={tc.expected_output}
+                  onChange={(e) =>
+                    setTestCases((prev) =>
+                      prev.map((t, i) => (i === idx ? { ...t, expected_output: e.target.value } : t))
+                    )
+                  }
+                  placeholder="Expected Output"
+                  className="w-full md:w-1/2 px-2 py-1 border rounded"
+                />
+                <button
+                  onClick={() => setTestCases((prev) => prev.filter((_, i) => i !== idx))}
+                  className="px-2 py-1 bg-red-500 text-white rounded hover:bg-red-600 mt-1 md:mt-0"
+                >
+                  X
+                </button>
+              </div>
+            ))}
+            <button
+              onClick={() => setTestCases((prev) => [...prev, emptyTestCase])}
+              className="px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700 transition"
+            >
+              + Add Test Case
+            </button>
+          </div>
+
+          {/* Modal actions */}
+          <div className="flex justify-end gap-2 mt-4">
             <button onClick={close} className="px-3 py-1 border rounded">
               Cancel
             </button>
-            <button onClick={save} className="px-3 py-1 bg-blue-600 text-white rounded">
+            <button
+              onClick={save}
+              className="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 transition"
+            >
               Save
             </button>
           </div>

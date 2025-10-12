@@ -16,7 +16,8 @@ export default function StudentSubmissions() {
   const [user, setUser] = useState<User | null>(null);
   const [submissions, setSubmissions] = useState<any[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
-  const [viewingSubmission, setViewingSubmission] = useState<{ code: string; output: string } | null>(null);
+  const [viewingSubmission, setViewingSubmission] = useState<any>(null);
+  const [testCases, setTestCases] = useState<any[]>([]);
   const [pdfLoading, setPdfLoading] = useState<boolean>(false);
 
   // ✅ Auth check
@@ -64,7 +65,10 @@ export default function StudentSubmissions() {
             language,
             status,
             created_at,
-            practicals ( title )
+            practical_id,
+            marks_obtained,
+            practicals ( title ),
+            test_case_results ( test_case_id, status, stdout, stderr, execution_time_ms, memory_used_kb )
           `)
           .eq("student_id", user.id)
           .order("created_at", { ascending: false });
@@ -73,12 +77,15 @@ export default function StudentSubmissions() {
 
         const formatted = data.map((s) => ({
           id: s.id,
-          practical_title: s.practicals?.title || "Unknown",
+          practical_id: s.practical_id,
+          practical_title: (s.practicals as any)?.title || "Unknown",
           code: s.code,
           output: s.output,
           language: s.language,
           status: s.status,
           created_at: s.created_at,
+          marks_obtained: s.marks_obtained,
+          testCaseResults: s.test_case_results || [],
         }));
 
         if (mountedRef.current) setSubmissions(formatted);
@@ -91,6 +98,27 @@ export default function StudentSubmissions() {
 
     fetchSubmissions();
   }, [user?.id, supabase]);
+
+  // ✅ Fetch test cases when viewing a submission
+  useEffect(() => {
+    if (!viewingSubmission) {
+      setTestCases([]);
+      return;
+    }
+
+    const fetchTestCases = async () => {
+      const { data, error } = await supabase
+        .from("test_cases")
+        .select("*")
+        .eq("practical_id", viewingSubmission.practical_id)
+        .order("id", { ascending: true });
+
+      if (error) console.error("Failed to fetch test cases:", error);
+      else setTestCases(data || []);
+    };
+
+    fetchTestCases();
+  }, [viewingSubmission, supabase]);
 
   // ✅ Download PDF
   const handleDownloadPdf = async (submission: any) => {
@@ -109,6 +137,18 @@ export default function StudentSubmissions() {
       console.error("PDF generation failed:", err);
     } finally {
       setPdfLoading(false);
+    }
+  };
+
+  // ✅ Helper for status color
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case "passed": return "text-green-600";
+      case "failed": return "text-red-600";
+      case "compile_error": return "text-orange-600";
+      case "runtime_error": return "text-red-600";
+      case "timeout": return "text-yellow-600";
+      default: return "text-gray-600";
     }
   };
 
@@ -154,7 +194,7 @@ export default function StudentSubmissions() {
                     <td className="px-4 py-3">{s.practical_title}</td>
                     <td className="px-4 py-3">{s.language}</td>
                     <td className="px-4 py-3">{s.status}</td>
-                    <td className="px-4 py-3">—</td>
+                    <td className="px-4 py-3">{s.marks_obtained ?? "—"}</td>
                     <td className="px-4 py-3">
                       {s.created_at ? new Date(s.created_at).toLocaleString() : "—"}
                     </td>
@@ -163,7 +203,7 @@ export default function StudentSubmissions() {
                         size="sm"
                         variant="outline"
                         onClick={() =>
-                          setViewingSubmission({ code: s.code, output: s.output || "" })
+                          setViewingSubmission(s)
                         }
                       >
                         View
@@ -185,24 +225,47 @@ export default function StudentSubmissions() {
         )}
       </div>
 
-      {/* Modal for viewing code and output */}
+      {/* Modal for viewing code and test case results */}
       {viewingSubmission && (
         <div className="fixed inset-0 flex items-center justify-center z-50 bg-black/50">
-          <div className="bg-white dark:bg-gray-900 rounded-xl p-6 w-11/12 max-w-3xl h-3/4 overflow-auto relative">
+          <div className="bg-white dark:bg-gray-900 rounded-xl p-6 w-11/12 max-w-4xl h-5/6 overflow-auto relative">
             <h2 className="text-xl font-semibold mb-4 text-gray-800 dark:text-gray-100">
-              Submitted Code & Output
+              Submitted Code & Test Case Results
             </h2>
             <div className="mb-4">
               <h3 className="font-semibold text-gray-700 dark:text-gray-300 mb-2">Code:</h3>
-              <pre className="bg-gray-100 dark:bg-gray-800 p-4 rounded-md overflow-auto whitespace-pre-wrap">
+              <pre className="bg-gray-100 dark:bg-gray-800 p-4 rounded-md overflow-auto whitespace-pre-wrap text-sm">
                 {viewingSubmission.code}
               </pre>
             </div>
             <div>
-              <h3 className="font-semibold text-gray-700 dark:text-gray-300 mb-2">Output:</h3>
-              <pre className="bg-gray-100 dark:bg-gray-800 p-4 rounded-md overflow-auto whitespace-pre-wrap">
-                {viewingSubmission.output || "No output"}
-              </pre>
+              <h3 className="font-semibold text-gray-700 dark:text-gray-300 mb-2">Test Case Results:</h3>
+              <div className="space-y-2 max-h-96 overflow-auto">
+                {viewingSubmission?.testCaseResults?.length ? (
+                  viewingSubmission.testCaseResults.map((r: any, idx: number) => {
+                    const tc = testCases.find((t: any) => t.id === r.test_case_id);
+                    return (
+                      <div key={idx} className="border border-gray-200 dark:border-gray-700 rounded p-2">
+                        <div className="flex justify-between items-center mb-1">
+                          <div className="text-sm">Test #{idx + 1} {tc?.is_hidden ? "(hidden)" : ""}</div>
+                          <div className={`font-semibold text-sm ${getStatusColor(r.status)}`}>
+                            {r.status.toUpperCase()}
+                          </div>
+                        </div>
+                        <div className="text-xs text-gray-600 dark:text-gray-300 space-y-1">
+                          <div><strong>Input:</strong> <pre className="whitespace-pre-wrap">{tc?.input || ""}</pre></div>
+                          <div><strong>Expected:</strong> <pre className="whitespace-pre-wrap">{tc?.expected_output || ""}</pre></div>
+                          <div><strong>Output:</strong> <pre className="whitespace-pre-wrap">{r.stdout || ""}</pre></div>
+                          {r.stderr && <div className="text-red-500"><strong>Error:</strong> {r.stderr}</div>}
+                          <div>Time: {r.execution_time_ms ?? "-"} ms • Memory: {r.memory_used_kb ?? "-"} KB</div>
+                        </div>
+                      </div>
+                    );
+                  })
+                ) : (
+                  <div className="text-gray-500 dark:text-gray-400">No test case results available</div>
+                )}
+              </div>
             </div>
             <Button
               className="absolute top-4 right-4"
