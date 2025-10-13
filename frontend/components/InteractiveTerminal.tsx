@@ -54,6 +54,10 @@ const InteractiveTerminal = forwardRef<
     term.current.loadAddon(fitAddon.current);
     term.current.open(terminalRef.current);
 
+      // 🧠 ResizeObserver — auto-fit terminal when container size changes
+    const observer = new ResizeObserver(() => fitAddon.current?.fit());
+    observer.observe(terminalRef.current);
+    
     // Simple fit without retry - let it fail gracefully
     try {
       fitAddon.current.fit();
@@ -124,10 +128,12 @@ const InteractiveTerminal = forwardRef<
     };
     window.addEventListener("resize", handleResize);
 
+    // 🧹 Cleanup
     return () => {
+      observer.disconnect();
       window.removeEventListener("resize", handleResize);
-      socket.current?.close();
       term.current?.dispose();
+       socket.current?.close();
     };
   }, [wsEndpoint, fontSize, fontFamily]);
 
