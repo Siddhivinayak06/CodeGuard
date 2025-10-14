@@ -31,7 +31,7 @@ const InteractiveTerminal = forwardRef<
   const currentLang = useRef<string>("python"); // default
  
 
-  const wsEndpoint = "ws://localhost:5001";
+  const wsEndpoint = wsUrl || "ws://localhost:5002";
 
   useEffect(() => {
     if (!terminalRef.current) return;

@@ -35,26 +35,38 @@ export async function POST(req: Request) {
       return NextResponse.json({ results: [], verdict: "pending" });
     }
 
-    // 2️⃣ Call your runner service
+    // 2️⃣ Call your runner service with retry
     const EXECUTE_URL = process.env.EXECUTE_URL || "http://localhost:5002/execute";
-    const runnerRes = await fetch(EXECUTE_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        code,
-        lang,
-        batch: tcs.map(tc => ({
-          id: tc.id,
-          stdinInput: tc.input,
-          time_limit_ms: tc.time_limit_ms ?? 2000,
-          memory_limit_kb: tc.memory_limit_kb ?? 65536,
-        })),
-      }),
-    });
+    let runnerRes: Response;
+    let attempts = 0;
+    const maxAttempts = 3;
+    while (attempts < maxAttempts) {
+      try {
+        runnerRes = await fetch(EXECUTE_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            code,
+            lang,
+            batch: tcs.map(tc => ({
+              id: tc.id,
+              stdinInput: tc.input,
+              time_limit_ms: tc.time_limit_ms ?? 2000,
+              memory_limit_kb: tc.memory_limit_kb ?? 65536,
+            })),
+          }),
+        });
+        if (runnerRes.ok) break;
+      } catch (fetchErr) {
+        attempts++;
+        if (attempts >= maxAttempts) throw fetchErr;
+        await new Promise(resolve => setTimeout(resolve, 1000)); // 1s delay
+      }
+    }
 
-    if (!runnerRes.ok) {
-      const text = await runnerRes.text();
-      return NextResponse.json({ error: `Runner error ${runnerRes.status}: ${text}` }, { status: 500 });
+    if (!runnerRes!.ok) {
+      const text = await runnerRes!.text();
+      return NextResponse.json({ error: `Runner error ${runnerRes!.status}: ${text}` }, { status: 500 });
     }
 
     const runnerResults = await runnerRes.json() as {

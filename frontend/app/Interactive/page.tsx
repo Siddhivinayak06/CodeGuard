@@ -206,7 +206,7 @@ export default function Home() {
               {/* ✅ Pass ref down */}
               <InteractiveTerminal
                 ref={interactiveTerminalRef}
-                wsUrl="ws://localhost:5001"
+                wsUrl="ws://localhost:5002"
                 fontSize={16}
                 fontFamily="Fira Code, monospace"
                 onOutput={(data: string) =>
