@@ -120,25 +120,56 @@ export default function StudentSubmissions() {
     fetchTestCases();
   }, [viewingSubmission, supabase]);
 
-  // ✅ Download PDF
-  const handleDownloadPdf = async (submission: any) => {
-    if (!submission) return;
-    try {
-      setPdfLoading(true);
-      await generatePdfClient({
-        code: submission.code,
-        output: submission.output || "",
-        user: user?.email || "Anonymous",
-        filename: submission.practical_title
-          ? `${submission.practical_title.replace(/\s+/g, "_")}.pdf`
-          : "submission.pdf",
-      });
-    } catch (err) {
-      console.error("PDF generation failed:", err);
-    } finally {
-      setPdfLoading(false);
-    }
-  };
+// ✅ Download PDF
+const handleDownloadPdf = async (submission: any) => {
+  if (!submission) return;
+
+  try {
+    setPdfLoading(true);
+
+    // Fetch all test cases for this practical
+    const { data: tcData, error } = await supabase
+      .from("test_cases")
+      .select("*")
+      .eq("practical_id", submission.practical_id)
+      .order("id", { ascending: true });
+    if (error) console.error(error);
+    const currentTestCases = tcData || [];
+
+    // Use testCaseResults already in submission
+    const results = submission.testCaseResults ?? [];
+
+    // Format test case results for PDF
+    let testCaseText = "";
+    results.forEach((r: any, idx: number) => {
+      const tc = currentTestCases.find((t: any) => t.id === r.test_case_id);
+      testCaseText += `Test #${idx + 1} ${tc?.is_hidden ? "(hidden)" : ""}\n`;
+      testCaseText += `Status: ${r.status.toUpperCase()}\n`;
+      testCaseText += `Input: ${tc?.input || ""}\n`;
+      testCaseText += `Expected: ${tc?.expected_output || ""}\n`;
+      testCaseText += `Output: ${r.stdout || ""}\n`;
+      if (r.stderr) testCaseText += `Error: ${r.stderr}\n`;
+      testCaseText += `Time: ${r.execution_time_ms ?? "-"} ms | Memory: ${r.memory_used_kb ?? "-"} KB\n\n`;
+    });
+
+    // Include original program output first, then test cases
+    const pdfContent = `Program Output:\n${submission.output || "No output"}\n\nTest Case Results:\n${testCaseText}`;
+
+    await generatePdfClient({
+      code: submission.code || "No code submitted",
+      output: pdfContent,
+      user: user?.email || "Anonymous",
+      filename: submission.practical_title
+        ? `${submission.practical_title.replace(/\s+/g, "_")}.pdf`
+        : "submission.pdf",
+    });
+  } catch (err) {
+    console.error("PDF generation failed:", err);
+  } finally {
+    setPdfLoading(false);
+  }
+};
+
 
   // ✅ Helper for status color
   const getStatusColor = (status: string) => {
