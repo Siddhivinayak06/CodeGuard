@@ -18,26 +18,10 @@ module.exports = async function runBatchCode(code, lang = "python", batch = []) 
     const escapedCode = code.replace(/\r/g, "");
 
     if (lang === "python") {
-      const inputLines = stdinInput.split("\n").map(l => l.replace(/'/g, "'\\''"));
-      const wrappedCode = `
-_inputs = ${JSON.stringify(inputLines)}
-_input_index = 0
-def input(prompt=""):
-    global _input_index
-    if prompt: print(prompt, end="")
-    if _input_index < len(_inputs):
-        val = _inputs[_input_index]
-        print(val)
-        _input_index += 1
-        return val
-    return ""
-${escapedCode}
-`;
-
       const cmd = `
 mkdir -p /tmp/${uniqueId} &&
-printf "%s" '${wrappedCode.replace(/'/g, "'\\''")}' > /tmp/${uniqueId}/code.py &&
-timeout ${Math.ceil(time_limit_ms / 1000)} python /tmp/${uniqueId}/code.py
+printf "%s" '${escapedCode.replace(/'/g, "'\\''")}' > /tmp/${uniqueId}/code.py &&
+printf "%s" '${stdinInput.replace(/'/g, "'\\''")}' | timeout ${Math.ceil(time_limit_ms / 1000)} python /tmp/${uniqueId}/code.py
 `;
 
       docker = spawn("docker", [
@@ -46,36 +30,11 @@ timeout ${Math.ceil(time_limit_ms / 1000)} python /tmp/${uniqueId}/code.py
       ]);
 
     } else if (lang === "c") {
-      const inputLines = stdinInput.split("\n").map(l => l.replace(/"/g, '\\"'));
-      const wrappedCode = `
-#include <stdio.h>
-#include <stdarg.h>
-
-int _input_index = 0;
-char *_inputs[] = { ${inputLines.map(l => `"${l}"`).join(", ")} };
-
-int my_scanf(const char *fmt, ...) {
-    va_list args;
-    va_start(args, fmt);
-    int ret = 0;
-    if (_input_index < sizeof(_inputs)/sizeof(_inputs[0])) {
-        printf("%s\\n", _inputs[_input_index]);
-        ret = vsscanf(_inputs[_input_index], fmt, args);
-        _input_index++;
-    }
-    va_end(args);
-    return ret;
-}
-#define scanf my_scanf
-
-${escapedCode}
-`;
-
       const cmd = `
 mkdir -p /tmp/${uniqueId} &&
-printf "%s" '${wrappedCode.replace(/'/g, "'\\''")}' > /tmp/${uniqueId}/code.c &&
+printf "%s" '${escapedCode.replace(/'/g, "'\\''")}' > /tmp/${uniqueId}/code.c &&
 gcc /tmp/${uniqueId}/code.c -o /tmp/${uniqueId}/a.out -lm &&
-timeout ${Math.ceil(time_limit_ms / 1000)} /tmp/${uniqueId}/a.out
+printf "%s" '${stdinInput.replace(/'/g, "'\\''")}' | timeout ${Math.ceil(time_limit_ms / 1000)} /tmp/${uniqueId}/a.out
 `;
 
       docker = spawn("docker", [

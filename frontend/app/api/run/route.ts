@@ -81,30 +81,41 @@ export async function POST(req: Request) {
       }>;
     };
 
-    // 3️⃣ Process results: compute correct status by comparing output with expected
-    const processedResults = runnerResults.details.map(d => {
-      const tc = tcs.find(tc => tc.id === d.test_case_id);
-      if (!tc) throw new Error(`Test case ${d.test_case_id} not found`);
+// 3️⃣ Process results: compute correct status by comparing output with expected
+const processedResults = runnerResults.details.map(d => {
+  const tc = tcs.find(tc => tc.id === d.test_case_id);
+  if (!tc) throw new Error(`Test case ${d.test_case_id} not found`);
 
-      let status = "failed";
-      if (d.stderr && d.stderr.toLowerCase().includes("compile")) status = "compile_error";
-      else if (d.stderr && d.stderr.toLowerCase().includes("timeout")) status = "timeout";
-      else if (d.stderr && d.stderr !== "") status = "runtime_error";
-      else if (d.stdout.trim() === tc.expected_output.trim()) status = "passed";
-      else status = "failed";
+  let status = "failed";
+  if (d.stderr && d.stderr.toLowerCase().includes("compile")) status = "compile_error";
+  else if (d.stderr && d.stderr.toLowerCase().includes("timeout")) status = "timeout";
+  else if (d.stderr && d.stderr !== "") status = "runtime_error";
+  // ✅ Ignore trailing whitespace on each line
+  else if (
+    d.stdout
+      .split("\n")
+      .map(line => line.trimEnd())
+      .join("\n") ===
+    tc.expected_output
+      .split("\n")
+      .map(line => line.trimEnd())
+      .join("\n")
+  )
+    status = "passed";
+  else status = "failed";
 
-      return {
-        test_case_id: d.test_case_id,
-        status,
-        input: tc.input,
-        expected: tc.expected_output,
-        stdout: d.stdout,
-        error: d.stderr || null,
-        time_ms: d.time_ms,
-        memory_kb: d.memory_kb,
-        is_hidden: tc.is_hidden,
-      };
-    });
+  return {
+    test_case_id: d.test_case_id,
+    status,
+    input: tc.input,
+    expected: tc.expected_output,
+    stdout: d.stdout,
+    error: d.stderr || null,
+    time_ms: d.time_ms,
+    memory_kb: d.memory_kb,
+    is_hidden: tc.is_hidden,
+  };
+});
 
     // 4️⃣ Insert / upsert test case results
     const tcrInserts = processedResults.map(pr => ({
