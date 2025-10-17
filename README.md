@@ -59,15 +59,86 @@ The app will be live at http://localhost:3000
 ## 🧱 Project Structure
 ```bash
 CodeGuard/
-├── app/                  # Next.js App Router
-├── src/
-│   ├── components/       # Reusable UI components
-│   ├── server/           # Express backend
-│   ├── utils/            # Helper functions and Docker scripts
-├── public/               # Static assets
-├── Dockerfile            # Docker configuration for isolated code execution
+├── README.md
 ├── package.json
-└── README.md
+├── Dockerfile
+├── .env
+├── .env.local
+├── public/
+│   ├── favicon.ico
+│   ├── logo.png
+│   ├── robots.txt
+│   └── (other static assets)
+│
+├── frontend/
+│   ├── package.json
+│   ├── next.config.js
+│   ├── tailwind.config.js
+│   ├── tsconfig.json
+│   ├── postcss.config.js
+│   ├── globals.css
+│   │
+│   ├── app/
+│   │   ├── layout.tsx
+│   │   ├── page.tsx
+│   │   ├── compiler/
+│   │   │   └── page.tsx
+│   │   ├── faculty/
+│   │   │   └── submissions/
+│   │   │       └── page.tsx
+│   │   ├── editor/
+│   │   │   └── EditorClient.tsx
+│   │   └── (other route folders as needed)
+│   │
+│   ├── components/
+│   │   ├── CodeEditor.jsx
+│   │   ├── Navbar.tsx
+│   │   ├── OutputPane.jsx
+│   │   ├── InputPane.jsx
+│   │   ├── ModeToggle.tsx
+│   │   └── ui/
+│   │       ├── button.tsx
+│   │       ├── dropdown-menu.tsx
+│   │       ├── resizable.tsx
+│   │       └── (other shadcn/ui primitives)
+│   │
+│   ├── lib/
+│   │   ├── supabase/
+│   │   │   └── client.ts
+│   │   ├── ClientPdf.ts
+│   │   └── generatePdfClient.ts
+│   │
+│   ├── hooks/
+│   │   └── useProctoring.js
+│   │
+│   └── (other frontend config and build files)
+│
+├── backend/
+│   ├── package.json
+│   ├── Dockerfile.python
+│   ├── Dockerfile.c
+│   ├── interactive_wrapper.c
+│   │
+│   ├── src/
+│   │   ├── server.js
+│   │   ├── interactiveserver.js
+│   │   ├── routes/
+│   │   │   └── execute.js
+│   │   ├── utils/
+│   │   │   ├── dockerRunner.js
+│   │   │   ├── sandbox.js
+│   │   │   └── (other helper scripts)
+│   │   └── (other backend source files)
+│   │
+│   └── (logs, temp, or build files)
+│
+└── docker/
+    ├── docker-compose.yml
+    ├── python-runtime/
+    │   └── Dockerfile
+    └── c-runtime/
+        └── Dockerfile
+
 ```
 
 ## 🧪 How It Works
