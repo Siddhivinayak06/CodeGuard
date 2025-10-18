@@ -1,60 +1,86 @@
 const express = require("express");
 const router = express.Router();
+const fs = require("fs");
+const path = require("path");
 const runBatchCode = require("../utils/dockerRunner");
-const runCode = require("../utils/runCode"); // your old runner
+const runCode = require("../utils/runCode"); // single test case fallback
 
 router.post("/", async (req, res) => {
-  const { code, lang = "python", batch = [], stdinInput = "" } = req.body;
+  const { code, reference_code, lang = "c", batch = [], stdinInput = "", problem = "" } = req.body;
 
-  // If batch is provided (test cases), use batch runner
-  if (Array.isArray(batch) && batch.length > 0) {
-    try {
+  try {
+    // ========================
+    // 1️⃣ Batch mode (multiple test cases)
+    // ========================
+    if (Array.isArray(batch) && batch.length > 0) {
+      console.log(`Executing ${batch.length} test cases for ${lang}...`);
+
       const runnerResults = await runBatchCode(code, lang, batch);
 
-      const details = runnerResults.map((r, idx) => {
-        const tc = batch[idx];
-        let status = "failed";
+      for (const result of runnerResults) {
+        const tc = batch.find(b => b.id === result.test_case_id);
+        if (!tc) continue;
 
-        if (r.stderr && r.stderr.toLowerCase().includes("compile")) status = "compile_error";
-        else if (r.stderr && r.stderr.toLowerCase().includes("timeout")) status = "time_limit_exceeded";
-        else if (r.stderr && r.stderr !== "") status = "runtime_error";
-        else status = "passed";
+        if (!tc.is_hidden && reference_code) {
+          const refRes = await runCode(reference_code, lang, tc.stdinInput ?? tc.input ?? "");
+          result.reference_stdout = (refRes.output ?? "").trimEnd();
+        } else if (tc.is_hidden) {
+          result.reference_stdout = tc.expectedOutput ?? "";
+        }
 
-        return {
-          test_case_id: tc.id ?? idx + 1,
-          status,
-          time_ms: tc.time_limit_ms ?? null,
-          memory_kb: tc.memory_limit_kb ?? null,
-          // ✅ Trim trailing whitespace from stdout/stderr to ignore whitespace issues
-          stdout: r.stdout.trimEnd(),
-          stderr: r.stderr.trimEnd()
-        };
-      });
+        const userOut = (result.stdout ?? "").trimEnd();
+        const refOut = (result.reference_stdout ?? "").trimEnd();
 
-      const passed = details.filter(d => d.status === "passed").length;
-      const total = details.length;
+        if (result.stderr?.toLowerCase().includes("compile")) result.status = "compile_error";
+        else if (result.stderr?.toLowerCase().includes("timeout")) result.status = "time_limit_exceeded";
+        else if (result.stderr && result.stderr !== "") result.status = "runtime_error";
+        else result.status = (userOut === refOut) ? "passed" : "failed";
+      }
 
-      let verdict = "accepted";
-      if (passed === 0) verdict = "wrong_answer";
-      else if (passed < total) verdict = "partial";
-
-      res.json({ verdict, details, results: details });
-    } catch (err) {
-      console.error("Execution error:", err);
-      res.status(500).json({ error: "Execution failed." });
+      return res.json({ verdict: "evaluated", details: runnerResults });
     }
 
-  } else {
-    // Normal static terminal mode: use single-run runner
+    // ========================
+    // 2️⃣ Single input / normal static terminal mode
+    // ========================
     if (!code) return res.status(400).json({ error: "No code provided." });
 
-    try {
-      const result = await runCode(code, lang, stdinInput);
-      res.json({ output: result.output, error: result.error, exitCode: result.exitCode });
-    } catch (err) {
-      console.error("Execution error:", err);
-      res.status(500).json({ error: "Execution failed." });
+    // Run user's code
+    const userResult = await runCode(code, lang, stdinInput);
+
+    // If a problem is provided, compare with reference code
+    let refOut = "";
+    if (problem) {
+      const referencePath = path.join(process.cwd(), "reference", `${problem}.c`);
+      if (fs.existsSync(referencePath)) {
+        const referenceCode = fs.readFileSync(referencePath, "utf8");
+        const refResult = await runCode(referenceCode, lang, stdinInput);
+        refOut = (refResult.output ?? "").trim();
+      }
     }
+
+    const clean = (s = "") =>
+      s
+        .split("\n")
+        .map((line) => line.trimEnd())
+        .join("\n")
+        .trim();
+
+    const userOut = clean(userResult.output);
+    const passed = refOut ? userOut === refOut : true;
+
+    return res.json({
+      mode: "manual",
+      problem: problem || "manual_run",
+      input: stdinInput,
+      expected: refOut || userOut,
+      output: userOut,
+      verdict: passed ? "passed" : "failed",
+      user_stderr: userResult.error || "",
+    });
+  } catch (err) {
+    console.error("Execution error:", err);
+    return res.status(500).json({ error: "Execution failed." });
   }
 });
 

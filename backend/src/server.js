@@ -7,7 +7,7 @@ const pty = require("@lydell/node-pty");
 
 const app = require("./app"); // your express app (the file you showed exports `app`)
 
-const PORT = process.env.INTERACTIVE_PORT || process.env.PORT || 5001;
+const PORT = process.env.INTERACTIVE_PORT || process.env.PORT || 5002;
 const server = http.createServer(app);
 
 // Attach a WebSocket server to the same HTTP server

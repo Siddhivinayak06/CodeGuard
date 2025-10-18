@@ -1,27 +1,23 @@
-import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/service";
-
-type TCRow = {
-  id: number;
-  input: string;
-  expected_output: string;
-  is_hidden: boolean | null;
-  time_limit_ms: number | null;
-  memory_limit_kb: number | null;
-};
+import { NextResponse } from "next/server";
+import { promises as fs } from "fs";
+import path from "path";
 
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { code, lang, practicalId, submissionId } = body;
+    const { code, lang, practicalId, submissionId, userTestCases = [] } = body;
 
     if (!code || !lang || !practicalId || !submissionId) {
-      return NextResponse.json({ error: "Missing code, lang, practicalId, or submissionId" }, { status: 400 });
+      return NextResponse.json(
+        { error: "Missing code, lang, practicalId, or submissionId" },
+        { status: 400 }
+      );
     }
 
-    // 1️⃣ Fetch test cases
+    // 1️⃣ Fetch predefined test cases
     const { data: tcs, error: tcErr } = await supabaseAdmin
-      .from<TCRow>("test_cases")
+      .from("test_cases")
       .select("*")
       .eq("practical_id", practicalId)
       .order("id", { ascending: true });
@@ -31,127 +27,117 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Failed to load test cases" }, { status: 500 });
     }
 
-    if (!tcs || tcs.length === 0) {
+    // 2️⃣ Read reference code
+    const refPath = path.join(process.cwd(), "app", "api", "run", "reference", `${practicalId}.c`);
+    let referenceCode = "";
+    try {
+      referenceCode = await fs.readFile(refPath, "utf-8");
+    } catch (err) {
+      console.error("Reference code missing:", refPath);
+      return NextResponse.json(
+        { error: `Reference code not found for ${practicalId}` },
+        { status: 404 }
+      );
+    }
+
+    // 3️⃣ Build execution batch
+    const batch = [
+      ...(tcs || []).map((tc) => ({
+        id: tc.id,
+        stdinInput: tc.input,
+        expectedOutput: tc.expected_output,
+        is_hidden: true, // predefined always hidden
+        time_limit_ms: tc.time_limit_ms ?? 2000,
+        memory_limit_kb: tc.memory_limit_kb ?? 65536,
+      })),
+      ...userTestCases.map((utc, idx) => ({
+        id: `user-${idx + 1}`,
+        stdinInput: utc.input,
+        expectedOutput: null, // will compare against reference code
+        is_hidden: false,
+        time_limit_ms: 2000,
+        memory_limit_kb: 65536,
+      })),
+    ];
+
+    if (batch.length === 0) {
       return NextResponse.json({ results: [], verdict: "pending" });
     }
 
-    // 2️⃣ Call your runner service with retry
+    // 4️⃣ Run code in Docker
     const EXECUTE_URL = process.env.EXECUTE_URL || "http://localhost:5002/execute";
-    let runnerRes: Response;
-    let attempts = 0;
-    const maxAttempts = 3;
-    while (attempts < maxAttempts) {
-      try {
-        runnerRes = await fetch(EXECUTE_URL, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            code,
-            lang,
-            batch: tcs.map(tc => ({
-              id: tc.id,
-              stdinInput: tc.input,
-              time_limit_ms: tc.time_limit_ms ?? 2000,
-              memory_limit_kb: tc.memory_limit_kb ?? 65536,
-            })),
-          }),
-        });
-        if (runnerRes.ok) break;
-      } catch (fetchErr) {
-        attempts++;
-        if (attempts >= maxAttempts) throw fetchErr;
-        await new Promise(resolve => setTimeout(resolve, 1000)); // 1s delay
-      }
+    const runnerRes = await fetch(EXECUTE_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        code, // user code
+        reference_code: referenceCode, // reference code
+        lang,
+        batch,
+      }),
+    });
+
+    if (!runnerRes.ok) {
+      const text = await runnerRes.text();
+      return NextResponse.json({ error: `Runner error ${runnerRes.status}: ${text}` }, { status: 500 });
     }
 
-    if (!runnerRes!.ok) {
-      const text = await runnerRes!.text();
-      return NextResponse.json({ error: `Runner error ${runnerRes!.status}: ${text}` }, { status: 500 });
-    }
+    const runnerResults = await runnerRes.json();
+    const details = runnerResults.details ?? []; // fallback if undefined
 
-    const runnerResults = await runnerRes.json() as {
-      verdict: string;
-      details: Array<{
-        test_case_id: number;
-        status: string;
-        stdout: string;
-        stderr: string;
-        time_ms: number | null;
-        memory_kb: number | null;
-      }>;
-    };
-
-// 3️⃣ Process results: compute correct status by comparing output with expected
-const processedResults = runnerResults.details.map(d => {
-  const tc = tcs.find(tc => tc.id === d.test_case_id);
-  if (!tc) throw new Error(`Test case ${d.test_case_id} not found`);
-
-  let status = "failed";
-  if (d.stderr && d.stderr.toLowerCase().includes("compile")) status = "compile_error";
-  else if (d.stderr && d.stderr.toLowerCase().includes("timeout")) status = "timeout";
-  else if (d.stderr && d.stderr !== "") status = "runtime_error";
-  // ✅ Ignore trailing whitespace on each line
-  else if (
-    d.stdout
-      .split("\n")
-      .map(line => line.trimEnd())
-      .join("\n") ===
-    tc.expected_output
-      .split("\n")
-      .map(line => line.trimEnd())
-      .join("\n")
-  )
-    status = "passed";
-  else status = "failed";
-
-  return {
+    // 5️⃣ Process user test case results only
+const userResults = details
+  .filter((d: any) => String(d.test_case_id).startsWith("user-"))
+  .map((d: any) => ({
     test_case_id: d.test_case_id,
-    status,
-    input: tc.input,
-    expected: tc.expected_output,
+    status: (d.stdout?.trim() ?? "") === (d.reference_stdout?.trim() ?? "") ? "passed" : "failed",
+    input: d.stdinInput ?? "",   // <-- fix here
+    expected: d.reference_stdout,
     stdout: d.stdout,
     error: d.stderr || null,
-    time_ms: d.time_ms,
-    memory_kb: d.memory_kb,
-    is_hidden: tc.is_hidden,
-  };
-});
+    is_hidden: false,
+    time_ms: d.time_ms ?? 0,
+    memory_kb: d.memory_kb ?? 0,
+  }));
 
-    // 4️⃣ Insert / upsert test case results
-    const tcrInserts = processedResults.map(pr => ({
-      submission_id: submissionId,
-      test_case_id: pr.test_case_id,
-      status: pr.status,
-      stdout: pr.stdout,
-      stderr: pr.error || "",
-      execution_time_ms: pr.time_ms,
-      memory_used_kb: pr.memory_kb,
-    }));
+console.log("User results ready:", userResults);
 
-    for (const tcr of tcrInserts) {
+
+    // 6️⃣ Save predefined test case results for scoring
+    const predefinedResults = details
+      .filter((d: any) => !String(d.test_case_id).startsWith("user-"))
+      .map((d: any) => {
+        const stdout = d.stdout ?? "";
+        const tc = tcs?.find((tc) => tc.id === d.test_case_id);
+        return {
+          submission_id: submissionId,
+          test_case_id: d.test_case_id,
+          status: stdout.trimEnd() === tc?.expected_output?.trimEnd() ? "passed" : "failed",
+          stdout,
+          stderr: d.stderr || "",
+          execution_time_ms: d.time_ms ?? 0,
+          memory_used_kb: d.memory_kb ?? 0,
+        };
+      });
+
+    for (const tcr of predefinedResults) {
       await supabaseAdmin
         .from("test_case_results")
         .upsert(tcr, { onConflict: "submission_id,test_case_id" });
     }
 
-    // 5️⃣ Compute overall status, marks, and combined output
-    const submissionStatus = "evaluated";
-    const passed = processedResults.filter(pr => pr.status === "passed").length;
-    const total = processedResults.length;
+    // 7️⃣ Compute marks
+    const passed = predefinedResults.filter((pr) => pr.status === "passed").length;
+    const total = predefinedResults.length;
     const marksObtained = total > 0 ? Math.round((passed / total) * 10) : 0;
-    const combinedOutput = processedResults
-      .map(pr => pr.error ? `ERROR: ${pr.error}` : `${pr.status.toUpperCase()}: ${pr.stdout}`)
-      .join("\n\n");
 
-    // 6️⃣ Update submission
-    const { error: subErr } = await supabaseAdmin
+    await supabaseAdmin
       .from("submissions")
-      .update({ status: submissionStatus, output: combinedOutput, marks_obtained: marksObtained })
+      .update({ status: "evaluated", marks_obtained: marksObtained })
       .eq("id", submissionId);
 
-    if (subErr) console.error("Failed to update submission:", subErr);
-
-    return NextResponse.json({ results: processedResults, verdict: submissionStatus });
+    // 8️⃣ Return only user test case results
+    return NextResponse.json({ results: userResults, verdict: "evaluated" });
 
   } catch (err) {
     console.error("Run API error:", err);

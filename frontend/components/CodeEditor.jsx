@@ -144,52 +144,7 @@ provideCompletionItems: (model, position) => {
       }
     });
 
-    // Prevent paste
-    editor.onDidPaste(() => {
-      showToast("Pasting is disabled!");
-      editor.trigger("keyboard", "undo");
-    });
-    editor.onKeyDown((e) => {
-    if ((e.ctrlKey || e.metaKey) && ["KeyV", "KeyC", "KeyX"].includes(e.code)) {
-        e.preventDefault();
-        showToast("Clipboard actions are disabled!");
-      }
-});
-
-editor.addAction({
-  id: "editor.action.clipboardCopyWithSyntaxHighlightingAction",
-  label: "Copy with Syntax Highlighting",
-  keybindings: [], // remove any keyboard triggers
-  precondition: null,
-  run: function (ed) {
-    showToast("This command is disabled!");
-    return null; // prevents actual copy
-  },
-});
-editor.addAction({
-  id: "editor.action.pasteAsText",
-  label: "Paste as Text",
-  keybindings: [],
-  precondition: null,
-  run: function (ed) {
-    showToast("This command is disabled!");
-    return null;
-  },
-});
-
-editor.addAction({
-  id: "editor.action.pasteAs",
-  label: "Paste As…",
-  keybindings: [],
-  precondition: null,
-  run: function (ed) {
-    showToast("This command is disabled!");
-    return null;
-  },
-});
-
-
-
+ 
     editor.onDidType((text) => {
       // ✅ Works only if language is C
       if (langRef.current === "c" && text === "#") {
@@ -272,7 +227,8 @@ editor.addAction({
               {showInput ? "Hide Input" : "Show Input"}
             </Button>
           )}
-
+     
+    
           {/* Run */}
           <Button
             size="sm"
