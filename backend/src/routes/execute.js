@@ -17,16 +17,28 @@ router.post("/", async (req, res) => {
 
       const runnerResults = await runBatchCode(code, lang, batch);
 
-      for (const result of runnerResults) {
-        const tc = batch.find(b => b.id === result.test_case_id);
-        if (!tc) continue;
+for (const result of runnerResults) {
+  const tc = batch.find(b => b.id === result.test_case_id);
+  if (!tc) continue;
 
-        if (!tc.is_hidden && reference_code) {
-          const refRes = await runCode(reference_code, lang, tc.stdinInput ?? tc.input ?? "");
-          result.reference_stdout = (refRes.output ?? "").trimEnd();
-        } else if (tc.is_hidden) {
-          result.reference_stdout = tc.expectedOutput ?? "";
-        }
+  console.log("Test case:", tc.id);
+  console.log("is_hidden:", tc.is_hidden);
+  console.log("has reference_code:", !!reference_code);
+
+  if (!tc.is_hidden && reference_code) {
+    console.log("Running reference code...");
+    const refRes = await runCode(reference_code, lang, tc.stdinInput ?? tc.input ?? "");
+    result.reference_stdout = (refRes.output ?? "").trimEnd();
+  } else if (tc.is_hidden) {
+    console.log("Using expectedOutput from tc:", tc.expectedOutput);
+    result.reference_stdout = tc.expectedOutput ?? "";
+  }
+  
+  console.log("Final reference_stdout:", result.reference_stdout);
+
+    // ✅ ADD THESE TWO LINES HERE:
+  console.log("Student stdout:", result.stdout);
+  console.log("Expected (reference_stdout):", result.reference_stdout);
 
         const userOut = (result.stdout ?? "").trimEnd();
         const refOut = (result.reference_stdout ?? "").trimEnd();

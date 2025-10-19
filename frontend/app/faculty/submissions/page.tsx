@@ -122,6 +122,10 @@ export default function FacultySubmissionsPage() {
   const handleViewSubmission = async (s: any) => {
     const results = await fetchTestCaseResults(s.submission_id);
     const cases = await fetchTestCases(s.practical_id);
+      console.log("=== VIEWING SUBMISSION ===");
+  console.log("Submission code:", s.code);
+  console.log("Test case results from DB:", results);
+  console.log("Test cases:", cases);
     setViewingSubmission({ ...s, testCaseResults: results });
     setTestCases(cases);
   };

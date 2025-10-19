@@ -132,13 +132,27 @@ const handleSubmit = async () => {
 
   setLoading(true);
   try {
-    // 1️⃣ Submit code and run all predefined test cases
+    // 1️⃣ CREATE SUBMISSION FIRST (with pending status)
+    const submissionRes = await axios.post("/api/submission/create", {
+      student_id: user.id,
+      practical_id: Number(practicalId),
+      code,
+      language: lang,
+      status: "pending",
+      marks_obtained: 0,
+      test_cases_passed: "0/0"
+    });
+
+    const submission = submissionRes.data.submission;
+    if (!submission?.id) throw new Error("Failed to create submission");
+
+    // 2️⃣ NOW RUN WITH THE NEW SUBMISSION ID
     const runRes = await axios.post("/api/run", {
       code,
       lang,
       practicalId,
-      submissionId: practical?.submission_id || 1,
-      mode: "submit", // <-- run predefined test cases for marks
+      submissionId: submission.id,  // ← Use the NEW submission ID
+      mode: "submit",
     });
 
     const verdict = runRes.data.verdict || "evaluated";
@@ -146,23 +160,11 @@ const handleSubmit = async () => {
     const passedTestCases = runRes.data.passedTestCases ?? 0;
     const totalTestCases = runRes.data.totalTestCases ?? 0;
 
-    // 2️⃣ Submit to database
-    const submissionRes = await axios.post("/api/submission/create", {
-      student_id: user.id,
-      practical_id: Number(practicalId),
-      code,
-      language: lang,
-      status: verdict === "evaluated" ? "evaluated" : "submitted",
-      marks_obtained: marksObtained,
-      test_cases_passed: `${passedTestCases}/${totalTestCases}`, // store # of test cases passed
-    });
-
-    const submission = submissionRes.data.submission;
-    if (!submission?.id) throw new Error("Failed to submit");
-
-    // 3️⃣ Update state
+    // 3️⃣ The /api/run already updates the submission with marks in the database
+    // Just update the UI state
     setSubmissionStatus(verdict === "evaluated" ? "evaluated" : "submitted");
     alert(`Practical submitted successfully! Marks: ${marksObtained} / 10 (${passedTestCases}/${totalTestCases} test cases passed)`);
+    
   } catch (err: any) {
     console.error(err);
     alert(err?.response?.data?.error || "Error submitting practical. Please try again.");
@@ -170,8 +172,6 @@ const handleSubmit = async () => {
     setLoading(false);
   }
 };
-
-
 
   const downloadPdf = async () => {
     try {
