@@ -128,34 +128,49 @@ const runCode = async () => {
   }
 };
 const handleSubmit = async () => {
-    if (!code || !practicalId || !user) return;
+  if (!code || !practicalId || !user) return;
 
-    setLoading(true);
-    try {
-      const total = scoreSummary.total || 1;
-      const marksOutOf10 = Math.round((scoreSummary.passed / total) * 10);
+  setLoading(true);
+  try {
+    // 1️⃣ Submit code and run all predefined test cases
+    const runRes = await axios.post("/api/run", {
+      code,
+      lang,
+      practicalId,
+      submissionId: practical?.submission_id || 1,
+      mode: "submit", // <-- run predefined test cases for marks
+    });
 
-      const submissionRes = await axios.post("/api/submission/create", {
-        student_id: user.id,
-        practical_id: Number(practicalId),
-        code,
-        language: lang,
-        status: "submitted",
-        marks_obtained: marksOutOf10,
-      });
+    const verdict = runRes.data.verdict || "evaluated";
+    const marksObtained = runRes.data.marksObtained ?? 0;
+    const passedTestCases = runRes.data.passedTestCases ?? 0;
+    const totalTestCases = runRes.data.totalTestCases ?? 0;
 
-      const submission = submissionRes.data.submission;
-      if (!submission?.id) throw new Error("Failed to submit");
+    // 2️⃣ Submit to database
+    const submissionRes = await axios.post("/api/submission/create", {
+      student_id: user.id,
+      practical_id: Number(practicalId),
+      code,
+      language: lang,
+      status: verdict === "evaluated" ? "evaluated" : "submitted",
+      marks_obtained: marksObtained,
+      test_cases_passed: `${passedTestCases}/${totalTestCases}`, // store # of test cases passed
+    });
 
-      setSubmissionStatus("submitted");
-      alert("Practical submitted successfully!");
-    } catch (err) {
-      console.error(err);
-      alert("Error submitting practical. Please try again.");
-    } finally {
-      setLoading(false);
-    }
-  };
+    const submission = submissionRes.data.submission;
+    if (!submission?.id) throw new Error("Failed to submit");
+
+    // 3️⃣ Update state
+    setSubmissionStatus(verdict === "evaluated" ? "evaluated" : "submitted");
+    alert(`Practical submitted successfully! Marks: ${marksObtained} / 10 (${passedTestCases}/${totalTestCases} test cases passed)`);
+  } catch (err: any) {
+    console.error(err);
+    alert(err?.response?.data?.error || "Error submitting practical. Please try again.");
+  } finally {
+    setLoading(false);
+  }
+};
+
 
 
   const downloadPdf = async () => {
@@ -355,7 +370,7 @@ const handleSubmit = async () => {
             <pre className="bg-gray-100 dark:bg-gray-700 p-2 rounded">{userTestCases[idx]?.input ?? "N/A"}</pre>
           </div>
           <div>
-            <strong>Expected:</strong>
+            <strong>Expected Output:</strong>
             <pre className="bg-gray-100 dark:bg-gray-700 p-2 rounded">{r.expected ?? "N/A"}</pre>
           </div>
           <div>

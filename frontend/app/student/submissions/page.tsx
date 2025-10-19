@@ -191,123 +191,91 @@ const handleDownloadPdf = async (submission: any) => {
     );
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-100 dark:from-gray-900 dark:via-gray-950 dark:to-black">
-      <Navbar />
+  <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-100 dark:from-gray-900 dark:via-gray-950 dark:to-black">
+    <Navbar />
 
-      <div className="pt-24 px-6 md:px-12">
-        <h1 className="text-3xl font-extrabold mb-8 text-gray-800 dark:text-gray-100">
-          📝 My Submissions
-        </h1>
+    <div className="pt-24 px-6 md:px-12">
+      <h1 className="text-3xl font-extrabold mb-8 text-gray-800 dark:text-gray-100">
+        📝 My Submissions
+      </h1>
 
-        {loading ? (
-          <p className="text-gray-500 dark:text-gray-400">Loading submissions...</p>
-        ) : submissions.length === 0 ? (
-          <p className="text-gray-500 dark:text-gray-400">No submissions found.</p>
-        ) : (
-          <div className="overflow-x-auto rounded-2xl shadow-md">
-            <table className="w-full bg-white/40 dark:bg-gray-800/40 border border-gray-200/50 dark:border-gray-700/50 rounded-2xl overflow-hidden">
-              <thead className="bg-gray-100/70 dark:bg-gray-700/50">
-                <tr>
-                  <th className="px-4 py-3 text-left">Practical</th>
-                  <th className="px-4 py-3 text-left">Language</th>
-                  <th className="px-4 py-3 text-left">Status</th>
-                  <th className="px-4 py-3 text-left">Marks</th>
-                  <th className="px-4 py-3 text-left">Submitted At</th>
-                  <th className="px-4 py-3 text-left">Actions</th>
+      {loading ? (
+        <p className="text-gray-500 dark:text-gray-400">Loading submissions...</p>
+      ) : submissions.length === 0 ? (
+        <p className="text-gray-500 dark:text-gray-400">No submissions found.</p>
+      ) : (
+        <div className="overflow-x-auto rounded-2xl shadow-md">
+          <table className="w-full bg-white/40 dark:bg-gray-800/40 border border-gray-200/50 dark:border-gray-700/50 rounded-2xl overflow-hidden">
+            <thead className="bg-gray-100/70 dark:bg-gray-700/50">
+              <tr>
+                <th className="px-4 py-3 text-left">Practical</th>
+                <th className="px-4 py-3 text-left">Language</th>
+                <th className="px-4 py-3 text-left">Status</th>
+                <th className="px-4 py-3 text-left">Marks</th>
+                <th className="px-4 py-3 text-left">Submitted At</th>
+                <th className="px-4 py-3 text-left">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {submissions.map((s) => (
+                <tr
+                  key={s.id}
+                  className="border-t border-gray-200/40 dark:border-gray-700/40 hover:bg-gray-50/60 dark:hover:bg-gray-800/60 transition"
+                >
+                  <td className="px-4 py-3">{s.practical_title}</td>
+                  <td className="px-4 py-3">{s.language}</td>
+                  <td className="px-4 py-3">{s.status}</td>
+                  <td className="px-4 py-3">{s.marks_obtained ?? "—"}</td>
+                  <td className="px-4 py-3">
+                    {s.created_at ? new Date(s.created_at).toLocaleString() : "—"}
+                  </td>
+                  <td className="px-4 py-3 flex gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setViewingSubmission(s)}
+                    >
+                      View
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => handleDownloadPdf(s)}
+                      disabled={pdfLoading}
+                    >
+                      {pdfLoading ? "Downloading..." : "Download PDF"}
+                    </Button>
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {submissions.map((s) => (
-                  <tr
-                    key={s.id}
-                    className="border-t border-gray-200/40 dark:border-gray-700/40 hover:bg-gray-50/60 dark:hover:bg-gray-800/60 transition"
-                  >
-                    <td className="px-4 py-3">{s.practical_title}</td>
-                    <td className="px-4 py-3">{s.language}</td>
-                    <td className="px-4 py-3">{s.status}</td>
-                    <td className="px-4 py-3">{s.marks_obtained ?? "—"}</td>
-                    <td className="px-4 py-3">
-                      {s.created_at ? new Date(s.created_at).toLocaleString() : "—"}
-                    </td>
-                    <td className="px-4 py-3 flex gap-2">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() =>
-                          setViewingSubmission(s)
-                        }
-                      >
-                        View
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        onClick={() => handleDownloadPdf(s)}
-                        disabled={pdfLoading}
-                      >
-                        {pdfLoading ? "Downloading..." : "Download PDF"}
-                      </Button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-
-      {/* Modal for viewing code and test case results */}
-      {viewingSubmission && (
-        <div className="fixed inset-0 flex items-center justify-center z-50 bg-black/50">
-          <div className="bg-white dark:bg-gray-900 rounded-xl p-6 w-11/12 max-w-4xl h-5/6 overflow-auto relative">
-            <h2 className="text-xl font-semibold mb-4 text-gray-800 dark:text-gray-100">
-              Submitted Code & Test Case Results
-            </h2>
-            <div className="mb-4">
-              <h3 className="font-semibold text-gray-700 dark:text-gray-300 mb-2">Code:</h3>
-              <pre className="bg-gray-100 dark:bg-gray-800 p-4 rounded-md overflow-auto whitespace-pre-wrap text-sm">
-                {viewingSubmission.code}
-              </pre>
-            </div>
-            <div>
-              <h3 className="font-semibold text-gray-700 dark:text-gray-300 mb-2">Test Case Results:</h3>
-              <div className="space-y-2 max-h-96 overflow-auto">
-                {viewingSubmission?.testCaseResults?.length ? (
-                  viewingSubmission.testCaseResults.map((r: any, idx: number) => {
-                    const tc = testCases.find((t: any) => t.id === r.test_case_id);
-                    return (
-                      <div key={idx} className="border border-gray-200 dark:border-gray-700 rounded p-2">
-                        <div className="flex justify-between items-center mb-1">
-                          <div className="text-sm">Test #{idx + 1} {tc?.is_hidden ? "(hidden)" : ""}</div>
-                          <div className={`font-semibold text-sm ${getStatusColor(r.status)}`}>
-                            {r.status.toUpperCase()}
-                          </div>
-                        </div>
-                        <div className="text-xs text-gray-600 dark:text-gray-300 space-y-1">
-                          <div><strong>Input:</strong> <pre className="whitespace-pre-wrap">{tc?.input || ""}</pre></div>
-                          <div><strong>Expected:</strong> <pre className="whitespace-pre-wrap">{tc?.expected_output || ""}</pre></div>
-                          <div><strong>Output:</strong> <pre className="whitespace-pre-wrap">{r.stdout || ""}</pre></div>
-                          {r.stderr && <div className="text-red-500"><strong>Error:</strong> {r.stderr}</div>}
-                          <div>Time: {r.execution_time_ms ?? "-"} ms • Memory: {r.memory_used_kb ?? "-"} KB</div>
-                        </div>
-                      </div>
-                    );
-                  })
-                ) : (
-                  <div className="text-gray-500 dark:text-gray-400">No test case results available</div>
-                )}
-              </div>
-            </div>
-            <Button
-              className="absolute top-4 right-4"
-              variant="destructive"
-              onClick={() => setViewingSubmission(null)}
-            >
-              Close
-            </Button>
-          </div>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
     </div>
-  );
+
+    {/* Modal for viewing only code */}
+    {viewingSubmission && (
+      <div className="fixed inset-0 flex items-center justify-center z-50 bg-black/50">
+        <div className="bg-white dark:bg-gray-900 rounded-xl p-6 w-11/12 max-w-4xl h-5/6 overflow-auto relative">
+          <h2 className="text-xl font-semibold mb-4 text-gray-800 dark:text-gray-100">
+            Submitted Code
+          </h2>
+          <div className="mb-4">
+            <pre className="bg-gray-100 dark:bg-gray-800 p-4 rounded-md overflow-auto whitespace-pre-wrap text-sm">
+              {viewingSubmission.code}
+            </pre>
+          </div>
+          <Button
+            className="absolute top-4 right-4"
+            variant="destructive"
+            onClick={() => setViewingSubmission(null)}
+          >
+            Close
+          </Button>
+        </div>
+      </div>
+    )}
+  </div>
+);
 }
