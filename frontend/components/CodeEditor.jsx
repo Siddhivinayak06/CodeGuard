@@ -151,9 +151,8 @@ provideCompletionItems: (model, position) => {
         editor.trigger("keyboard", "editor.action.triggerSuggest");
       }
     });
-  };
 
-      // Prevent paste
+   // Prevent paste
     editor.onDidPaste(() => {
       showToast("Pasting is disabled!");
       editor.trigger("keyboard", "undo");
@@ -197,6 +196,10 @@ editor.addAction({
   },
 });
 
+
+  };
+
+   
 
 
   // 🧠 Starter templates
