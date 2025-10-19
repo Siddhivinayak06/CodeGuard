@@ -77,7 +77,7 @@ export async function generatePdfClient({
   };
 
   drawPreformattedBlock("Code:", code || "");
-  drawPreformattedBlock("Output:", output || "No output");
+ 
 
   doc.save(filename);
 }

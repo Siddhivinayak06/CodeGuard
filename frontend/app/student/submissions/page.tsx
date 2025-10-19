@@ -126,35 +126,15 @@ const handleDownloadPdf = async (submission: any) => {
 
   try {
     setPdfLoading(true);
+ 
+     // Compute results summary
+    const totalTestCases = submission.total_test_cases ?? 8; // default to 8 if not stored
+    const passedTestCases = submission.test_cases_passed ?? 0; // number of passed test cases
 
-    // Fetch all test cases for this practical
-    const { data: tcData, error } = await supabase
-      .from("test_cases")
-      .select("*")
-      .eq("practical_id", submission.practical_id)
-      .order("id", { ascending: true });
-    if (error) console.error(error);
-    const currentTestCases = tcData || [];
+    const resultsSummary = `Results: ${passedTestCases} / ${totalTestCases} test cases passed`;
 
-    // Use testCaseResults already in submission
-    const results = submission.testCaseResults ?? [];
-
-    // Format test case results for PDF
-    let testCaseText = "";
-    results.forEach((r: any, idx: number) => {
-      const tc = currentTestCases.find((t: any) => t.id === r.test_case_id);
-      testCaseText += `Test #${idx + 1} ${tc?.is_hidden ? "(hidden)" : ""}\n`;
-      testCaseText += `Status: ${r.status.toUpperCase()}\n`;
-      testCaseText += `Input: ${tc?.input || ""}\n`;
-      testCaseText += `Expected: ${tc?.expected_output || ""}\n`;
-      testCaseText += `Output: ${r.stdout || ""}\n`;
-      if (r.stderr) testCaseText += `Error: ${r.stderr}\n`;
-      testCaseText += `Time: ${r.execution_time_ms ?? "-"} ms | Memory: ${r.memory_used_kb ?? "-"} KB\n\n`;
-    });
-
-    // Include original program output first, then test cases
-    const pdfContent = `Program Output:\n${submission.output || "No output"}\n\nTest Case Results:\n${testCaseText}`;
-
+    // Only include submitted code and results summary
+    const pdfContent = `  {${resultsSummary} }`;
     await generatePdfClient({
       code: submission.code || "No code submitted",
       output: pdfContent,
@@ -169,6 +149,7 @@ const handleDownloadPdf = async (submission: any) => {
     setPdfLoading(false);
   }
 };
+
 
 
   // ✅ Helper for status color
