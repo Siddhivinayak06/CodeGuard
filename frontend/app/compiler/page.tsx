@@ -182,6 +182,7 @@ const [currentMode, setCurrentMode] = useState("Static");
                 disabled={locked}
                 onRun={runCode}
                 onDownload={downloadPdf}
+                onSubmit={runCode}
                 loading={loading}
                 locked={locked}
                 lang={lang}
