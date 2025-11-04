@@ -1,6 +1,6 @@
 "use client";
 
-export default function PracticalList({ practicals, onEdit, onDelete, subjects }: any) {
+export default function PracticalList({ practicals, onEdit, onAssign, onDelete, subjects }: any) {
   return (
     <div className="space-y-2">
       {practicals.map((p: any) => {
@@ -16,6 +16,9 @@ export default function PracticalList({ practicals, onEdit, onDelete, subjects }
             <div className="flex gap-2">
               <button onClick={() => onEdit(p)} className="px-2 py-1 bg-blue-600 text-white rounded text-sm">
                 Edit
+              </button>
+              <button onClick={() => onAssign(p.id)} className="px-2 py-1 bg-green-600 text-white rounded text-sm">
+                Assign
               </button>
               <button
                 onClick={async () => {

@@ -52,7 +52,7 @@ export default function StudentPracticals() {
     };
   }, [router, supabase]);
 
-  // 2️⃣ Fetch practicals directly from Supabase
+  // 2️⃣ Fetch personalized practicals from student_practicals
   useEffect(() => {
     if (!user?.id) return;
 
@@ -64,17 +64,23 @@ export default function StudentPracticals() {
 
       try {
         const { data, error } = await supabase
-          .from("practicals")
+          .from("student_practicals")
           .select(`
             id,
-            title,
-            description,
-            language,
-            deadline,
-            subject_id,
-            subjects ( subject_name )
+            assigned_deadline,
+            status,
+            notes,
+            practicals (
+              id,
+              title,
+              description,
+              language,
+              subject_id,
+              subjects ( subject_name )
+            )
           `)
-          .order("deadline", { ascending: true });
+          .eq("student_id", user.id)
+          .order("assigned_deadline", { ascending: true });
 
         if (error) {
           console.error("Supabase fetch error:", error.message, error.details, error.hint);
@@ -88,14 +94,16 @@ export default function StudentPracticals() {
         }
 
         // Map to desired format
-        const formatted = data.map((p) => ({
-          id: p.id,
-          title: p.title,
-          description: p.description,
-          language: p.language,
-          deadline: p.deadline,
-          subject_id: p.subject_id,
-          subject_name: (p.subjects as any)?.subject_name || "Unknown",
+        const formatted = data.map((sp) => ({
+          id: sp.practicals.id,
+          title: sp.practicals.title,
+          description: sp.practicals.description,
+          language: sp.practicals.language,
+          deadline: sp.assigned_deadline,
+          subject_id: sp.practicals.subject_id,
+          subject_name: sp.practicals.subjects?.subject_name || "Unknown",
+          status: sp.status,
+          notes: sp.notes,
         }));
 
         if (!signal.aborted && mountedRef.current) {
@@ -147,6 +155,7 @@ export default function StudentPracticals() {
                   <th className="px-4 py-3 text-left">Title</th>
                   <th className="px-4 py-3 text-left">Subject</th>
                   <th className="px-4 py-3 text-left">Deadline</th>
+                  <th className="px-4 py-3 text-left">Status</th>
                   <th className="px-4 py-3 text-left">Actions</th>
                 </tr>
               </thead>
@@ -160,6 +169,16 @@ export default function StudentPracticals() {
                     <td className="px-4 py-3">{p.subject_name}</td>
                     <td className="px-4 py-3">
                       {p.deadline ? new Date(p.deadline).toLocaleDateString() : "—"}
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className={`px-2 py-1 rounded text-xs ${
+                        p.status === 'completed' ? 'bg-green-100 text-green-800' :
+                        p.status === 'overdue' ? 'bg-red-100 text-red-800' :
+                        p.status === 'in_progress' ? 'bg-yellow-100 text-yellow-800' :
+                        'bg-gray-100 text-gray-800'
+                      }`}>
+                        {p.status}
+                      </span>
                     </td>
                     <td className="px-4 py-3">
                       <Button

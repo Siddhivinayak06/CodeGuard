@@ -5,29 +5,53 @@ import { createClient } from "@/lib/supabase/client";
 import Navbar from "@/components/Navbar";
 import PracticalForm from "../components/PracticalForm";
 import PracticalList from "../components/PracticalList";
+import StudentAssignmentForm from "../components/StudentAssignmentForm";
 
 export default function FacultySchedulePage() {
   const supabase = useMemo(() => createClient(), []);
   const [practicals, setPracticals] = useState<any[]>([]);
   const [subjects, setSubjects] = useState<any[]>([]);
   const [modalOpen, setModalOpen] = useState(false);
+  const [assignmentModalOpen, setAssignmentModalOpen] = useState(false);
+  const [selectedPracticalId, setSelectedPracticalId] = useState<number | null>(null);
   const [editing, setEditing] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   // Fetch practicals
   const fetchPracticals = async () => {
-    const { data, error } = await supabase
-      .from("practicals")
-      .select("*")
-      .order("deadline", { ascending: true });
-    if (error) console.error(error);
-    else setPracticals(data ?? []);
+    try {
+      const { data, error } = await supabase
+        .from("practicals")
+        .select("*")
+        .order("deadline", { ascending: true });
+      if (error) {
+        console.error("Error fetching practicals:", error);
+        setError("Failed to load practicals. Please try again.");
+      } else {
+        setPracticals(data ?? []);
+        setError(null);
+      }
+    } catch (err) {
+      console.error("Unexpected error fetching practicals:", err);
+      setError("An unexpected error occurred while loading practicals.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   // Fetch subjects
   const fetchSubjects = async () => {
-    const { data, error } = await supabase.from("subjects").select("*");
-    if (error) console.error(error);
-    else setSubjects(data ?? []);
+    try {
+      const { data, error } = await supabase.from("subjects").select("*");
+      if (error) {
+        console.error("Error fetching subjects:", error);
+      } else {
+        setSubjects(data ?? []);
+      }
+    } catch (err) {
+      console.error("Unexpected error fetching subjects:", err);
+    }
   };
 
   useEffect(() => {
@@ -43,6 +67,11 @@ export default function FacultySchedulePage() {
   const openEdit = (p: any) => {
     setEditing(p);
     setModalOpen(true);
+  };
+
+  const openAssign = (practicalId: number) => {
+    setSelectedPracticalId(practicalId);
+    setAssignmentModalOpen(true);
   };
 
   return (
@@ -62,23 +91,41 @@ export default function FacultySchedulePage() {
         </header>
 
         {/* Practical list */}
-        <PracticalList
-          practicals={practicals}
-          subjects={subjects}       // pass subjects for name lookup
-          onEdit={openEdit}
-          onDelete={async (id: number) => {
-            if (!confirm("Delete this practical?")) return;
-            const { error } = await supabase.from("practicals").delete().eq("id", id);
-            if (error) console.error(error);
-            fetchPracticals();
-          }}
-        />
+        {loading ? (
+          <p className="text-center text-gray-500">Loading practicals...</p>
+        ) : error ? (
+          <p className="text-center text-red-500">{error}</p>
+        ) : practicals.length === 0 ? (
+          <p className="text-center text-gray-500">No practicals scheduled yet.</p>
+        ) : (
+          <PracticalList
+            practicals={practicals}
+            subjects={subjects}       // pass subjects for name lookup
+            onEdit={openEdit}
+            onAssign={openAssign}
+            onDelete={async (id: number) => {
+              if (!confirm("Delete this practical?")) return;
+              const { error } = await supabase.from("practicals").delete().eq("id", id);
+              if (error) console.error(error);
+              fetchPracticals();
+            }}
+          />
+        )}
 
-        {/* Modal */}
+        {/* Practical Form Modal */}
         {modalOpen && (
           <PracticalForm
             editing={editing}
             close={() => setModalOpen(false)}
+            refresh={fetchPracticals}
+          />
+        )}
+
+        {/* Student Assignment Modal */}
+        {assignmentModalOpen && selectedPracticalId && (
+          <StudentAssignmentForm
+            practicalId={selectedPracticalId}
+            close={() => setAssignmentModalOpen(false)}
             refresh={fetchPracticals}
           />
         )}
