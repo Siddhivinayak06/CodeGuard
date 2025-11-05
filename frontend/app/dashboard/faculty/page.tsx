@@ -8,6 +8,7 @@ import { Calendar } from "@/components/ui/calendar";
 import dynamic from "next/dynamic";
 import type { User } from "@supabase/supabase-js";
 import PracticalForm from "../../faculty/components/PracticalForm";
+
 const CodeMirror = dynamic(() => import("@uiw/react-codemirror"), { ssr: false });
 
 // ---------------------- Types ----------------------
@@ -29,17 +30,8 @@ type TestCase = {
   time_limit_ms?: number;
   memory_limit_kb?: number;
 };
-type ReferenceRow = {
-  id: number;
-  practical_id: number;
-  author?: string | null;
-  language: string;
-  code?: string | null;
-  is_primary?: boolean;
-  version?: number;
-};
 
-// ---------------------- Initial states ----------------------
+// ---------------------- Initial States ----------------------
 const initialPracticalForm: Practical = {
   id: 0,
   title: "",
@@ -57,7 +49,7 @@ const initialTestCase: TestCase = {
   memory_limit_kb: 65536,
 };
 
-// ---------------------- Child Components ----------------------
+// ---------------------- Practical Card ----------------------
 function PracticalCard({
   practical,
   subject,
@@ -81,8 +73,9 @@ function PracticalCard({
           <div className="mt-1 text-xs text-gray-400 dark:text-gray-500">Language: {practical.language}</div>
         )}
         <span
-          className={`mt-1 inline-block px-2 py-0.5 rounded text-xs ${isPast ? "bg-red-200 text-red-800" : "bg-green-200 text-green-800"
-            }`}
+          className={`mt-1 inline-block px-2 py-0.5 rounded text-xs ${
+            isPast ? "bg-red-200 text-red-800" : "bg-green-200 text-green-800"
+          }`}
         >
           {isPast ? "Closed" : "Upcoming"}
         </span>
@@ -105,6 +98,7 @@ function PracticalCard({
   );
 }
 
+// ---------------------- Calendar Panel ----------------------
 function CalendarPanel({
   selected,
   setSelected,
@@ -130,12 +124,17 @@ function CalendarPanel({
           const hasEvent = events.length > 0;
           return (
             <div
-              className={`aspect-square w-full flex flex-col items-center justify-center rounded-md cursor-pointer select-none ${hasEvent ? "bg-blue-500 text-white font-semibold" : "hover:bg-gray-100 dark:hover:bg-gray-800"
-                } transition`}
+              className={`aspect-square w-full flex flex-col items-center justify-center rounded-md cursor-pointer select-none ${
+                hasEvent
+                  ? "bg-blue-500 text-white font-semibold"
+                  : "hover:bg-gray-100 dark:hover:bg-gray-800"
+              } transition`}
               title={events.map((e) => e.title).join("\n")}
             >
               {date.getDate()}
-              {events.length > 1 && <span className="text-xs mt-1 bg-white text-blue-500 px-1 rounded">{events.length}</span>}
+              {events.length > 1 && (
+                <span className="text-xs mt-1 bg-white text-blue-500 px-1 rounded">{events.length}</span>
+              )}
             </div>
           );
         }}
@@ -157,21 +156,14 @@ export default function FacultyDashboardPage() {
   const [selected, setSelected] = useState<Date>(new Date());
   const [modalOpen, setModalOpen] = useState(false);
 
-  // Form & test case states
+  // Form states lifted to dashboard
   const [editingPractical, setEditingPractical] = useState<Practical | null>(null);
   const [form, setForm] = useState<Practical>(initialPracticalForm);
   const [testCases, setTestCases] = useState<TestCase[]>([initialTestCase]);
-
-  // Reference code states
-  const [formStep, setFormStep] = useState<"details" | "reference">("details");
   const [sampleCode, setSampleCode] = useState<string>("");
   const [sampleLanguage, setSampleLanguage] = useState<string>("c");
-  const [savedPracticalId, setSavedPracticalId] = useState<number | null>(null);
-  const [referenceList, setReferenceList] = useState<ReferenceRow[]>([]);
-  const [savedReferenceId, setSavedReferenceId] = useState<number | null>(null);
-  const [saving, setSaving] = useState(false);
 
-  // ------------------- Fetch user, subjects, practicals -------------------
+  // ------------------- Fetch user -------------------
   useEffect(() => {
     const fetchUser = async () => {
       const { data, error } = await supabase.auth.getUser();
@@ -182,6 +174,7 @@ export default function FacultyDashboardPage() {
     fetchUser();
   }, [router, supabase]);
 
+  // ------------------- Fetch subjects -------------------
   useEffect(() => {
     const fetchSubjects = async () => {
       const { data, error } = await supabase.from("subjects").select("*");
@@ -190,12 +183,18 @@ export default function FacultyDashboardPage() {
     fetchSubjects();
   }, [supabase]);
 
+  // ------------------- Fetch practicals -------------------
   const fetchPracticals = async () => {
     if (!user) return;
-    const { data, error } = await supabase.from("practicals").select("*").order("deadline", { ascending: true });
+    const { data, error } = await supabase
+      .from("practicals")
+      .select("*")
+      .order("deadline", { ascending: true });
     if (!error && data) setPracticals(data as Practical[]);
   };
-  useEffect(() => { if (user) fetchPracticals(); }, [user]);
+  useEffect(() => {
+    if (user) fetchPracticals();
+  }, [user]);
 
   const eventsByDate = useMemo(() => {
     const map = new Map<string, Practical[]>();
@@ -208,20 +207,17 @@ export default function FacultyDashboardPage() {
     return map;
   }, [practicals]);
 
-  // ------------------- Modal Logic -------------------
+  // ------------------- Modal -------------------
   const openCreate = (date?: Date) => {
     const deadline = date
       ? new Date(date.getFullYear(), date.getMonth(), date.getDate(), 9, 0).toISOString().slice(0, 16)
       : new Date().toISOString().slice(0, 16);
+
     setEditingPractical(null);
     setForm({ ...initialPracticalForm, deadline });
     setTestCases([initialTestCase]);
-    setFormStep("details");
     setSampleCode("");
     setSampleLanguage("c");
-    setSavedPracticalId(null);
-    setReferenceList([]);
-    setSavedReferenceId(null);
     setModalOpen(true);
   };
 
@@ -233,16 +229,15 @@ export default function FacultyDashboardPage() {
     const { data: tcs } = await supabase.from("test_cases").select("*").eq("practical_id", p.id);
     setTestCases(tcs && tcs.length > 0 ? tcs : [initialTestCase]);
 
-    // Fetch reference codes
+    // Fetch reference code (optional)
     const { data: refs } = await supabase
       .from("reference_codes")
       .select("*")
       .eq("practical_id", p.id)
       .order("created_at", { ascending: false });
-    if (refs) setReferenceList(refs as ReferenceRow[]);
+    if (refs && refs.length > 0) setSampleCode(refs[0].code || "");
 
-    setSavedPracticalId(p.id);
-    setFormStep("details");
+    setSampleLanguage(refs && refs.length > 0 ? refs[0].language : "c");
     setModalOpen(true);
   };
 
@@ -250,69 +245,6 @@ export default function FacultyDashboardPage() {
     if (!confirm("Delete this practical?")) return;
     const { error } = await supabase.from("practicals").delete().eq("id", id);
     if (!error) setPracticals((prev) => prev.filter((p) => p.id !== id));
-  };
-
-  // ------------------- Save Practical & Reference -------------------
-  const savePractical = async () => {
-    if (saving) return;
-    setSaving(true);
-
-    try {
-      let practicalId = savedPracticalId;
-      let practicalData: Practical;
-
-      // Step 1: Save practical
-      if (formStep === "details") {
-        if (!form.title || !form.subject_id || !form.deadline) return alert("Please fill all required fields");
-        if (editingPractical) {
-          const { data } = await supabase.from("practicals").update(form).eq("id", editingPractical.id).select().single();
-          practicalData = data!;
-          await supabase.from("test_cases").delete().eq("practical_id", practicalData.id);
-        } else {
-          const { data } = await supabase.from("practicals").insert(form).select().single();
-          practicalData = data!;
-        }
-
-        // Insert test cases
-        if (testCases.length > 0) {
-          const tcsToInsert = testCases.map((tc) => ({ practical_id: practicalData.id, ...tc }));
-          await supabase.from("test_cases").insert(tcsToInsert);
-        }
-
-        setSavedPracticalId(practicalData.id);
-        setFormStep("reference");
-        fetchPracticals();
-        setSaving(false);
-        return;
-      }
-
-      // Step 2: Save reference code
-      if (formStep === "reference") {
-        if (!practicalId) return alert("Practical not saved");
-        const lang = sampleLanguage.toLowerCase();
-        const { data: existing } = await supabase.from("reference_codes").select("id").eq("practical_id", practicalId).eq("language", lang).limit(1);
-        if (existing && existing.length > 0) {
-          await supabase.from("reference_codes").update({ code: sampleCode, language: lang }).eq("id", existing[0].id);
-        } else {
-          await supabase.from("reference_codes").insert({ practical_id: practicalId, code: sampleCode, language: lang, is_primary: true, version: 1 });
-        }
-        setModalOpen(false);
-        setForm(initialPracticalForm);
-        setTestCases([initialTestCase]);
-        setSampleCode("");
-        setSampleLanguage("c");
-        setSavedPracticalId(null);
-        setReferenceList([]);
-        setSavedReferenceId(null);
-        fetchPracticals();
-        alert("Practical saved successfully!");
-      }
-    } catch (err) {
-      console.error(err);
-      alert("Failed to save practical. Try again.");
-    } finally {
-      setSaving(false);
-    }
   };
 
   if (loading)
@@ -325,7 +257,6 @@ export default function FacultyDashboardPage() {
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 pt-24 md:pt-28">
       <Navbar />
-
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Header */}
         <div className="flex flex-col md:flex-row items-start md:items-center justify-between mb-6 gap-4 md:gap-0">
@@ -339,12 +270,7 @@ export default function FacultyDashboardPage() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <CalendarPanel
-            selected={selected}
-            setSelected={setSelected}
-            eventsByDate={eventsByDate}
-            onDateClick={openCreate}
-          />
+          <CalendarPanel selected={selected} setSelected={setSelected} eventsByDate={eventsByDate} onDateClick={openCreate} />
 
           <div className="md:col-span-2 flex flex-col gap-4">
             <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-100">Upcoming Practicals</h2>
@@ -370,13 +296,24 @@ export default function FacultyDashboardPage() {
                 practical={editingPractical}
                 subjects={subjects}
                 supabase={supabase}
+                sampleCode={sampleCode}
+                setSampleCode={setSampleCode}
+                sampleLanguage={sampleLanguage}
+                setSampleLanguage={setSampleLanguage}
                 onClose={() => setModalOpen(false)}
-                onSaved={fetchPracticals}
+                onSaved={async () => {
+                  await fetchPracticals();
+                  setModalOpen(false);
+                  setEditingPractical(null);
+                  setForm(initialPracticalForm);
+                  setTestCases([initialTestCase]);
+                  setSampleCode("");
+                  setSampleLanguage("c");
+                }}
               />
             </div>
           </div>
         )}
-
       </main>
     </div>
   );
