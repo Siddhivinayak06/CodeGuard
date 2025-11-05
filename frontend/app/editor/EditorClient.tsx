@@ -261,37 +261,54 @@ export default function EditorClient() {
   };
 
   const runCode = async () => {
-    if (!userTestCases.length) {
-      alert("Please add at least one test case!");
-      return;
-    }
+    if (!code || !practicalId) return;
 
     setLoading(true);
     setTestCaseResults([]);
-    setSubmissionStatus("pending");
-
     try {
-      const payload = {
+      const customCases = userTestCases.filter(tc => tc.input.trim() !== "");
+
+      const payload: any = {
         code,
         lang,
         practicalId,
-        submissionId: practical?.submission_id || 1,
-        userTestCases: userTestCases.map(tc => ({ input: tc.input })),
+        mode: "run",
+        userTestCases: customCases.map(tc => ({
+          input: tc.input,
+          
+          time_limit_ms: 2000,
+          memory_limit_kb: 65536,
+        })),
       };
 
       const res = await axios.post("/api/run", payload);
+      const normalizeStr = (s: any) => (s === null || s === undefined ? "" : String(s));
 
-      const results: TestCaseResult[] = res.data.results || [];
+      const results: TestCaseResult[] = (res.data.results || []).map((r: any) => ({
+        test_case_id: r.test_case_id ?? 0,
+        input: r.input ?? r.stdinInput ?? r.expected ?? "",  // <--- fix
+        expected: normalizeStr(r.expected ?? r.expected_output),
+        stdout: normalizeStr(r.stdout),
+        error: r.error ?? null,
+        status: r.status ?? "failed",
+        time_ms: r.time_ms ?? null,
+        memory_kb: r.memory_kb ?? null,
+        is_hidden: r.is_hidden ?? false,
+      }));
+
+
+
+
       setTestCaseResults(results);
-      setSubmissionStatus(res.data.verdict || "evaluated");
-
+      console.log("Run results:", results);
     } catch (err: any) {
       console.error(err);
-      alert(err?.response?.data?.error || "Error running code. Try again!");
+      alert(err?.response?.data?.error || "Error running code.");
     } finally {
       setLoading(false);
     }
   };
+
 
   const handleSubmit = async () => {
     if (!code || !practicalId || !user) return;
@@ -373,24 +390,24 @@ export default function EditorClient() {
       {/* Header */}
       <div className="h-14 flex items-center justify-between px-6 border-b border-gray-300 dark:border-gray-700 backdrop-blur-md bg-white/30 dark:bg-gray-900/30 shadow-sm">
         <motion.h1
-  role="heading"
-  aria-level={1}
-  initial={{ opacity: 0, y: -6, scale: 0.98 }}
-  animate={{ opacity: 1, y: 0, scale: 1 }}
-  transition={{ duration: 0.7, ease: [0.25, 0.8, 0.25, 1] }}
-  whileHover={{
-    scale: 1.03,
-    textShadow:
-      "0 4px 14px rgba(99,102,241,0.18), 0 2px 6px rgba(99,102,241,0.12)",
-  }}
-  whileTap={{ scale: 0.98 }}
-  className="select-none text-1xl md:text-2xl lg:text-3xl font-extrabold tracking-tight 
+          role="heading"
+          aria-level={1}
+          initial={{ opacity: 0, y: -6, scale: 0.98 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          transition={{ duration: 0.7, ease: [0.25, 0.8, 0.25, 1] }}
+          whileHover={{
+            scale: 1.03,
+            textShadow:
+              "0 4px 14px rgba(99,102,241,0.18), 0 2px 6px rgba(99,102,241,0.12)",
+          }}
+          whileTap={{ scale: 0.98 }}
+          className="select-none text-1xl md:text-2xl lg:text-3xl font-extrabold tracking-tight 
              bg-clip-text text-transparent bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500
              animate-gradient-x drop-shadow-sm"
-  style={{ WebkitFontSmoothing: 'antialiased' }}
->
-  CodeGuard
-</motion.h1>
+          style={{ WebkitFontSmoothing: 'antialiased' }}
+        >
+          CodeGuard
+        </motion.h1>
 
 
 
@@ -621,7 +638,7 @@ export default function EditorClient() {
                       <div className="text-sm text-gray-700 dark:text-gray-300 space-y-2">
                         <div>
                           <strong>Input:</strong>
-                          <pre className="bg-gray-100 dark:bg-gray-700 p-2 rounded">{userTestCases[idx]?.input ?? "N/A"}</pre>
+                          <pre className="bg-gray-100 dark:bg-gray-700 p-2 rounded">{r.input}</pre>
                         </div>
                         <div>
                           <strong>Expected Output:</strong>
@@ -639,6 +656,7 @@ export default function EditorClient() {
                       </div>
                     </div>
                   ))}
+
                 </div>
               </ResizablePanel>
 
