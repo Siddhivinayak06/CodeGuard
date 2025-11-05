@@ -8,6 +8,7 @@ import PracticalList from "../components/PracticalList";
 import StudentAssignmentForm from "../components/StudentAssignmentForm";
 
 export default function FacultySchedulePage() {
+   const [editingPractical, setEditingPractical] = useState<Practical | null>(null);
   const supabase = useMemo(() => createClient(), []);
   const [practicals, setPracticals] = useState<any[]>([]);
   const [subjects, setSubjects] = useState<any[]>([]);
@@ -112,13 +113,19 @@ export default function FacultySchedulePage() {
           />
         )}
 
-        {/* Practical Form Modal */}
         {modalOpen && (
-          <PracticalForm
-            editing={editing}
-            close={() => setModalOpen(false)}
-            refresh={fetchPracticals}
-          />
+          <div className="fixed inset-0 z-50 flex items-center justify-center">
+            <div className="absolute inset-0 bg-black/40" onClick={() => setModalOpen(false)} />
+            <div className="relative bg-white dark:bg-gray-900 rounded-lg p-6 w-full max-w-2xl shadow-lg overflow-y-auto max-h-[90vh]">
+              <PracticalForm
+                practical={editingPractical}
+                subjects={subjects}
+                supabase={supabase}
+                onClose={() => setModalOpen(false)}
+                onSaved={fetchPracticals}
+              />
+            </div>
+          </div>
         )}
 
         {/* Student Assignment Modal */}

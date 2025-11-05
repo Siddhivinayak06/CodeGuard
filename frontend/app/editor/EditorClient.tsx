@@ -261,53 +261,54 @@ export default function EditorClient() {
   };
 
   const runCode = async () => {
-    if (!code || !practicalId) return;
+  if (!code || !practicalId) return;
 
-    setLoading(true);
-    setTestCaseResults([]);
-    try {
-      const customCases = userTestCases.filter(tc => tc.input.trim() !== "");
+  setLoading(true);
+  setTestCaseResults([]);
 
-      const payload: any = {
-        code,
-        lang,
-        practicalId,
-        mode: "run",
-        userTestCases: customCases.map(tc => ({
-          input: tc.input,
-          
-          time_limit_ms: 2000,
-          memory_limit_kb: 65536,
-        })),
-      };
+  try {
+    // Filter out empty user test cases
+    const customCases = userTestCases.filter(tc => tc.input.trim() !== "");
 
-      const res = await axios.post("/api/run", payload);
-      const normalizeStr = (s: any) => (s === null || s === undefined ? "" : String(s));
+    const payload: any = {
+      code,
+      lang,
+      practicalId,
+      mode: "run",
+      userTestCases: customCases.map(tc => ({
+        input: tc.input,
+        time_limit_ms: 2000,
+        memory_limit_kb: 65536,
+      })),
+      useCustomTestCases: showUserTestCases && customCases.length > 0, // important!
+    };
 
-      const results: TestCaseResult[] = (res.data.results || []).map((r: any) => ({
-        test_case_id: r.test_case_id ?? 0,
-        input: r.input ?? r.stdinInput ?? r.expected ?? "",  // <--- fix
-        expected: normalizeStr(r.expected ?? r.expected_output),
-        stdout: normalizeStr(r.stdout),
-        error: r.error ?? null,
-        status: r.status ?? "failed",
-        time_ms: r.time_ms ?? null,
-        memory_kb: r.memory_kb ?? null,
-        is_hidden: r.is_hidden ?? false,
-      }));
+    const res = await axios.post("/api/run", payload);
 
+    const normalizeStr = (s: any) => (s === null || s === undefined ? "" : String(s));
 
+    const results: TestCaseResult[] = (res.data.results || []).map((r: any) => ({
+      test_case_id: r.test_case_id ?? 0,
+      input: r.input ?? r.stdinInput ?? "",
+      expected: normalizeStr(r.expected ?? r.expectedOutput),
+      stdout: normalizeStr(r.stdout),
+      error: r.error ?? null,
+      status: r.status ?? "failed",
+      time_ms: r.time_ms ?? null,
+      memory_kb: r.memory_kb ?? null,
+      is_hidden: r.is_hidden ?? false,
+    }));
 
+    setTestCaseResults(results);
+    console.log("Run results:", results);
+  } catch (err: any) {
+    console.error(err);
+    alert(err?.response?.data?.error || "Error running code.");
+  } finally {
+    setLoading(false);
+  }
+};
 
-      setTestCaseResults(results);
-      console.log("Run results:", results);
-    } catch (err: any) {
-      console.error(err);
-      alert(err?.response?.data?.error || "Error running code.");
-    } finally {
-      setLoading(false);
-    }
-  };
 
 
   const handleSubmit = async () => {
