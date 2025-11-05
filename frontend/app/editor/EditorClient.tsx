@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useRef, useState, useMemo } from "react";
+import React, { useEffect, useRef, useState, useMemo } from "react";
 import axios from "axios";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/resizable";
 import { Button } from "@/components/ui/button";
 import type { User } from "@supabase/supabase-js";
+import { motion } from "framer-motion";
 
 type TestCaseResult = {
   test_case_id: number;
@@ -27,6 +28,126 @@ type TestCaseResult = {
   memory_kb?: number | null;
   is_hidden?: boolean;
 };
+
+// ---------------------------
+// Parse freeform description into contest-like sections
+// ---------------------------
+function parseDescriptionToSections(raw: string | undefined) {
+  if (!raw) {
+    return { sections: [{ title: "Problem Statement", body: "No description available." }] };
+  }
+
+  const text = raw.replace(/\r\n/g, "\n").trim();
+
+  // Common headings to detect
+  const headings = [
+    "Problem Statement",
+    "Description",
+    "Input",
+    "Input Format",
+    "Output",
+    "Output Format",
+    "Constraints",
+    "Notes",
+    "Sample Input",
+    "Sample Output",
+    "Example",
+    "Explanation",
+    "Approach",
+  ];
+
+  // If explicit labeled headings exist on their own lines, split by them
+  const lines = text.split("\n");
+  const indices: Array<{ idx: number; label: string }> = [];
+  const headingRegex = new RegExp(`^\\s*(${headings.map(h => h.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")})\\s*[:\\-]?\\s*$`, "i");
+
+  lines.forEach((ln, i) => {
+    const m = ln.match(headingRegex);
+    if (m) indices.push({ idx: i, label: m[1] });
+  });
+
+  if (indices.length > 0) {
+    const sections: Array<{ title: string; body: string }> = [];
+    for (let i = 0; i < indices.length; i++) {
+      const start = indices[i].idx + 1;
+      const end = i + 1 < indices.length ? indices[i + 1].idx : lines.length;
+      const body = lines.slice(start, end).join("\n").trim();
+      sections.push({ title: indices[i].label, body: body || "—" });
+    }
+    return { sections };
+  }
+
+  // If keywords exist inline, try to split by them
+  const keywordSplit = /(Input(?:\s*Format)?|Output(?:\s*Format)?|Constraints|Sample Input|Sample Output|Explanation)/i;
+  if (keywordSplit.test(text)) {
+    const parts = text.split(/(Input(?:\s*Format)?|Output(?:\s*Format)?|Constraints|Sample Input|Sample Output|Explanation)/i)
+      .map(p => p.trim())
+      .filter(Boolean);
+
+    const sections: Array<{ title: string; body: string }> = [];
+    for (let i = 0; i < parts.length; i++) {
+      const part = parts[i];
+      if (keywordSplit.test(part) && i + 1 < parts.length) {
+        sections.push({ title: part.replace(/:$/, ""), body: parts[i + 1] });
+        i++;
+      } else if (!keywordSplit.test(part)) {
+        sections.push({ title: "Problem Statement", body: part });
+      }
+    }
+    return { sections };
+  }
+
+  // Fallback: split into paragraphs
+  const paras = text.split(/\n\s*\n/).map(p => p.trim()).filter(Boolean);
+  if (paras.length === 1) return { sections: [{ title: "Problem Statement", body: paras[0] }] };
+
+  const sections = [{ title: "Problem Statement", body: paras[0] }];
+  if (paras.length > 1) sections.push({ title: "Notes / Examples", body: paras.slice(1).join("\n\n") });
+  return { sections };
+}
+
+// ---------------------------
+// Small helper to extract example blocks (Sample Input / Output + Explanation)
+// ---------------------------
+function extractExamplesFromText(text?: string) {
+  if (!text) return [];
+  // split by paragraphs and try to detect Input/Output pairs
+  const parts = text.split(/\n\s*\n/).map(p => p.trim()).filter(Boolean);
+  const examples: Array<{ title: string; input?: string; output?: string; explanation?: string; raw?: string }> = [];
+
+  for (const p of parts) {
+    const inputMatch = p.match(/Input\s*[:\-]?\s*(?:s\s*=\s*)?["']?([^"\n]+?)["']?(?:\n|$)/i);
+    const outputMatch = p.match(/Output\s*[:\-]?\s*["']?([^"\n]+?)["']?(?:\n|$)/i);
+    const explMatch = p.match(/Explanation\s*[:\-]?\s*([\s\S]+)/i);
+
+    if (inputMatch || outputMatch || /^(Example|Example \d+)/i.test(p)) {
+      examples.push({
+        title: "Example",
+        input: inputMatch ? inputMatch[1].trim() : undefined,
+        output: outputMatch ? outputMatch[1].trim() : undefined,
+        explanation: explMatch ? explMatch[1].trim() : undefined,
+        raw: p,
+      });
+      continue;
+    }
+
+    const lines = p.split("\n").map(l => l.trim()).filter(Boolean);
+    if (lines.length > 1 && lines.some(l => /Input|Output|Sample/i.test(l))) {
+      const inL = lines.find(l => /Input/i);
+      const outL = lines.find(l => /Output/i);
+      examples.push({
+        title: "Example",
+        input: inL ? inL.replace(/Input\s*[:\-]?\s*/i, "") : undefined,
+        output: outL ? outL.replace(/Output\s*[:\-]?\s*/i, "") : undefined,
+        explanation: undefined,
+        raw: p,
+      });
+      continue;
+    }
+  }
+
+  return examples;
+}
 
 export default function EditorClient() {
   const router = useRouter();
@@ -49,6 +170,9 @@ export default function EditorClient() {
   const [scoreSummary, setScoreSummary] = useState<{ passed: number; total: number }>({ passed: 0, total: 0 });
   const [submissionStatus, setSubmissionStatus] = useState<"idle" | "pending" | "evaluated" | "submitted">("idle");
   const [userTestCases, setUserTestCases] = useState([{ id: 1, input: "" }]);
+
+  // NEW: examples from test_cases table
+  const [examplesFromDB, setExamplesFromDB] = useState<Array<{ input: string; output: string }>>([]);
 
   // ========================
   // Auth
@@ -87,6 +211,48 @@ export default function EditorClient() {
   }, [practicalId, supabase]);
 
   // ========================
+  // Fetch examples (test_cases) from DB for this practical
+  // ========================
+  useEffect(() => {
+    if (!practicalId) {
+      setExamplesFromDB([]);
+      return;
+    }
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data, error } = await supabase
+          .from("test_cases")
+          .select("input, expected_output")
+          .eq("practical_id", Number(practicalId))
+          .order("id", { ascending: true })
+          .limit(10);
+
+        if (error) {
+          console.error("Failed to fetch test_cases:", error);
+          setExamplesFromDB([]);
+          return;
+        }
+        if (!cancelled) {
+          const mapped = (data || []).map((r: any) => ({
+            input: r.input ?? "",
+            output: r.expected_output ?? "",
+          }));
+          setExamplesFromDB(mapped);
+        }
+      } catch (e) {
+        console.error("Error fetching test cases:", e);
+        if (!cancelled) setExamplesFromDB([]);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [practicalId, supabase]);
+
+  // ========================
   // Sign out
   // ========================
   const handleSignOut = async () => {
@@ -106,7 +272,7 @@ export default function EditorClient() {
 
     try {
       const payload = {
-        code, // user code
+        code,
         lang,
         practicalId,
         submissionId: practical?.submission_id || 1,
@@ -115,9 +281,7 @@ export default function EditorClient() {
 
       const res = await axios.post("/api/run", payload);
 
-      // Only user test cases are returned from API now
       const results: TestCaseResult[] = res.data.results || [];
-
       setTestCaseResults(results);
       setSubmissionStatus(res.data.verdict || "evaluated");
 
@@ -128,12 +292,12 @@ export default function EditorClient() {
       setLoading(false);
     }
   };
+
   const handleSubmit = async () => {
     if (!code || !practicalId || !user) return;
 
     setLoading(true);
     try {
-      // 1️⃣ CREATE SUBMISSION FIRST (with pending status)
       const submissionRes = await axios.post("/api/submission/create", {
         student_id: user.id,
         practical_id: Number(practicalId),
@@ -147,12 +311,11 @@ export default function EditorClient() {
       const submission = submissionRes.data.submission;
       if (!submission?.id) throw new Error("Failed to create submission");
 
-      // 2️⃣ NOW RUN WITH THE NEW SUBMISSION ID
       const runRes = await axios.post("/api/run", {
         code,
         lang,
         practicalId,
-        submissionId: submission.id,  // ← Use the NEW submission ID
+        submissionId: submission.id,
         mode: "submit",
       });
 
@@ -161,8 +324,6 @@ export default function EditorClient() {
       const passedTestCases = runRes.data.passedTestCases ?? 0;
       const totalTestCases = runRes.data.totalTestCases ?? 0;
 
-      // 3️⃣ The /api/run already updates the submission with marks in the database
-      // Just update the UI state
       setSubmissionStatus(verdict === "evaluated" ? "evaluated" : "submitted");
       alert(`Practical submitted successfully! Marks: ${marksObtained} / 10 (${passedTestCases}/${totalTestCases} test cases passed)`);
 
@@ -200,13 +361,39 @@ export default function EditorClient() {
     }
   };
 
+  // Structured sections from practical.description
+  const { sections } = parseDescriptionToSections(practical?.description);
+  const extractedExamples = extractExamplesFromText(practical?.description || sections.map(s => s.body).join("\n\n"));
+  // Attempt to gather constraints
+  const constraintSection = sections.find(s => /constraint/i.test(s.title)) || sections.find(s => /constraint/i.test(s.body));
+  const problemStmt = sections.find(s => /problem/i.test(s.title))?.body || sections[0]?.body || practical?.description || "No description available.";
+
   return (
     <div className="h-screen flex flex-col bg-gradient-to-br from-gray-100 via-white/30 to-gray-200 dark:from-gray-900 dark:via-gray-800/40 dark:to-gray-900 backdrop-blur-sm">
       {/* Header */}
       <div className="h-14 flex items-center justify-between px-6 border-b border-gray-300 dark:border-gray-700 backdrop-blur-md bg-white/30 dark:bg-gray-900/30 shadow-sm">
-        <h1 className="text-xl font-semibold text-gray-800 dark:text-gray-200">
-          {practical?.title || "Code Editor"}
-        </h1>
+        <motion.h1
+  role="heading"
+  aria-level={1}
+  initial={{ opacity: 0, y: -6, scale: 0.98 }}
+  animate={{ opacity: 1, y: 0, scale: 1 }}
+  transition={{ duration: 0.7, ease: [0.25, 0.8, 0.25, 1] }}
+  whileHover={{
+    scale: 1.03,
+    textShadow:
+      "0 4px 14px rgba(99,102,241,0.18), 0 2px 6px rgba(99,102,241,0.12)",
+  }}
+  whileTap={{ scale: 0.98 }}
+  className="select-none text-1xl md:text-2xl lg:text-3xl font-extrabold tracking-tight 
+             bg-clip-text text-transparent bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500
+             animate-gradient-x drop-shadow-sm"
+  style={{ WebkitFontSmoothing: 'antialiased' }}
+>
+  CodeGuard
+</motion.h1>
+
+
+
         <div className="flex items-center gap-4">
           {locked && (
             <div className="px-3 py-1 text-sm bg-red-200/30 text-red-600 rounded-full backdrop-blur-sm">
@@ -229,24 +416,88 @@ export default function EditorClient() {
       {/* Main Content */}
       <div className="flex-1 p-4 h-full">
         <ResizablePanelGroup direction="horizontal" className="h-full gap-4">
-          {/* Left: Practical description */}
+          {/* LEFT: LeetCode-style Problem Panel */}
           <ResizablePanel defaultSize={40} minSize={20}>
-            <div className="h-full p-4 overflow-auto bg-white/10 dark:bg-gray-800/30 backdrop-blur-md rounded-2xl shadow-inner border border-gray-300 dark:border-gray-700">
-              <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-3">
-                Practical Question
-              </h2>
-              <div className="text-gray-700 dark:text-gray-300 text-sm whitespace-pre-wrap leading-relaxed">
-                {practical?.description || "No description available."}
+            <div className="h-full p-6 overflow-auto bg-white dark:bg-gray-900 rounded-2xl shadow-inner border border-gray-200 dark:border-gray-700">
+              {/* Title large */}
+              <h1 className="text-2xl font-extrabold text-gray-900 dark:text-gray-50 mb-3">
+                {practical?.title || "Problem Title"}
+              </h1>
+
+              {/* Badges / meta row */}
+              <div className="flex items-center gap-2 mb-4">
+                <div className="text-xs font-semibold px-2 py-1 rounded-md bg-yellow-100 text-yellow-800">Medium</div>
+              </div>
+
+              {/* Problem statement paragraph */}
+              <div className="text-gray-700 dark:text-gray-300 leading-relaxed mb-6 whitespace-pre-wrap">
+                {problemStmt}
+              </div>
+
+              {/* Examples */}
+              <div className="space-y-6">
+                {examplesFromDB && examplesFromDB.length > 0 ? (
+                  examplesFromDB.map((ex, idx) => (
+                    <div key={idx}>
+                      <div className="font-semibold text-gray-800 dark:text-gray-200 mb-2">Example {idx + 1}</div>
+                      <div className="flex gap-4">
+                        <div className="flex-1">
+                          <div className="text-xs text-gray-500 mb-1">Input:</div>
+                          <pre className="bg-gray-100 dark:bg-gray-800 text-sm font-mono p-3 rounded whitespace-pre-wrap">{ex.input}</pre>
+                        </div>
+                        <div className="flex-1">
+                          <div className="text-xs text-gray-500 mb-1">Output:</div>
+                          <pre className="bg-gray-100 dark:bg-gray-800 text-sm font-mono p-3 rounded whitespace-pre-wrap">{ex.output}</pre>
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                ) : extractedExamples && extractedExamples.length > 0 ? (
+                  extractedExamples.map((ex, idx) => (
+                    <div key={idx}>
+                      <div className="font-semibold text-gray-800 dark:text-gray-200 mb-2">Example {idx + 1}</div>
+                      <div className="flex gap-4">
+                        <div className="flex-1">
+                          <div className="text-xs text-gray-500 mb-1">Input:</div>
+                          <pre className="bg-gray-100 dark:bg-gray-800 text-sm font-mono p-3 rounded whitespace-pre-wrap">{ex.input ?? ex.raw ?? "—"}</pre>
+                        </div>
+                        <div className="flex-1">
+                          <div className="text-xs text-gray-500 mb-1">Output:</div>
+                          <pre className="bg-gray-100 dark:bg-gray-800 text-sm font-mono p-3 rounded whitespace-pre-wrap">{ex.output ?? "—"}</pre>
+                        </div>
+                      </div>
+                      {ex.explanation && (
+                        <div className="mt-2 text-sm text-gray-600 dark:text-gray-400">
+                          <strong>Explanation:</strong> {ex.explanation}
+                        </div>
+                      )}
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-sm text-gray-500 dark:text-gray-400">No examples available.</div>
+                )}
+              </div>
+
+              {/* Constraints */}
+              <div className="mt-6">
+                <div className="font-semibold text-gray-800 dark:text-gray-200 mb-2">Constraints:</div>
+                {constraintSection ? (
+                  <div className="text-sm text-gray-600 dark:text-gray-400 whitespace-pre-wrap">{constraintSection.body}</div>
+                ) : (
+                  <ul className="list-disc list-inside text-sm text-gray-600 dark:text-gray-400">
+                    <li>Input length and ranges will be reasonable for C programs.</li>
+                    <li>Use efficient algorithms for large inputs (if required).</li>
+                  </ul>
+                )}
               </div>
             </div>
           </ResizablePanel>
 
           <ResizableHandle className="w-1 bg-gray-200 dark:bg-gray-700 hover:bg-blue-400 dark:hover:bg-blue-600 transition-colors duration-200 rounded" />
 
-          {/* Right: Code Editor + Test Cases + Results */}
+          {/* RIGHT: Code Editor + Test Cases + Results */}
           <ResizablePanel defaultSize={60} minSize={40}>
             <ResizablePanelGroup direction="vertical" className="h-full gap-3 rounded-2xl overflow-hidden">
-
               {/* Code Editor */}
               <ResizablePanel defaultSize={50} minSize={20}>
                 <div className="h-full">
@@ -271,17 +522,12 @@ export default function EditorClient() {
 
               <ResizableHandle className="h-1 bg-gray-200 dark:bg-gray-700 hover:bg-blue-400 dark:hover:bg-blue-600 transition-colors duration-200 rounded" />
 
-
-
-
               {/* User Test Cases Panel */}
               {showUserTestCases && (
                 <ResizablePanel defaultSize={25} minSize={20}>
                   <div className="h-full overflow-auto p-4 bg-white/10 dark:bg-gray-900/30 backdrop-blur-md rounded-xl border border-gray-300 dark:border-gray-700">
                     <div className="flex justify-between items-center mb-3">
-                      <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-200">
-                        Your Test Cases
-                      </h3>
+                      <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-200">Your Test Cases</h3>
                       <Button
                         variant="outline"
                         size="sm"
@@ -299,9 +545,7 @@ export default function EditorClient() {
                         className="mb-4 p-3 bg-white/20 dark:bg-gray-800/20 rounded-xl border border-gray-300 dark:border-gray-700"
                       >
                         <div className="flex justify-between items-center mb-2">
-                          <span className="font-medium text-gray-700 dark:text-gray-300">
-                            Case #{idx + 1}
-                          </span>
+                          <span className="font-medium text-gray-700 dark:text-gray-300">Case #{idx + 1}</span>
                           {userTestCases.length > 1 && (
                             <button
                               className="text-sm text-red-500 hover:underline"
@@ -314,9 +558,7 @@ export default function EditorClient() {
                           )}
                         </div>
 
-                        <label className="block text-xs font-semibold mb-1 text-gray-600 dark:text-gray-400">
-                          Input
-                        </label>
+                        <label className="block text-xs font-semibold mb-1 text-gray-600 dark:text-gray-400">Input</label>
                         <textarea
                           className="w-full p-2 rounded border border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-sm text-gray-800 dark:text-gray-200"
                           rows={2}
@@ -339,11 +581,9 @@ export default function EditorClient() {
               <ResizablePanel defaultSize={25} minSize={15}>
                 <div className="h-full overflow-auto p-4 bg-white/10 dark:bg-gray-900/30 backdrop-blur-md rounded-xl border border-gray-300 dark:border-gray-700">
                   <div className="flex justify-between items-center mb-4">
-                    <h3 className="text-xl font-semibold text-gray-800 dark:text-gray-200">
-                      Test Case Results
-                    </h3>
+                    <h3 className="text-xl font-semibold text-gray-800 dark:text-gray-200">Test Case Results</h3>
 
-                    {/* ✅ Checkbox to toggle User Test Cases */}
+                    {/* Checkbox to toggle User Test Cases */}
                     <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
                       <input
                         type="checkbox"
@@ -356,9 +596,7 @@ export default function EditorClient() {
                   </div>
 
                   {testCaseResults.length === 0 && (
-                    <div className="text-sm text-gray-500 dark:text-gray-400">
-                      Run your test cases to see results here.
-                    </div>
+                    <div className="text-sm text-gray-500 dark:text-gray-400">Run your test cases to see results here.</div>
                   )}
 
                   {testCaseResults.map((r, idx) => (
@@ -367,15 +605,13 @@ export default function EditorClient() {
                       className="border border-gray-300 dark:border-gray-600 rounded-lg p-4 mb-4 bg-white/30 dark:bg-gray-800/30 shadow-sm"
                     >
                       <div className="flex justify-between items-center mb-3">
-                        <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                          Case #{idx + 1}
-                        </span>
+                        <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Case #{idx + 1}</span>
                         <span
                           className={`text-sm font-semibold ${r.status === "passed"
-                              ? "text-green-600 dark:text-green-400"
-                              : r.status === "failed"
-                                ? "text-red-600 dark:text-red-400"
-                                : "text-yellow-600 dark:text-yellow-400"
+                            ? "text-green-600 dark:text-green-400"
+                            : r.status === "failed"
+                              ? "text-red-600 dark:text-red-400"
+                              : "text-yellow-600 dark:text-yellow-400"
                             }`}
                         >
                           {r.status.toUpperCase()}
@@ -385,15 +621,11 @@ export default function EditorClient() {
                       <div className="text-sm text-gray-700 dark:text-gray-300 space-y-2">
                         <div>
                           <strong>Input:</strong>
-                          <pre className="bg-gray-100 dark:bg-gray-700 p-2 rounded">
-                            {userTestCases[idx]?.input ?? "N/A"}
-                          </pre>
+                          <pre className="bg-gray-100 dark:bg-gray-700 p-2 rounded">{userTestCases[idx]?.input ?? "N/A"}</pre>
                         </div>
                         <div>
                           <strong>Expected Output:</strong>
-                          <pre className="bg-gray-100 dark:bg-gray-700 p-2 rounded">
-                            {r.expected ?? "N/A"}
-                          </pre>
+                          <pre className="bg-gray-100 dark:bg-gray-700 p-2 rounded">{r.expected ?? "N/A"}</pre>
                         </div>
                         <div>
                           <strong>Output:</strong>
@@ -409,7 +641,6 @@ export default function EditorClient() {
                   ))}
                 </div>
               </ResizablePanel>
-
 
             </ResizablePanelGroup>
           </ResizablePanel>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
 
 type TestCase = {
@@ -42,8 +42,15 @@ export default function PracticalForm({ editing, close, refresh }: any) {
 
   const [form, setForm] = useState(editing?.practical || empty);
   const [testCases, setTestCases] = useState<TestCase[]>(editing?.testCases || [emptyTestCase]);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const saveRef = useRef(false);
 
   const save = async () => {
+    if (saving || saveRef.current) return; // Prevent multiple saves
+    saveRef.current = true;
+    setSaving(true);
+    setError(null);
     try {
       let practicalId: number;
       if (editing) {
@@ -70,8 +77,12 @@ export default function PracticalForm({ editing, close, refresh }: any) {
 
       refresh();
       close();
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
+      setError(e.message || "Failed to save practical");
+    } finally {
+      setSaving(false);
+      saveRef.current = false;
     }
   };
 
@@ -80,6 +91,7 @@ export default function PracticalForm({ editing, close, refresh }: any) {
       <div className="absolute inset-0 bg-black/40" onClick={close}></div>
       <div className="relative bg-white dark:bg-gray-900 p-6 rounded-lg shadow-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto">
         <h3 className="font-semibold text-lg mb-4">{editing ? "Edit Practical" : "Add Practical"}</h3>
+        {error && <p className="text-red-500 mb-4">{error}</p>}
         <div className="space-y-3">
           {/* Practical details */}
           <input
@@ -174,9 +186,10 @@ export default function PracticalForm({ editing, close, refresh }: any) {
             </button>
             <button
               onClick={save}
-              className="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 transition"
+              disabled={saving}
+              className="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 transition disabled:opacity-50"
             >
-              Save
+              {saving ? "Saving..." : "Save"}
             </button>
           </div>
         </div>
