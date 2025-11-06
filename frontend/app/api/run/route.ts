@@ -52,21 +52,74 @@ export async function POST(req: Request) {
       console.warn(`Runner language (${reqLangNorm}) does not match reference language (${refLangNorm})`);
     }
 
+    // helper to call runner service
+    const EXECUTE_URL = process.env.EXECUTE_URL || "http://localhost:5002/execute";
+    const callRunner = async (payload: any) => {
+      const runnerRes = await fetch(EXECUTE_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!runnerRes.ok) {
+        const text = await runnerRes.text();
+        throw new Error(`Runner error ${runnerRes.status}: ${text}`);
+      }
+      return await runnerRes.json();
+    };
+
     // Prepare batch based on toggle and mode
     let batch: any[] = [];
     let usedTestCaseSource: "user" | "db" | "none" = "none";
 
     if (mode === "run") {
       if (useCustomTestCases && userTestCases.length > 0) {
-        batch = userTestCases.map((utc: any, idx: number) => ({
-          id: `user-${idx + 1}`,
-          stdinInput: utc.input ?? "",
-          expectedOutput: utc.expectedOutput ?? "", // user expected
-          is_hidden: false,
-          time_limit_ms: utc.time_limit_ms ?? 2000,
-          memory_limit_kb: utc.memory_limit_kb ?? 65536,
-        }));
+        // Build user batch (ids prefixed with user-)
+        const userBatch = userTestCases
+          .map((utc: any, idx: number) => ({
+            id: `user-${idx + 1}`,
+            stdinInput: utc.input ?? "",
+            expectedOutput: utc.expectedOutput ?? "", // will be filled from reference if available
+            is_hidden: false,
+            time_limit_ms: utc.time_limit_ms ?? 2000,
+            memory_limit_kb: utc.memory_limit_kb ?? 65536,
+          }));
+
         usedTestCaseSource = "user";
+
+        // If we have a reference code, run it first to generate expected outputs
+        if (referenceCode) {
+          try {
+            const refPayload = {
+              code: referenceCode,
+              lang: refLangNorm || reqLangNorm || String(lang),
+              batch: userBatch.map(u => ({ id: u.id, stdinInput: u.stdinInput, time_limit_ms: u.time_limit_ms, memory_limit_kb: u.memory_limit_kb })),
+            };
+            const refRes = await callRunner(refPayload);
+            const refDetails = refRes.details ?? [];
+
+            // Map reference outputs by id
+            const refMap = new Map<string, string>();
+            for (const d of refDetails) {
+              const out = String(d.stdout ?? "");
+              // normalize line endings but keep raw until comparison step
+              refMap.set(String(d.test_case_id), out);
+            }
+
+            // Fill expectedOutput in userBatch
+            batch = userBatch.map(u => ({
+              ...u,
+              expectedOutput: refMap.get(u.id) ?? "",
+            }));
+
+          } catch (e: any) {
+            console.error("Failed to run reference code for user test cases:", e);
+            // If reference run fails, still fallback to running student code without expected outputs
+            batch = userBatch;
+          }
+        } else {
+          // No reference code — just run user cases (run-only)
+          batch = userBatch;
+        }
       } else if (dbTestCases.length > 0) {
         batch = dbTestCases.map((tc: any) => ({
           id: tc.id,
@@ -90,7 +143,7 @@ export async function POST(req: Request) {
       batch = dbTestCases.map((tc: any, idx: number) => ({
         id: tc.id,
         stdinInput: tc.input ?? "",
-        expectedOutput: tc.expected_output ?? "", // from DB or reference code
+        expectedOutput: tc.expected_output ?? "",
         is_hidden: tc.is_hidden ?? true,
         time_limit_ms: tc.time_limit_ms ?? 2000,
         memory_limit_kb: tc.memory_limit_kb ?? 65536,
@@ -105,56 +158,70 @@ export async function POST(req: Request) {
       return NextResponse.json({ results: [], verdict: "no_testcases" });
     }
 
-    // Call runner service
-    const EXECUTE_URL = process.env.EXECUTE_URL || "http://localhost:5002/execute";
-    const runnerRes = await fetch(EXECUTE_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
+    // Now run student's code (we pass student's code, lang, and batch).
+    // Note: reference outputs have already been filled into batch.expectedOutput for user testcases if reference was available.
+    let runnerResults;
+    try {
+      runnerResults = await callRunner({
         code,
-        reference_code: referenceCode,
+        reference_code: referenceCode || undefined,
         lang: reqLangNorm || lang,
         batch,
-      }),
-    });
-
-    if (!runnerRes.ok) {
-      const text = await runnerRes.text();
-      console.error("Runner error:", runnerRes.status, text);
-      return NextResponse.json({ error: `Runner error ${runnerRes.status}: ${text}` }, { status: 500 });
+      });
+    } catch (e: any) {
+      console.error("Runner error:", e);
+      return NextResponse.json({ error: e.message || "Runner failed" }, { status: 500 });
     }
 
-    const runnerResults = await runnerRes.json();
     const details = runnerResults.details ?? [];
 
     const normalizeOutputText = (s: any) =>
       String(s ?? "").split("\n").map(line => line.trim()).filter(Boolean).join("\n");
 
-    const batchMap = new Map(batch.map(b => [b.id, b]));
+    const batchMap = new Map(batch.map(b => [String(b.id), b]));
 
+    // Build results: for user-testcases with expectedOutput filled, compare student's stdout with expected.
     const allResults = details.map((d: any) => {
-      const isUser = String(d.test_case_id).startsWith("user-");
-      const tc = isUser ? null : dbTestCases.find(t => Number(t.id) === Number(d.test_case_id));
-      const batchItem = batchMap.get(d.test_case_id);
+      const idStr = String(d.test_case_id);
+      const isUser = idStr.startsWith("user-");
+      const batchItem = batchMap.get(idStr);
 
       const stdout = d.stdout ?? "";
-      const expected = isUser ? batchItem?.expectedOutput ?? "" : tc?.expected_output ?? "";
-      const input = isUser ? batchItem?.stdinInput ?? "" : tc?.input ?? "";
+      const expected = batchItem?.expectedOutput ?? "";
+      const input = batchItem?.stdinInput ?? "";
+
+      let status: string;
+      if (isUser) {
+        if (expected && expected !== "") {
+          // Compare student's stdout with generated expected output
+          const normStdout = normalizeOutputText(stdout);
+          const normExpected = normalizeOutputText(expected);
+          status = normStdout === normExpected ? "passed" : "failed";
+        } else {
+          // No expected (no reference), mark as run-only
+          status = "ran";
+        }
+      } else {
+        // db testcases: compare as usual
+        const normStdout = normalizeOutputText(stdout);
+        const normExpected = normalizeOutputText(expected);
+        status = normStdout === normExpected ? "passed" : "failed";
+      }
 
       return {
         test_case_id: d.test_case_id,
-        status: normalizeOutputText(stdout) === normalizeOutputText(expected) ? "passed" : "failed",
+        status,
         input,
         expected,
         stdout,
         error: d.stderr || null,
-        is_hidden: isUser ? false : tc?.is_hidden ?? true,
+        is_hidden: isUser ? false : (batchItem?.is_hidden ?? true),
         time_ms: d.time_ms ?? 0,
         memory_kb: d.memory_kb ?? 0,
       };
     });
 
-    // Submission result handling
+    // Submission result handling (unchanged)
     let passed = 0;
     let total = 0;
     let marksObtained = 0;

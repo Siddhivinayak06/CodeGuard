@@ -273,11 +273,16 @@ export default function EditorClient() {
         lang,
         practicalId,
         mode: "run",
-        userTestCases: customCases.map(tc => ({
+        // Tell server explicitly whether we want to run custom cases
+        useCustomTestCases: customCases.length > 0,
+        userTestCases: customCases.map((tc, idx) => ({
+          // server expects `input` / `stdinInput` on batch creation
           input: tc.input,
-          
-          time_limit_ms: 2000,
-          memory_limit_kb: 65536,
+          // optional: allow per-case limits; keep defaults if not provided
+          time_limit_ms: tc.time_limit_ms ?? 2000,
+          memory_limit_kb: tc.memory_limit_kb ?? 65536,
+          // we don't have an expected output UI field for user cases — leave expectedOutput blank
+          expectedOutput: tc.expectedOutput ?? "",
         })),
       };
 
@@ -286,7 +291,7 @@ export default function EditorClient() {
 
       const results: TestCaseResult[] = (res.data.results || []).map((r: any) => ({
         test_case_id: r.test_case_id ?? 0,
-        input: r.input ?? r.stdinInput ?? r.expected ?? "",  // <--- fix
+        input: r.input ?? r.stdinInput ?? r.expected ?? "",
         expected: normalizeStr(r.expected ?? r.expected_output),
         stdout: normalizeStr(r.stdout),
         error: r.error ?? null,
@@ -295,9 +300,6 @@ export default function EditorClient() {
         memory_kb: r.memory_kb ?? null,
         is_hidden: r.is_hidden ?? false,
       }));
-
-
-
 
       setTestCaseResults(results);
       console.log("Run results:", results);
@@ -308,6 +310,7 @@ export default function EditorClient() {
       setLoading(false);
     }
   };
+
 
 
   const handleSubmit = async () => {
@@ -605,9 +608,17 @@ export default function EditorClient() {
                       <input
                         type="checkbox"
                         checked={showUserTestCases}
-                        onChange={(e) => setShowUserTestCases(e.target.checked)}
+                        onChange={(e) => {
+                          const checked = e.target.checked;
+                          setShowUserTestCases(checked);
+                          // when user hides the test-cases panel, clear entered cases
+                          if (!checked) {
+                            setUserTestCases([{ id: 1, input: "" }]);
+                          }
+                        }}
                         className="accent-blue-500 cursor-pointer"
                       />
+
                       Custom Test Cases
                     </label>
                   </div>
