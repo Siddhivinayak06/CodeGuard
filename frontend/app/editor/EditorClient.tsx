@@ -174,6 +174,9 @@ export default function EditorClient() {
   // NEW: examples from test_cases table
   const [examplesFromDB, setExamplesFromDB] = useState<Array<{ input: string; output: string }>>([]);
 
+  // expanded state for LeetCode-style test case cards
+  const [expandedCases, setExpandedCases] = useState<Record<number, boolean>>({});
+
   // ========================
   // Auth
   // ========================
@@ -388,6 +391,11 @@ export default function EditorClient() {
   const constraintSection = sections.find(s => /constraint/i.test(s.title)) || sections.find(s => /constraint/i.test(s.body));
   const problemStmt = sections.find(s => /problem/i.test(s.title))?.body || sections[0]?.body || practical?.description || "No description available.";
 
+  // LeetCode-style summary numbers
+  const passedCount = testCaseResults.filter(t => t.status === "passed").length;
+  const totalCount = testCaseResults.length;
+  const passPercent = totalCount ? Math.round((passedCount / totalCount) * 100) : 0;
+
   return (
     <div className="h-screen flex flex-col bg-gradient-to-br from-gray-100 via-white/30 to-gray-200 dark:from-gray-900 dark:via-gray-800/40 dark:to-gray-900 backdrop-blur-sm">
       {/* Header */}
@@ -421,7 +429,7 @@ export default function EditorClient() {
             </div>
           )}
           <div className="text-sm text-gray-600 dark:text-gray-400">
-            Violations:{" "}
+            Violations: {" "}
             <span className="font-semibold text-red-600 dark:text-red-400">
               {violations}/3
             </span>
@@ -597,76 +605,97 @@ export default function EditorClient() {
 
               <ResizableHandle className="h-1 bg-gray-200 dark:bg-gray-700 hover:bg-blue-400 dark:hover:bg-blue-600 transition-colors duration-200 rounded" />
 
-              {/* Test Case Results */}
+              {/* Test Case Results - LEETCODE STYLE */}
               <ResizablePanel defaultSize={25} minSize={15}>
                 <div className="h-full overflow-auto p-4 bg-white/10 dark:bg-gray-900/30 backdrop-blur-md rounded-xl border border-gray-300 dark:border-gray-700">
                   <div className="flex justify-between items-center mb-4">
-                    <h3 className="text-xl font-semibold text-gray-800 dark:text-gray-200">Test Case Results</h3>
+                    <div>
+                      <h3 className="text-xl font-semibold text-gray-800 dark:text-gray-200">Test Case Results</h3>
+                      <div className="text-sm text-gray-500 dark:text-gray-400">{passedCount} passed • {totalCount} total</div>
+                    </div>
 
-                    {/* Checkbox to toggle User Test Cases */}
-                    <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
-                      <input
-                        type="checkbox"
-                        checked={showUserTestCases}
-                        onChange={(e) => {
-                          const checked = e.target.checked;
-                          setShowUserTestCases(checked);
-                          // when user hides the test-cases panel, clear entered cases
-                          if (!checked) {
-                            setUserTestCases([{ id: 1, input: "" }]);
-                          }
-                        }}
-                        className="accent-blue-500 cursor-pointer"
-                      />
-
-                      Custom Test Cases
-                    </label>
+                    {/* Progress bar similar to LeetCode */}
+                    <div className="w-56">
+                      <div className="bg-gray-200 dark:bg-gray-700 rounded-full h-2 overflow-hidden">
+                        <div className="h-2 rounded-full" style={{ width: `${passPercent}%`, backgroundColor: passPercent === 100 ? '#16a34a' : '#6366f1' }} />
+                      </div>
+                      <div className="text-xs text-right text-gray-500 mt-1">{passPercent}%</div>
+                    </div>
                   </div>
+
+                  {/* Checkbox to toggle User Test Cases */}
+                  <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 mb-4">
+                    <input
+                      type="checkbox"
+                      checked={showUserTestCases}
+                      onChange={(e) => {
+                        const checked = e.target.checked;
+                        setShowUserTestCases(checked);
+                        // when user hides the test-cases panel, clear entered cases
+                        if (!checked) {
+                          setUserTestCases([{ id: 1, input: "" }]);
+                        }
+                      }}
+                      className="accent-blue-500 cursor-pointer"
+                    />
+
+                    Custom Test Cases
+                  </label>
 
                   {testCaseResults.length === 0 && (
                     <div className="text-sm text-gray-500 dark:text-gray-400">Run your test cases to see results here.</div>
                   )}
 
-                  {testCaseResults.map((r, idx) => (
-                    <div
-                      key={idx}
-                      className="border border-gray-300 dark:border-gray-600 rounded-lg p-4 mb-4 bg-white/30 dark:bg-gray-800/30 shadow-sm"
-                    >
-                      <div className="flex justify-between items-center mb-3">
-                        <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Case #{idx + 1}</span>
-                        <span
-                          className={`text-sm font-semibold ${r.status === "passed"
-                            ? "text-green-600 dark:text-green-400"
-                            : r.status === "failed"
-                              ? "text-red-600 dark:text-red-400"
-                              : "text-yellow-600 dark:text-yellow-400"
-                            }`}
-                        >
-                          {r.status.toUpperCase()}
-                        </span>
-                      </div>
+                  {testCaseResults.map((r, idx) => {
+                    const isExpanded = !!expandedCases[idx];
+                    const leftBorderClass = r.status === 'passed' ? 'border-l-4 border-green-500' : r.status === 'failed' ? 'border-l-4 border-red-500' : 'border-l-4 border-yellow-400';
 
-                      <div className="text-sm text-gray-700 dark:text-gray-300 space-y-2">
-                        <div>
-                          <strong>Input:</strong>
-                          <pre className="bg-gray-100 dark:bg-gray-700 p-2 rounded">{r.input}</pre>
+                    return (
+                      <div key={idx} className={`mb-4 rounded-lg p-0 overflow-hidden shadow-sm ${leftBorderClass} bg-white/30 dark:bg-gray-800/30 border border-gray-200 dark:border-gray-700`}>
+                        <div className="flex items-center justify-between p-3 cursor-pointer" onClick={() => setExpandedCases(prev => ({ ...prev, [idx]: !prev[idx] }))}>
+                          <div className="flex items-center gap-3">
+                            <div className={`w-10 h-10 flex items-center justify-center rounded-full bg-white/60 dark:bg-black/40 ${r.status === 'passed' ? 'text-green-600' : r.status === 'failed' ? 'text-red-600' : 'text-yellow-600'} font-semibold`}>{idx + 1}</div>
+                            <div>
+                              <div className="text-sm font-medium text-gray-800 dark:text-gray-100">Case {idx + 1} {r.is_hidden ? <span className="text-xs text-gray-500">(hidden)</span> : null}</div>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            <div className={`text-sm font-semibold ${r.status === 'passed' ? 'text-green-600' : r.status === 'failed' ? 'text-red-600' : 'text-yellow-600'}`}>{r.status.toUpperCase()}</div>
+                          </div>
+
                         </div>
-                        <div>
-                          <strong>Expected Output:</strong>
-                          <pre className="bg-gray-100 dark:bg-gray-700 p-2 rounded">{r.expected ?? "N/A"}</pre>
-                        </div>
-                        <div>
-                          <strong>Output:</strong>
-                          <pre className="bg-gray-100 dark:bg-gray-700 p-2 rounded">{r.stdout}</pre>
-                        </div>
-                        {r.error && (
-                          <div className="text-red-500">
-                            <strong>Error:</strong> {r.error}
+
+                        {isExpanded && (
+                          <div className="p-3 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900">
+                            <div className="grid grid-cols-2 gap-4">
+                              <div>
+                                <div className="text-xs text-gray-500 mb-1">Input</div>
+                                <pre className="bg-white dark:bg-gray-800 p-3 rounded text-sm font-mono whitespace-pre-wrap">{r.input}</pre>
+                              </div>
+                              <div>
+                                <div className="text-xs text-gray-500 mb-1">Expected</div>
+                                <pre className="bg-white dark:bg-gray-800 p-3 rounded text-sm font-mono whitespace-pre-wrap">{r.expected || '—'}</pre>
+                              </div>
+                            </div>
+
+                            <div className="mt-3">
+                              <div className="text-xs text-gray-500 mb-1">Output</div>
+                              <pre className="bg-white dark:bg-gray-800 p-3 rounded text-sm font-mono whitespace-pre-wrap">{r.stdout}</pre>
+
+                              {r.error && (
+                                <div className="mt-2 text-sm text-red-500">
+                                  <strong>Error:</strong> {r.error}
+                                </div>
+                              )}
+
+                             
+                            </div>
                           </div>
                         )}
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
 
                 </div>
               </ResizablePanel>
