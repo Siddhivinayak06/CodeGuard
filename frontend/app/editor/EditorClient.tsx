@@ -523,7 +523,7 @@ export default function EditorClient() {
 
           <ResizableHandle className="w-1 bg-gray-200 dark:bg-gray-700 hover:bg-blue-400 dark:hover:bg-blue-600 transition-colors duration-200 rounded" />
 
-          {/* RIGHT: Code Editor + Test Cases + Results */}
+{/* RIGHT: Code Editor + Test Cases + Results */}
           <ResizablePanel defaultSize={60} minSize={40}>
             <ResizablePanelGroup direction="vertical" className="h-full gap-3 rounded-2xl overflow-hidden">
               {/* Code Editor */}
@@ -552,58 +552,77 @@ export default function EditorClient() {
 
               {/* User Test Cases Panel */}
               {showUserTestCases && (
-                <ResizablePanel defaultSize={25} minSize={20}>
-                  <div className="h-full overflow-auto p-4 bg-white/10 dark:bg-gray-900/30 backdrop-blur-md rounded-xl border border-gray-300 dark:border-gray-700">
-                    <div className="flex justify-between items-center mb-3">
-                      <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-200">Your Test Cases</h3>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() =>
-                          setUserTestCases([...userTestCases, { id: userTestCases.length + 1, input: "" }])
-                        }
-                      >
-                        ➕ Add Test Case
-                      </Button>
-                    </div>
-
-                    {userTestCases.map((tc, idx) => (
-                      <div
-                        key={idx}
-                        className="mb-4 p-3 bg-white/20 dark:bg-gray-800/20 rounded-xl border border-gray-300 dark:border-gray-700"
-                      >
-                        <div className="flex justify-between items-center mb-2">
-                          <span className="font-medium text-gray-700 dark:text-gray-300">Case #{idx + 1}</span>
-                          {userTestCases.length > 1 && (
-                            <button
-                              className="text-sm text-red-500 hover:underline"
-                              onClick={() =>
-                                setUserTestCases(userTestCases.filter((_, i) => i !== idx))
-                              }
-                            >
-                              Delete
-                            </button>
-                          )}
+                <>
+                  <ResizablePanel defaultSize={30} minSize={25} maxSize={50}>
+                    <div className="h-full flex flex-col bg-gradient-to-br from-blue-50/50 to-purple-50/50 dark:from-gray-900/50 dark:to-gray-800/50 backdrop-blur-md rounded-xl border border-blue-200 dark:border-gray-700 shadow-lg">
+                      {/* Fixed Header */}
+                      <div className="flex-shrink-0 p-4 border-b border-blue-200 dark:border-gray-700">
+                        <div className="flex justify-between items-center">
+                          <div>
+                            <h3 className="text-xl font-bold text-gray-800 dark:text-gray-100">Custom Test Cases</h3>
+                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Add your own test inputs</p>
+                          </div>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() =>
+                              setUserTestCases([...userTestCases, { id: userTestCases.length + 1, input: "" }])
+                            }
+                            className="bg-blue-500 hover:bg-blue-600 text-white border-0 shadow-md hover:shadow-lg transition-all"
+                          >
+                            <span className="text-lg mr-1">+</span> Add Case
+                          </Button>
                         </div>
-
-                        <label className="block text-xs font-semibold mb-1 text-gray-600 dark:text-gray-400">Input</label>
-                        <textarea
-                          className="w-full p-2 rounded border border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-sm text-gray-800 dark:text-gray-200"
-                          rows={2}
-                          value={tc.input}
-                          onChange={(e) => {
-                            const newCases = [...userTestCases];
-                            newCases[idx].input = e.target.value;
-                            setUserTestCases(newCases);
-                          }}
-                        />
                       </div>
-                    ))}
-                  </div>
-                </ResizablePanel>
-              )}
 
-              <ResizableHandle className="h-1 bg-gray-200 dark:bg-gray-700 hover:bg-blue-400 dark:hover:bg-blue-600 transition-colors duration-200 rounded" />
+                      {/* Scrollable Test Cases - Only this scrolls */}
+                      <div className="flex-1 overflow-auto p-4">
+                        <div className="space-y-3">
+                          {userTestCases.map((tc, idx) => (
+                            <div
+                              key={idx}
+                              className="group relative p-4 bg-white dark:bg-gray-800 rounded-lg border-2 border-gray-200 dark:border-gray-700 hover:border-blue-400 dark:hover:border-blue-500 transition-all duration-200 shadow-sm hover:shadow-md"
+                            >
+                              <div className="flex justify-between items-center mb-3">
+                                <div className="flex items-center gap-2">
+                                  <div className="w-8 h-8 flex items-center justify-center rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 font-bold text-sm">
+                                    {idx + 1}
+                                  </div>
+                                  <span className="font-semibold text-gray-800 dark:text-gray-200">Test Case {idx + 1}</span>
+                                </div>
+                                {userTestCases.length > 1 && (
+                                  <button
+                                    className="opacity-0 group-hover:opacity-100 transition-opacity text-xs px-3 py-1 rounded-md bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 hover:bg-red-200 dark:hover:bg-red-900/50 font-medium"
+                                    onClick={() =>
+                                      setUserTestCases(userTestCases.filter((_, i) => i !== idx))
+                                    }
+                                  >
+                                    Remove
+                                  </button>
+                                )}
+                              </div>
+
+                              <label className="block text-xs font-bold mb-2 text-gray-600 dark:text-gray-400 uppercase tracking-wide">Input</label>
+                              <textarea
+                                className="w-full p-3 rounded-md border-2 border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-900 text-sm text-gray-800 dark:text-gray-200 font-mono focus:border-blue-500 dark:focus:border-blue-400 focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-900/50 outline-none transition-all resize-none"
+                                rows={2}
+                                placeholder="Enter test input..."
+                                value={tc.input}
+                                onChange={(e) => {
+                                  const newCases = [...userTestCases];
+                                  newCases[idx].input = e.target.value;
+                                  setUserTestCases(newCases);
+                                }}
+                              />
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </ResizablePanel>
+                  <ResizableHandle className="h-1 bg-gray-200 dark:bg-gray-700 hover:bg-blue-400 dark:hover:bg-blue-600 transition-colors duration-200 rounded" />
+                </>
+              )}
 
               {/* Test Case Results - LEETCODE STYLE */}
               <ResizablePanel defaultSize={25} minSize={15}>
