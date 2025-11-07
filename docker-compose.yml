@@ -46,6 +46,18 @@ services:
     networks:
       - app_net
 
+  java-runtime:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.java
+    image: ${JAVA_RUNTIME_IMAGE:-codeguard-java}:${JAVA_RUNTIME_TAG:-latest}
+    command: tail -f /dev/null
+    expose:
+      - "8082"
+    restart: unless-stopped
+    networks:
+      - app_net
+
   c-runtime:
     build:
       context: ./backend

@@ -16,18 +16,48 @@ import {
   ResizablePanel,
   ResizablePanelGroup,
 } from "@/components/ui/resizable";
-import { Button } from "@/components/ui/button"; // ✅ Make sure Button is imported
+import { Button } from "@/components/ui/button";
 import type { User } from "@supabase/supabase-js";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 export default function EditorPage() {
   const router = useRouter();
   const mountedRef = useRef(true);
   const pathname = usePathname();
-  const [lang, setLang] = useState("python");
-  const [code, setCode] = useState(
-    "# Welcome to Python Code Editor\n# Write your Python code here\n\nprint('Hello, World!')\n"
-  );
+
+  // ---- Language templates ----
+  const LANGUAGE_TEMPLATES: Record<string, string> = {
+    java: `// Java starter template
+// Make sure you have a Main class with a public static void main(String[] args) entrypoint.
+public class Main {
+    public static void main(String[] args) {
+        System.out.println("Hello, World!");
+    }
+}
+`,
+    python: `# Python starter template
+print("Hello, World!")
+`,
+    c: `// C starter template
+#include <stdio.h>
+
+int main(void) {
+    printf("Hello, World!\\n");
+    return 0;
+}
+`,
+  };
+
+  // Default to Java as requested
+  const [lang, setLang] = useState<"java" | "python" | "c">("java");
+  const [code, setCode] = useState<string>(LANGUAGE_TEMPLATES["java"]);
   const [input, setInput] = useState("");
   const [output, setOutput] = useState("");
   const [errorOutput, setError] = useState("");
@@ -43,13 +73,14 @@ export default function EditorPage() {
   }, []);
 
   const [user, setUser] = useState<User | null>(null);
-const [currentMode, setCurrentMode] = useState("Static");
+  const [currentMode, setCurrentMode] = useState("Static");
 
   // Initialize mode based on current path
   useEffect(() => {
     if (pathname === "/Interactive") setCurrentMode("Interactive");
     else setCurrentMode("Static");
   }, [pathname]);
+
   useEffect(() => {
     mountedRef.current = true;
     const fetchUser = async () => {
@@ -71,16 +102,30 @@ const [currentMode, setCurrentMode] = useState("Static");
       mountedRef.current = false;
     };
   }, [router, supabase]);
+
   const handleModeChange = (mode: "Static" | "Interactive", path: string) => {
     setCurrentMode(mode); // update dropdown immediately
-    router.push(path);    // navigate to new page
+    router.push(path); // navigate to new page
   };
 
-  // ✅ Add this function
+  // Sign out helper
   const handleSignOut = async () => {
     if (!supabase) return;
     await supabase.auth.signOut();
     router.push("/"); // redirect to home or login page
+  };
+
+  // If user switches language, only replace code when current code equals the previous template or is empty.
+  const handleLangChange = (newLang: "java" | "python" | "c") => {
+    setLang(newLang);
+    const currentTemplate = LANGUAGE_TEMPLATES[lang];
+    const nextTemplate = LANGUAGE_TEMPLATES[newLang];
+
+    // If current editor content is empty OR exactly equal to the previous template, swap to new template.
+    if (!code || code.trim() === "" || code === currentTemplate) {
+      setCode(nextTemplate);
+    }
+    // Otherwise keep user's current code (do not overwrite).
   };
 
   const runCode = async () => {
@@ -92,9 +137,10 @@ const [currentMode, setCurrentMode] = useState("Static");
         `${process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5002"}/execute`,
         { code, lang, stdinInput: input }
       );
-      setOutput(res.data.output);
-      setError(res.data.error);
-    } catch {
+      setOutput(res.data.output ?? "");
+      setError(res.data.error ?? "");
+    } catch (err) {
+      console.error("runCode error:", err);
       setError("Execution failed. Please try again.");
     } finally {
       setLoading(false);
@@ -102,19 +148,18 @@ const [currentMode, setCurrentMode] = useState("Static");
   };
 
   const downloadPdf = async () => {
-  try {
-    // user?.email is available from your user state (you already fetch user)
-    await generatePdfClient({
-      code,
-      output,
-      user: user?.email || user?.user_metadata?.full_name || "Anonymous",
-      filename: "code_output.pdf",
-    });
-  } catch (err) {
-    console.error("PDF generation failed:", err);
-    setError("PDF generation failed.");
-  }
-};
+    try {
+      await generatePdfClient({
+        code,
+        output,
+        user: user?.email || user?.user_metadata?.full_name || "Anonymous",
+        filename: "code_output.pdf",
+      });
+    } catch (err) {
+      console.error("PDF generation failed:", err);
+      setError("PDF generation failed.");
+    }
+  };
 
   if (!user) return <div>Loading...</div>;
 
@@ -126,10 +171,12 @@ const [currentMode, setCurrentMode] = useState("Static");
           <h1 className="text-xl font-semibold text-gray-800 dark:text-gray-200">
             Code Editor
           </h1>
+
+          {/* Mode Selector */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" size="sm" className="flex items-center gap-2 text-sm">
-                {currentMode} {/* Displays the current mode */}
+                {currentMode}
                 <ChevronDown className="w-4 h-4" />
               </Button>
             </DropdownMenuTrigger>
@@ -162,7 +209,6 @@ const [currentMode, setCurrentMode] = useState("Static");
             /3
           </div>
 
-          {/* ✅ Added Sign Out Button */}
           <Button variant="outline" onClick={handleSignOut}>
             Sign Out
           </Button>
@@ -186,7 +232,7 @@ const [currentMode, setCurrentMode] = useState("Static");
                 loading={loading}
                 locked={locked}
                 lang={lang}
-                onLangChange={setLang}
+                onLangChange={(l) => handleLangChange(l as "java" | "python" | "c")}
                 showInput={showInput}
                 setShowInput={setShowInput}
                 showInputToggle={showInputToggle}
