@@ -89,7 +89,7 @@ public class Main {
 }
 WRAPPER
     # replace placeholder with actual class name
-    sed -i "s/%CLASS_NAME%/${class_name}/g" $wrapper_file
+    sed -i "s/%CLASS_NAME%/$class_name/g" $wrapper_file
   fi
 fi &&
 

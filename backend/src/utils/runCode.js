@@ -30,6 +30,7 @@ module.exports = async function runCode(code, lang = "python", stdinInput = "") 
   const timeoutSec = DEFAULT_TIMEOUT_SEC;
 
   let cmd;
+
   if (lang === "python" || lang === "py") {
     cmd = `
 mkdir -p /tmp/${uniqueId} &&
@@ -45,48 +46,44 @@ cat /tmp/${uniqueId}/gcc_err.txt 1>&2 || true &&
 printf "%s" '${escapeForPrintf(stdinInput)}' | timeout ${timeoutSec} /tmp/${uniqueId}/a.out
 `;
   } else if (lang === "java") {
-    // The Java handling below:
-    // 1) write the user's code to a temp file
-    // 2) detect package line and public class name
-    // 3) if public class name == Main -> save file as Main.java
-    // 4) if public class name != Main -> keep file as UserCode.java and create a Main wrapper
-    // 5) compile and run Main
-    cmd = `
+  cmd = `
 mkdir -p /tmp/${uniqueId} &&
-printf "%s" '${escapeForPrintf(escapedCode)}' > /tmp/${uniqueId}/UserCode.java &&
 
-# detect package and public class name from the saved file
-pkg_line=$(grep -E '^[[:space:]]*package[[:space:]]+[a-zA-Z0-9_.]+' /tmp/${uniqueId}/UserCode.java | head -n1 | sed 's/;//') || true &&
-class_name=$(grep -Eo '^[[:space:]]*(public[[:space:]]+)?class[[:space:]]+[A-Za-z_][A-Za-z0-9_]*' /tmp/${uniqueId}/UserCode.java | head -n1 | awk '{print $NF}' ) || true &&
+# Write the user code to a temp file for analysis
+printf "%s" '${escapeForPrintf(escapedCode)}' > /tmp/${uniqueId}/TempUserCode.java || true &&
 
-# If the public class is Main, rename the file to Main.java to satisfy javac
+# Detect package line and class name
+pkg_line=$(grep -E '^[[:space:]]*package[[:space:]]+[a-zA-Z0-9_.]+' /tmp/${uniqueId}/TempUserCode.java | head -n1 | sed 's/;//') || true &&
+class_name=$(grep -Eo '^[[:space:]]*(public[[:space:]]+)?class[[:space:]]+[A-Za-z_][A-Za-z0-9_]*' /tmp/${uniqueId}/TempUserCode.java | head -n1 | awk '{print $NF}') || true &&
+
+# Choose the right file name
 if [ "$class_name" = "Main" ]; then
-  mv /tmp/${uniqueId}/UserCode.java /tmp/${uniqueId}/Main.java || true
   code_file=/tmp/${uniqueId}/Main.java
 else
-  code_file=/tmp/${uniqueId}/UserCode.java
+  code_file=/tmp/${uniqueId}/\${class_name:-UserCode}.java
 fi &&
 
-# Check whether there's a main method in the code file
+# Write actual code to that file
+mv /tmp/${uniqueId}/TempUserCode.java "$code_file" || cp /tmp/${uniqueId}/TempUserCode.java "$code_file" &&
+
+# Detect if there's a main method
 if grep -q 'public[[:space:]]\\+static[[:space:]]\\+void[[:space:]]\\+main[[:space:]]*(' "$code_file"; then
   has_main=1
 else
   has_main=0
 fi &&
 
-# If user has a main and the public class isn't Main, create a Main wrapper that calls it
+# If user has main and the public class isn't Main, make a wrapper
 if [ "$has_main" -eq 1 ] && [ "$class_name" != "Main" ]; then
   wrapper_file=/tmp/${uniqueId}/Main.java
   if [ -n "$pkg_line" ]; then
-    echo "$pkg_line;" > $wrapper_file
-  else
-    : > $wrapper_file
+    echo "$pkg_line;" > "$wrapper_file"
   fi
-  cat >> $wrapper_file <<'WRAPPER'
+  cat >> "$wrapper_file" <<WRAPPER
 public class Main {
     public static void main(String[] args) {
         try {
-            %CLASS_NAME%.main(args);
+            $class_name.main(args);
         } catch (Throwable t) {
             t.printStackTrace();
             System.exit(1);
@@ -94,12 +91,10 @@ public class Main {
     }
 }
 WRAPPER
-  # Substitute the placeholder with the shell variable $class_name — escape $ for JS so shell gets $class_name
-  sed -i "s/%CLASS_NAME%/\\$class_name/g" $wrapper_file
 fi &&
 
+# Compile and run
 javac /tmp/${uniqueId}/*.java 2> /tmp/${uniqueId}/compile_err.txt || true &&
-
 if [ -s /tmp/${uniqueId}/compile_err.txt ]; then
   cat /tmp/${uniqueId}/compile_err.txt 1>&2
   exit 1
@@ -107,7 +102,8 @@ else
   printf "%s" '${escapeForPrintf(stdinInput)}' | timeout ${timeoutSec} java -cp /tmp/${uniqueId} Main
 fi
 `;
-  }
+}
+
 
   // Which docker image to use per language
   const image = lang === "python" ? "codeguard-python"
