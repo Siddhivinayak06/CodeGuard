@@ -9,58 +9,34 @@ export default function StudentAssignmentForm({ practicalId, close, refresh }: a
   const [selectedStudents, setSelectedStudents] = useState<any[]>([]);
   const [deadline, setDeadline] = useState(new Date().toISOString().slice(0, 16));
   const [notes, setNotes] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchStudents = async () => {
       setError(null);
-
-      // quick client sanity checks
       try {
-        console.log("Supabase client:", supabase);
-        // optional: check session/connection
-        if (typeof supabase.auth?.getSession === "function") {
-          const sess = await supabase.auth.getSession();
-          console.log("supabase session:", sess);
-        }
-      } catch (err) {
-        console.warn("Supabase client check failed:", err);
-      }
-
-      try {
-        // be explicit about columns (helps with RLS/policy debugging)
-        const { data, error, status } = await supabase
-          .from("users")          // <-- confirm this is correct table name
-          .select("uid, name, email, role")
+        const { data, error } = await supabase
+          .from("users")
+          .select("uid, name, email, role, student_details(roll_no, semester)")
           .eq("role", "student");
 
-        // log raw response for debugging
-        console.log("fetchStudents response:", { status, data, error });
+        if (error) throw error;
 
-        if (error) {
-          // stringify to reveal possible hidden fields
-          console.error("Error fetching students (raw):", JSON.stringify(error, Object.getOwnPropertyNames(error)));
-          // Provide helpful message
-          setError(
-            // if RLS is common culprit, hint it
-            `Failed to load students. ${error.message ?? ""} 
-            (Check env keys, table name, network/CORS, or Row Level Security policies.)`
-          );
-          return;
+        if (data) {
+          const mappedStudents = data.map((s: any) => ({
+            uid: s.uid,
+            name: s.name,
+            email: s.email,
+            roll: s.student_details?.roll_no || "",
+            semester: s.student_details?.semester || "",
+          }));
+          setStudents(mappedStudents);
         }
-
-        if (!data || data.length === 0) {
-          setStudents([]);
-          setError(null);
-          return;
-        }
-
-        setStudents(data);
-        setError(null);
       } catch (err: any) {
-        console.error("Unexpected error fetching students:", err);
-        setError("An unexpected error occurred while loading students. See console for details.");
+        console.error("Error fetching students:", err);
+        setError("Failed to load students. Check console for details.");
       }
     };
 
@@ -73,9 +49,14 @@ export default function StudentAssignmentForm({ practicalId, close, refresh }: a
     );
   };
 
+  const filteredStudents = students.filter(
+    (s) =>
+      s.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      s.roll.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
   const assign = async () => {
     if (selectedStudents.length === 0) return;
-
     setLoading(true);
     try {
       const response = await fetch("/api/admin/practicals/assign", {
@@ -83,9 +64,9 @@ export default function StudentAssignmentForm({ practicalId, close, refresh }: a
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           practical_id: practicalId,
-          student_ids: selectedStudents.map(s => s.uid),
+          student_ids: selectedStudents.map((s) => s.uid),
           assigned_deadline: deadline,
-          notes: notes,
+          notes,
         }),
       });
 
@@ -97,8 +78,8 @@ export default function StudentAssignmentForm({ practicalId, close, refresh }: a
       } else {
         alert("Error: " + result.error);
       }
-    } catch (error) {
-      console.error("Assignment error:", error);
+    } catch (err) {
+      console.error("Assignment error:", err);
       alert("Failed to assign practical");
     } finally {
       setLoading(false);
@@ -106,64 +87,143 @@ export default function StudentAssignmentForm({ practicalId, close, refresh }: a
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/40" onClick={close}></div>
-      <div className="relative bg-white dark:bg-gray-900 p-6 rounded-lg shadow-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-        <h3 className="font-semibold text-lg mb-4">Assign Practical to Students</h3>
-        <div className="space-y-3">
+    <>
+      {/* Background overlay */}
+      <div
+        className="fixed inset-0 bg-black/40 z-40"
+        onClick={close}
+      />
+
+      {/* Modal */}
+      <div className="fixed top-10 left-1/2 -translate-x-1/2 z-50 w-full max-w-4xl mx-auto flex flex-col bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 rounded-2xl shadow-xl overflow-hidden">
+        
+        {/* Header */}
+        <div className="flex justify-between items-center p-5 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
           <div>
-            <label className="block text-sm font-medium mb-1">Deadline</label>
+            <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-50">
+              Assign Practical
+            </h2>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+              Select students and set a deadline
+            </p>
+          </div>
+          <button
+            onClick={close}
+            className="p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 transition"
+            aria-label="Close"
+          >
+            <svg className="w-6 h-6 text-gray-600 dark:text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="p-6 space-y-6 max-h-[80vh] overflow-y-auto">
+          
+          {/* Assignment Details */}
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md border border-gray-200 dark:border-gray-700 p-5 space-y-4">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-50 flex items-center gap-2">
+              Assignment Details
+            </h3>
+            <div className="grid md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
+                  Deadline
+                </label>
+                <input
+                  type="datetime-local"
+                  value={deadline}
+                  onChange={(e) => setDeadline(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:text-white"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
+                  Notes
+                </label>
+                <textarea
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  placeholder="Optional notes for students"
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg resize-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:text-white"
+                  rows={3}
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Student Selection */}
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md border border-gray-200 dark:border-gray-700 p-5 space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-50">
+                Select Students
+              </h3>
+              <span className="text-sm font-medium text-blue-600 dark:text-blue-300">
+                {selectedStudents.length} selected
+              </span>
+            </div>
             <input
-              type="datetime-local"
-              value={deadline}
-              onChange={(e) => setDeadline(e.target.value)}
-              className="w-full px-3 py-2 border rounded"
+              type="text"
+              placeholder="Search by name or roll number"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:text-white"
             />
-          </div>
-          <div>
-            <label className="block text-sm font-medium mb-1">Notes</label>
-            <textarea
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder="Optional notes"
-              className="w-full px-3 py-2 border rounded h-20"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium mb-2">Select Students ({selectedStudents.length} selected)</label>
-            <div className="max-h-40 overflow-y-auto border rounded p-2">
+
+            <div className="max-h-72 overflow-y-auto mt-3 border border-gray-200 dark:border-gray-600 rounded-lg divide-y divide-gray-200 dark:divide-gray-700 bg-gray-50 dark:bg-gray-900/50">
               {error ? (
-                <p className="text-red-500 text-sm">{error}</p>
-              ) : students.length === 0 ? (
-                <p className="text-gray-500 text-sm">No students available to assign. (Check console/network/RLS)</p>
+                <p className="p-4 text-red-500">{error}</p>
+              ) : filteredStudents.length === 0 ? (
+                <p className="p-4 text-gray-500 dark:text-gray-400 text-center">No students found</p>
               ) : (
-                students.map((student) => (
-                  <label key={student.uid} className="flex items-center space-x-2 p-1 hover:bg-gray-50 dark:hover:bg-gray-800 rounded">
-                    <input
-                      type="checkbox"
-                      checked={selectedStudents.some((s) => s.uid === student.uid)}
-                      onChange={() => toggleStudent(student)}
-                    />
-                    <span>{student.name} ({student.email})</span>
-                  </label>
+                filteredStudents.map((student) => (
+                  <div
+                    key={student.uid}
+                    className={`flex items-center justify-between px-4 py-2 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 transition ${
+                      selectedStudents.some((s) => s.uid === student.uid) ? "bg-blue-50 dark:bg-blue-900/20" : ""
+                    }`}
+                    onClick={() => toggleStudent(student)}
+                  >
+                    <div className="flex items-center gap-3">
+                      <input
+                        type="checkbox"
+                        checked={selectedStudents.some((s) => s.uid === student.uid)}
+                        readOnly
+                        className="w-4 h-4 accent-blue-600"
+                      />
+                      <div>
+                        <span className="text-gray-900 dark:text-gray-100 font-medium">{student.name}</span>
+                        <div className="text-xs text-gray-500 dark:text-gray-400">
+                          {student.roll} • Sem {student.semester}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 ))
               )}
             </div>
           </div>
-          <div className="flex justify-end gap-2 mt-4">
-            <button onClick={close} className="px-3 py-1 border rounded" disabled={loading}>
+
+          {/* Actions */}
+          <div className="flex justify-end gap-3 mt-2">
+            <button
+              onClick={close}
+              className="px-5 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition"
+            >
               Cancel
             </button>
             <button
               onClick={assign}
               disabled={selectedStudents.length === 0 || loading}
-              className="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 transition disabled:opacity-50"
+              className="px-5 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {loading ? "Assigning..." : `Assign to ${selectedStudents.length} Student${selectedStudents.length !== 1 ? 's' : ''}`}
+              {loading ? "Assigning..." : `Assign to ${selectedStudents.length} Student${selectedStudents.length !== 1 ? "s" : ""}`}
             </button>
           </div>
+
         </div>
       </div>
-    </div>
+    </>
   );
 }

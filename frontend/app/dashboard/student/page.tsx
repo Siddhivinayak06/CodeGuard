@@ -12,6 +12,7 @@ export default function StudentDashboard() {
   const supabase = useMemo(() => createClient(), []);
 
   const [user, setUser] = useState<User | null>(null);
+  const [studentDetails, setStudentDetails] = useState<any>(null);
   const [progress, setProgress] = useState<any[]>([]);
   const [submissions, setSubmissions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -22,16 +23,15 @@ export default function StudentDashboard() {
 
     const fetchUser = async () => {
       try {
-        const {
-          data: { user },
-        } = await supabase.auth.getUser();
+        const { data } = await supabase.auth.getUser();
+        const u = data?.user ?? null;
 
-        if (!user) {
+        if (!u) {
           router.push("/auth/login");
           return;
         }
 
-        if (mountedRef.current) setUser(user);
+        if (mountedRef.current) setUser(u);
       } catch (err) {
         console.error("Auth fetch error:", err);
         router.push("/auth/login");
@@ -44,26 +44,37 @@ export default function StudentDashboard() {
     };
   }, [router, supabase]);
 
-  // ✅ Fetch progress & submissions
+  // ✅ Fetch student details and dashboard data
   useEffect(() => {
     if (!user?.id) return;
 
     const fetchDashboardData = async () => {
       setLoading(true);
       try {
-        // 1️⃣ Fetch all subjects for the student
-        const { data: subjects } = await supabase
+        // 1️⃣ Fetch student details
+        const { data: sd, error: sdErr } = await supabase
+          .from("student_details")
+          .select("*")
+          .eq("student_id", user.id)
+          .maybeSingle();
+
+        if (sdErr || !sd) throw new Error("Failed to fetch student details");
+        setStudentDetails(sd);
+
+        // 2️⃣ Fetch subjects only for the student's semester
+        const { data: subjects, error: subjErr } = await supabase
           .from("subjects")
           .select(`
             id,
             subject_name,
-            practicals (
-              id,
-              title
-            )
-          `);
+            semester,
+            practicals(id, title)
+          `)
+          .eq("semester", sd.semester);
 
-        // 2️⃣ Calculate progress per subject
+        if (subjErr) throw subjErr;
+
+        // 3️⃣ Calculate progress per subject
         const progressData = await Promise.all(
           (subjects ?? []).map(async (subject: any) => {
             const total_count = subject.practicals?.length || 0;
@@ -86,12 +97,12 @@ export default function StudentDashboard() {
         );
         setProgress(progressData);
 
-        // 3️⃣ Fetch recent submissions with practical titles
+        // 4️⃣ Fetch recent submissions
         const { data: submissionsData } = await supabase
           .from("submissions")
           .select(`
             id,
-            practicals (title),
+            practicals(title),
             language,
             status,
             marks_obtained,
@@ -146,7 +157,7 @@ export default function StudentDashboard() {
                 📚 Progress
               </h2>
               {progress.length === 0 ? (
-                <p className="text-gray-500 dark:text-gray-400">No subjects found.</p>
+                <p className="text-gray-500 dark:text-gray-400">No subjects found for your semester.</p>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                   {progress.map((p) => {
@@ -206,9 +217,7 @@ export default function StudentDashboard() {
                           <td className="px-4 py-3">{s.status}</td>
                           <td className="px-4 py-3">{s.marks_obtained ?? "—"}</td>
                           <td className="px-4 py-3">
-                            {s.created_at
-                              ? new Date(s.created_at).toLocaleString()
-                              : "—"}
+                            {s.created_at ? new Date(s.created_at).toLocaleString() : "—"}
                           </td>
                         </tr>
                       ))}

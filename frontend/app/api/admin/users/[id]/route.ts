@@ -1,37 +1,65 @@
-// app/api/admin/users/[id]/route.ts
 import { NextRequest, NextResponse } from "next/server";
-import { supabaseAdmin } from "@/lib/supabase/service"; // your admin Supabase client
+import { supabaseAdmin } from "@/lib/supabase/service";
+import { createClient as createServerClient } from "@/lib/supabase/server";
 
-export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {
+// Admin check helper
+async function isAdminUsingCookieClient(): Promise<boolean> {
   try {
-    const userId = params.id;
+    const supabase = await createServerClient();
+    const { data: userData } = await (supabase as any).auth.getUser();
+    if (!userData?.user) return false;
 
-    if (!userId) {
-      return NextResponse.json({ error: "User ID is required" }, { status: 400 });
-    }
+    const user = userData.user;
+    const { data: row } = await supabaseAdmin
+      .from("users")
+      .select("role")
+      .eq("uid", user.id)
+      .maybeSingle();
+
+    return row?.role === "admin";
+  } catch {
+    return false;
+  }
+}
+
+// ---------------------------
+// PUT: update a single user
+// ---------------------------
+export async function PUT(req: NextRequest, context: { params: { id: string } }) {
+  const isAdmin = await isAdminUsingCookieClient();
+  if (!isAdmin) return NextResponse.json({ success: false, error: "Forbidden" }, { status: 403 });
+
+  try {
+    // ✅ Correct way to get dynamic params
+    const { id } = context.params;
+    if (!id) return NextResponse.json({ success: false, error: "User ID is required" }, { status: 400 });
 
     const body = await req.json();
-    const { email, role, name } = body; // adapt fields according to your table
+    const { name, role, roll_no, semester } = body;
 
-    // Update user in Supabase
-    const { data, error } = await supabaseAdmin
+    // Update users table
+    const { data: updatedUser, error: updateErr } = await supabaseAdmin
       .from("users")
-      .update({ email, role, name })
-      .eq("uid", userId)
-      .select() // return updated row
+      .update({ name, role })
+      .eq("uid", id)
+      .select()
+      .single();
+    if (updateErr) throw updateErr;
 
-    if (error) {
-      console.error("Supabase update error:", error);
-      return NextResponse.json({ error: error.message }, { status: 500 });
+    let studentDetails = null;
+    if (role === "student") {
+      const { data: sd, error: sdErr } = await supabaseAdmin
+        .from("student_details")
+        .upsert({ student_id: id, roll_no, semester }, { onConflict: "student_id" })
+        .select()
+        .single();
+      if (sdErr) console.error("student_details upsert failed:", sdErr);
+      studentDetails = sd ?? null;
     }
 
-    if (!data || data.length === 0) {
-      return NextResponse.json({ error: "User not found" }, { status: 404 });
-    }
-
-    return NextResponse.json({ message: "User updated successfully", user: data[0] });
+    return NextResponse.json({ success: true, data: { ...updatedUser, student_details: studentDetails } });
   } catch (err: any) {
     console.error("PUT /api/admin/users/[id] error:", err);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    return NextResponse.json({ success: false, error: err.message ?? "Server error" }, { status: 500 });
   }
 }

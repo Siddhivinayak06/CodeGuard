@@ -1,77 +1,71 @@
-// app/api/admin/users/route.ts
-import { NextResponse } from "next/server";
-import { createClient as createServerClient } from "@/lib/supabase/server"; // cookie-aware server client
-import { supabaseAdmin } from "@/lib/supabase/service"; // service-role client (must exist)
- 
-// Helper: check if the currently-signed-in user (from cookies) is admin
-async function isAdminUsingCookieClient() {
+import { NextRequest, NextResponse } from "next/server";
+import { createClient as createServerClient } from "@/lib/supabase/server";
+import { supabaseAdmin } from "@/lib/supabase/service";
+
+// Helper: check if current user is admin
+async function isAdminUsingCookieClient(): Promise<boolean> {
   try {
     const supabase = await createServerClient();
-    // cookie-authenticated client: get current user
-    const { data: userData, error: userErr } = await (supabase as any).auth.getUser();
-    if (userErr) {
-      console.error("Error getting user from cookie client:", userErr);
-      return false;
-    }
-    const user = userData?.user;
-    if (!user?.id) return false;
+    const { data: userData } = await (supabase as any).auth.getUser();
+    if (!userData?.user) return false;
 
-    // lookup role with service-role client (bypass RLS safely)
-    const { data: row, error } = await supabaseAdmin
+    const user = userData.user;
+    const { data: row } = await supabaseAdmin
       .from("users")
       .select("role")
       .eq("uid", user.id)
-      .limit(1)
       .maybeSingle();
 
-    if (error) {
-      console.error("Error checking role in users table:", error);
-      return false;
-    }
     return row?.role === "admin";
   } catch (err) {
-    console.error("Unexpected error in isAdminUsingCookieClient:", err);
+    console.error("Admin check failed:", err);
     return false;
   }
 }
- 
-// GET -> list users (admin only)
-export async function GET() {
-  try {
-    const isAdmin = await isAdminUsingCookieClient();
-    if (!isAdmin) {
-      return NextResponse.json({ success: false, error: "Forbidden" }, { status: 403 });
-    }
 
+// ---------------------------
+// GET: list all users with student_details
+// ---------------------------
+export async function GET() {
+  const isAdmin = await isAdminUsingCookieClient();
+  if (!isAdmin) return NextResponse.json({ success: false, error: "Forbidden" }, { status: 403 });
+
+  try {
     const { data, error } = await supabaseAdmin
       .from("users")
-      .select("uid, name, email, role, created_at, updated_at")
+      .select(`
+        uid, name, email, role, created_at, updated_at,
+        student_details(roll_no, semester)
+      `)
       .order("created_at", { ascending: false });
 
-    if (error) {
-      console.error("Error listing users:", error);
-      return NextResponse.json({ success: false, error: error.message }, { status: 500 });
-    }
+    if (error) throw error;
 
-    return NextResponse.json({ success: true, data });
+    // Flatten student_details to top level for frontend convenience
+    const formatted = data.map((u: any) => ({
+      ...u,
+      roll_no: u.student_details?.roll_no ?? "",
+      semester: u.student_details?.semester ?? "",
+    }));
+
+    return NextResponse.json({ success: true, data: formatted });
   } catch (err: any) {
-    console.error("GET /api/admin/users unexpected error:", err);
-    return NextResponse.json({ success: false, error: err?.message ?? "Server error" }, { status: 500 });
+    console.error("GET /api/admin/users error:", err);
+    return NextResponse.json({ success: false, error: err.message ?? "Server error" }, { status: 500 });
   }
 }
- 
-// POST -> create a new user (admin only)
-export async function POST(request: Request) {
+
+// ---------------------------
+// POST: create new user
+// ---------------------------
+export async function POST(req: NextRequest) {
+  const isAdmin = await isAdminUsingCookieClient();
+  if (!isAdmin) return NextResponse.json({ success: false, error: "Forbidden" }, { status: 403 });
+
   try {
-    const isAdmin = await isAdminUsingCookieClient();
-    if (!isAdmin) {
-      return NextResponse.json({ success: false, error: "Forbidden" }, { status: 403 });
-    }
+    const body = await req.json();
+    const { email, password, name, role = "student", roll_no, semester } = body;
 
-    const body = await request.json().catch(() => ({}));
-    const { email, password, role = "student", name } = body ?? {};
-
-    // Basic validation
     if (!email || !password) {
       return NextResponse.json({ success: false, error: "Missing email or password" }, { status: 400 });
     }
@@ -79,50 +73,117 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: false, error: "Invalid role" }, { status: 400 });
     }
 
-    // Create auth user using service-role client
+    // Create Auth user
     const { data: createData, error: createErr } = await supabaseAdmin.auth.admin.createUser({
       email,
       password,
       user_metadata: { role, name },
     });
+    if (createErr) throw createErr;
 
-    if (createErr) {
-      console.error("Error creating auth user:", createErr);
-      return NextResponse.json({ success: false, error: createErr.message }, { status: 500 });
-    }
+    const uid = createData.user?.id;
+    if (!uid) return NextResponse.json({ success: false, error: "Failed to get UID" }, { status: 500 });
 
-    // create row in `users` table (uid references auth.users(id))
-    const uid = createData?.user?.id;
-    if (!uid) {
-      console.warn("createUser returned no uid in data:", createData);
-      return NextResponse.json({ success: true, data: createData }); // created but no uid? return whatever we have
-    }
-
-    const profile = {
-      uid,
-      name: name ?? (email.split("@")[0] || "User"),
-      email,
-      role,
-    };
-
+    // Insert into users table
+    const profile = { uid, name: name ?? email.split("@")[0], email, role };
     const { data: inserted, error: insertErr } = await supabaseAdmin
       .from("users")
       .insert([profile])
       .select()
       .single();
+    if (insertErr) throw insertErr;
 
-    if (insertErr) {
-      // If profile creation fails, it's still useful to inform but the auth user exists.
-      console.error("Created auth user but failed to insert into users table:", insertErr);
-      return NextResponse.json({
-        success: true,
-        data: { authUser: createData?.user, profileInsertError: insertErr.message },
-      }, { status: 201 });
+    // Insert student_details if student
+    let studentDetails = null;
+    if (role === "student") {
+      const { data: sd, error: sdErr } = await supabaseAdmin
+        .from("student_details")
+        .upsert(
+          { student_id: uid, roll_no: roll_no ?? null, semester: semester ?? null },
+          { onConflict: "student_id" }
+        )
+        .select()
+        .single();
+      if (sdErr) console.error("student_details insert failed:", sdErr);
+      studentDetails = sd ?? null;
     }
 
-    return NextResponse.json({ success: true, data: inserted }, { status: 201 });
+    return NextResponse.json({
+      success: true,
+      data: { ...inserted, roll_no: studentDetails?.roll_no ?? "", semester: studentDetails?.semester ?? "" },
+    }, { status: 201 });
+
   } catch (err: any) {
-    console.error("POST /api/admin/users unexpected error:", err);
-    return NextResponse.json({ success: false, error: err?.message ?? "Server error" }, { status: 500 });
+    console.error("POST /api/admin/users error:", err);
+    return NextResponse.json({ success: false, error: err.message ?? "Server error" }, { status: 500 });
+  }
+}
+
+// ---------------------------
+// PUT: update user by ID
+// ---------------------------
+export async function PUT(req: NextRequest, context: { params: { id: string } }) {
+  const isAdmin = await isAdminUsingCookieClient();
+  if (!isAdmin) return NextResponse.json({ success: false, error: "Forbidden" }, { status: 403 });
+
+  try {
+    const { id } = context.params;
+    if (!id) return NextResponse.json({ success: false, error: "User ID is required" }, { status: 400 });
+
+    const body = await req.json();
+    const { name, role, roll_no, semester } = body;
+
+    // Update users table
+    const { data: updatedUser, error: updateErr } = await supabaseAdmin
+      .from("users")
+      .update({ name, role })
+      .eq("uid", id)
+      .select()
+      .single();
+    if (updateErr) throw updateErr;
+
+    // Update student_details if role is student
+    let studentDetails = null;
+    if (role === "student") {
+      const { data: sd, error: sdErr } = await supabaseAdmin
+        .from("student_details")
+        .upsert({ student_id: id, roll_no, semester }, { onConflict: "student_id" })
+        .select()
+        .single();
+      if (sdErr) console.error("student_details upsert failed:", sdErr);
+      studentDetails = sd ?? null;
+    }
+
+    return NextResponse.json({
+      success: true,
+      data: { ...updatedUser, roll_no: studentDetails?.roll_no ?? "", semester: studentDetails?.semester ?? "" },
+    });
+  } catch (err: any) {
+    console.error("PUT /api/admin/users/[id] error:", err);
+    return NextResponse.json({ success: false, error: err.message ?? "Server error" }, { status: 500 });
+  }
+}
+
+// ---------------------------
+// DELETE: remove user by ID
+// ---------------------------
+export async function DELETE(req: NextRequest, context: { params: { id: string } }) {
+  const isAdmin = await isAdminUsingCookieClient();
+  if (!isAdmin) return NextResponse.json({ success: false, error: "Forbidden" }, { status: 403 });
+
+  try {
+    const { id } = context.params;
+    if (!id) return NextResponse.json({ success: false, error: "User ID is required" }, { status: 400 });
+
+    // Delete user and student_details
+    const { error: delErr } = await supabaseAdmin.from("users").delete().eq("uid", id);
+    if (delErr) throw delErr;
+
+    await supabaseAdmin.from("student_details").delete().eq("student_id", id);
+
+    return NextResponse.json({ success: true, message: "User deleted" });
+  } catch (err: any) {
+    console.error("DELETE /api/admin/users/[id] error:", err);
+    return NextResponse.json({ success: false, error: err.message ?? "Server error" }, { status: 500 });
   }
 }

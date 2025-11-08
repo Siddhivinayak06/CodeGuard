@@ -39,6 +39,7 @@ export default function FacultySchedulePage() {
 
   // ------------------- Fetch Data -------------------
   const fetchPracticals = async () => {
+    setLoading(true);
     try {
       const { data, error } = await supabase
         .from("practicals")
@@ -128,10 +129,13 @@ export default function FacultySchedulePage() {
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       <Navbar />
-      <main className="max-w-5xl mx-auto p-6 pt-28">
+      <main className="max-w-6xl mx-auto p-6 pt-28">
         <header className="flex justify-between items-center mb-6">
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Practical Schedule</h1>
-          <button onClick={openCreate} className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition">
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">Practical Schedule</h1>
+          <button
+            onClick={openCreate}
+            className="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition text-lg font-semibold"
+          >
             + Add Practical
           </button>
         </header>
@@ -154,33 +158,59 @@ export default function FacultySchedulePage() {
 
         {/* Practical Form Modal */}
         {modalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center">
-            <div className="absolute inset-0 bg-black/40" onClick={() => setModalOpen(false)} />
-            <div className="relative bg-white dark:bg-gray-900 rounded-lg p-6 w-full max-w-2xl shadow-lg overflow-y-auto max-h-[90vh]">
-              <PracticalForm
-                practical={editingPractical}
-                subjects={subjects}
-                students={students}          // <-- Pass students here
-                supabase={supabase}
-                sampleCode={sampleCode}
-                setSampleCode={setSampleCode}
-                sampleLanguage={sampleLanguage}
-                setSampleLanguage={setSampleLanguage}
-                onClose={() => setModalOpen(false)}
-                onSaved={fetchPracticals}
-              />
-            </div>
-          </div>
+          <div
+  className="fixed top-16 left-0 right-0 bottom-0 z-50 flex flex-col bg-white dark:bg-gray-900 overflow-y-auto"
+>
+  {/* Top bar inside modal */}
+  <div className="flex justify-between items-center p-4 border-b border-gray-300 dark:border-gray-700">
+    <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">
+      {editingPractical ? "Edit Practical" : "Add Practical"}
+    </h2>
+    <button
+      onClick={() => setModalOpen(false)}
+      className="px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700 text-sm"
+    >
+      Close
+    </button>
+  </div>
+
+  {/* Practical Form */}
+  <div className="flex-1 ">
+    <PracticalForm
+      practical={editingPractical}
+      subjects={subjects}
+      students={students} // Pass students
+      supabase={supabase}
+      sampleCode={sampleCode}
+      setSampleCode={setSampleCode}
+      sampleLanguage={sampleLanguage}
+      setSampleLanguage={setSampleLanguage}
+      onClose={() => setModalOpen(false)}
+      onSaved={fetchPracticals}
+    />
+  </div>
+</div>
+
         )}
 
         {/* Student Assignment Modal */}
-        {assignmentModalOpen && selectedPracticalId && (
-          <StudentAssignmentForm
-            practicalId={selectedPracticalId}
-            close={() => setAssignmentModalOpen(false)}
-            refresh={fetchPracticals}
-          />
-        )}
+        {/* Student Assignment Modal */}
+{assignmentModalOpen && selectedPracticalId && (
+   <div
+  className="fixed top-16 left-0 right-0 bottom-0 z-50 flex flex-col bg-white dark:bg-gray-900 overflow-y-auto"
+>
+
+    {/* Assignment Form */}
+    <div className="flex-1 p-6">
+      <StudentAssignmentForm
+        practicalId={selectedPracticalId}
+        close={() => setAssignmentModalOpen(false)}
+        refresh={fetchPracticals}
+      />
+    </div>
+  </div>
+)}
+
       </main>
     </div>
   );
