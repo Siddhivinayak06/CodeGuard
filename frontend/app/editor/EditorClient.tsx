@@ -29,9 +29,17 @@ type TestCaseResult = {
   is_hidden?: boolean;
 };
 
+type UserTestCase = {
+  id: number;
+  input: string;
+  time_limit_ms: number;
+  memory_limit_kb: number;
+  expectedOutput: string;
+};
+
 // ---------------------------
 // Parse freeform description into contest-like sections
-// ---------------------------
+// (unchanged)
 function parseDescriptionToSections(raw: string | undefined) {
   if (!raw) {
     return { sections: [{ title: "Problem Statement", body: "No description available." }] };
@@ -39,7 +47,6 @@ function parseDescriptionToSections(raw: string | undefined) {
 
   const text = raw.replace(/\r\n/g, "\n").trim();
 
-  // Common headings to detect
   const headings = [
     "Problem Statement",
     "Description",
@@ -56,7 +63,6 @@ function parseDescriptionToSections(raw: string | undefined) {
     "Approach",
   ];
 
-  // If explicit labeled headings exist on their own lines, split by them
   const lines = text.split("\n");
   const indices: Array<{ idx: number; label: string }> = [];
   const headingRegex = new RegExp(`^\\s*(${headings.map(h => h.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")})\\s*[:\\-]?\\s*$`, "i");
@@ -77,7 +83,6 @@ function parseDescriptionToSections(raw: string | undefined) {
     return { sections };
   }
 
-  // If keywords exist inline, try to split by them
   const keywordSplit = /(Input(?:\s*Format)?|Output(?:\s*Format)?|Constraints|Sample Input|Sample Output|Explanation)/i;
   if (keywordSplit.test(text)) {
     const parts = text.split(/(Input(?:\s*Format)?|Output(?:\s*Format)?|Constraints|Sample Input|Sample Output|Explanation)/i)
@@ -97,7 +102,6 @@ function parseDescriptionToSections(raw: string | undefined) {
     return { sections };
   }
 
-  // Fallback: split into paragraphs
   const paras = text.split(/\n\s*\n/).map(p => p.trim()).filter(Boolean);
   if (paras.length === 1) return { sections: [{ title: "Problem Statement", body: paras[0] }] };
 
@@ -108,10 +112,9 @@ function parseDescriptionToSections(raw: string | undefined) {
 
 // ---------------------------
 // Small helper to extract example blocks (Sample Input / Output + Explanation)
-// ---------------------------
+// (unchanged)
 function extractExamplesFromText(text?: string) {
   if (!text) return [];
-  // split by paragraphs and try to detect Input/Output pairs
   const parts = text.split(/\n\s*\n/).map(p => p.trim()).filter(Boolean);
   const examples: Array<{ title: string; input?: string; output?: string; explanation?: string; raw?: string }> = [];
 
@@ -156,8 +159,20 @@ export default function EditorClient() {
 
   const practicalId = searchParams?.get("practicalId");
 
-  const [lang, setLang] = useState("python");
-  const [code, setCode] = useState("");
+  // DEFAULT LANGUAGE SET TO JAVA and provide a starter template
+  const javaStarter = `public class Main {
+    public static void main(String[] args) {
+        java.util.Scanner sc = new java.util.Scanner(System.in);
+        // Read all tokens from stdin and print them (example)
+        while (sc.hasNext()) {
+            System.out.println(sc.next());
+        }
+        sc.close();
+    }
+}`;
+
+  const [lang, setLang] = useState("java");
+  const [code, setCode] = useState(javaStarter);
   const [loading, setLoading] = useState(false);
   const { violations, locked } = useProctoring(3);
   const [practical, setPractical] = useState<any>(null);
@@ -169,7 +184,8 @@ export default function EditorClient() {
   const [testCaseResults, setTestCaseResults] = useState<TestCaseResult[]>([]);
   const [scoreSummary, setScoreSummary] = useState<{ passed: number; total: number }>({ passed: 0, total: 0 });
   const [submissionStatus, setSubmissionStatus] = useState<"idle" | "pending" | "evaluated" | "submitted">("idle");
-  const [userTestCases, setUserTestCases] = useState([{ id: 1, input: "" }]);
+  // userTestCases now include expectedOutput field by default (keeps parity with server)
+  const [userTestCases, setUserTestCases] = useState<UserTestCase[]>([{ id: 1, input: "", time_limit_ms: 2000, memory_limit_kb: 65536, expectedOutput: "" }]);
 
   // NEW: examples from test_cases table
   const [examplesFromDB, setExamplesFromDB] = useState<Array<{ input: string; output: string }>>([]);
@@ -314,8 +330,6 @@ export default function EditorClient() {
     }
   };
 
-
-
   const handleSubmit = async () => {
     if (!code || !practicalId || !user) return;
 
@@ -400,27 +414,16 @@ export default function EditorClient() {
     <div className="h-screen flex flex-col bg-gradient-to-br from-gray-100 via-white/30 to-gray-200 dark:from-gray-900 dark:via-gray-800/40 dark:to-gray-900 backdrop-blur-sm">
       {/* Header */}
       <div className="h-14 flex items-center justify-between px-6 border-b border-gray-300 dark:border-gray-700 backdrop-blur-md bg-white/30 dark:bg-gray-900/30 shadow-sm">
-        <motion.h1
+        <h1
           role="heading"
           aria-level={1}
-          initial={{ opacity: 0, y: -6, scale: 0.98 }}
-          animate={{ opacity: 1, y: 0, scale: 1 }}
-          transition={{ duration: 0.7, ease: [0.25, 0.8, 0.25, 1] }}
-          whileHover={{
-            scale: 1.03,
-            textShadow:
-              "0 4px 14px rgba(99,102,241,0.18), 0 2px 6px rgba(99,102,241,0.12)",
-          }}
-          whileTap={{ scale: 0.98 }}
-          className="select-none text-1xl md:text-2xl lg:text-3xl font-extrabold tracking-tight 
+          className="select-none text-1xl md:text-2xl lg:text-3xl font-extrabold tracking-tight
              bg-clip-text text-transparent bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500
              animate-gradient-x drop-shadow-sm"
           style={{ WebkitFontSmoothing: 'antialiased' }}
         >
           CodeGuard
-        </motion.h1>
-
-
+        </h1>
 
         <div className="flex items-center gap-4">
           {locked && (
@@ -455,6 +458,7 @@ export default function EditorClient() {
               {/* Badges / meta row */}
               <div className="flex items-center gap-2 mb-4">
                 <div className="text-xs font-semibold px-2 py-1 rounded-md bg-yellow-100 text-yellow-800">Medium</div>
+                <div className="text-xs px-2 py-1 rounded-md bg-gray-100 text-gray-700">Java</div>
               </div>
 
               {/* Problem statement paragraph */}
@@ -513,8 +517,9 @@ export default function EditorClient() {
                   <div className="text-sm text-gray-600 dark:text-gray-400 whitespace-pre-wrap">{constraintSection.body}</div>
                 ) : (
                   <ul className="list-disc list-inside text-sm text-gray-600 dark:text-gray-400">
-                    <li>Input length and ranges will be reasonable for C programs.</li>
+                    <li>Input length and ranges will be reasonable for Java programs.</li>
                     <li>Use efficient algorithms for large inputs (if required).</li>
+                    <li>Mind stack/heap usage — large recursion may cause StackOverflowError in Java.</li>
                   </ul>
                 )}
               </div>
@@ -566,7 +571,7 @@ export default function EditorClient() {
                             variant="outline"
                             size="sm"
                             onClick={() =>
-                              setUserTestCases([...userTestCases, { id: userTestCases.length + 1, input: "" }])
+                              setUserTestCases([...userTestCases, { id: userTestCases.length + 1, input: "", time_limit_ms: 2000, memory_limit_kb: 65536, expectedOutput: "" }])
                             }
                             className="bg-blue-500 hover:bg-blue-600 text-white border-0 shadow-md hover:shadow-lg transition-all"
                           >
@@ -650,9 +655,9 @@ export default function EditorClient() {
                       onChange={(e) => {
                         const checked = e.target.checked;
                         setShowUserTestCases(checked);
-                        // when user hides the test-cases panel, clear entered cases
+                        // when user hides the test-cases panel, reset to a single empty case (with expectedOutput included)
                         if (!checked) {
-                          setUserTestCases([{ id: 1, input: "" }]);
+                          setUserTestCases([{ id: 1, input: "", time_limit_ms: 2000, memory_limit_kb: 65536, expectedOutput: "" }]);
                         }
                       }}
                       className="accent-blue-500 cursor-pointer"

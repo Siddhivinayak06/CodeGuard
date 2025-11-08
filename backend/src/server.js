@@ -20,10 +20,11 @@ wss.on("connection", (ws, req) => {
 
   const sessionId = uuidv4();
   let containerName = `interactive-${sessionId}`;
-  let cProcess = null;       // for C wrapper (pty)
-  let pythonProcess = null;  // for Python wrapper
-  let lang = "python";       // default language
-  let cCodeBuffer = [];      // buffer for C code collection (if needed)
+  let cProcess = null;        // for C wrapper (pty)
+  let pythonProcess = null;   // for Python wrapper (stdio)
+  let javaProcess = null;     // for Java wrapper (stdio)
+  let lang = "python";        // default language
+  let cCodeBuffer = [];       // buffer for C code collection (if needed)
   let isCollectingCode = false;
   let suppressNextOutput = false;
 
@@ -35,22 +36,33 @@ wss.on("connection", (ws, req) => {
     }
   };
 
+  const killIfExists = (proc) => {
+    try {
+      if (proc && typeof proc.kill === "function") {
+        proc.kill();
+      }
+    } catch (e) {
+      // ignore
+    }
+  };
+
+  const removeContainer = (name) => {
+    try {
+      spawn("docker", ["rm", "-f", name]);
+    } catch (e) {
+      // ignore
+    }
+  };
+
   const startContainer = (newLang) => {
     console.log(`Starting container for language: ${newLang}`);
 
     // Cleanup previous processes/containers
     try {
-      if (cProcess) {
-        console.log("Killing previous C process");
-        try { cProcess.kill(); } catch(e){/*ignore*/ }
-        spawn("docker", ["rm", "-f", containerName]);
-        cProcess = null;
-      }
-      if (pythonProcess) {
-        try { pythonProcess.kill(); } catch(e){/*ignore*/ }
-        spawn("docker", ["rm", "-f", containerName]);
-        pythonProcess = null;
-      }
+      killIfExists(cProcess);
+      killIfExists(pythonProcess);
+      killIfExists(javaProcess);
+      removeContainer(containerName);
     } catch (cleanupErr) {
       console.error("Error during cleanup:", cleanupErr);
     }
@@ -146,6 +158,39 @@ wss.on("connection", (ws, req) => {
           suppressNextOutput = false;
         });
       }, 1500);
+    } else if (newLang === "java") {
+      console.log("Launching Java container in detached mode");
+
+      const runArgs = [
+        "run",
+        "--rm",
+        "--name", containerName,
+        "-d",
+        "--network", "none",
+        "-m", "256m",
+        "--cpus=0.5",
+        "--pids-limit", "128",
+        "--tmpfs", "/tmp:exec,rw,size=256m",
+        "codeguard-java",
+        "tail", "-f", "/dev/null"
+      ];
+
+      spawn("docker", runArgs);
+
+      // small delay so container is up before exec
+      setTimeout(() => {
+        javaProcess = spawn("docker", [
+          "exec", "-i", "-u", "runner", containerName,
+          "java", "-jar", "/app/interactive_wrapper.jar"
+        ], { stdio: ["pipe", "pipe", "pipe"] });
+
+        javaProcess.stdout.on("data", data => safeSend(ws, data.toString()));
+        javaProcess.stderr.on("data", data => safeSend(ws, data.toString()));
+
+        javaProcess.on("exit", (code) => {
+          console.log(`Java wrapper exited with code ${code}`);
+        });
+      }, 1200);
     }
 
     // wrapper process will send its own ready messages
@@ -193,6 +238,15 @@ wss.on("connection", (ws, req) => {
           console.log(`[C Input] ${inputData}`);
           cProcess.write(inputData + "\r");
         }
+      } else if (lang === "java" && javaProcess) {
+        if (parsed.type === "execute") {
+          // same pattern as python: send code lines and sentinel
+          safeSend(ws, "\x1b[2J\x1b[H");
+          inputData.split("\n").forEach(line => javaProcess.stdin.write(line + "\n"));
+          javaProcess.stdin.write("__RUN_CODE__\n");
+        } else {
+          javaProcess.stdin.write(inputData + "\n");
+        }
       } else {
         console.warn("No process available for current language yet.");
       }
@@ -203,7 +257,8 @@ wss.on("connection", (ws, req) => {
     console.log("Client disconnected, cleaning up");
     try { if (cProcess) cProcess.kill(); } catch(e){}
     try { if (pythonProcess) pythonProcess.kill(); } catch(e){}
-    spawn("docker", ["rm", "-f", containerName]);
+    try { if (javaProcess) javaProcess.kill(); } catch(e){}
+    removeContainer(containerName);
   });
 
   ws.on("error", (err) => {

@@ -1,7 +1,7 @@
-# Dockerfile.java
 FROM eclipse-temurin:17-jdk
 
 LABEL maintainer="you@example.com"
+
 ENV LANG=C.UTF-8 \
     JAVA_HOME=/usr/local/openjdk \
     PATH="$JAVA_HOME/bin:$PATH" \
@@ -9,23 +9,21 @@ ENV LANG=C.UTF-8 \
     APT_RETRY_COUNT=5 \
     APT_RETRY_DELAY=3
 
-# Helper: retry wrapper for apt-get to tolerate transient network issues
+# Retry helper
 RUN set -eux; \
-    echo '#!/bin/sh' > /usr/local/bin/apt-retry && \
-    echo 'n=$1; shift; i=0; until [ "$i" -ge "$n" ]; do if "$@"; then exit 0; fi; i=$((i+1)); echo "apt: attempt $i failed, retrying in ${APT_RETRY_DELAY}s"; sleep ${APT_RETRY_DELAY}; done; exit 1' >> /usr/local/bin/apt-retry && \
+    echo '#!/bin/sh' > /usr/local/bin/apt-retry; \
+    echo 'n=$1; shift; i=0; while [ "$i" -lt "$n" ]; do if "$@"; then exit 0; fi; i=$((i+1)); echo "apt: attempt $i failed, retrying in ${APT_RETRY_DELAY}s"; sleep ${APT_RETRY_DELAY}; done; exit 1' >> /usr/local/bin/apt-retry; \
     chmod +x /usr/local/bin/apt-retry
 
-# Make sure sources use archive.ubuntu.com if ports.ubuntu.com fails (helps on some platforms)
-# We do this BEFORE apt-get update so that builds on hosts with DNS issues for ports.* still work.
+# Replace ports.* with archive.* if present
 RUN set -eux; \
-    # If sources.list contains ports.ubuntu.com (used on some arches), try to replace with archive.ubuntu.com
-    if grep -q 'ports.ubuntu.com' /etc/apt/sources.list 2>/dev/null || grep -q 'ports.ubuntu.com' /etc/apt/sources.list.d/* 2>/dev/null; then \
+    if grep -q 'ports.ubuntu.com' /etc/apt/sources.list 2>/dev/null || \
+       grep -q 'ports.ubuntu.com' /etc/apt/sources.list.d/* 2>/dev/null; then \
         sed -i.bak -E 's#http://ports.ubuntu.com#http://archive.ubuntu.com#g' /etc/apt/sources.list* || true; \
     fi; \
-    # Show final sources for debugging
     echo "----- apt sources -----"; sed -n '1,200p' /etc/apt/sources.list || true; echo "-----------------------"
 
-# Install a small toolset used by runner scripts (non-interactive)
+# Install minimal toolchain
 RUN set -eux; \
     /usr/local/bin/apt-retry ${APT_RETRY_COUNT} apt-get update; \
     /usr/local/bin/apt-retry ${APT_RETRY_COUNT} apt-get install -y --no-install-recommends \
@@ -38,27 +36,44 @@ RUN set -eux; \
        unzip \
        zip \
        netcat-openbsd \
-       locales \
-    ; \
+       locales; \
     rm -rf /var/lib/apt/lists/*
 
-# Create non-root user "runner" and workspace, create /opt/scripts if absent
+# Create runner user & workspace
 RUN set -eux; \
-  groupadd -r runner \
-  && useradd -r -g runner -m -d /home/runner runner \
-  && mkdir -p /workspace /tmp/workspace /home/runner/.cache /opt/scripts \
-  && chown -R runner:runner /workspace /tmp/workspace /home/runner /opt/scripts
+    groupadd -r runner; \
+    useradd -r -g runner -m -d /home/runner runner; \
+    mkdir -p /workspace /app /tmp/workspace /home/runner/.cache /opt/scripts; \
+    chown -R runner:runner /workspace /tmp/workspace /home/runner /opt/scripts
 
 WORKDIR /workspace
 
-# Optional: if you later add helper scripts into backend/scripts, uncomment:
+# ---------- COPY + BUILD interactive wrapper ----------
+# Copy source into image and compile it during build (as root).
+# Ensure you have InteractiveWrapper.java next to this Dockerfile.
+COPY InteractiveWrapper.java /app/InteractiveWrapper.java
+
+# Compile and package into a runnable jar (Main-Class InteractiveWrapper).
+# We run javac as root here (image build), then create a jar with entrypoint.
+RUN set -eux; \
+    cd /app; \
+    javac InteractiveWrapper.java; \
+    # create jar with Main-Class=InteractiveWrapper
+    jar cfe interactive_wrapper.jar InteractiveWrapper *.class; \
+    # list contents for debug
+    echo "Contents of /app:"; ls -la /app
+
+# Make the /app directory and jar owned by runner, so a non-root runtime can access it
+RUN chown -R runner:runner /app || true
+# -----------------------------------------------------
+
+# Optional: copy helper scripts (uncomment if you have them)
 # COPY --chown=runner:runner ./scripts /opt/scripts
 
-# Make scripts executable (no-op if empty)
 RUN chmod -R a+rx /opt/scripts || true
 
-# Run as non-root for safety
+# Switch to non-root
 USER runner
 
-# Keep container alive so you can exec into it or use it as a runtime image
+# Keep container alive by default (server.js uses docker exec to run wrapper)
 CMD ["tail", "-f", "/dev/null"]

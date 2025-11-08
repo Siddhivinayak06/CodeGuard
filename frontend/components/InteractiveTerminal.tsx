@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useRef, forwardRef, useImperativeHandle } from "react";
-import { Terminal } from "xterm";
-import { FitAddon } from "xterm-addon-fit";
+import { Terminal } from "@xterm/xterm";
+import { FitAddon } from "@xterm/addon-fit";
 import "xterm/css/xterm.css";
 
 interface InteractiveTerminalProps {
@@ -57,13 +57,17 @@ const InteractiveTerminal = forwardRef<
       // 🧠 ResizeObserver — auto-fit terminal when container size changes
     const observer = new ResizeObserver(() => fitAddon.current?.fit());
     observer.observe(terminalRef.current);
-    
-    // Simple fit without retry - let it fail gracefully
-    try {
-      fitAddon.current.fit();
-    } catch (error) {
-      console.error("Initial terminal fit failed:", error);
-    }
+
+    // Delay initial fit to ensure terminal is fully initialized
+    setTimeout(() => {
+      try {
+        if (terminalRef.current && terminalRef.current.offsetWidth > 0 && terminalRef.current.offsetHeight > 0) {
+          fitAddon.current?.fit();
+        }
+      } catch (error) {
+        console.error("Initial terminal fit failed:", error);
+      }
+    }, 200);
 
     // WebSocket connection
     socket.current = new WebSocket(wsEndpoint);

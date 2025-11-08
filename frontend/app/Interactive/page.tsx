@@ -26,11 +26,18 @@ const InteractiveTerminal = dynamic(
   { ssr: false }
 );
 
+// Define language templates
+const LANGUAGE_TEMPLATES = {
+  python: "# Welcome to Python Code Editor\n# Write your Python code here\n\nprint('Hello, World!')\n",
+  java: "public class Main {\n    public static void main(String[] args) {\n        System.out.println(\"Hello, World!\");\n    }\n}",
+  c: "#include <stdio.h>\n\nint main() {\n    printf(\"Hello, World!\\n\");\n    return 0;\n}"
+};
+
 export default function Home() {
   const router = useRouter();
   const mountedRef = useRef<boolean>(true);
   const pathname = usePathname();
-  const [lang, setLang] = useState<string>("python");
+  const [lang, setLang] = useState<"java" | "python" | "c">("python");
   const [code, setCode] = useState<string>(
     "# Welcome to Python Code Editor\n# Write your Python code here\n\nprint('Hello, World!')\n"
   );
@@ -40,6 +47,7 @@ export default function Home() {
   const interactiveTerminalRef = useRef<any>(null);
   const terminalRef = useRef<any>(null);
   const [interactiveOutput, setInteractiveOutput] = useState<string>("");
+  const [terminalMounted, setTerminalMounted] = useState<boolean>(false);
   // Initial mode can be 'Static' or 'Interactive'
   const [currentMode, setCurrentMode] = useState("Static");
 
@@ -95,6 +103,18 @@ export default function Home() {
     if (!supabase) return;
     await supabase.auth.signOut();
     router.push("/"); // redirect to home or login page
+  };
+
+  const handleLangChange = (newLang: "java" | "python" | "c") => {
+    setLang(newLang);
+    const currentTemplate = LANGUAGE_TEMPLATES[lang];
+    const nextTemplate = LANGUAGE_TEMPLATES[newLang];
+
+    // If current editor content is empty OR exactly equal to the previous template, swap to new template.
+    if (!code || code.trim() === "" || code === currentTemplate) {
+      setCode(nextTemplate);
+    }
+    // Otherwise keep user's current code (do not overwrite).
   };
 
   // inside Home component
@@ -179,23 +199,27 @@ export default function Home() {
                 code={code}
                 setCode={setCode}
                 disabled={locked}
-                onDownload={downloadPdf}
-                locked={locked}
-                lang={lang}
-                onLangChange={setLang}
-                showInputToggle={false}
-                terminalRef={terminalRef}
                 onRun={() => {
                   console.log("Run button clicked!"); // <- check this
                   // 🔑 Reset output for fresh run
                   setInteractiveOutput("");
 
-                  if (interactiveTerminalRef.current) {
+                  if (terminalMounted && interactiveTerminalRef.current) {
                     interactiveTerminalRef.current.startExecution(code, lang);
                   } else {
                     console.error("Interactive terminal not ready yet");
                   }
                 }}
+                onDownload={downloadPdf}
+                onSubmit={() => {}}
+                loading={false}
+                locked={locked}
+                lang={lang}
+                onLangChange={handleLangChange}
+                showInputToggle={false}
+                showInput={false}
+                setShowInput={() => {}}
+                terminalRef={terminalRef}
               />
             </ResizablePanel>
 
@@ -212,6 +236,7 @@ export default function Home() {
                 onOutput={(data: string) =>
                   setInteractiveOutput((prev) => prev + data)
                 }
+                onMount={() => setTerminalMounted(true)}
               />
             </ResizablePanel>
           </ResizablePanelGroup>
