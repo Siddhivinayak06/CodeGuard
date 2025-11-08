@@ -321,6 +321,7 @@ export default function EditorClient() {
       }));
 
       setTestCaseResults(results);
+           setShowUserTestCases(false); // ← Add this line to switch to results tab
       console.log("Run results:", results);
     } catch (err: any) {
       console.error(err);
@@ -528,11 +529,11 @@ export default function EditorClient() {
 
           <ResizableHandle className="w-1 bg-gray-200 dark:bg-gray-700 hover:bg-blue-400 dark:hover:bg-blue-600 transition-colors duration-200 rounded" />
 
-{/* RIGHT: Code Editor + Test Cases + Results */}
+{/* RIGHT: Code Editor + Bottom Section */}
           <ResizablePanel defaultSize={60} minSize={40}>
             <ResizablePanelGroup direction="vertical" className="h-full gap-3 rounded-2xl overflow-hidden">
               {/* Code Editor */}
-              <ResizablePanel defaultSize={50} minSize={20}>
+              <ResizablePanel defaultSize={65} minSize={30}>
                 <div className="h-full">
                   <CodeEditor
                     code={code}
@@ -555,172 +556,177 @@ export default function EditorClient() {
 
               <ResizableHandle className="h-1 bg-gray-200 dark:bg-gray-700 hover:bg-blue-400 dark:hover:bg-blue-600 transition-colors duration-200 rounded" />
 
-              {/* User Test Cases Panel */}
-              {showUserTestCases && (
-                <>
-                  <ResizablePanel defaultSize={30} minSize={25} maxSize={50}>
-                    <div className="h-full flex flex-col bg-gradient-to-br from-blue-50/50 to-purple-50/50 dark:from-gray-900/50 dark:to-gray-800/50 backdrop-blur-md rounded-xl border border-blue-200 dark:border-gray-700 shadow-lg">
-                      {/* Fixed Header */}
-                      <div className="flex-shrink-0 p-4 border-b border-blue-200 dark:border-gray-700">
-                        <div className="flex justify-between items-center">
-                          <div>
-                            <h3 className="text-xl font-bold text-gray-800 dark:text-gray-100">Custom Test Cases</h3>
-                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Add your own test inputs</p>
-                          </div>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() =>
-                              setUserTestCases([...userTestCases, { id: userTestCases.length + 1, input: "", time_limit_ms: 2000, memory_limit_kb: 65536, expectedOutput: "" }])
-                            }
-                            className="bg-blue-500 hover:bg-blue-600 text-white border-0 shadow-md hover:shadow-lg transition-all"
-                          >
-                            <span className="text-lg mr-1">+</span> Add Case
-                          </Button>
-                        </div>
-                      </div>
-
-                      {/* Scrollable Test Cases - Only this scrolls */}
-                      <div className="flex-1 overflow-auto p-4">
-                        <div className="space-y-3">
-                          {userTestCases.map((tc, idx) => (
-                            <div
-                              key={idx}
-                              className="group relative p-4 bg-white dark:bg-gray-800 rounded-lg border-2 border-gray-200 dark:border-gray-700 hover:border-blue-400 dark:hover:border-blue-500 transition-all duration-200 shadow-sm hover:shadow-md"
-                            >
-                              <div className="flex justify-between items-center mb-3">
-                                <div className="flex items-center gap-2">
-                                  <div className="w-8 h-8 flex items-center justify-center rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 font-bold text-sm">
-                                    {idx + 1}
-                                  </div>
-                                  <span className="font-semibold text-gray-800 dark:text-gray-200">Test Case {idx + 1}</span>
-                                </div>
-                                {userTestCases.length > 1 && (
-                                  <button
-                                    className="opacity-0 group-hover:opacity-100 transition-opacity text-xs px-3 py-1 rounded-md bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 hover:bg-red-200 dark:hover:bg-red-900/50 font-medium"
-                                    onClick={() =>
-                                      setUserTestCases(userTestCases.filter((_, i) => i !== idx))
-                                    }
-                                  >
-                                    Remove
-                                  </button>
-                                )}
-                              </div>
-
-                              <label className="block text-xs font-bold mb-2 text-gray-600 dark:text-gray-400 uppercase tracking-wide">Input</label>
-                              <textarea
-                                className="w-full p-3 rounded-md border-2 border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-900 text-sm text-gray-800 dark:text-gray-200 font-mono focus:border-blue-500 dark:focus:border-blue-400 focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-900/50 outline-none transition-all resize-none"
-                                rows={2}
-                                placeholder="Enter test input..."
-                                value={tc.input}
-                                onChange={(e) => {
-                                  const newCases = [...userTestCases];
-                                  newCases[idx].input = e.target.value;
-                                  setUserTestCases(newCases);
-                                }}
-                              />
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  </ResizablePanel>
-                  <ResizableHandle className="h-1 bg-gray-200 dark:bg-gray-700 hover:bg-blue-400 dark:hover:bg-blue-600 transition-colors duration-200 rounded" />
-                </>
-              )}
-
-              {/* Test Case Results - LEETCODE STYLE */}
-              <ResizablePanel defaultSize={25} minSize={15}>
-                <div className="h-full overflow-auto p-4 bg-white/10 dark:bg-gray-900/30 backdrop-blur-md rounded-xl border border-gray-300 dark:border-gray-700">
-                  <div className="flex justify-between items-center mb-4">
-                    <div>
-                      <h3 className="text-xl font-semibold text-gray-800 dark:text-gray-200">Test Case Results</h3>
-                      <div className="text-sm text-gray-500 dark:text-gray-400">{passedCount} passed • {totalCount} total</div>
-                    </div>
-
-                    {/* Progress bar similar to LeetCode */}
-                    <div className="w-56">
-                      <div className="bg-gray-200 dark:bg-gray-700 rounded-full h-2 overflow-hidden">
-                        <div className="h-2 rounded-full" style={{ width: `${passPercent}%`, backgroundColor: passPercent === 100 ? '#16a34a' : '#6366f1' }} />
-                      </div>
-                      <div className="text-xs text-right text-gray-500 mt-1">{passPercent}%</div>
-                    </div>
+              {/* Bottom Section - Tabs like LeetCode */}
+              <ResizablePanel defaultSize={35} minSize={20}>
+                <div className="h-full flex flex-col bg-white/10 dark:bg-gray-900/30 backdrop-blur-md rounded-xl border border-gray-300 dark:border-gray-700">
+                  
+                  {/* Tab Headers */}
+                  <div className="flex-shrink-0 flex border-b border-gray-300 dark:border-gray-700">
+                    <button
+                      onClick={() => setShowUserTestCases(false)}
+                      className={`px-4 py-3 text-sm font-medium transition-colors ${
+                        !showUserTestCases
+                          ? 'text-blue-600 dark:text-blue-400 border-b-2 border-blue-600 dark:border-blue-400 bg-blue-50/50 dark:bg-blue-900/20'
+                          : 'text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200'
+                      }`}
+                    >
+                      Testcase Result
+                    </button>
+                    <button
+                      onClick={() => setShowUserTestCases(true)}
+                      className={`px-4 py-3 text-sm font-medium transition-colors ${
+                        showUserTestCases
+                          ? 'text-blue-600 dark:text-blue-400 border-b-2 border-blue-600 dark:border-blue-400 bg-blue-50/50 dark:bg-blue-900/20'
+                          : 'text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200'
+                      }`}
+                    >
+                      Test Cases
+                    </button>
                   </div>
 
-                  {/* Checkbox to toggle User Test Cases */}
-                  <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 mb-4">
-                    <input
-                      type="checkbox"
-                      checked={showUserTestCases}
-                      onChange={(e) => {
-                        const checked = e.target.checked;
-                        setShowUserTestCases(checked);
-                        // when user hides the test-cases panel, reset to a single empty case (with expectedOutput included)
-                        if (!checked) {
-                          setUserTestCases([{ id: 1, input: "", time_limit_ms: 2000, memory_limit_kb: 65536, expectedOutput: "" }]);
-                        }
-                      }}
-                      className="accent-blue-500 cursor-pointer"
-                    />
+                  {/* Tab Content */}
+                  <div className="flex-1 overflow-auto">
+                    
+                    {/* Test Case Results Tab */}
+                    {!showUserTestCases && (
+                      <div className="h-full p-4">
+                        <div className="flex justify-between items-center mb-4">
+                          <div>
+                            <div className="text-sm text-gray-500 dark:text-gray-400">{passedCount} passed • {totalCount} total</div>
+                          </div>
 
-                    Custom Test Cases
-                  </label>
-
-                  {testCaseResults.length === 0 && (
-                    <div className="text-sm text-gray-500 dark:text-gray-400">Run your test cases to see results here.</div>
-                  )}
-
-                  {testCaseResults.map((r, idx) => {
-                    const isExpanded = !!expandedCases[idx];
-                    const leftBorderClass = r.status === 'passed' ? 'border-l-4 border-green-500' : r.status === 'failed' ? 'border-l-4 border-red-500' : 'border-l-4 border-yellow-400';
-
-                    return (
-                      <div key={idx} className={`mb-4 rounded-lg p-0 overflow-hidden shadow-sm ${leftBorderClass} bg-white/30 dark:bg-gray-800/30 border border-gray-200 dark:border-gray-700`}>
-                        <div className="flex items-center justify-between p-3 cursor-pointer" onClick={() => setExpandedCases(prev => ({ ...prev, [idx]: !prev[idx] }))}>
-                          <div className="flex items-center gap-3">
-                            <div className={`w-10 h-10 flex items-center justify-center rounded-full bg-white/60 dark:bg-black/40 ${r.status === 'passed' ? 'text-green-600' : r.status === 'failed' ? 'text-red-600' : 'text-yellow-600'} font-semibold`}>{idx + 1}</div>
-                            <div>
-                              <div className="text-sm font-medium text-gray-800 dark:text-gray-100">Case {idx + 1} {r.is_hidden ? <span className="text-xs text-gray-500">(hidden)</span> : null}</div>
+                          {/* Progress bar */}
+                          <div className="w-56">
+                            <div className="bg-gray-200 dark:bg-gray-700 rounded-full h-2 overflow-hidden">
+                              <div className="h-2 rounded-full transition-all" style={{ width: `${passPercent}%`, backgroundColor: passPercent === 100 ? '#16a34a' : '#6366f1' }} />
                             </div>
+                            <div className="text-xs text-right text-gray-500 mt-1">{passPercent}%</div>
                           </div>
-
-                          <div className="flex items-center gap-2">
-                            <div className={`text-sm font-semibold ${r.status === 'passed' ? 'text-green-600' : r.status === 'failed' ? 'text-red-600' : 'text-yellow-600'}`}>{r.status.toUpperCase()}</div>
-                          </div>
-
                         </div>
 
-                        {isExpanded && (
-                          <div className="p-3 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900">
-                            <div className="grid grid-cols-2 gap-4">
-                              <div>
-                                <div className="text-xs text-gray-500 mb-1">Input</div>
-                                <pre className="bg-white dark:bg-gray-800 p-3 rounded text-sm font-mono whitespace-pre-wrap">{r.input}</pre>
-                              </div>
-                              <div>
-                                <div className="text-xs text-gray-500 mb-1">Expected</div>
-                                <pre className="bg-white dark:bg-gray-800 p-3 rounded text-sm font-mono whitespace-pre-wrap">{r.expected || '—'}</pre>
-                              </div>
-                            </div>
+                        {testCaseResults.length === 0 && (
+                          <div className="text-sm text-gray-500 dark:text-gray-400">Run your code to see results here.</div>
+                        )}
 
-                            <div className="mt-3">
-                              <div className="text-xs text-gray-500 mb-1">Output</div>
-                              <pre className="bg-white dark:bg-gray-800 p-3 rounded text-sm font-mono whitespace-pre-wrap">{r.stdout}</pre>
+                        {testCaseResults.map((r, idx) => {
+                          const isExpanded = !!expandedCases[idx];
+                          const leftBorderClass = r.status === 'passed' ? 'border-l-4 border-green-500' : r.status === 'failed' ? 'border-l-4 border-red-500' : 'border-l-4 border-yellow-400';
 
-                              {r.error && (
-                                <div className="mt-2 text-sm text-red-500">
-                                  <strong>Error:</strong> {r.error}
+                          return (
+                            <div key={idx} className={`mb-4 rounded-lg p-0 overflow-hidden shadow-sm ${leftBorderClass} bg-white/30 dark:bg-gray-800/30 border border-gray-200 dark:border-gray-700`}>
+                              <div className="flex items-center justify-between p-3 cursor-pointer" onClick={() => setExpandedCases(prev => ({ ...prev, [idx]: !prev[idx] }))}>
+                                <div className="flex items-center gap-3">
+                                  <div className={`w-10 h-10 flex items-center justify-center rounded-full bg-white/60 dark:bg-black/40 ${r.status === 'passed' ? 'text-green-600' : r.status === 'failed' ? 'text-red-600' : 'text-yellow-600'} font-semibold`}>{idx + 1}</div>
+                                  <div>
+                                    <div className="text-sm font-medium text-gray-800 dark:text-gray-100">Case {idx + 1} {r.is_hidden ? <span className="text-xs text-gray-500">(hidden)</span> : null}</div>
+                                  </div>
+                                </div>
+
+                                <div className="flex items-center gap-2">
+                                  <div className={`text-sm font-semibold ${r.status === 'passed' ? 'text-green-600' : r.status === 'failed' ? 'text-red-600' : 'text-yellow-600'}`}>{r.status.toUpperCase()}</div>
+                                </div>
+                              </div>
+
+                              {isExpanded && (
+                                <div className="p-3 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900">
+                                  <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                      <div className="text-xs text-gray-500 mb-1">Input</div>
+                                      <pre className="bg-white dark:bg-gray-800 p-3 rounded text-sm font-mono whitespace-pre-wrap">{r.input}</pre>
+                                    </div>
+                                    <div>
+                                      <div className="text-xs text-gray-500 mb-1">Expected</div>
+                                      <pre className="bg-white dark:bg-gray-800 p-3 rounded text-sm font-mono whitespace-pre-wrap">{r.expected || '—'}</pre>
+                                    </div>
+                                  </div>
+
+                                  <div className="mt-3">
+                                    <div className="text-xs text-gray-500 mb-1">Output</div>
+                                    <pre className="bg-white dark:bg-gray-800 p-3 rounded text-sm font-mono whitespace-pre-wrap">{r.stdout}</pre>
+
+                                    {r.error && (
+                                      <div className="mt-2 text-sm text-red-500">
+                                        <strong>Error:</strong> {r.error}
+                                      </div>
+                                    )}
+                                  </div>
                                 </div>
                               )}
-
-                             
                             </div>
-                          </div>
-                        )}
+                          );
+                        })}
                       </div>
-                    );
-                  })}
+                    )}
 
+                    {/* Custom Test Cases Tab */}
+                    {showUserTestCases && (
+                      <div className="h-full flex flex-col bg-gradient-to-br from-blue-50/50 to-purple-50/50 dark:from-gray-900/50 dark:to-gray-800/50">
+                        {/* Fixed Header */}
+                        <div className="flex-shrink-0 p-4 border-b border-blue-200 dark:border-gray-700">
+                          <div className="flex justify-between items-center">
+                            <div>
+                              <p className="text-sm text-gray-600 dark:text-gray-400">Add your own test inputs</p>
+                            </div>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() =>
+                                setUserTestCases([...userTestCases, { id: userTestCases.length + 1, input: "", time_limit_ms: 2000, memory_limit_kb: 65536, expectedOutput: "" }])
+                              }
+                              className="bg-blue-500 hover:bg-blue-600 text-white border-0 shadow-md hover:shadow-lg transition-all"
+                            >
+                              <span className="text-lg mr-1">+</span> Add Case
+                            </Button>
+                          </div>
+                        </div>
+
+                        {/* Scrollable Test Cases */}
+                        <div className="flex-1 overflow-auto p-4">
+                          <div className="space-y-3">
+                            {userTestCases.map((tc, idx) => (
+                              <div
+                                key={idx}
+                                className="group relative p-4 bg-white dark:bg-gray-800 rounded-lg border-2 border-gray-200 dark:border-gray-700 hover:border-blue-400 dark:hover:border-blue-500 transition-all duration-200 shadow-sm hover:shadow-md"
+                              >
+                                <div className="flex justify-between items-center mb-3">
+                                  <div className="flex items-center gap-2">
+                                    <div className="w-8 h-8 flex items-center justify-center rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 font-bold text-sm">
+                                      {idx + 1}
+                                    </div>
+                                    <span className="font-semibold text-gray-800 dark:text-gray-200">Case {idx + 1}</span>
+                                  </div>
+                                  {userTestCases.length > 1 && (
+                                    <button
+                                      className="opacity-0 group-hover:opacity-100 transition-opacity text-xs px-3 py-1 rounded-md bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 hover:bg-red-200 dark:hover:bg-red-900/50 font-medium"
+                                      onClick={() =>
+                                        setUserTestCases(userTestCases.filter((_, i) => i !== idx))
+                                      }
+                                    >
+                                      Remove
+                                    </button>
+                                  )}
+                                </div>
+
+                                <label className="block text-xs font-bold mb-2 text-gray-600 dark:text-gray-400 uppercase tracking-wide">Input</label>
+                                <textarea
+                                  className="w-full p-3 rounded-md border-2 border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-900 text-sm text-gray-800 dark:text-gray-200 font-mono focus:border-blue-500 dark:focus:border-blue-400 focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-900/50 outline-none transition-all resize-none"
+                                  rows={3}
+                                  placeholder="Enter test input..."
+                                  value={tc.input}
+                                  onChange={(e) => {
+                                    const newCases = [...userTestCases];
+                                    newCases[idx].input = e.target.value;
+                                    setUserTestCases(newCases);
+                                  }}
+                                />
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                  </div>
                 </div>
               </ResizablePanel>
 
