@@ -4,7 +4,7 @@ import { GeistMono } from 'geist/font/mono'
 import { Analytics } from '@vercel/analytics/next'
 import './globals.css'
 import { ThemeProvider } from "@/components/theme-provider";
-
+import { SpeedInsights } from "@vercel/speed-insights/next"
 
 export const metadata: Metadata = {
   title: "CodeGuard – Secure Python Editor",
@@ -31,6 +31,7 @@ export default function RootLayout({
           {/* ✅ Wrap whole app with AuthProvider */}
             <div className="h-full flex flex-col">
               {children}
+              <SpeedInsights/>
             </div>
         </ThemeProvider>
         {process.env.VERCEL && <Analytics />}
