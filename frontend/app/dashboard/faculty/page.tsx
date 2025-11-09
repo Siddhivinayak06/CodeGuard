@@ -13,7 +13,7 @@ import PracticalForm from "../../faculty/components/PracticalForm";
 const CodeMirror = dynamic(() => import("@uiw/react-codemirror"), { ssr: false });
 
 // ---------------------- Types ----------------------
-type Subject = { id: number; subject_name: string };
+type Subject = { id: number; subject_name: string; faculty_id?: string };
 type Practical = {
   id: number;
   subject_id: number;
@@ -206,7 +206,7 @@ function CalendarPanel({
           components={{
             DayButton: ({ day, ...props }) => {
               const date = day.date;
-              if (!(date instanceof Date) || isNaN(date.getTime())) return null;
+              if (!(date instanceof Date) || isNaN(date.getTime())) return <></>;
 
               const iso = date.toISOString().slice(0, 10);
               const events = eventsByDate.get(iso) ?? [];
@@ -288,36 +288,80 @@ export default function FacultyDashboardPage() {
   const [sampleCode, setSampleCode] = useState<string>("");
   const [sampleLanguage, setSampleLanguage] = useState<string>("c");
 
+  // Fetch authenticated user, then faculty subjects & practicals for those subjects
   useEffect(() => {
-    const fetchUser = async () => {
+    const init = async () => {
+      // get user
       const { data, error } = await supabase.auth.getUser();
-      if (error || !data.user) return router.push("/auth/login");
+      if (error || !data.user) {
+        router.push("/auth/login");
+        return;
+      }
       setUser(data.user);
       setLoading(false);
-    };
-    fetchUser();
-  }, [router, supabase]);
 
-  useEffect(() => {
-    const fetchSubjects = async () => {
-      const { data, error } = await supabase.from("subjects").select("*");
-      if (!error && data) setSubjects(data as Subject[]);
-    };
-    fetchSubjects();
-  }, [supabase]);
+      // fetch subjects for this faculty only
+      const { data: subjData, error: subjErr } = await supabase
+        .from("subjects")
+        .select("*")
+        .eq("faculty_id", data.user.id);
 
+      if (!subjErr && subjData) {
+        setSubjects(subjData as Subject[]);
+      } else {
+        setSubjects([]);
+        console.error("Failed to fetch subjects for faculty:", subjErr);
+      }
+
+      // if faculty has subjects, fetch practicals for those subject ids
+      try {
+        const subjectIds = (subjData ?? []).map((s: any) => s.id);
+        if (subjectIds.length === 0) {
+          setPracticals([]);
+        } else {
+          const { data: pracData, error: pracErr } = await supabase
+            .from("practicals")
+            .select("*")
+            .in("subject_id", subjectIds)
+            .order("deadline", { ascending: true });
+
+          if (!pracErr && pracData) {
+            setPracticals(pracData as Practical[]);
+          } else {
+            setPracticals([]);
+            console.error("Failed to fetch practicals:", pracErr);
+          }
+        }
+      } catch (e) {
+        console.error("Error fetching practicals:", e);
+        setPracticals([]);
+      }
+    };
+
+    init();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [supabase, router]);
+
+  // helper to refresh practicals (keeps subject filter)
   const fetchPracticals = async () => {
     if (!user) return;
+    const subjectIds = subjects.map((s) => s.id);
+    if (subjectIds.length === 0) {
+      setPracticals([]);
+      return;
+    }
     const { data, error } = await supabase
       .from("practicals")
       .select("*")
+      .in("subject_id", subjectIds)
       .order("deadline", { ascending: true });
-    if (!error && data) setPracticals(data as Practical[]);
-  };
 
-  useEffect(() => {
-    if (user) fetchPracticals();
-  }, [user]);
+    if (!error && data) setPracticals(data as Practical[]);
+    else {
+      console.error("Failed to refresh practicals:", error);
+      setPracticals([]);
+    }
+  };
 
   const eventsByDate = useMemo(() => {
     const map = new Map<string, Practical[]>();
@@ -425,7 +469,9 @@ export default function FacultyDashboardPage() {
                 ) : (
                   <div className="space-y-3">
                     {practicals.map((p) => {
-                      const subj = subjects.find((s) => s.id === p.subject_id)?.subject_name || "Unknown";
+                      // robust id compare in case one side is string
+                      const subjObj = subjects.find((s) => String(s.id) === String(p.subject_id));
+                      const subj = subjObj ? subjObj.subject_name : "Unknown";
                       return <PracticalCard key={p.id} practical={p} subject={subj} onEdit={openEdit} onDelete={deletePractical} />;
                     })}
                   </div>

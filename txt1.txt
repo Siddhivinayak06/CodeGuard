@@ -81,14 +81,18 @@ export default function PracticalForm({
   const [error, setError] = useState<string | null>(null);
 
   const { theme } = useTheme();
-  const supabaseClient = createClient();
 
   // ---------------------- Effects ----------------------
   useEffect(() => {
     if (practical) {
       setForm({ ...practical, deadline: practical.deadline.slice(0, 16) });
-      supabase.from("test_cases").select("*").eq("practical_id", practical.id).then(({ data }) => {
-        if (data && data.length > 0) setTestCases(data);
+      supabase.from("test_cases").select("*").eq("practical_id", practical.id).then(({ data, error }) => {
+        if (error) {
+          console.error("Error fetching test cases:", error);
+          setError("Failed to load test cases.");
+        } else if (data && data.length > 0) {
+          setTestCases(data);
+        }
       });
       setAssignmentDeadline(practical.deadline.slice(0, 16));
     }
@@ -98,7 +102,7 @@ export default function PracticalForm({
     const fetchStudents = async () => {
       setError(null);
       try {
-        const { data, error } = await supabaseClient
+        const { data, error } = await supabase
           .from("users")
           .select("uid, name, email")
           .eq("role", "student");
@@ -111,7 +115,7 @@ export default function PracticalForm({
       }
     };
     fetchStudents();
-  }, [supabaseClient]);
+  }, [supabase]);
 
   // ---------------------- Handlers ----------------------
   const handleInput = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
@@ -197,6 +201,9 @@ export default function PracticalForm({
         const tcsToInsert = testCases.map((tc) => ({ practical_id: practicalId, ...tc }));
         await supabase.from("test_cases").insert(tcsToInsert);
       }
+
+      // Update form.id to the new practicalId for subsequent operations
+      setForm(prev => ({ ...prev, id: practicalId }));
 
       onSaved();
     } catch (err) {

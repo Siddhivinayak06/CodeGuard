@@ -8,7 +8,7 @@ import PracticalList from "../components/PracticalList";
 import StudentAssignmentForm from "../components/StudentAssignmentForm";
 
 // ---------------------- Types ----------------------
-type Subject = { id: number; subject_name: string };
+type Subject = { id: number; subject_name: string; faculty_id?: string };
 type Practical = {
   id: number;
   subject_id: number;
@@ -18,8 +18,79 @@ type Practical = {
   deadline: string;
   max_marks: number;
 };
-type Student = { id: number; name: string };
+type Student = { id: string; name: string };
 
+// ---------------------- Icons ----------------------
+const PlusIcon = () => (
+  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+  </svg>
+);
+
+const CloseIcon = () => (
+  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+  </svg>
+);
+
+const SpinnerIcon = () => (
+  <svg className="animate-spin h-8 w-8 text-blue-600" fill="none" viewBox="0 0 24 24">
+    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+  </svg>
+);
+
+const AlertIcon = () => (
+  <svg className="w-12 h-12 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+  </svg>
+);
+
+const CalendarIcon = () => (
+  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+  </svg>
+);
+
+// ---------------------- Loading State ----------------------
+function LoadingState() {
+  return (
+    <div className="flex flex-col items-center justify-center py-20">
+      <SpinnerIcon />
+      <p className="mt-4 text-lg font-medium text-gray-700 dark:text-gray-300">
+        Loading practicals...
+      </p>
+      <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+        Please wait while we fetch your data
+      </p>
+    </div>
+  );
+}
+
+// ---------------------- Error State ----------------------
+function ErrorState({ message }: { message: string }) {
+  return (
+    <div className="flex flex-col items-center justify-center py-20 px-4">
+      <div className="p-4 bg-red-50 dark:bg-red-900/20 rounded-full">
+        <AlertIcon />
+      </div>
+      <h3 className="mt-6 text-xl font-bold text-gray-900 dark:text-white">
+        Oops! Something went wrong
+      </h3>
+      <p className="mt-2 text-center text-gray-600 dark:text-gray-400 max-w-md">
+        {message}
+      </p>
+      <button
+        onClick={() => window.location.reload()}
+        className="mt-6 px-6 py-3 bg-red-600 hover:bg-red-700 text-white font-semibold rounded-lg shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 transition-all duration-200"
+      >
+        Try Again
+      </button>
+    </div>
+  );
+}
+
+// ---------------------- Main Component ----------------------
 export default function FacultySchedulePage() {
   const supabase = useMemo(() => createClient(), []);
   const [practicals, setPracticals] = useState<Practical[]>([]);
@@ -40,16 +111,61 @@ export default function FacultySchedulePage() {
   // ------------------- Fetch Data -------------------
   const fetchPracticals = async () => {
     setLoading(true);
+    setError(null);
     try {
+      const {
+        data: { user },
+        error: userErr,
+      } = await supabase.auth.getUser();
+
+      if (userErr) {
+        console.error("Failed to get user:", userErr);
+        setError("Failed to get authenticated user.");
+        setPracticals([]);
+        return;
+      }
+      if (!user) {
+        setError("No authenticated user found.");
+        setPracticals([]);
+        return;
+      }
+
+      const { data: facultySubjects, error: subjErr } = await supabase
+        .from("subjects")
+        .select("id, subject_name")
+        .eq("faculty_id", user.id);
+
+      if (subjErr) {
+        console.error("Failed to fetch subjects for faculty:", subjErr);
+        setError("Failed to load subjects.");
+        setPracticals([]);
+        return;
+      }
+
+      const subjectIds = (facultySubjects ?? []).map((s: any) => s.id);
+
+      if (subjectIds.length === 0) {
+        setPracticals([]);
+        return;
+      }
+
       const { data, error } = await supabase
         .from("practicals")
         .select("*")
+        .in("subject_id", subjectIds)
         .order("deadline", { ascending: true });
-      if (error) setError("Failed to load practicals.");
-      else setPracticals(data ?? []);
+
+      if (error) {
+        console.error("Failed to fetch practicals:", error);
+        setError("Failed to load practicals.");
+        setPracticals([]);
+      } else {
+        setPracticals(data ?? []);
+      }
     } catch (err) {
-      console.error(err);
+      console.error("Unexpected error in fetchPracticals:", err);
       setError("Unexpected error occurred.");
+      setPracticals([]);
     } finally {
       setLoading(false);
     }
@@ -57,10 +173,30 @@ export default function FacultySchedulePage() {
 
   const fetchSubjects = async () => {
     try {
-      const { data, error } = await supabase.from("subjects").select("*");
-      if (!error && data) setSubjects(data as Subject[]);
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (!user) {
+        setSubjects([]);
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from("subjects")
+        .select("*")
+        .eq("faculty_id", user.id);
+
+      if (error) {
+        console.error("Failed to fetch subjects:", error);
+        setSubjects([]);
+        return;
+      }
+
+      if (data) setSubjects(data as Subject[]);
     } catch (err) {
-      console.error(err);
+      console.error("Unexpected error in fetchSubjects:", err);
+      setSubjects([]);
     }
   };
 
@@ -68,13 +204,28 @@ export default function FacultySchedulePage() {
     try {
       const { data, error } = await supabase
         .from("users")
-        .select("id, name")
+        .select("uid, name, role")
         .eq("role", "student");
 
-      if (!error && data) setStudents(data as Student[]);
-      else console.error("Failed to fetch students:", error);
+      if (error) {
+        console.error("Failed to fetch students:", error, error?.message ?? null);
+        setStudents([]);
+        return;
+      }
+
+      if (!data) {
+        setStudents([]);
+        return;
+      }
+
+      const mapped = (data as any[])
+        .filter((u) => u && u.uid)
+        .map((u) => ({ id: String(u.uid), name: u.name }));
+
+      setStudents(mapped);
     } catch (err) {
-      console.error(err);
+      console.error("Unexpected error fetching students:", err);
+      setStudents([]);
     }
   };
 
@@ -82,6 +233,7 @@ export default function FacultySchedulePage() {
     fetchPracticals();
     fetchSubjects();
     fetchStudents();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // ------------------- Modal Handlers -------------------
@@ -95,7 +247,6 @@ export default function FacultySchedulePage() {
   const openEdit = async (p: Practical) => {
     setEditingPractical(p);
 
-    // Fetch latest reference code for this practical
     const { data: refs, error } = await supabase
       .from("reference_codes")
       .select("*")
@@ -121,96 +272,195 @@ export default function FacultySchedulePage() {
   const deletePractical = async (id: number) => {
     if (!confirm("Delete this practical?")) return;
     const { error } = await supabase.from("practicals").delete().eq("id", id);
-    if (error) console.error(error);
-    fetchPracticals();
+    if (error) {
+      console.error("Failed to delete practical:", error);
+    } else {
+      fetchPracticals();
+    }
   };
 
   // ------------------- Render -------------------
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-blue-50/30 to-purple-50/20 dark:from-gray-900 dark:via-gray-900 dark:to-gray-800">
       <Navbar />
-      <main className="max-w-6xl mx-auto p-6 pt-28">
-        <header className="flex justify-between items-center mb-6">
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">Practical Schedule</h1>
-          <button
-            onClick={openCreate}
-            className="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition text-lg font-semibold"
-          >
-            + Add Practical
-          </button>
-        </header>
+      
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-24 pb-12">
+        {/* Header Section */}
+        <div className="mb-8">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div className="flex items-center gap-4">
+              <div className="p-3 bg-gradient-to-br from-blue-600 to-purple-600 rounded-xl shadow-lg">
+                <CalendarIcon />
+              </div>
+              <div>
+                <h1 className="text-3xl sm:text-4xl font-bold bg-gradient-to-r from-gray-900 via-blue-900 to-purple-900 dark:from-white dark:via-blue-200 dark:to-purple-200 bg-clip-text text-transparent">
+                  Practical Schedule
+                </h1>
+                <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+                  Manage and organize your practical assignments
+                </p>
+              </div>
+            </div>
 
-        {loading ? (
-          <p className="text-center text-gray-500">Loading practicals...</p>
-        ) : error ? (
-          <p className="text-center text-red-500">{error}</p>
-        ) : practicals.length === 0 ? (
-          <p className="text-center text-gray-500">No practicals scheduled yet.</p>
-        ) : (
-          <PracticalList
-            practicals={practicals}
-            subjects={subjects}
-            onEdit={openEdit}
-            onAssign={openAssign}
-            onDelete={deletePractical}
-          />
-        )}
+            <button
+              onClick={openCreate}
+              className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 transition-all duration-200"
+            >
+              <PlusIcon />
+              <span>Add Practical</span>
+            </button>
+          </div>
+
+          {/* Stats Bar */}
+          {!loading && !error && (
+            <div className="mt-6 grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm rounded-xl p-4 border border-gray-200 dark:border-gray-700 shadow-sm">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
+                    <svg className="w-5 h-5 text-blue-600 dark:text-blue-400" fill="currentColor" viewBox="0 0 20 20">
+                      <path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z" />
+                      <path fillRule="evenodd" d="M4 5a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v11a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm3 4a1 1 0 000 2h.01a1 1 0 100-2H7zm3 0a1 1 0 000 2h3a1 1 0 100-2h-3zm-3 4a1 1 0 100 2h.01a1 1 0 100-2H7zm3 0a1 1 0 100 2h3a1 1 0 100-2h-3z" clipRule="evenodd" />
+                    </svg>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-600 dark:text-gray-400">Total Practicals</p>
+                    <p className="text-2xl font-bold text-gray-900 dark:text-white">{practicals.length}</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm rounded-xl p-4 border border-gray-200 dark:border-gray-700 shadow-sm">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-emerald-100 dark:bg-emerald-900/30 rounded-lg">
+                    <svg className="w-5 h-5 text-emerald-600 dark:text-emerald-400" fill="currentColor" viewBox="0 0 20 20">
+                      <path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zM17 6a3 3 0 11-6 0 3 3 0 016 0zM12.93 17c.046-.327.07-.66.07-1a6.97 6.97 0 00-1.5-4.33A5 5 0 0119 16v1h-6.07zM6 11a5 5 0 015 5v1H1v-1a5 5 0 015-5z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-600 dark:text-gray-400">Total Students</p>
+                    <p className="text-2xl font-bold text-gray-900 dark:text-white">{students.length}</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm rounded-xl p-4 border border-gray-200 dark:border-gray-700 shadow-sm">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-purple-100 dark:bg-purple-900/30 rounded-lg">
+                    <svg className="w-5 h-5 text-purple-600 dark:text-purple-400" fill="currentColor" viewBox="0 0 20 20">
+                      <path d="M10.394 2.08a1 1 0 00-.788 0l-7 3a1 1 0 000 1.84L5.25 8.051a.999.999 0 01.356-.257l4-1.714a1 1 0 11.788 1.838L7.667 9.088l1.94.831a1 1 0 00.787 0l7-3a1 1 0 000-1.838l-7-3zM3.31 9.397L5 10.12v4.102a8.969 8.969 0 00-1.05-.174 1 1 0 01-.89-.89 11.115 11.115 0 01.25-3.762zM9.3 16.573A9.026 9.026 0 007 14.935v-3.957l1.818.78a3 3 0 002.364 0l5.508-2.361a11.026 11.026 0 01.25 3.762 1 1 0 01-.89.89 8.968 8.968 0 00-5.35 2.524 1 1 0 01-1.4 0zM6 18a1 1 0 001-1v-2.065a8.935 8.935 0 00-2-.712V17a1 1 0 001 1z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-600 dark:text-gray-400">Subjects</p>
+                    <p className="text-2xl font-bold text-gray-900 dark:text-white">{subjects.length}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Content Section */}
+        <div className="bg-white/60 dark:bg-gray-900/40 backdrop-blur-sm rounded-2xl border border-gray-200 dark:border-gray-700 shadow-lg p-6">
+          {loading ? (
+            <LoadingState />
+          ) : error ? (
+            <ErrorState message={error} />
+          ) : (
+            <PracticalList
+              practicals={practicals}
+              subjects={subjects}
+              onEdit={openEdit}
+              onAssign={openAssign}
+              onDelete={deletePractical}
+            />
+          )}
+        </div>
 
         {/* Practical Form Modal */}
         {modalOpen && (
-          <div
-  className="fixed top-16 left-0 right-0 bottom-0 z-50 flex flex-col bg-white dark:bg-gray-900 overflow-y-auto"
->
-  {/* Top bar inside modal */}
-  <div className="flex justify-between items-center p-4 border-b border-gray-300 dark:border-gray-700">
-    <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">
-      {editingPractical ? "Edit Practical" : "Add Practical"}
-    </h2>
-    <button
-      onClick={() => setModalOpen(false)}
-      className="px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700 text-sm"
-    >
-      Close
-    </button>
-  </div>
+          <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/50 backdrop-blur-sm overflow-y-auto pt-16 pb-8">
+            <div className="w-full max-w-5xl mx-4 bg-white dark:bg-gray-900 rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-700 animate-in fade-in slide-in-from-top-4 duration-300">
+              {/* Modal Header */}
+              <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-gradient-to-br from-blue-600 to-purple-600 rounded-lg">
+                    {editingPractical ? (
+                      <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                      </svg>
+                    ) : (
+                      <PlusIcon />
+                    )}
+                  </div>
+                  <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
+                    {editingPractical ? "Edit Practical" : "Create New Practical"}
+                  </h2>
+                </div>
+                <button
+                  onClick={() => setModalOpen(false)}
+                  className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
+                  title="Close"
+                >
+                  <CloseIcon />
+                </button>
+              </div>
 
-  {/* Practical Form */}
-  <div className="flex-1 ">
-    <PracticalForm
-      practical={editingPractical}
-      subjects={subjects}
-      students={students} // Pass students
-      supabase={supabase}
-      sampleCode={sampleCode}
-      setSampleCode={setSampleCode}
-      sampleLanguage={sampleLanguage}
-      setSampleLanguage={setSampleLanguage}
-      onClose={() => setModalOpen(false)}
-      onSaved={fetchPracticals}
-    />
-  </div>
-</div>
-
+              {/* Modal Content */}
+              <div className="max-h-[calc(100vh-12rem)] overflow-y-auto">
+                <PracticalForm
+                  practical={editingPractical}
+                  subjects={subjects}
+                  students={students}
+                  supabase={supabase}
+                  sampleCode={sampleCode}
+                  setSampleCode={setSampleCode}
+                  sampleLanguage={sampleLanguage}
+                  setSampleLanguage={setSampleLanguage}
+                  onClose={() => setModalOpen(false)}
+                  onSaved={fetchPracticals}
+                />
+              </div>
+            </div>
+          </div>
         )}
 
         {/* Student Assignment Modal */}
-        {/* Student Assignment Modal */}
-{assignmentModalOpen && selectedPracticalId && (
-   <div
-  className="fixed top-16 left-0 right-0 bottom-0 z-50 flex flex-col bg-white dark:bg-gray-900 overflow-y-auto"
->
+        {assignmentModalOpen && selectedPracticalId && (
+          <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/50 backdrop-blur-sm overflow-y-auto pt-16 pb-8">
+            <div className="w-full max-w-4xl mx-4 bg-white dark:bg-gray-900 rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-700 animate-in fade-in slide-in-from-top-4 duration-300">
+              {/* Modal Header */}
+              <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-gradient-to-br from-emerald-600 to-blue-600 rounded-lg">
+                    <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+                    </svg>
+                  </div>
+                  <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
+                    Assign to Students
+                  </h2>
+                </div>
+                <button
+                  onClick={() => setAssignmentModalOpen(false)}
+                  className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
+                  title="Close"
+                >
+                  <CloseIcon />
+                </button>
+              </div>
 
-    {/* Assignment Form */}
-    <div className="flex-1 p-6">
-      <StudentAssignmentForm
-        practicalId={selectedPracticalId}
-        close={() => setAssignmentModalOpen(false)}
-        refresh={fetchPracticals}
-      />
-    </div>
-  </div>
-)}
-
+              {/* Modal Content */}
+              <div className="max-h-[calc(100vh-12rem)] overflow-y-auto">
+                <StudentAssignmentForm
+                  practicalId={selectedPracticalId}
+                  close={() => setAssignmentModalOpen(false)}
+                  refresh={fetchPracticals}
+                />
+              </div>
+            </div>
+          </div>
+        )}
       </main>
     </div>
   );

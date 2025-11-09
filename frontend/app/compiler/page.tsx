@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState, useMemo } from "react";
 import axios from "axios";
 import { ChevronDown } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import Navbar from "@/components/Navbar";
 import CodeEditor from "@/components/CodeEditor";
 import OutputPane from "@/components/OutputPane";
 import InputPane from "@/components/InputPane";
@@ -32,10 +33,8 @@ export default function EditorPage() {
   const mountedRef = useRef(true);
   const pathname = usePathname();
 
-  // ---- Language templates ----
   const LANGUAGE_TEMPLATES: Record<string, string> = {
     java: `// Java starter template
-// Make sure you have a Main class with a public static void main(String[] args) entrypoint.
 public class Main {
     public static void main(String[] args) {
         System.out.println("Hello, World!");
@@ -55,7 +54,6 @@ int main(void) {
 `,
   };
 
-  // Default to Java as requested
   const [lang, setLang] = useState<"java" | "python" | "c">("java");
   const [code, setCode] = useState<string>(LANGUAGE_TEMPLATES["java"]);
   const [input, setInput] = useState("");
@@ -67,15 +65,10 @@ int main(void) {
   const [showInputToggle, setShowInputToggle] = useState(true);
   const terminalRef = useRef(null);
 
-  const supabase = useMemo(() => {
-    if (typeof window === "undefined") return null;
-    return createClient();
-  }, []);
-
+  const supabase = useMemo(() => createClient(), []);
   const [user, setUser] = useState<User | null>(null);
   const [currentMode, setCurrentMode] = useState("Static");
 
-  // Initialize mode based on current path
   useEffect(() => {
     if (pathname === "/Interactive") setCurrentMode("Interactive");
     else setCurrentMode("Static");
@@ -84,7 +77,6 @@ int main(void) {
   useEffect(() => {
     mountedRef.current = true;
     const fetchUser = async () => {
-      if (!supabase) return;
       try {
         const { data, error } = await supabase.auth.getUser();
         if (error || !data?.user) {
@@ -104,28 +96,22 @@ int main(void) {
   }, [router, supabase]);
 
   const handleModeChange = (mode: "Static" | "Interactive", path: string) => {
-    setCurrentMode(mode); // update dropdown immediately
-    router.push(path); // navigate to new page
+    setCurrentMode(mode);
+    router.push(path);
   };
 
-  // Sign out helper
   const handleSignOut = async () => {
-    if (!supabase) return;
     await supabase.auth.signOut();
-    router.push("/"); // redirect to home or login page
+    router.push("/");
   };
 
-  // If user switches language, only replace code when current code equals the previous template or is empty.
   const handleLangChange = (newLang: "java" | "python" | "c") => {
     setLang(newLang);
     const currentTemplate = LANGUAGE_TEMPLATES[lang];
     const nextTemplate = LANGUAGE_TEMPLATES[newLang];
-
-    // If current editor content is empty OR exactly equal to the previous template, swap to new template.
     if (!code || code.trim() === "" || code === currentTemplate) {
       setCode(nextTemplate);
     }
-    // Otherwise keep user's current code (do not overwrite).
   };
 
   const runCode = async () => {
@@ -161,65 +147,21 @@ int main(void) {
     }
   };
 
-  if (!user) return <div>Loading...</div>;
+  if (!user)
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-gray-50 dark:bg-gray-900">
+        <p className="text-gray-500 dark:text-gray-400 text-lg">Loading...</p>
+      </div>
+    );
 
   return (
-    <div className="h-screen flex flex-col bg-gray-100 dark:bg-gray-900">
-      {/* Header */}
-      <div className="h-12 bg-white dark:bg-gray-800 flex items-center justify-between px-6 border-b border-gray-200 dark:border-gray-700">
-        <div className="flex items-center gap-4">
-          <h1 className="text-xl font-semibold text-gray-800 dark:text-gray-200">
-            Code Editor
-          </h1>
+    <div className="flex flex-col min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-100 dark:from-gray-900 dark:via-gray-950 dark:to-black">
+      {/* Glass Navbar */}
+      <Navbar />
 
-          {/* Mode Selector */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm" className="flex items-center gap-2 text-sm">
-                {currentMode}
-                <ChevronDown className="w-4 h-4" />
-              </Button>
-            </DropdownMenuTrigger>
-
-            <DropdownMenuContent>
-              <DropdownMenuLabel>Select Mode</DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => handleModeChange("Static", "/compiler")}>
-                Static
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => handleModeChange("Interactive", "/Interactive")}>
-                Interactive
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-
-        <div className="flex items-center gap-4">
-          {locked && (
-            <div className="px-3 py-1 text-sm bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 rounded">
-              Session Locked
-            </div>
-          )}
-
-          <div className="text-sm text-gray-600 dark:text-gray-400">
-            Violations:{" "}
-            <span className="text-red-600 dark:text-red-400 font-semibold">
-              {violations}
-            </span>
-            /3
-          </div>
-
-          <Button variant="outline" onClick={handleSignOut}>
-            Sign Out
-          </Button>
-
-          <ModeToggle />
-        </div>
-      </div>
-
-      {/* Rest of your code editor layout... */}
-      <div className="flex-1 p-4">
-        <div className="h-full rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700">
+      {/* Editor Section: fills remaining space, full width and height minus navbar */}
+      <div className="flex-1 pt-16">
+        <div className="h-full w-full rounded-2xl bg-white/40 dark:bg-gray-800/40 backdrop-blur-md shadow-lg overflow-hidden border border-gray-200/50 dark:border-gray-700/50">
           <ResizablePanelGroup direction="vertical" className="h-full">
             <ResizablePanel defaultSize={60} minSize={30}>
               <CodeEditor
@@ -228,7 +170,7 @@ int main(void) {
                 disabled={locked}
                 onRun={runCode}
                 onDownload={downloadPdf}
-                onSubmit={runCode}
+                onSubmit={runCode} // submit still calls runCode (change if needed)
                 loading={loading}
                 locked={locked}
                 lang={lang}
@@ -237,7 +179,10 @@ int main(void) {
                 setShowInput={setShowInput}
                 showInputToggle={showInputToggle}
                 terminalRef={terminalRef}
+                violations={violations}     // new prop to show violation count
+                isFullscreen={true}         // optional: set false if you want readOnly behavior
               />
+
             </ResizablePanel>
 
             <ResizableHandle className="bg-gray-200 dark:bg-gray-700 hover:bg-blue-500 dark:hover:bg-blue-600 transition-colors duration-200" />
