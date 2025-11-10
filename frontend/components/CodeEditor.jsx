@@ -59,7 +59,7 @@ export default function CodeEditor({
     else setCurrentMode("Static");
   }, [pathname]);
   const showModeSection =
-    pathname === "/compiler" || pathname === "/interactive";
+    pathname === "/compiler" || pathname === "/Interactive";
 
   const showToast = (message) => {
     setShowWarning(message);
@@ -71,7 +71,88 @@ export default function CodeEditor({
     const path = mode === "Interactive" ? "/Interactive" : "/compiler";
     router.push(path);
   };
+ useEffect(() => {
+    if (!window.monacoProvidersRegistered) {
+      window.monacoProvidersRegistered = true;
 
+      loader.init().then((monaco) => {
+        // Python completions
+        monaco.languages.registerCompletionItemProvider("python", {
+          triggerCharacters: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ".split(""),
+          provideCompletionItems: (model, position) => {
+            return {
+              suggestions: [
+                { label: "def", kind: monaco.languages.CompletionItemKind.Keyword, insertText: "def", documentation: "Define a function" },
+                { label: "class", kind: monaco.languages.CompletionItemKind.Keyword, insertText: "class", documentation: "Define a class" },
+                { label: "if", kind: monaco.languages.CompletionItemKind.Keyword, insertText: "if", documentation: "If statement" },
+                { label: "elif", kind: monaco.languages.CompletionItemKind.Keyword, insertText: "elif", documentation: "Else if statement" },
+                { label: "else", kind: monaco.languages.CompletionItemKind.Keyword, insertText: "else", documentation: "Else statement" },
+                { label: "for", kind: monaco.languages.CompletionItemKind.Keyword, insertText: "for", documentation: "For loop" },
+                { label: "while", kind: monaco.languages.CompletionItemKind.Keyword, insertText: "while", documentation: "While loop" },
+                { label: "break", kind: monaco.languages.CompletionItemKind.Keyword, insertText: "break", documentation: "Exit the nearest loop" },
+                { label: "continue", kind: monaco.languages.CompletionItemKind.Keyword, insertText: "continue", documentation: "Skip to next loop iteration" },
+                { label: "lambda", kind: monaco.languages.CompletionItemKind.Keyword, insertText: "lambda", documentation: "Anonymous function" },
+                { label: "pass", kind: monaco.languages.CompletionItemKind.Keyword, insertText: "pass", documentation: "Do nothing (placeholder)" },
+                { label: "print", kind: monaco.languages.CompletionItemKind.Function, insertText: "print()", documentation: "Print output" },
+                { label: "len", kind: monaco.languages.CompletionItemKind.Function, insertText: "len()", documentation: "Length of iterable" },
+                { label: "range", kind: monaco.languages.CompletionItemKind.Function, insertText: "range()", documentation: "Generate range" },
+                { label: "input", kind: monaco.languages.CompletionItemKind.Function, insertText: "input()", documentation: "Get user input" },
+                { label: "import math", kind: monaco.languages.CompletionItemKind.Module, insertText: "import math", documentation: "Math module" },
+                { label: "import os", kind: monaco.languages.CompletionItemKind.Module, insertText: "import os", documentation: "OS module" }
+              ]
+            };
+          }
+        });
+
+        // C completions
+        monaco.languages.registerCompletionItemProvider("c", {
+          triggerCharacters: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ#".split(""),
+          provideCompletionItems: (model, position) => {
+            return {
+              suggestions: [
+                { label: "#include <stdio.h>", kind: monaco.languages.CompletionItemKind.Snippet, insertText: "#include <stdio.h>", documentation: "Standard I/O library", filterText: "#" },
+                { label: "#include <stdlib.h>", kind: monaco.languages.CompletionItemKind.Snippet, insertText: "#include <stdlib.h>", documentation: "Standard library", filterText: "#" },
+                { label: "#include <string.h>", kind: monaco.languages.CompletionItemKind.Snippet, insertText: "#include <string.h>", documentation: "String manipulation library", filterText: "#" },
+                { label: "#include <math.h>", kind: monaco.languages.CompletionItemKind.Snippet, insertText: "#include <math.h>", documentation: "Math library", filterText: "#" },
+                { label: "int", kind: monaco.languages.CompletionItemKind.Keyword, insertText: "int", documentation: "Integer data type" },
+                { label: "char", kind: monaco.languages.CompletionItemKind.Keyword, insertText: "char", documentation: "Character data type" },
+                { label: "float", kind: monaco.languages.CompletionItemKind.Keyword, insertText: "float", documentation: "Floating-point data type" },
+                { label: "main", kind: monaco.languages.CompletionItemKind.Function, insertText: "int main() {\\n\\t\\n}", documentation: "Main function" },
+                { label: "for", kind: monaco.languages.CompletionItemKind.Keyword, insertText: "for", documentation: "For loop" },
+                { label: "while", kind: monaco.languages.CompletionItemKind.Keyword, insertText: "while", documentation: "While loop" },
+                { label: "if", kind: monaco.languages.CompletionItemKind.Keyword, insertText: "if", documentation: "If statement" },
+                { label: "else", kind: monaco.languages.CompletionItemKind.Keyword, insertText: "else", documentation: "Else statement" },
+                { label: "printf", kind: monaco.languages.CompletionItemKind.Function, insertText: "printf()", documentation: "Print output" },
+                { label: "scanf", kind: monaco.languages.CompletionItemKind.Function, insertText: "scanf()", documentation: "Read input" },
+                { label: "malloc", kind: monaco.languages.CompletionItemKind.Function, insertText: "malloc()", documentation: "Allocate memory" },
+                { label: "free", kind: monaco.languages.CompletionItemKind.Function, insertText: "free()", documentation: "Free memory" }
+              ]
+            };
+          }
+        });
+
+        // Java completions (lightweight)
+        monaco.languages.registerCompletionItemProvider("java", {
+          triggerCharacters: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ".split(""),
+          provideCompletionItems: (model, position) => {
+            return {
+              suggestions: [
+                { label: "public class", kind: monaco.languages.CompletionItemKind.Keyword, insertText: "public class ", documentation: "Define a public class" },
+                { label: "class", kind: monaco.languages.CompletionItemKind.Keyword, insertText: "class ", documentation: "Define a class" },
+                { label: "public static void main", kind: monaco.languages.CompletionItemKind.Snippet, insertText: "public static void main(String[] args) {\\n\\t\\n}", documentation: "Main method" },
+                { label: "System.out.println", kind: monaco.languages.CompletionItemKind.Function, insertText: "System.out.println()", documentation: "Print line" },
+                { label: "import java.util.*;", kind: monaco.languages.CompletionItemKind.Module, insertText: "import java.util.*;", documentation: "Import utilities" },
+                { label: "String", kind: monaco.languages.CompletionItemKind.Keyword, insertText: "String", documentation: "String type" },
+                { label: "int", kind: monaco.languages.CompletionItemKind.Keyword, insertText: "int", documentation: "Integer type" },
+                { label: "for", kind: monaco.languages.CompletionItemKind.Keyword, insertText: "for (int i = 0; i < ; i++) {\\n\\t\\n}", documentation: "For loop" },
+                { label: "if", kind: monaco.languages.CompletionItemKind.Keyword, insertText: "if () {\\n\\t\\n}", documentation: "If statement" }
+              ]
+            };
+          }
+        });
+      });
+    }
+  }, []);
   const handleEditorMount = (editor) => {
     editorRef.current = editor;
     editor.updateOptions({ contextmenu: false });
@@ -102,8 +183,50 @@ export default function CodeEditor({
         showToast("Clipboard actions are disabled!");
       }
     });
-  };
+    // Disable some actions
+    editor.addAction({
+      id: "editor.action.clipboardCopyWithSyntaxHighlightingAction",
+      label: "Copy with Syntax Highlighting",
+      keybindings: [], // remove any keyboard triggers
+      precondition: null,
+      run: function (ed) {
+        showToast("This command is disabled!");
+        return null;
+      },
+    });
+    editor.addAction({
+      id: "editor.action.pasteAsText",
+      label: "Paste as Text",
+      keybindings: [],
+      precondition: null,
+      run: function (ed) {
+        showToast("This command is disabled!");
+        return null;
+      },
+    });
+    editor.addAction({
+      id: "editor.action.pasteAs",
+      label: "Paste As…",
+      keybindings: [],
+      precondition: null,
+      run: function (ed) {
+        showToast("This command is disabled!");
+        return null;
+      },
+    });
 
+  };
+      const handleMenuClick = (action) => {
+    if (!editorRef.current) return;
+    editorRef.current.focus();
+    if (action === "commandPalette") {
+      editorRef.current.trigger("keyboard", "editor.action.quickCommand");
+    }
+    if (action === "changeAll") {
+      editorRef.current.trigger("keyboard", "editor.action.selectHighlights");
+    }
+    setShowContextMenu(false);
+  };
   const languageLabel = lang === "python" ? "Python" : lang === "java" ? "Java" : "C";
 
   return (
@@ -175,9 +298,8 @@ export default function CodeEditor({
               </div>
             </div>
           )}
-
-
-          {/* Controls: input toggle, run, pdf, submit, mode toggle UI */}
+        
+          {/* Controls: input toggle, run, pdf, submit */}
           <div className="flex items-center gap-2">
             {showInputToggle && (
               <Button
@@ -207,9 +329,6 @@ export default function CodeEditor({
               </Button>
             )}
 
-
-            {/* small ModeToggle control (visual theme toggle or other) */}
-            <ModeToggle />
           </div>
         </div>
       </div>
@@ -244,13 +363,13 @@ export default function CodeEditor({
           >
             <button
               className="block px-4 py-2 w-full text-left hover:bg-gray-100 dark:hover:bg-gray-700 text-sm"
-              onClick={() => editorRef.current?.trigger("keyboard", "editor.action.selectHighlights")}
+              onClick={() => handleMenuClick("changeAll")}
             >
               Change All Occurrences
             </button>
             <button
               className="block px-4 py-2 w-full text-left hover:bg-gray-100 dark:hover:bg-gray-700 text-sm"
-              onClick={() => editorRef.current?.trigger("keyboard", "editor.action.quickCommand")}
+              onClick={() => handleMenuClick("commandPalette")}
             >
               Command Palette
             </button>
