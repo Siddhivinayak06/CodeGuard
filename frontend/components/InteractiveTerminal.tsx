@@ -4,24 +4,26 @@ import { useEffect, useRef, forwardRef, useImperativeHandle } from "react";
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import "@xterm/xterm/css/xterm.css";
+import { FileData } from "./FileExplorer";
 
 interface InteractiveTerminalProps {
   wsUrl?: string;
   fontSize?: number;
   fontFamily?: string;
-    onOutput?: (data: string) => void; // ✅ new prop
+  onOutput?: (data: string) => void; // ✅ new prop
   onMount?: () => void; // ✅ new prop
+  onImage?: (base64: string) => void;
 }
 
 export interface InteractiveTerminalHandle {
-  startExecution: (code: string, lang: string) => void;
-    switchLanguage: (lang: string) => void; // Add this
+  startExecution: (files: FileData[] | string, activeFileOrLang?: string, lang?: string) => void;
+  switchLanguage: (lang: string) => void;
 }
 
 const InteractiveTerminal = forwardRef<
   InteractiveTerminalHandle,
   InteractiveTerminalProps
->(({ wsUrl, fontSize = 16, fontFamily = "monospace", onOutput, onMount  }, ref) => {
+>(({ wsUrl, fontSize = 16, fontFamily = "monospace", onOutput, onMount, onImage }, ref) => {
   const terminalRef = useRef<HTMLDivElement | null>(null);
   const term = useRef<Terminal | null>(null);
   const fitAddon = useRef<FitAddon | null>(null);
@@ -29,7 +31,7 @@ const InteractiveTerminal = forwardRef<
   const inputBuffer = useRef<string>("");
 
   const currentLang = useRef<string>("python"); // default
- 
+
 
   const wsEndpoint = wsUrl || "ws://localhost:5002";
 
@@ -54,7 +56,7 @@ const InteractiveTerminal = forwardRef<
     term.current.loadAddon(fitAddon.current);
     term.current.open(terminalRef.current);
 
-      // 🧠 ResizeObserver — auto-fit terminal when container size changes
+    // 🧠 ResizeObserver — auto-fit terminal when container size changes
     const observer = new ResizeObserver(() => fitAddon.current?.fit());
     observer.observe(terminalRef.current);
 
@@ -93,10 +95,33 @@ const InteractiveTerminal = forwardRef<
         currentLang.current = msg.lang; // store current language for execution
       } else {
         const data = msg.data ?? msg;
-        term.current.write(data.replace(/\r?\n/g, "\r\n"));
-        term.current.scrollToBottom();
-          // ✅ this uses onOutput
-  if (onOutput) onOutput(data);
+
+        // Check for image delimiters
+        const imgStart = "__IMAGE_START__";
+        const imgEnd = "__IMAGE_END__";
+
+        if (data.includes(imgStart) && data.includes(imgEnd)) {
+          const parts = data.split(imgStart);
+          let cleanData = parts[0];
+
+          for (let i = 1; i < parts.length; i++) {
+            const [imgContent, rest] = parts[i].split(imgEnd);
+            if (imgContent && onImage) {
+              onImage(imgContent.trim());
+            }
+            cleanData += rest || "";
+          }
+
+          if (cleanData) {
+            term.current.write(cleanData.replace(/\r?\n/g, "\r\n"));
+            term.current.scrollToBottom();
+            if (onOutput) onOutput(cleanData);
+          }
+        } else {
+          term.current.write(data.replace(/\r?\n/g, "\r\n"));
+          term.current.scrollToBottom();
+          if (onOutput) onOutput(data);
+        }
       }
     };
 
@@ -137,39 +162,55 @@ const InteractiveTerminal = forwardRef<
       observer.disconnect();
       window.removeEventListener("resize", handleResize);
       term.current?.dispose();
-       socket.current?.close();
+      socket.current?.close();
     };
   }, [wsEndpoint, fontSize, fontFamily]);
 
+
   useImperativeHandle(ref, () => ({
-    startExecution: (code: string, lang: string) => {
-      if (socket.current?.readyState === WebSocket.OPEN) {
-        term.current?.clear();
-        inputBuffer.current = "";
+    startExecution: (filesOrCode: FileData[] | string, activeFileOrLang?: string, lang?: string) => {
+      if (!socket.current || socket.current.readyState !== WebSocket.OPEN) {
+        term.current?.write("\r\n❌ WebSocket not connected!\r\n");
+        return;
+      }
 
-        // 1️⃣ Notify server about language change
-        if (lang !== currentLang.current) {
-          socket.current.send(JSON.stringify({ type: "lang", lang }));
-          currentLang.current = lang;
-        }
+      // Determine if this is multi-file or single-file mode
+      const isMultiFile = Array.isArray(filesOrCode);
 
-        // 2️⃣ Send code to execute
-        socket.current.send(JSON.stringify({ type: "execute", code }));
+      if (isMultiFile) {
+        const files = filesOrCode as FileData[];
+        const activeFileName = activeFileOrLang!;
+        const language = lang!;
+
+        // Send all files to the backend
+        files.forEach((file, index) => {
+          const msg = JSON.stringify({
+            type: "code",
+            data: file.content,
+            filename: file.name,
+            isLast: index === files.length - 1,
+            activeFile: file.name === activeFileName
+          });
+          socket.current?.send(msg);
+        });
+
+        term.current?.write(`\r\n🚀 Running ${activeFileName}...\r\n`);
       } else {
-        console.error("WebSocket not connected yet");
+        // Single-file mode (backward compatibility)
+        const code = filesOrCode as string;
+        const language = activeFileOrLang!;
+        const msg = JSON.stringify({ type: "code", data: code });
+        socket.current?.send(msg);
+        term.current?.write(`\r\n🚀 Running code...\r\n`);
       }
     },
-  // Add this new method
-  switchLanguage: (lang: string) => {
-    if (socket.current?.readyState === WebSocket.OPEN && lang !== currentLang.current) {
+    switchLanguage: (newLang: string) => {
+      currentLang.current = newLang;
+      const msg = JSON.stringify({ type: "lang", lang: newLang });
+      socket.current?.send(msg);
       term.current?.clear();
-      inputBuffer.current = "";
-      socket.current.send(JSON.stringify({ type: "lang", lang }));
-      currentLang.current = lang;
-    }
-  },
-    
-
+      term.current?.write(`\r\n📝 Switching to ${newLang}...\r\n`);
+    },
   }));
 
   return (

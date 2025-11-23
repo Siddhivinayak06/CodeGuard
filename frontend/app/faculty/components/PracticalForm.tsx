@@ -7,6 +7,7 @@ import { python } from "@codemirror/lang-python";
 import { oneDark } from "@codemirror/theme-one-dark";
 import { createClient } from "@/lib/supabase/client";
 import { useTheme } from "next-themes";
+import { Sparkles, Info as InfoIcon, Code as CodeIcon, FlaskConical as TestIcon, Plus as PlusIcon, Trash2 as TrashIcon, Users as UsersIcon, FileText, Search as SearchIcon, Check as CheckIcon, Loader2 } from "lucide-react";
 
 // dynamic to avoid SSR issues
 const CodeMirror = dynamic(() => import("@uiw/react-codemirror"), { ssr: false });
@@ -36,6 +37,14 @@ interface Subject {
   semester?: string;
 }
 
+interface Student {
+  uid: string;
+  name: string;
+  email?: string;
+  roll?: string;
+  semester?: string;
+}
+
 interface PracticalFormProps {
   practical: Practical | null;
   subjects: Subject[];
@@ -49,60 +58,7 @@ interface PracticalFormProps {
 }
 
 // ---------------------- Small icons / helpers ----------------------
-const InfoIcon = () => (
-  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-  </svg>
-);
-
-const CodeIcon = () => (
-  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
-  </svg>
-);
-
-const TestIcon = () => (
-  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
-  </svg>
-);
-
-const PlusIcon = () => (
-  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-  </svg>
-);
-
-const TrashIcon = () => (
-  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-  </svg>
-);
-
-const SearchIcon = () => (
-  <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-  </svg>
-);
-
-const CheckIcon = () => (
-  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20" aria-hidden>
-    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-  </svg>
-);
-
-const UsersIcon = () => (
-  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
-  </svg>
-);
-
-const LoadingSpinner = () => (
-  <svg className="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24" aria-hidden>
-    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-  </svg>
-);
+const LoadingSpinner = () => <Loader2 className="animate-spin h-5 w-5" />;
 
 // simple classnames helper
 function cx(...parts: Array<string | false | null | undefined>) {
@@ -138,12 +94,13 @@ export default function PracticalForm({
   ]);
 
   const [step, setStep] = useState<1 | 2>(1);
-  const [students, setStudents] = useState<any[]>([]);
-  const [selectedStudents, setSelectedStudents] = useState<any[]>([]);
+  const [students, setStudents] = useState<Student[]>([]);
+  const [selectedStudents, setSelectedStudents] = useState<Student[]>([]);
   const [assignmentDeadline, setAssignmentDeadline] = useState<string>(form.deadline);
   const [notes, setNotes] = useState("");
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [generatingTests, setGeneratingTests] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const [filters, setFilters] = useState({ query: "", semester: "" });
@@ -161,7 +118,7 @@ export default function PracticalForm({
       // load test cases for existing practical
       supabase.from("test_cases").select("*").eq("practical_id", practical.id).then(({ data }: any) => {
         if (data && data.length > 0) setTestCases(data);
-      }).catch((e) => {
+      }).catch((e: any) => {
         console.error("Failed to fetch test cases:", e);
       });
     } else {
@@ -246,7 +203,92 @@ export default function PracticalForm({
   const addTestCase = () => setTestCases(prev => [...prev, { input: "", expected_output: "", is_hidden: false, time_limit_ms: 2000, memory_limit_kb: 65536 }]);
   const removeTestCase = (index: number) => setTestCases(prev => prev.filter((_, i) => i !== index));
 
-  const toggleStudent = (student: any) => {
+  const generateTestCases = async () => {
+    if (!form.description || form.description.length < 10) {
+      alert("Please enter a detailed description first.");
+      return;
+    }
+
+    setGeneratingTests(true);
+    try {
+      const prompt = `
+        Generate 3-5 diverse test cases (input and expected output) for a programming problem with this description:
+        "${form.description}"
+        
+        ${sampleCode ? `Reference Code:\n${sampleCode}` : ""}
+
+        Return ONLY a valid JSON array of objects with "input" and "expected_output" keys. 
+        Example: [{"input": "5", "expected_output": "120"}, {"input": "0", "expected_output": "1"}]
+        Do not include markdown formatting or explanations.
+      `;
+
+      const savedSettings = localStorage.getItem("ai_settings");
+      const config = savedSettings ? JSON.parse(savedSettings) : {};
+      const apiUrl = process.env.NEXT_PUBLIC_AI_API_URL || "http://localhost:5002/ai";
+
+      const res = await fetch(`${apiUrl}/chat`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          messages: [{ role: "user", parts: [{ text: prompt }] }],
+          config
+        }),
+      });
+
+      if (!res.ok) throw new Error(`API Error: ${res.statusText}`);
+      if (!res.body) throw new Error("No response body");
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let fullText = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        const chunk = decoder.decode(value, { stream: true });
+        const lines = chunk.split("\n\n");
+
+        for (const line of lines) {
+          if (line.startsWith("data: ")) {
+            const dataStr = line.slice(6);
+            if (dataStr === "[DONE]") break;
+            try {
+              const parsed = JSON.parse(dataStr);
+              if (parsed.text) fullText += parsed.text;
+              if (parsed.error) throw new Error(parsed.error);
+            } catch (e) {
+              console.warn("Error parsing chunk:", e);
+            }
+          }
+        }
+      }
+
+      let jsonStr = fullText;
+      // Clean up markdown if present
+      jsonStr = jsonStr.replace(/```json/g, "").replace(/```/g, "").trim();
+
+      const newTests = JSON.parse(jsonStr);
+      if (Array.isArray(newTests)) {
+        const formattedTests = newTests.map((t: any) => ({
+          input: String(t.input),
+          expected_output: String(t.expected_output),
+          is_hidden: false,
+          time_limit_ms: 2000,
+          memory_limit_kb: 65536
+        }));
+        setTestCases(prev => [...prev, ...formattedTests]);
+      } else {
+        throw new Error("Invalid response format");
+      }
+    } catch (err: any) {
+      console.error("AI Generation Error:", err);
+      alert("Failed to generate test cases. Please try again. " + (err.message || ""));
+    } finally {
+      setGeneratingTests(false);
+    }
+  };
+
+  const toggleStudent = (student: Student) => {
     setSelectedStudents(prev => prev.find(s => s.uid === student.uid) ? prev.filter(s => s.uid !== student.uid) : [...prev, student]);
   };
 
@@ -449,271 +491,257 @@ export default function PracticalForm({
         {/* ---------- STEP 1 ---------- */}
         {step === 1 && (
           <div className="space-y-6">
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              {/* Left column: info & tests */}
-              <div className="space-y-6">
-                <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5 space-y-4 shadow-sm">
-                  <div className="flex items-center gap-3 pb-3 border-b border-gray-200 dark:border-gray-700">
-                    <div className="p-2 bg-gradient-to-br from-blue-600 to-purple-600 rounded-lg text-white">
-                      <InfoIcon />
-                    </div>
-                    <h3 className="font-bold text-lg text-gray-900 dark:text-white">Basic Information</h3>
-                  </div>
 
-                  <div className="space-y-4">
-                    <div>
-                      <label className="block text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2">
-                        Practical Title <span className="text-red-500">*</span>
-                      </label>
-                      <input
-                        type="text"
-                        name="title"
-                        value={form.title}
-                        onChange={handleInput}
-                        placeholder="e.g., Binary Search Implementation"
-                        className="w-full px-4 py-3 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all text-gray-900 dark:text-white"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2">
-                        Subject <span className="text-red-500">*</span>
-                      </label>
-                      <select
-                        name="subject_id"
-                        value={form.subject_id}
-                        onChange={handleInput}
-                        className="w-full px-4 py-3 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all text-gray-900 dark:text-white"
-                      >
-                        {subjects.map(s => <option key={s.id} value={s.id}>{s.subject_name}</option>)}
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2">
-                        Deadline <span className="text-red-500">*</span>
-                      </label>
-                      <input
-                        type="datetime-local"
-                        name="deadline"
-                        value={form.deadline}
-                        onChange={handleInput}
-                        className="w-full px-4 py-3 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all text-gray-900 dark:text-white"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2">
-                        Max Marks <span className="text-red-500">*</span>
-                      </label>
-                      <input
-                        type="number"
-                        name="max_marks"
-                        value={form.max_marks}
-                        onChange={handleInput}
-                        className="w-full px-4 py-3 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all text-gray-900 dark:text-white"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2">
-                        Programming Language
-                      </label>
-                      <input
-                        type="text"
-                        name="language"
-                        value={form.language}
-                        onChange={handleInput}
-                        placeholder="e.g., C, Python, Java"
-                        className="w-full px-4 py-3 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all text-gray-900 dark:text-white"
-                      />
-                    </div>
-                  </div>
+            {/* 1. Basic Information (Top Row) */}
+            <div className="glass-card rounded-xl p-6">
+              <div className="flex items-center gap-3 pb-4 border-b border-gray-200 dark:border-gray-700 mb-6">
+                <div className="p-2 bg-gradient-to-br from-blue-600 to-purple-600 rounded-lg text-white shadow-md">
+                  <InfoIcon size={20} />
                 </div>
-
-                <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5 space-y-4 shadow-sm">
-                  <div className="flex items-center justify-between pb-3 border-b border-gray-200 dark:border-gray-700">
-                    <div className="flex items-center gap-3">
-                      <div className="p-2 bg-gradient-to-br from-emerald-600 to-blue-600 rounded-lg text-white">
-                        <TestIcon />
-                      </div>
-                      <div>
-                        <h3 className="font-bold text-lg text-gray-900 dark:text-white">Test Cases</h3>
-                        <p className="text-xs text-gray-500 dark:text-gray-400">Add input/output pairs</p>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-3">
-                      <span className="px-3 py-1 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-200 text-sm font-bold rounded-full">
-                        {testCases.length}
-                      </span>
-                      <button
-                        onClick={addTestCase}
-                        className="inline-flex items-center gap-2 px-3 py-2 bg-gradient-to-r from-emerald-600 to-blue-600 text-white rounded-lg text-sm font-medium hover:scale-[1.02] transition"
-                        aria-label="Add test case"
-                        title="Add test case"
-                      >
-                        <PlusIcon />
-                        Add
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="space-y-3 max-h-96 overflow-y-auto pr-2">
-                    {testCases.map((tc, i) => (
-                      <div key={i} className="bg-gray-50 dark:bg-gray-900 rounded-lg p-4 border border-gray-200 dark:border-gray-700 space-y-3">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-500 to-blue-500 flex items-center justify-center text-white font-bold">
-                              {i + 1}
-                            </div>
-                            <span className="font-bold text-gray-800 dark:text-gray-200">Test Case</span>
-                          </div>
-
-                          <div className="flex items-center gap-2">
-                            <label className="inline-flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
-                              <input
-                                type="checkbox"
-                                checked={!!tc.is_hidden}
-                                onChange={(e) => handleTestCaseChange(i, "is_hidden", e.target.checked)}
-                                className="rounded"
-                                aria-label={`Hide test case ${i + 1}`}
-                              />
-                              Hidden
-                            </label>
-
-                            <button
-                              onClick={() => removeTestCase(i)}
-                              className="p-1.5 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
-                              title="Remove test case"
-                              aria-label={`Remove test case ${i + 1}`}
-                            >
-                              <TrashIcon />
-                            </button>
-                          </div>
-                        </div>
-
-                        <div>
-                          <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Input</label>
-                          <textarea
-                            value={tc.input}
-                            onChange={(e) => handleTestCaseChange(i, "input", e.target.value)}
-                            placeholder="Enter input..."
-                            rows={2}
-                            className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
-                          />
-                        </div>
-
-                        <div>
-                          <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Expected Output</label>
-                          <textarea
-                            value={tc.expected_output}
-                            onChange={(e) => handleTestCaseChange(i, "expected_output", e.target.value)}
-                            placeholder="Enter expected output..."
-                            rows={2}
-                            className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
-                          />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+                <div>
+                  <h3 className="font-bold text-lg text-gray-900 dark:text-white">Basic Information</h3>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">Essential details for the practical</p>
                 </div>
               </div>
 
-              {/* Right column: description & reference code */}
-              <div className="lg:col-span-2 space-y-6">
-                <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5 space-y-4 shadow-sm">
-                  <div className="flex items-center gap-3 pb-3 border-b border-gray-200 dark:border-gray-700">
-                    <div className="p-2 bg-gradient-to-br from-purple-600 to-pink-600 rounded-lg text-white">
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h7" />
-                      </svg>
-                    </div>
-                    <div>
-                      <h3 className="font-bold text-lg text-gray-900 dark:text-white">Description</h3>
-                      <p className="text-xs text-gray-500 dark:text-gray-400">Problem statement and requirements</p>
-                    </div>
-                    <div className="ml-auto px-2 py-1 bg-purple-50 dark:bg-purple-900/30 text-purple-700 dark:text-purple-200 text-xs font-bold rounded-full">
-                      {String(form.description || "").length} chars
-                    </div>
-                  </div>
-
-                  <textarea
-                    name="description"
-                    value={form.description}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                <div className="lg:col-span-2">
+                  <label className="block text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2">
+                    Practical Title <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    name="title"
+                    value={form.title}
                     onChange={handleInput}
-                    placeholder="Write a detailed description of the practical, including problem statement, input/output, constraints, and examples..."
-                    rows={12}
-                    className="w-full px-4 py-3 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all resize-none text-gray-900 dark:text-white"
+                    placeholder="e.g., Binary Search Implementation"
+                    className="w-full px-4 py-3 bg-white/50 dark:bg-gray-900/50 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all text-gray-900 dark:text-white"
                   />
                 </div>
 
-                <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5 space-y-4 shadow-sm">
-                  <div className="flex items-center justify-between pb-3 border-b border-gray-200 dark:border-gray-700">
-                    <div className="flex items-center gap-3">
-                      <div className="p-2 bg-gradient-to-br from-amber-600 to-orange-600 rounded-lg text-white">
-                        <CodeIcon />
-                      </div>
-                      <div>
-                        <h3 className="font-bold text-lg text-gray-900 dark:text-white">Reference Code</h3>
-                        <p className="text-xs text-gray-500 dark:text-gray-400">Optional sample solution</p>
-                      </div>
-                    </div>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2">
+                    Subject <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    name="subject_id"
+                    value={form.subject_id}
+                    onChange={handleInput}
+                    className="w-full px-4 py-3 bg-white/50 dark:bg-gray-900/50 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all text-gray-900 dark:text-white"
+                  >
+                    {subjects.map(s => <option key={s.id} value={s.id}>{s.subject_name}</option>)}
+                  </select>
+                </div>
 
-                    <select
-                      value={sampleLanguage}
-                      onChange={(e) => setSampleLanguage(e.target.value)}
-                      className="px-3 py-2 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-lg text-sm font-medium focus:ring-2 focus:ring-blue-500"
-                      aria-label="Reference code language"
-                    >
-                      <option value="c">C</option>
-                      <option value="python">Python</option>
-                      <option value="cpp">C++</option>
-                      <option value="java">Java</option>
-                    </select>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2">
+                    Deadline <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="datetime-local"
+                    name="deadline"
+                    value={form.deadline}
+                    onChange={handleInput}
+                    className="w-full px-4 py-3 bg-white/50 dark:bg-gray-900/50 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all text-gray-900 dark:text-white"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2">
+                    Max Marks <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    name="max_marks"
+                    value={form.max_marks}
+                    onChange={handleInput}
+                    className="w-full px-4 py-3 bg-white/50 dark:bg-gray-900/50 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all text-gray-900 dark:text-white"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2">
+                    Language
+                  </label>
+                  <input
+                    type="text"
+                    name="language"
+                    value={form.language}
+                    onChange={handleInput}
+                    placeholder="e.g., C, Python, Java"
+                    className="w-full px-4 py-3 bg-white/50 dark:bg-gray-900/50 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all text-gray-900 dark:text-white"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* 2. Description (Full Width) */}
+            <div className="glass-card rounded-xl p-6">
+              <div className="flex items-center gap-3 pb-4 border-b border-gray-200 dark:border-gray-700 mb-4">
+                <div className="p-2 bg-gradient-to-br from-purple-600 to-pink-600 rounded-lg text-white shadow-md">
+                  <FileText size={20} />
+                </div>
+                <div>
+                  <h3 className="font-bold text-lg text-gray-900 dark:text-white">Problem Description</h3>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">Detailed problem statement and requirements</p>
+                </div>
+                <div className="ml-auto px-3 py-1 bg-purple-50 dark:bg-purple-900/30 text-purple-700 dark:text-purple-200 text-xs font-bold rounded-full border border-purple-100 dark:border-purple-800">
+                  {String(form.description || "").length} chars
+                </div>
+              </div>
+
+              <textarea
+                name="description"
+                value={form.description}
+                onChange={handleInput}
+                placeholder="# Problem Statement\n\nWrite a program that...\n\n## Input Format\n...\n\n## Output Format\n..."
+                className="w-full min-h-[300px] px-5 py-4 bg-white/50 dark:bg-gray-900/50 border border-gray-300 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all resize-y text-gray-900 dark:text-white font-mono text-sm leading-relaxed"
+              />
+            </div>
+
+            {/* 3. Bottom Section: Test Cases & Reference Code */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+              {/* Test Cases */}
+              <div className="glass-card rounded-xl p-6 flex flex-col h-full">
+                <div className="flex items-center justify-between pb-4 border-b border-gray-200 dark:border-gray-700 mb-4">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-gradient-to-br from-emerald-600 to-teal-600 rounded-lg text-white shadow-md">
+                      <TestIcon />
+                    </div>
+                    <div>
+                      <h3 className="font-bold text-lg text-gray-900 dark:text-white">Test Cases</h3>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">Auto-grading criteria</p>
+                    </div>
                   </div>
 
-                  <div className="rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700">
-                    <div className="px-2 py-2 bg-gray-50 dark:bg-gray-900/60 text-xs text-gray-500 dark:text-gray-400">
-                      Tip: use this area for short sample solutions (optional).
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={generateTestCases}
+                      disabled={generatingTests}
+                      className="inline-flex items-center gap-2 px-3 py-1.5 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded-lg text-xs font-bold hover:bg-purple-200 dark:hover:bg-purple-900/50 transition border border-purple-200 dark:border-purple-800"
+                      title="Generate with AI"
+                    >
+                      {generatingTests ? <LoadingSpinner /> : <Sparkles className="w-3.5 h-3.5" />}
+                      AI Generate
+                    </button>
+                    <button
+                      onClick={addTestCase}
+                      className="inline-flex items-center gap-2 px-3 py-1.5 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 rounded-lg text-xs font-bold hover:bg-emerald-200 dark:hover:bg-emerald-900/50 transition border border-emerald-200 dark:border-emerald-800"
+                    >
+                      <PlusIcon />
+                      Add
+                    </button>
+                  </div>
+                </div>
+
+                <div className="space-y-4 flex-1 overflow-y-auto max-h-[500px] pr-2 custom-scrollbar">
+                  {testCases.length === 0 && (
+                    <div className="text-center py-10 text-gray-400 dark:text-gray-500 italic">
+                      No test cases added yet. Use AI or add manually.
                     </div>
-                    <div className="p-3">
+                  )}
+                  {testCases.map((tc, i) => (
+                    <div key={i} className="bg-white/40 dark:bg-gray-900/40 rounded-xl p-4 border border-gray-200 dark:border-gray-700 space-y-3 shadow-sm hover:shadow-md transition-shadow">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className="w-6 h-6 rounded-full bg-emerald-100 dark:bg-emerald-900/50 text-emerald-600 dark:text-emerald-400 flex items-center justify-center text-xs font-bold border border-emerald-200 dark:border-emerald-800">
+                            {i + 1}
+                          </div>
+                          <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">Test Case</span>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <label className="inline-flex items-center gap-2 text-xs font-medium text-gray-600 dark:text-gray-400 cursor-pointer select-none">
+                            <input
+                              type="checkbox"
+                              checked={!!tc.is_hidden}
+                              onChange={(e) => handleTestCaseChange(i, "is_hidden", e.target.checked)}
+                              className="rounded text-emerald-600 focus:ring-emerald-500"
+                            />
+                            Hidden
+                          </label>
+                          <button
+                            onClick={() => removeTestCase(i)}
+                            className="text-gray-400 hover:text-red-500 transition-colors"
+                          >
+                            <TrashIcon size={16} />
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-[10px] uppercase tracking-wider font-bold text-gray-500 dark:text-gray-500 mb-1">Input</label>
+                          <textarea
+                            value={tc.input}
+                            onChange={(e) => handleTestCaseChange(i, "input", e.target.value)}
+                            rows={2}
+                            className="w-full px-3 py-2 bg-white dark:bg-gray-950 border border-gray-200 dark:border-gray-800 rounded-lg text-xs font-mono focus:ring-2 focus:ring-emerald-500 focus:border-transparent resize-none"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] uppercase tracking-wider font-bold text-gray-500 dark:text-gray-500 mb-1">Output</label>
+                          <textarea
+                            value={tc.expected_output}
+                            onChange={(e) => handleTestCaseChange(i, "expected_output", e.target.value)}
+                            rows={2}
+                            className="w-full px-3 py-2 bg-white dark:bg-gray-950 border border-gray-200 dark:border-gray-800 rounded-lg text-xs font-mono focus:ring-2 focus:ring-emerald-500 focus:border-transparent resize-none"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Reference Code */}
+              <div className="glass-card rounded-xl p-6 flex flex-col h-full">
+                <div className="flex items-center justify-between pb-4 border-b border-gray-200 dark:border-gray-700 mb-4">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-gradient-to-br from-amber-500 to-orange-600 rounded-lg text-white shadow-md">
+                      <CodeIcon />
+                    </div>
+                    <div>
+                      <h3 className="font-bold text-lg text-gray-900 dark:text-white">Reference Code</h3>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">For AI context (Optional)</p>
+                    </div>
+                  </div>
+
+                  <select
+                    value={sampleLanguage}
+                    onChange={(e) => setSampleLanguage(e.target.value)}
+                    className="px-3 py-1.5 bg-white/50 dark:bg-gray-900/50 border border-gray-300 dark:border-gray-700 rounded-lg text-xs font-medium focus:ring-2 focus:ring-amber-500"
+                  >
+                    <option value="c">C</option>
+                    <option value="python">Python</option>
+                    <option value="cpp">C++</option>
+                    <option value="java">Java</option>
+                  </select>
+                </div>
+
+                <div className="flex-1 rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50 flex flex-col">
+                  <div className="px-4 py-2 bg-gray-100 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 text-xs text-gray-500 dark:text-gray-400 flex items-center gap-2">
+                    <InfoIcon size={12} />
+                    <span>This code helps AI generate better test cases.</span>
+                  </div>
+                  <div className="flex-1 relative">
+                    <div className="absolute inset-0 overflow-auto">
                       <CodeMirror
                         value={sampleCode}
                         onChange={setSampleCode}
-                        height="300px"
+                        height="100%"
                         theme={theme === "dark" ? oneDark : undefined}
                         extensions={[getLanguageExtension()]}
+                        className="h-full text-sm"
                       />
                     </div>
                   </div>
                 </div>
               </div>
             </div>
-
-            {/* actions */}
-            <div className="flex items-center justify-end gap-3 pt-6 border-t border-gray-200 dark:border-gray-700">
-              <button
-                onClick={onClose}
-                className="px-6 py-3 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-200 font-semibold rounded-xl hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
-              >
-                Cancel
-              </button>
-
-              <button
-                onClick={async () => { await handleSave(); setStep(2); }}
-                disabled={saving}
-                className={cx(
-                  "inline-flex items-center gap-2 px-6 py-3 rounded-xl text-white font-semibold transition-all",
-                  saving ? "bg-gray-300 text-gray-700 cursor-wait" : "bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 shadow-lg"
-                )}
-              >
-                {saving ? <LoadingSpinner /> : null}
-                {saving ? "Saving..." : "Save & Next"}
-              </button>
-            </div>
           </div>
         )}
+
 
         {/* ---------- STEP 2: Assign ---------- */}
         {step === 2 && (
@@ -847,40 +875,29 @@ export default function PracticalForm({
               </div>
             </div>
 
-            
+            <div className="flex items-center justify-end gap-3 pt-6 border-t border-gray-200 dark:border-gray-700">
+              <button
+                onClick={() => setStep(1)}
+                className="px-6 py-3 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-200 font-semibold rounded-xl hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+              >
+                Back
+              </button>
+
+              <button
+                onClick={assign}
+                disabled={saving || selectedStudents.length === 0}
+                className={cx(
+                  "inline-flex items-center gap-2 px-6 py-3 rounded-xl text-white font-semibold transition-all",
+                  (saving || selectedStudents.length === 0) ? "bg-gray-300 text-gray-700 cursor-not-allowed" : "bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 shadow-lg"
+                )}
+              >
+                {saving ? <LoadingSpinner /> : `Assign (${selectedStudents.length})`}
+              </button>
+            </div>
           </div>
         )}
       </div>
-
-      {/* Sticky bottom action for mobile */}
-      <div className="fixed bottom-4 left-0 right-0 z-50 pointer-events-none">
-        <div className="max-w-6xl mx-auto px-4">
-          <div className="pointer-events-auto flex items-center justify-end gap-3">
-            <button
-              onClick={() => setStep(prev => (prev === 1 ? 2 : 1))}
-              className="hidden sm:inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-200 hover:bg-gray-200 transition"
-            >
-              {step === 1 ? "Next" : "Back"}
-            </button>
-
-            <button
-              onClick={async () => {
-                if (step === 1) { await handleSave(); setStep(2); }
-                else { await assign(); }
-              }}
-              disabled={saving || (step === 2 && selectedStudents.length === 0)}
-              className={cx(
-                "w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-3 rounded-2xl text-sm font-semibold transition-transform pointer-events-auto",
-                (saving || (step === 2 && selectedStudents.length === 0))
-                  ? "bg-gray-300 text-gray-600 cursor-not-allowed"
-                  : "bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-lg hover:scale-[1.02]"
-              )}
-            >
-              {saving ? <LoadingSpinner /> : (step === 1 ? "Save & Next" : `Assign (${selectedStudents.length})`)}
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
+    </div >
   );
 }
+

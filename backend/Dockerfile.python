@@ -12,6 +12,9 @@ RUN pip install --no-cache-dir \
     scipy \
     scikit-learn
 
+# Set Matplotlib config dir to writable location
+ENV MPLCONFIGDIR=/tmp
+
 # Set working directory
 WORKDIR /app
 

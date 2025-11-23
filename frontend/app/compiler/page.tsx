@@ -27,6 +27,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { AssistantPanel } from "@/components/AssistantPanel";
 
 export default function EditorPage() {
   const router = useRouter();
@@ -68,6 +69,7 @@ int main(void) {
   const supabase = useMemo(() => createClient(), []);
   const [user, setUser] = useState<User | null>(null);
   const [currentMode, setCurrentMode] = useState("Static");
+  const [showAssistant, setShowAssistant] = useState(false);
 
   useEffect(() => {
     if (pathname === "/Interactive") setCurrentMode("Interactive");
@@ -155,55 +157,79 @@ int main(void) {
     );
 
   return (
-    <div className="flex flex-col min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-100 dark:from-gray-900 dark:via-gray-950 dark:to-black">
+    <div className="flex flex-col h-screen overflow-hidden bg-gradient-to-br from-gray-50 via-white to-gray-100 dark:from-gray-900 dark:via-gray-950 dark:to-black">
       {/* Glass Navbar */}
       <Navbar />
 
       {/* Editor Section: fills remaining space, full width and height minus navbar */}
       <div className="flex-1 pt-16">
         <div className="h-full w-full rounded-2xl bg-white/40 dark:bg-gray-800/40 backdrop-blur-md shadow-lg overflow-hidden border border-gray-200/50 dark:border-gray-700/50">
-          <ResizablePanelGroup direction="vertical" className="h-full">
-            <ResizablePanel defaultSize={60} minSize={30}>
-              <CodeEditor
-                code={code}
-                setCode={setCode}
-                disabled={locked}
-                onRun={runCode}
-                onDownload={downloadPdf}
-                onSubmit={runCode} // submit still calls runCode (change if needed)
-                loading={loading}
-                locked={locked}
-                lang={lang}
-                onLangChange={(l) => handleLangChange(l as "java" | "python" | "c")}
-                showInput={showInput}
-                setShowInput={setShowInput}
-                showInputToggle={showInputToggle}
-                terminalRef={terminalRef}
-                violations={violations}     // new prop to show violation count
-                isFullscreen={true}         // optional: set false if you want readOnly behavior
-              />
+          <ResizablePanelGroup direction="horizontal" className="h-full">
+            <ResizablePanel defaultSize={showAssistant ? 75 : 100} minSize={50}>
+              <ResizablePanelGroup direction="vertical" className="h-full">
+                <ResizablePanel defaultSize={60} minSize={30}>
+                  <CodeEditor
+                    code={code}
+                    setCode={setCode}
+                    disabled={locked}
+                    onRun={runCode}
+                    onDownload={downloadPdf}
+                    onSubmit={runCode} // submit still calls runCode (change if needed)
+                    loading={loading}
+                    locked={locked}
+                    lang={lang}
+                    onLangChange={(l) => handleLangChange(l as "java" | "python" | "c")}
+                    showInput={showInput}
+                    setShowInput={setShowInput}
+                    showInputToggle={showInputToggle}
+                    terminalRef={terminalRef}
+                    violations={violations}     // new prop to show violation count
+                    isFullscreen={true}         // optional: set false if you want readOnly behavior
+                    externalShowAssistant={showAssistant}
+                    externalSetShowAssistant={setShowAssistant}
+                    renderAssistantExternally={true}
+                  />
 
-            </ResizablePanel>
+                </ResizablePanel>
 
-            <ResizableHandle className="bg-gray-200 dark:bg-gray-700 hover:bg-blue-500 dark:hover:bg-blue-600 transition-colors duration-200" />
+                <ResizableHandle className="bg-gray-200 dark:bg-gray-700 hover:bg-blue-500 dark:hover:bg-blue-600 transition-colors duration-200" />
 
-            <ResizablePanel defaultSize={40} minSize={20}>
-              {showInput ? (
-                <ResizablePanelGroup direction="horizontal">
-                  <ResizablePanel defaultSize={20} minSize={10}>
-                    <InputPane onChange={setInput} />
-                  </ResizablePanel>
+                <ResizablePanel defaultSize={40} minSize={20}>
+                  {showInput ? (
+                    <ResizablePanelGroup direction="horizontal">
+                      <ResizablePanel defaultSize={20} minSize={10}>
+                        <InputPane onChange={setInput} />
+                      </ResizablePanel>
 
-                  <ResizableHandle className="bg-gray-200 dark:bg-gray-700 hover:bg-blue-500 dark:hover:bg-blue-600 transition-colors duration-200" />
+                      <ResizableHandle className="bg-gray-200 dark:bg-gray-700 hover:bg-blue-500 dark:hover:bg-blue-600 transition-colors duration-200" />
 
-                  <ResizablePanel defaultSize={50} minSize={20}>
+                      <ResizablePanel defaultSize={50} minSize={20}>
+                        <OutputPane output={output} error={errorOutput} language={lang} />
+                      </ResizablePanel>
+                    </ResizablePanelGroup>
+                  ) : (
                     <OutputPane output={output} error={errorOutput} language={lang} />
-                  </ResizablePanel>
-                </ResizablePanelGroup>
-              ) : (
-                <OutputPane output={output} error={errorOutput} language={lang} />
-              )}
+                  )}
+                </ResizablePanel>
+              </ResizablePanelGroup>
             </ResizablePanel>
+
+            {showAssistant && (
+              <>
+                <ResizableHandle className="bg-gray-200 dark:bg-gray-700 hover:bg-blue-500 dark:hover:bg-blue-600 transition-colors duration-200" />
+                <ResizablePanel defaultSize={25} minSize={20} maxSize={40}>
+                  <AssistantPanel
+                    codeContext={{
+                      code: code,
+                      activeFile: "main." + (lang === "python" ? "py" : lang === "java" ? "java" : "c"),
+                      files: [], // Static editor doesn't support multi-file yet
+                      cursorPosition: { lineNumber: 1, column: 1 }
+                    }}
+                    onClose={() => setShowAssistant(false)}
+                  />
+                </ResizablePanel>
+              </>
+            )}
           </ResizablePanelGroup>
         </div>
       </div>

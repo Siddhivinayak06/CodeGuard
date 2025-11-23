@@ -28,6 +28,27 @@ def timeout_handler(signum, frame):
 
 signal.signal(signal.SIGALRM, timeout_handler)
 
+# --- Plot Helper ---
+try:
+    import matplotlib.pyplot as plt
+    import io
+    import base64
+
+    def show_plot():
+        """Save current plot to base64 and print with delimiters"""
+        if plt.get_fignums():
+            buf = io.BytesIO()
+            plt.savefig(buf, format='png')
+            buf.seek(0)
+            img_str = base64.b64encode(buf.read()).decode('utf-8')
+            print(f"\n__IMAGE_START__{img_str}__IMAGE_END__\n", flush=True)
+            plt.close()
+    
+    # Monkey patch plt.show
+    plt.show = show_plot
+except ImportError:
+    pass
+
 # --- Read code from stdin ---
 buffer = []
 

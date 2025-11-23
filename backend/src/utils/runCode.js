@@ -1,6 +1,7 @@
 // src/utils/runCode.js
 const { spawn } = require("child_process");
 const { v4: uuidv4 } = require("uuid");
+const config = require("../config");
 
 const DEFAULT_TIMEOUT_SEC = 5;
 const MAX_OUTPUT = 64 * 1024; // 64 KB
@@ -46,7 +47,7 @@ cat /tmp/${uniqueId}/gcc_err.txt 1>&2 || true &&
 printf "%s" '${escapeForPrintf(stdinInput)}' | timeout ${timeoutSec} /tmp/${uniqueId}/a.out
 `;
   } else if (lang === "java") {
-  cmd = `
+    cmd = `
 mkdir -p /tmp/${uniqueId} &&
 
 # Write the user code to a temp file for analysis
@@ -102,13 +103,13 @@ else
   printf "%s" '${escapeForPrintf(stdinInput)}' | timeout ${timeoutSec} java -cp /tmp/${uniqueId} Main
 fi
 `;
-}
+  }
 
 
   // Which docker image to use per language
   const image = lang === "python" ? "codeguard-python"
     : lang === "c" ? "codeguard-c"
-    : "codeguard-java";
+      : "codeguard-java";
 
   // Spawn docker - do not swallow spawn errors
   let docker;
@@ -117,8 +118,8 @@ fi
       "run",
       "--rm",
       "--network", "none",
-      "-m", "65536k",
-      "--cpus=0.5",
+      "-m", config.docker.memory,
+      "--cpus=" + config.docker.cpus,
       image,
       "sh",
       "-c",
