@@ -6,13 +6,14 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
-package-lock.json
 .pnpm-debug.log
 
 # Next.js build output
 .next/
 out/
 .vercel/
+build/
+dist/
 
 # Tailwind CSS build cache
 *.css.map
@@ -23,6 +24,7 @@ out/
 backend/tmp/
 backend/logs/
 *.log
+coverage/
 
 # PDF / Exported files
 *.pdf
@@ -31,7 +33,6 @@ backend/logs/
 # Docker
 # ----------------------
 .docker/
-.dockerignore
 
 # ----------------------
 # OS & Editor files
@@ -47,9 +48,12 @@ Thumbs.db
 .env
 .env.local
 .env.*.local
+*.pem
+*.key
 
 # ----------------------
 # Misc
 # ----------------------
 *.swp
 *.swo
+workspace/

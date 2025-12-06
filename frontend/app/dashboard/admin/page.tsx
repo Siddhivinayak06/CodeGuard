@@ -4,6 +4,18 @@ import { useState, useEffect, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import Navbar from "@/components/Navbar";
+import {
+  Users,
+  BookOpen,
+  GraduationCap,
+  FileCode,
+  Plus,
+  RefreshCw,
+  Pencil,
+  Trash2,
+  X,
+  Shield,
+} from "lucide-react";
 
 type Subject = {
   id: string;
@@ -12,6 +24,58 @@ type Subject = {
   faculty_name?: string;
   semester?: number | null;
 };
+
+// Stat Card Component
+function StatCard({
+  label,
+  value,
+  icon,
+  color,
+}: {
+  label: string;
+  value: number;
+  icon: React.ReactNode;
+  color: string;
+}) {
+  return (
+    <div className="glass-card-premium rounded-2xl p-5 hover-lift">
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+            {label}
+          </p>
+          <p className="text-3xl font-bold text-gray-900 dark:text-white mt-1">
+            {value}
+          </p>
+        </div>
+        <div className={`icon-container-lg ${color}`}>{icon}</div>
+      </div>
+    </div>
+  );
+}
+
+// Skeleton loader for table
+function SkeletonRow() {
+  return (
+    <tr className="animate-pulse">
+      <td className="px-5 py-4">
+        <div className="h-4 w-20 bg-gray-200 dark:bg-gray-700 rounded" />
+      </td>
+      <td className="px-5 py-4">
+        <div className="h-4 w-32 bg-gray-200 dark:bg-gray-700 rounded" />
+      </td>
+      <td className="px-5 py-4">
+        <div className="h-4 w-28 bg-gray-200 dark:bg-gray-700 rounded" />
+      </td>
+      <td className="px-5 py-4">
+        <div className="h-4 w-12 bg-gray-200 dark:bg-gray-700 rounded" />
+      </td>
+      <td className="px-5 py-4">
+        <div className="h-8 w-20 bg-gray-200 dark:bg-gray-700 rounded" />
+      </td>
+    </tr>
+  );
+}
 
 export default function AdminDashboard() {
   const router = useRouter();
@@ -35,9 +99,7 @@ export default function AdminDashboard() {
     semester: "",
   });
 
-  // -----------------------------------------
-  // lifecycle: auth check
-  // -----------------------------------------
+  // Auth check
   useEffect(() => {
     mountedRef.current = true;
 
@@ -64,9 +126,7 @@ export default function AdminDashboard() {
     };
   }, [router, supabase]);
 
-  // -----------------------------------------
-  // helper: get access token
-  // -----------------------------------------
+  // Get access token
   const getAccessToken = async (): Promise<string | null> => {
     try {
       const {
@@ -79,9 +139,7 @@ export default function AdminDashboard() {
     }
   };
 
-  // -----------------------------------------
-  // load stats + subjects
-  // -----------------------------------------
+  // Load stats + subjects
   useEffect(() => {
     if (!user) return;
 
@@ -101,7 +159,6 @@ export default function AdminDashboard() {
           ),
         ]);
 
-        // normalize shapes
         const statsData = statsRes?.data ?? statsRes ?? {};
         const subjData = subjRes?.data ?? subjRes ?? [];
 
@@ -117,9 +174,7 @@ export default function AdminDashboard() {
     loadData();
   }, [user]);
 
-  // -----------------------------------------
-  // form helpers
-  // -----------------------------------------
+  // Form helpers
   const openAddForm = () => {
     setFormData({ id: "", subject_code: "", subject_name: "", faculty_name: "", semester: "" });
     setIsEditing(false);
@@ -147,7 +202,7 @@ export default function AdminDashboard() {
 
       const method = isEditing ? "PUT" : "POST";
       const body = {
-        uid: user.id, // <-- include UID here
+        uid: user.id,
         id: formData.id || undefined,
         subject_code: formData.subject_code.trim(),
         subject_name: formData.subject_name.trim(),
@@ -182,7 +237,6 @@ export default function AdminDashboard() {
       }
 
       setFormOpen(false);
-      alert(isEditing ? "Subject updated" : "Subject added");
     } catch (err: any) {
       console.error("Save failed:", err);
       alert("Save failed: " + (err?.message ?? "Unknown error"));
@@ -190,7 +244,6 @@ export default function AdminDashboard() {
       if (mountedRef.current) setBusy(false);
     }
   };
-
 
   const handleDelete = async (s: Subject) => {
     if (!confirm(`Delete "${s.subject_name ?? s.subject_code}"? This can't be undone.`)) return;
@@ -208,7 +261,6 @@ export default function AdminDashboard() {
       if (!res.ok) throw new Error(payload?.error ?? "Delete failed");
 
       setSubjects((prev) => prev.filter((x) => x.id !== s.id));
-      alert("Deleted.");
     } catch (err: any) {
       console.error("Delete failed:", err);
       alert("Delete failed: " + (err?.message ?? "Unknown error"));
@@ -217,121 +269,188 @@ export default function AdminDashboard() {
     }
   };
 
-
-  // -----------------------------------------
-  // small UI helpers
-  // -----------------------------------------
-  const statCard = (label: string, value: number) => (
-    <div className="p-5 bg-white/60 dark:bg-gray-800/60 rounded-2xl shadow-sm hover:shadow-lg transition">
-      <p className="text-sm text-gray-500 dark:text-gray-400">{label}</p>
-      <p className="mt-3 text-2xl font-bold text-gray-800 dark:text-gray-100">{value}</p>
-    </div>
-  );
+  const handleRefresh = async () => {
+    setLoading(true);
+    try {
+      const token = await getAccessToken();
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (token) headers["Authorization"] = `Bearer ${token}`;
+      const [statsRes, subjRes] = await Promise.all([
+        fetch(`/api/admin/stats`, { headers }).then((r) => r.json().catch(() => ({}))),
+        fetch(`/api/admin/subjects`, { headers }).then((r) => r.json().catch(() => [])),
+      ]);
+      setStats(statsRes?.data ?? statsRes ?? {});
+      setSubjects(subjRes?.data ?? subjRes ?? []);
+    } catch (err) {
+      console.error("Refresh failed:", err);
+    } finally {
+      if (mountedRef.current) setLoading(false);
+    }
+  };
 
   if (!user)
     return (
-      <div className="flex items-center justify-center min-h-screen bg-gray-50 dark:bg-gray-900">
-        <p className="text-gray-500 dark:text-gray-400 text-lg">Loading...</p>
+      <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-100 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-12 h-12 border-4 border-red-500 border-t-transparent rounded-full animate-spin" />
+          <p className="text-gray-500 dark:text-gray-400">Loading...</p>
+        </div>
       </div>
     );
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-100 dark:from-gray-900 dark:via-gray-950 dark:to-black">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-red-50/20 to-orange-50/20 dark:from-gray-950 dark:via-red-950/10 dark:to-orange-950/10">
       <Navbar />
 
-      <main className="pt-24 px-4 md:px-12 pb-12">
-        <div className="flex items-center justify-between mb-6">
-          <h1 className="text-3xl font-extrabold text-gray-800 dark:text-gray-100">🧑‍💼 Admin Dashboard</h1>
+      <main className="pt-24 pb-12 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
+        {/* Header */}
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8 animate-slideUp">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 rounded-xl bg-gradient-to-br from-red-500 to-orange-600 shadow-lg shadow-red-500/25">
+              <Shield className="w-6 h-6 text-white" />
+            </div>
+            <div>
+              <h1 className="text-3xl font-bold text-gradient-warm">Admin Dashboard</h1>
+              <p className="text-sm text-gray-600 dark:text-gray-400">
+                Manage subjects, users, and system settings
+              </p>
+            </div>
+          </div>
 
           <div className="flex items-center gap-3">
             <button
               onClick={openAddForm}
               disabled={busy}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-green-600 text-white hover:bg-green-700 disabled:opacity-60"
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 text-white font-medium shadow-lg shadow-emerald-500/25 hover:shadow-emerald-500/40 hover:-translate-y-0.5 transition-all disabled:opacity-60"
             >
-              + Add Subject
+              <Plus className="w-4 h-4" />
+              Add Subject
             </button>
             <button
-              onClick={async () => {
-                setLoading(true);
-                try {
-                  const token = await getAccessToken();
-                  const headers: Record<string, string> = { "Content-Type": "application/json" };
-                  if (token) headers["Authorization"] = `Bearer ${token}`;
-                  const [statsRes, subjRes] = await Promise.all([
-                    fetch(`/api/admin/stats`, { headers }).then((r) =>
-                      r.json().catch(() => ({}))
-                    ),
-                    fetch(`/api/admin/subjects`, { headers }).then((r) =>
-                      r.json().catch(() => [])
-                    ),
-                  ]);
-                  setStats(statsRes?.data ?? statsRes ?? {});
-                  setSubjects(subjRes?.data ?? subjRes ?? []);
-                } catch (err) {
-                  console.error("Refresh failed:", err);
-                } finally {
-                  if (mountedRef.current) setLoading(false);
-                }
-              }}
-              className="px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-60"
+              onClick={handleRefresh}
+              disabled={loading}
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 font-medium hover:bg-gray-50 dark:hover:bg-gray-700 transition-all disabled:opacity-60"
             >
+              <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
               Refresh
             </button>
           </div>
         </div>
 
-        {/* Stats grid */}
-        <section className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-          {statCard("Students", stats.students ?? 0)}
-          {statCard("Faculty", stats.faculty ?? 0)}
-          {statCard("Subjects", stats.subjects ?? 0)}
-          {statCard("Practicals", stats.practicals ?? 0)}
+        {/* Stats Grid */}
+        <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 mb-10 animate-slideUp animation-delay-100">
+          <StatCard
+            label="Students"
+            value={stats.students ?? 0}
+            icon={<GraduationCap className="w-6 h-6 text-blue-600 dark:text-blue-400" />}
+            color="bg-blue-100 dark:bg-blue-900/30"
+          />
+          <StatCard
+            label="Faculty"
+            value={stats.faculty ?? 0}
+            icon={<Users className="w-6 h-6 text-purple-600 dark:text-purple-400" />}
+            color="bg-purple-100 dark:bg-purple-900/30"
+          />
+          <StatCard
+            label="Subjects"
+            value={stats.subjects ?? 0}
+            icon={<BookOpen className="w-6 h-6 text-amber-600 dark:text-amber-400" />}
+            color="bg-amber-100 dark:bg-amber-900/30"
+          />
+          <StatCard
+            label="Practicals"
+            value={stats.practicals ?? 0}
+            icon={<FileCode className="w-6 h-6 text-emerald-600 dark:text-emerald-400" />}
+            color="bg-emerald-100 dark:bg-emerald-900/30"
+          />
         </section>
 
-        {/* Subjects table */}
-        <section className="bg-transparent">
-          <div className="overflow-hidden rounded-2xl shadow-md">
-            <table className="min-w-full text-left divide-y divide-gray-200 dark:divide-gray-700 bg-white/40 dark:bg-gray-800/40">
-              <thead className="bg-gray-100/70 dark:bg-gray-700/50">
+        {/* Subjects Table */}
+        <section className="glass-card rounded-2xl overflow-hidden animate-slideUp animation-delay-200">
+          <div className="px-6 py-4 border-b border-gray-200/50 dark:border-gray-700/50 bg-gray-50/50 dark:bg-gray-800/50">
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+              <BookOpen className="w-5 h-5 text-amber-500" />
+              Subjects Management
+            </h2>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[700px]">
+              <thead className="bg-gray-100/70 dark:bg-gray-800/70">
                 <tr>
-                  <th className="px-4 py-3 text-sm font-medium text-gray-600">Code</th>
-                  <th className="px-4 py-3 text-sm font-medium text-gray-600">Subject</th>
-                  <th className="px-4 py-3 text-sm font-medium text-gray-600">Faculty</th>
-                  <th className="px-4 py-3 text-sm font-medium text-gray-600">Semester</th>
-                  <th className="px-4 py-3 text-sm font-medium text-gray-600">Actions</th>
+                  <th className="px-5 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">
+                    Code
+                  </th>
+                  <th className="px-5 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">
+                    Subject
+                  </th>
+                  <th className="px-5 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">
+                    Faculty
+                  </th>
+                  <th className="px-5 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">
+                    Semester
+                  </th>
+                  <th className="px-5 py-3 text-right text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">
+                    Actions
+                  </th>
                 </tr>
               </thead>
 
-              <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                {subjects.length === 0 ? (
+              <tbody className="divide-y divide-gray-200/50 dark:divide-gray-700/50">
+                {loading ? (
+                  [1, 2, 3].map((i) => <SkeletonRow key={i} />)
+                ) : subjects.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="px-4 py-6 text-center text-gray-500">
-                      {loading ? "Loading subjects..." : "No subjects found."}
+                    <td colSpan={5} className="px-5 py-12 text-center">
+                      <BookOpen className="w-12 h-12 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
+                      <p className="text-gray-500 dark:text-gray-400">
+                        No subjects found. Add your first subject!
+                      </p>
                     </td>
                   </tr>
                 ) : (
                   subjects.map((s) => (
-                    <tr key={s.id} className="hover:bg-gray-50 dark:hover:bg-gray-800/60 transition">
-                      <td className="px-4 py-3 text-sm">{s.subject_code ?? "—"}</td>
-                      <td className="px-4 py-3 text-sm">{s.subject_name ?? "—"}</td>
-                      <td className="px-4 py-3 text-sm">{s.faculty_name ?? "—"}</td>
-                      <td className="px-4 py-3 text-sm">{s.semester ?? "—"}</td>
-                      <td className="px-4 py-3 text-sm">
-                        <div className="flex items-center gap-3">
+                    <tr
+                      key={s.id}
+                      className="hover:bg-gray-50/60 dark:hover:bg-gray-800/60 transition-colors"
+                    >
+                      <td className="px-5 py-4">
+                        <span className="inline-flex px-2.5 py-1 text-xs font-semibold bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-lg">
+                          {s.subject_code ?? "—"}
+                        </span>
+                      </td>
+                      <td className="px-5 py-4 font-medium text-gray-900 dark:text-white">
+                        {s.subject_name ?? "—"}
+                      </td>
+                      <td className="px-5 py-4 text-gray-600 dark:text-gray-400">
+                        {s.faculty_name ?? "—"}
+                      </td>
+                      <td className="px-5 py-4">
+                        {s.semester ? (
+                          <span className="inline-flex px-2.5 py-1 text-xs font-semibold bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400 rounded-lg">
+                            Sem {s.semester}
+                          </span>
+                        ) : (
+                          "—"
+                        )}
+                      </td>
+                      <td className="px-5 py-4">
+                        <div className="flex items-center justify-end gap-2">
                           <button
                             onClick={() => openEditForm(s)}
-                            className="text-blue-600 hover:underline"
                             disabled={busy}
+                            className="p-2 rounded-lg text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors disabled:opacity-50"
+                            title="Edit"
                           >
-                            Edit
+                            <Pencil className="w-4 h-4" />
                           </button>
                           <button
                             onClick={() => handleDelete(s)}
-                            className="text-red-600 hover:underline"
                             disabled={busy}
+                            className="p-2 rounded-lg text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors disabled:opacity-50"
+                            title="Delete"
                           >
-                            Delete
+                            <Trash2 className="w-4 h-4" />
                           </button>
                         </div>
                       </td>
@@ -345,54 +464,73 @@ export default function AdminDashboard() {
 
         {/* Form Modal */}
         {formOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center">
-            <div className="absolute inset-0 bg-black/50" onClick={() => !busy && setFormOpen(false)} />
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div
+              className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+              onClick={() => !busy && setFormOpen(false)}
+            />
             <form
               onSubmit={handleFormSubmit}
-              className="relative w-full max-w-lg bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-2xl mx-4"
+              className="relative w-full max-w-lg glass-card-premium rounded-2xl p-6 shadow-2xl animate-scaleIn"
             >
-              <h3 className="text-xl font-semibold mb-4">{isEditing ? "Edit Subject" : "Add Subject"}</h3>
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-xl font-bold text-gray-900 dark:text-white">
+                  {isEditing ? "Edit Subject" : "Add Subject"}
+                </h3>
+                <button
+                  type="button"
+                  onClick={() => setFormOpen(false)}
+                  disabled={busy}
+                  className="p-2 rounded-lg text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <input
-                  className="p-3 border rounded-md bg-gray-50 dark:bg-gray-700"
+                  className="input-premium"
                   placeholder="Subject Code (CS101)"
                   value={formData.subject_code}
                   onChange={(e) => setFormData((f) => ({ ...f, subject_code: e.target.value }))}
                   required
                 />
                 <input
-                  className="p-3 border rounded-md bg-gray-50 dark:bg-gray-700 col-span-1 sm:col-span-1"
+                  className="input-premium"
                   placeholder="Semester (number)"
                   value={formData.semester}
                   onChange={(e) => setFormData((f) => ({ ...f, semester: e.target.value }))}
                   inputMode="numeric"
                 />
                 <input
-                  className="p-3 border rounded-md bg-gray-50 dark:bg-gray-700 col-span-1 sm:col-span-2"
+                  className="input-premium sm:col-span-2"
                   placeholder="Subject Name"
                   value={formData.subject_name}
                   onChange={(e) => setFormData((f) => ({ ...f, subject_name: e.target.value }))}
                   required
                 />
                 <input
-                  className="p-3 border rounded-md bg-gray-50 dark:bg-gray-700 col-span-1 sm:col-span-2"
+                  className="input-premium sm:col-span-2"
                   placeholder="Faculty Name (optional)"
                   value={formData.faculty_name}
                   onChange={(e) => setFormData((f) => ({ ...f, faculty_name: e.target.value }))}
                 />
               </div>
 
-              <div className="flex justify-end gap-3 mt-4">
+              <div className="flex justify-end gap-3 mt-6">
                 <button
                   type="button"
                   onClick={() => setFormOpen(false)}
-                  className="px-4 py-2 rounded-md border"
+                  className="btn-secondary"
                   disabled={busy}
                 >
                   Cancel
                 </button>
-                <button type="submit" className="px-4 py-2 rounded-md bg-blue-600 text-white" disabled={busy}>
+                <button
+                  type="submit"
+                  className="btn-primary"
+                  disabled={busy}
+                >
                   {busy ? "Saving..." : "Save"}
                 </button>
               </div>

@@ -88,7 +88,7 @@ module.exports = function runCode(code, lang = "python", stdinInput = "") {
       }
 
       let cleanError = stderr
-        .replace(/\/tmp\/[a-f0-9\-]+\/code\.(py|c)/g, "")
+        .replace(/\/tmp\/[a-f0-9-]+\/code\.(py|c)/g, "")
         .replace(/File ""(, )?/g, "");
 
       if (exitCode === 124) {

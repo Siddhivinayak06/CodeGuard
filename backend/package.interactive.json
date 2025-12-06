@@ -5,10 +5,9 @@
   "scripts": {
     "start": "node src/interactiveserver.js"
   },
-"dependencies": {
-  "ws": "^8.18.3",
-  "@lydell/node-pty": "^1.1.0",
-  "uuid": "^9.0.1"
-}
-
+  "dependencies": {
+    "ws": "^8.18.3",
+    "@lydell/node-pty": "^1.1.0",
+    "uuid": "^9.0.1"
+  }
 }

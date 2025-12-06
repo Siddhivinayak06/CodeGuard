@@ -1,5 +1,0 @@
-- [ ] Define TypeScript interfaces for Submission, TestCase, TestCaseResult, and other data structures
-- [ ] Update state variables to use proper types instead of `any`
-- [ ] Update function parameters to use proper types
-- [ ] Remove unused `dynamic` import from Next.js
-- [ ] Run TypeScript check to ensure no compilation errors

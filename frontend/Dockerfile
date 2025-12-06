@@ -31,6 +31,8 @@ ENV NEXT_PUBLIC_SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL}
 ENV NEXT_PUBLIC_SUPABASE_ANON_KEY=${NEXT_PUBLIC_SUPABASE_ANON_KEY}
 ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
 ENV NEXT_PUBLIC_DEV_SUPABASE_REDIRECT_URL=${NEXT_PUBLIC_DEV_SUPABASE_REDIRECT_URL}
+ARG SUPABASE_SERVICE_ROLE_KEY
+ENV SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
 
 # Build Next.js app
 RUN npm run build
@@ -46,6 +48,11 @@ ARG UID=1001
 ARG GID=1001
 RUN groupadd -g ${GID} appgroup \
   && useradd -m -u ${UID} -g appgroup appuser
+
+# Install curl for healthcheck
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends curl \
+  && rm -rf /var/lib/apt/lists/*
 
 # Copy production dependencies
 COPY --from=builder /app/package*.json ./

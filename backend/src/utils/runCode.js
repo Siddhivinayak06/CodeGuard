@@ -1,25 +1,29 @@
 // src/utils/runCode.js
-const { spawn } = require("child_process");
-const { v4: uuidv4 } = require("uuid");
-const config = require("../config");
+const { spawn } = require('child_process');
+const { v4: uuidv4 } = require('uuid');
+const config = require('../config');
 
 const DEFAULT_TIMEOUT_SEC = 5;
 const MAX_OUTPUT = 64 * 1024; // 64 KB
 
-function escapeForPrintf(s = "") {
+function escapeForPrintf(s = '') {
   // escape single quotes safely for printf '%s' '...'
   return s.replace(/'/g, "'\\''");
 }
 
-module.exports = async function runCode(code, lang = "python", stdinInput = "") {
-  if (!code || typeof code !== "string") {
-    throw new Error("No code provided");
+module.exports = async function runCode(
+  code,
+  lang = 'python',
+  stdinInput = ''
+) {
+  if (!code || typeof code !== 'string') {
+    throw new Error('No code provided');
   }
 
-  const supported = ["python", "py", "c", "java"];
+  const supported = ['python', 'py', 'c', 'java'];
   if (!supported.includes(lang)) {
     return {
-      output: "",
+      output: '',
       error: `Unsupported language: ${lang}`,
       stderr: `Unsupported language: ${lang}`,
       exitCode: null,
@@ -27,18 +31,18 @@ module.exports = async function runCode(code, lang = "python", stdinInput = "") 
   }
 
   const uniqueId = uuidv4();
-  const escapedCode = code.replace(/\r/g, "");
+  const escapedCode = code.replace(/\r/g, '');
   const timeoutSec = DEFAULT_TIMEOUT_SEC;
 
   let cmd;
 
-  if (lang === "python" || lang === "py") {
+  if (lang === 'python' || lang === 'py') {
     cmd = `
 mkdir -p /tmp/${uniqueId} &&
 printf "%s" '${escapeForPrintf(escapedCode)}' > /tmp/${uniqueId}/code.py &&
 printf "%s" '${escapeForPrintf(stdinInput)}' | timeout ${timeoutSec} python3 /tmp/${uniqueId}/code.py
 `;
-  } else if (lang === "c") {
+  } else if (lang === 'c') {
     cmd = `
 mkdir -p /tmp/${uniqueId} &&
 printf "%s" '${escapeForPrintf(escapedCode)}' > /tmp/${uniqueId}/code.c &&
@@ -46,7 +50,7 @@ printf "%s" '${escapeForPrintf(escapedCode)}' > /tmp/${uniqueId}/code.c &&
 cat /tmp/${uniqueId}/gcc_err.txt 1>&2 || true &&
 printf "%s" '${escapeForPrintf(stdinInput)}' | timeout ${timeoutSec} /tmp/${uniqueId}/a.out
 `;
-  } else if (lang === "java") {
+  } else if (lang === 'java') {
     cmd = `
 mkdir -p /tmp/${uniqueId} &&
 
@@ -105,69 +109,79 @@ fi
 `;
   }
 
-
   // Which docker image to use per language
-  const image = lang === "python" ? "codeguard-python"
-    : lang === "c" ? "codeguard-c"
-      : "codeguard-java";
+  const image =
+    lang === 'python'
+      ? 'codeguard-python'
+      : lang === 'c'
+        ? 'codeguard-c'
+        : 'codeguard-java';
 
   // Spawn docker - do not swallow spawn errors
   let docker;
   try {
-    docker = spawn("docker", [
-      "run",
-      "--rm",
-      "--network", "none",
-      "-m", config.docker.memory,
-      "--cpus=" + config.docker.cpus,
+    docker = spawn('docker', [
+      'run',
+      '--rm',
+      '--network',
+      'none',
+      '-m',
+      config.docker.memory,
+      '--cpus=' + config.docker.cpus,
       image,
-      "sh",
-      "-c",
+      'sh',
+      '-c',
       cmd,
     ]);
   } catch (spawnErr) {
     // spawn can throw synchronously if 'docker' binary isn't found
     return {
-      output: "",
+      output: '',
       error: `Failed to spawn docker: ${spawnErr && spawnErr.message}`,
-      stderr: String(spawnErr && spawnErr.stack || spawnErr),
+      stderr: String((spawnErr && spawnErr.stack) || spawnErr),
       exitCode: null,
     };
   }
 
   // collect output with truncation
-  let stdout = "";
-  let stderr = "";
+  let stdout = '';
+  let stderr = '';
   let truncated = false;
 
-  docker.stdout.on("data", (data) => {
+  docker.stdout.on('data', (data) => {
     stdout += data.toString();
     if (stdout.length > MAX_OUTPUT && !truncated) {
-      stdout = stdout.slice(0, MAX_OUTPUT) + "\n[Output truncated]";
+      stdout = stdout.slice(0, MAX_OUTPUT) + '\n[Output truncated]';
       truncated = true;
     }
   });
 
-  docker.stderr.on("data", (data) => {
+  docker.stderr.on('data', (data) => {
     stderr += data.toString();
     if (stderr.length > MAX_OUTPUT && !truncated) {
-      stderr = stderr.slice(0, MAX_OUTPUT) + "\n[Error truncated]";
+      stderr = stderr.slice(0, MAX_OUTPUT) + '\n[Error truncated]';
       truncated = true;
     }
   });
 
   const result = await new Promise((resolve, reject) => {
-    docker.on("error", (err) => {
+    docker.on('error', (err) => {
       // typical reasons: docker CLI missing, permission denied to socket, etc.
       return reject(new Error(`docker spawn error: ${err && err.message}`));
     });
 
-    docker.on("close", (code, signal) => {
-      return resolve({ code: typeof code === "number" ? code : null, signal: signal || null });
+    docker.on('close', (code, signal) => {
+      return resolve({
+        code: typeof code === 'number' ? code : null,
+        signal: signal || null,
+      });
     });
   }).catch((err) => {
     // bubble up the spawn error with useful details
-    return { spawnError: String(err && err.message ? err.message : err), code: null };
+    return {
+      spawnError: String(err && err.message ? err.message : err),
+      code: null,
+    };
   });
 
   // If spawn error occurred
@@ -180,7 +194,8 @@ fi
     };
   }
 
-  const exitCode = result && typeof result.code === "number" ? result.code : null;
+  const exitCode =
+    result && typeof result.code === 'number' ? result.code : null;
 
   // Normalize error output
   const cleanError = stderr.trim() || null;

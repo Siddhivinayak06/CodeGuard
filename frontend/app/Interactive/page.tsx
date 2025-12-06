@@ -145,17 +145,21 @@ export default function Home() {
   };
 
   const downloadPdf = async () => {
-    if (!interactiveOutput) {
-      alert("No output captured yet!");
+    if (!interactiveOutput && !files.find(f => f.name === activeFileName)?.content) {
+      alert("No content to generate PDF!");
       return;
     }
     const activeFile = files.find(f => f.name === activeFileName);
     try {
       await generatePdfClient({
+        studentName: user?.user_metadata?.name || user?.email || "Anonymous User",
+        rollNumber: "Interactive Mode",
+        practicalTitle: "Code Playground Session",
         code: activeFile?.content || "",
-        output: interactiveOutput,
-        user: user?.email || "Anonymous",
-        filename: "interactive_code_output.pdf",
+        language: lang,
+        submissionDate: new Date().toLocaleDateString(),
+        status: "PRACTICE",
+        filename: "playground_session.pdf",
       });
     } catch (err) {
       console.error("PDF generation failed:", err);
@@ -163,20 +167,31 @@ export default function Home() {
     }
   };
 
-  if (!user) return <div className="flex items-center justify-center min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-500 dark:text-gray-400">Loading...</div>;
+  if (!user) return (
+    <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50/30 to-purple-50/30 dark:from-gray-950 dark:via-indigo-950/10 dark:to-purple-950/10">
+      <div className="glass-card p-8 rounded-2xl flex flex-col items-center gap-4">
+        <div className="w-12 h-12 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+        <p className="text-gray-500 dark:text-gray-400 font-medium">Loading environment...</p>
+      </div>
+    </div>
+  );
 
   return (
-    <div className="flex flex-col h-screen overflow-auto bg-gradient-to-br from-gray-50 via-white to-gray-100 dark:from-gray-900 dark:via-gray-950 dark:to-black">
-      {/* Glass-effect Navbar */}
+    <div className="flex flex-col h-screen overflow-hidden bg-gradient-to-br from-slate-50 via-indigo-50/30 to-purple-50/30 dark:from-gray-950 dark:via-indigo-950/10 dark:to-purple-950/10">
       <Navbar />
 
       {/* Main Editor + Terminal */}
-      <div className="flex-1 mt-16 h-[calc(100vh-4rem)] w-full">
-        <div className="h-full w-full">
+      <div className="flex-1 mt-16 p-4 h-[calc(100vh-4rem)] w-full">
+        <div className="h-full w-full glass-card-premium rounded-3xl overflow-hidden shadow-2xl border border-white/20 dark:border-gray-800/50">
           <ResizablePanelGroup direction="horizontal" className="h-full">
-            <ResizablePanel defaultSize={showAssistant ? 75 : 100} minSize={50}>
+
+            {/* Left Main Panel: Editor & Terminal */}
+            <ResizablePanel defaultSize={showAssistant ? 75 : 100} minSize={50} className="bg-white/30 dark:bg-gray-900/30 backdrop-blur-sm">
               <ResizablePanelGroup direction="vertical" className="h-full">
-                <ResizablePanel defaultSize={60} minSize={30}>
+
+                {/* Code Editor */}
+                <ResizablePanel defaultSize={60} minSize={30} className="relative transition-all duration-300">
+                  <div className="absolute inset-0 bg-white/40 dark:bg-gray-900/50 backdrop-blur-sm -z-10" />
                   <CodeEditor
                     code={files.find(f => f.name === activeFileName)?.content || ""}
                     setCode={(newCode) => handleFileChange(activeFileName, newCode)}
@@ -185,7 +200,6 @@ export default function Home() {
                       setInteractiveOutput("");
                       setPlotImages([]);
                       if (terminalMounted && interactiveTerminalRef.current) {
-                        const activeFile = files.find(f => f.name === activeFileName);
                         interactiveTerminalRef.current.startExecution(files, activeFileName, lang);
                       }
                     }}
@@ -211,27 +225,42 @@ export default function Home() {
                     externalSetShowAssistant={setShowAssistant}
                     renderAssistantExternally={true}
                   />
-
                 </ResizablePanel>
 
-                <ResizableHandle className="bg-gray-200 dark:bg-gray-700 hover:bg-blue-500 dark:hover:bg-blue-600 transition-colors duration-200" />
+                <ResizableHandle className="h-2 bg-gray-100/50 dark:bg-gray-800/50 hover:bg-indigo-500/50 dark:hover:bg-indigo-500/50 transition-colors duration-300 flex items-center justify-center group outline-none focus-visible:ring-2 focus-visible:ring-indigo-500">
+                  <div className="w-16 h-1 rounded-full bg-gray-300 dark:bg-gray-700 group-hover:bg-white/80 transition-colors" />
+                </ResizableHandle>
 
-                <ResizablePanel defaultSize={40} minSize={20}>
-                  <InteractiveTerminal
-                    ref={interactiveTerminalRef}
-                    wsUrl="ws://localhost:5002"
-                    fontSize={16}
-                    fontFamily="Fira Code, monospace"
-                    onOutput={(data: string) => setInteractiveOutput((prev) => prev + data)}
-                    onMount={() => setTerminalMounted(true)}
-                    onImage={handleImage}
-                  />
+                {/* Terminal */}
+                <ResizablePanel defaultSize={40} minSize={20} className="bg-gray-50/50 dark:bg-gray-950/50 backdrop-blur-md">
+                  <div className="h-full flex flex-col">
+                    <div className="px-4 py-2 bg-gray-100/50 dark:bg-gray-900/50 border-b border-gray-200/50 dark:border-gray-800/50 flex items-center gap-2">
+                      <div className="w-3 h-3 rounded-full bg-red-400/80" />
+                      <div className="w-3 h-3 rounded-full bg-amber-400/80" />
+                      <div className="w-3 h-3 rounded-full bg-emerald-400/80" />
+                      <span className="ml-2 text-xs font-mono text-gray-500 dark:text-gray-400">Terminal</span>
+                    </div>
+                    <div className="flex-1 overflow-hidden relative">
+                      <div className="absolute inset-0 bg-black/5 dark:bg-black/20 pointer-events-none" />
+                      <InteractiveTerminal
+                        ref={interactiveTerminalRef}
+                        wsUrl="ws://localhost:5002"
+                        fontSize={16}
+                        fontFamily="Fira Code, monospace"
+                        onOutput={(data: string) => setInteractiveOutput((prev) => prev + data)}
+                        onMount={() => setTerminalMounted(true)}
+                        onImage={handleImage}
+                      />
+                    </div>
+                  </div>
                 </ResizablePanel>
 
                 {plotImages.length > 0 && (
                   <>
-                    <ResizableHandle />
-                    <ResizablePanel defaultSize={20} minSize={15}>
+                    <ResizableHandle className="h-2 bg-gray-100/50 dark:bg-gray-800/50 hover:bg-indigo-500/50 dark:hover:bg-indigo-500/50 transition-colors duration-300 flex items-center justify-center group">
+                      <div className="w-16 h-1 rounded-full bg-gray-300 dark:bg-gray-700 group-hover:bg-white/80 transition-colors" />
+                    </ResizableHandle>
+                    <ResizablePanel defaultSize={20} minSize={15} className="bg-white dark:bg-black">
                       <div className="h-full relative">
                         <PlotViewer
                           images={plotImages}
@@ -247,14 +276,16 @@ export default function Home() {
 
             {showAssistant && (
               <>
-                <ResizableHandle className="bg-gray-200 dark:bg-gray-700 hover:bg-blue-500 dark:hover:bg-blue-600 transition-colors duration-200" />
-                <ResizablePanel defaultSize={25} minSize={20} maxSize={40}>
+                <ResizableHandle className="w-2 bg-gray-100/50 dark:bg-gray-800/50 hover:bg-indigo-500/50 dark:hover:bg-indigo-500/50 transition-colors duration-300 flex items-center justify-center group outline-none">
+                  <div className="h-16 w-1 rounded-full bg-gray-300 dark:bg-gray-700 group-hover:bg-white/80 transition-colors" />
+                </ResizableHandle>
+                <ResizablePanel defaultSize={25} minSize={20} maxSize={40} className="bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl border-l border-white/20 dark:border-gray-800/50">
                   <AssistantPanel
                     codeContext={{
                       code: files.find(f => f.name === activeFileName)?.content || "",
                       activeFile: activeFileName,
                       files: files.map(f => ({ name: f.name, language: f.language })),
-                      cursorPosition: { lineNumber: 1, column: 1 } // TODO: Pass real cursor pos if needed
+                      cursorPosition: { lineNumber: 1, column: 1 }
                     }}
                     onClose={() => setShowAssistant(false)}
                   />

@@ -1,55 +1,61 @@
 // src/utils/dockerRunner.js
-const { spawn } = require("child_process");
-const { v4: uuidv4 } = require("uuid");
-const config = require("../config");
+const { spawn } = require('child_process');
+const { v4: uuidv4 } = require('uuid');
+const config = require('../config');
 
-function escapeForPrintf(s = "") {
+function escapeForPrintf(s = '') {
   return String(s).replace(/'/g, "'\\''");
 }
 
 async function runTestCase(tc, code, lang) {
   const {
     id,
-    stdinInput = "",
-    expectedOutput = "",
+    stdinInput = '',
+    expectedOutput = '',
     time_limit_ms = 5000,
     memory_limit_kb = 65536,
     is_hidden = false,
   } = tc;
 
   let docker;
-  let stdout = "";
-  let stderr = "";
+  let stdout = '';
+  let stderr = '';
   const uniqueId = uuidv4();
-  const escapedCode = code.replace(/\r/g, "");
+  const escapedCode = code.replace(/\r/g, '');
   const timeoutSec = Math.max(1, Math.ceil(time_limit_ms / 1000));
 
   // Use config limits if not overridden by test case (though test case usually takes precedence or we clamp it)
   // For now, we'll stick to the test case's limit or default, but ensuring we use the config's CPU/PIDs limits.
-  const memoryLimit = memory_limit_kb + "k";
+  const memoryLimit = memory_limit_kb + 'k';
 
   let cmd;
-  if (lang === "python") {
+  if (lang === 'python') {
     cmd = `
 mkdir -p /tmp/${uniqueId} &&
 printf "%s" '${escapeForPrintf(escapedCode)}' > /tmp/${uniqueId}/code.py &&
 printf "%s" '${escapeForPrintf(stdinInput)}' | timeout ${timeoutSec} python3 /tmp/${uniqueId}/code.py
 `;
     docker = spawn(
-      "docker",
+      'docker',
       [
-        "run",
-        "--rm",
-        "--network", "none",
-        "-m", memoryLimit,
-        "--cpus=" + config.docker.cpus,
-        "--pids-limit", config.docker.pidsLimit,
-        "codeguard-python",
-        "sh", "-c", cmd,
+        'run',
+        '--rm',
+        '--network',
+        'none',
+        '--cap-drop=ALL',
+        '-m',
+        memoryLimit,
+        '--cpus=' + config.docker.cpus,
+        '--pids-limit',
+        config.docker.pidsLimit,
+        'codeguard-python',
+        'sh',
+        '-c',
+        cmd,
       ],
-      { stdio: ["ignore", "pipe", "pipe"] }
+      { stdio: ['ignore', 'pipe', 'pipe'] }
     );
-  } else if (lang === "c") {
+  } else if (lang === 'c') {
     cmd = `
 mkdir -p /tmp/${uniqueId} &&
 printf "%s" '${escapeForPrintf(escapedCode)}' > /tmp/${uniqueId}/code.c &&
@@ -58,20 +64,26 @@ cat /tmp/${uniqueId}/gcc_err.txt 1>&2 || true &&
 printf "%s" '${escapeForPrintf(stdinInput)}' | timeout ${timeoutSec} /tmp/${uniqueId}/a.out
 `;
     docker = spawn(
-      "docker",
+      'docker',
       [
-        "run",
-        "--rm",
-        "--network", "none",
-        "-m", memoryLimit,
-        "--cpus=" + config.docker.cpus,
-        "--pids-limit", config.docker.pidsLimit,
-        "codeguard-c",
-        "sh", "-c", cmd,
+        'run',
+        '--rm',
+        '--network',
+        'none',
+        '--cap-drop=ALL',
+        '-m',
+        memoryLimit,
+        '--cpus=' + config.docker.cpus,
+        '--pids-limit',
+        config.docker.pidsLimit,
+        'codeguard-c',
+        'sh',
+        '-c',
+        cmd,
       ],
-      { stdio: ["ignore", "pipe", "pipe"] }
+      { stdio: ['ignore', 'pipe', 'pipe'] }
     );
-  } else if (lang === "java") {
+  } else if (lang === 'java') {
     cmd = `
 mkdir -p /tmp/${uniqueId} &&
 printf "%s" '${escapeForPrintf(escapedCode)}' > /tmp/${uniqueId}/TempUserCode.java || true &&
@@ -106,38 +118,46 @@ else
 fi
 `;
     docker = spawn(
-      "docker",
+      'docker',
       [
-        "run",
-        "--rm",
-        "--network", "none",
-        "-m", memoryLimit,
-        "--cpus=" + config.docker.cpus,
-        "--pids-limit", config.docker.javaPidsLimit,
-        "codeguard-java",
-        "sh", "-c", cmd,
+        'run',
+        '--rm',
+        '--network',
+        'none',
+        '--cap-drop=ALL',
+        '-m',
+        memoryLimit,
+        '--cpus=' + config.docker.cpus,
+        '--pids-limit',
+        config.docker.javaPidsLimit,
+        'codeguard-java',
+        'sh',
+        '-c',
+        cmd,
       ],
-      { stdio: ["ignore", "pipe", "pipe"] }
+      { stdio: ['ignore', 'pipe', 'pipe'] }
     );
   } else {
     return {
       test_case_id: id,
       input: stdinInput,
       expectedOutput,
-      stdout: "",
-      stderr: "Unsupported language",
+      stdout: '',
+      stderr: 'Unsupported language',
       exitCode: null,
       is_hidden,
     };
   }
 
   // Collect output
-  docker.stdout.on("data", (data) => (stdout += data.toString()));
-  docker.stderr.on("data", (data) => (stderr += data.toString()));
+  docker.stdout.on('data', (data) => (stdout += data.toString()));
+  docker.stderr.on('data', (data) => (stderr += data.toString()));
 
   const exitCode = await new Promise((resolve) => {
-    docker.on("close", (code) => resolve(typeof code === "number" ? code : null));
-    docker.on("error", () => resolve(1));
+    docker.on('close', (code) =>
+      resolve(typeof code === 'number' ? code : null)
+    );
+    docker.on('error', () => resolve(1));
   });
 
   // Trim results
@@ -155,7 +175,11 @@ fi
   return result;
 }
 
-module.exports = async function runBatchCode(code, lang = "python", batch = []) {
+module.exports = async function runBatchCode(
+  code,
+  lang = 'python',
+  batch = []
+) {
   const results = [];
   const CONCURRENCY_LIMIT = 5;
 
@@ -181,9 +205,11 @@ module.exports = async function runBatchCode(code, lang = "python", batch = []) 
 
   const tasks = batch.map((tc) => () => runTestCase(tc, code, lang));
 
-  console.log(`Executing ${batch.length} test cases with concurrency ${CONCURRENCY_LIMIT}...`);
+  console.log(
+    `Executing ${batch.length} test cases with concurrency ${CONCURRENCY_LIMIT}...`
+  );
   const batchResults = await runWithLimit(tasks);
 
-  console.log("📦 Final batch results:", batchResults.length);
+  console.log('📦 Final batch results:', batchResults.length);
   return batchResults;
 };
