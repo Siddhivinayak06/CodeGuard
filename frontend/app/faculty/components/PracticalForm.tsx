@@ -294,7 +294,12 @@ export default function PracticalForm({
   const getCurrentLevel = () => levels.find(l => l.level === activeLevel)!;
 
   const generateTestCases = async () => {
-    if (!form.description || form.description.length < 10) {
+    // Determine source description based on mode
+    const sourceDescription = enableLevels
+      ? getCurrentLevel().description
+      : form.description;
+
+    if (!sourceDescription || sourceDescription.length < 10) {
       alert("Please enter a detailed description first.");
       return;
     }
@@ -303,7 +308,7 @@ export default function PracticalForm({
     try {
       const prompt = `
         Generate 3-5 diverse test cases (input and expected output) for a programming problem with this description:
-        "${form.description}"
+        "${sourceDescription}"
         
         ${sampleCode ? `Reference Code:\n${sampleCode}` : ""}
 
@@ -366,7 +371,18 @@ export default function PracticalForm({
           time_limit_ms: 2000,
           memory_limit_kb: 65536
         }));
-        setTestCases(prev => [...prev, ...formattedTests]);
+
+        if (enableLevels) {
+          // Add to current level test cases
+          setLevels(prev => prev.map(l =>
+            l.level === activeLevel
+              ? { ...l, testCases: [...l.testCases, ...formattedTests] }
+              : l
+          ));
+        } else {
+          // Add to global test cases
+          setTestCases(prev => [...prev, ...formattedTests]);
+        }
       } else {
         throw new Error("Invalid response format");
       }
@@ -818,13 +834,23 @@ export default function PracticalForm({
                     <div className="mt-4">
                       <div className="flex items-center justify-between mb-3">
                         <h4 className="font-semibold text-gray-800 dark:text-gray-200">Test Cases for {activeLevel.charAt(0).toUpperCase() + activeLevel.slice(1)}</h4>
-                        <button
-                          type="button"
-                          onClick={() => addLevelTestCase(activeLevel)}
-                          className="inline-flex items-center gap-1 px-3 py-1.5 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 rounded-lg text-xs font-bold hover:bg-emerald-200 transition"
-                        >
-                          <PlusIcon size={14} /> Add Test Case
-                        </button>
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            onClick={generateTestCases}
+                            disabled={generatingTests}
+                            className="inline-flex items-center gap-1 px-3 py-1.5 bg-gradient-to-r from-violet-600 to-indigo-600 text-white rounded-lg text-xs font-bold hover:shadow-lg hover:scale-105 transition disabled:opacity-50"
+                          >
+                            {generatingTests ? <LoadingSpinner /> : <Sparkles size={14} />} AI
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => addLevelTestCase(activeLevel)}
+                            className="inline-flex items-center gap-1 px-3 py-1.5 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 rounded-lg text-xs font-bold hover:bg-emerald-200 transition"
+                          >
+                            <PlusIcon size={14} /> Add Test Case
+                          </button>
+                        </div>
                       </div>
                       <div className="space-y-3 max-h-[300px] overflow-y-auto">
                         {getCurrentLevel().testCases.map((tc, i) => (

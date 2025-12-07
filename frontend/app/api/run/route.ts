@@ -5,7 +5,9 @@ import { supabaseAdmin } from "@/lib/supabase/service";
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { code, lang, practicalId, submissionId, userTestCases = [], mode = "run", useCustomTestCases = false } = body;
+    const { code, lang, practicalId, submissionId, userTestCases = [], mode = "run", level, useCustomTestCases = false } = body;
+
+
 
     if (!code || !lang || !practicalId) {
       return NextResponse.json({ error: "Missing code, lang, or practicalId" }, { status: 400 });
@@ -16,17 +18,47 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Invalid practicalId" }, { status: 400 });
     }
 
-    // Fetch DB test cases
-    const { data: dbTestCases = [], error: tcErr } = await supabaseAdmin
+    // Determine max marks and level filter
+    let maxMarks = 10; // Default
+    let levelId: string | null = null;
+
+    if (level) {
+      const { data: levelData } = await supabaseAdmin
+        .from("practical_levels")
+        .select("id, max_marks")
+        .eq("practical_id", pid)
+        .eq("level", level)
+        .single();
+
+      if (levelData) {
+        levelId = levelData.id;
+        maxMarks = levelData.max_marks || 10;
+      }
+    }
+
+    // Fetch DB test cases (filtered by level if applicable)
+    let query = supabaseAdmin
       .from("test_cases")
       .select("*")
       .eq("practical_id", pid)
       .order("id", { ascending: true });
 
+    // Key filtering logic: 
+    // If levelId exists, only get test cases for that level.
+    // If no levelId (single level mode), only get test cases where level_id IS NULL.
+    if (levelId) {
+      query = query.eq("level_id", levelId);
+    } else {
+      query = query.is("level_id", null);
+    }
+
+    const { data: dbTestCasesData, error: tcErr } = await query;
+    const dbTestCases = dbTestCasesData || [];
+
     if (tcErr) console.error("Failed to fetch test cases:", tcErr);
 
     // Fetch reference code
-    const { data: refs = [] } = await supabaseAdmin
+    const { data: refsData } = await supabaseAdmin
       .from("reference_codes")
       .select("id, language, code, is_primary, created_at")
       .eq("practical_id", pid)
@@ -34,6 +66,7 @@ export async function POST(req: Request) {
       .order("created_at", { ascending: false })
       .limit(1);
 
+    const refs = refsData || [];
     const ref = refs[0] || null;
     const referenceCode = ref?.code ?? "";
     const referenceLang = (ref?.language ?? "").toLowerCase();
@@ -92,7 +125,7 @@ export async function POST(req: Request) {
             const refPayload = {
               code: referenceCode,
               lang: refLangNorm || reqLangNorm || String(lang),
-              batch: userBatch.map(u => ({ id: u.id, stdinInput: u.stdinInput, time_limit_ms: u.time_limit_ms, memory_limit_kb: u.memory_limit_kb })),
+              batch: userBatch.map((u: any) => ({ id: u.id, stdinInput: u.stdinInput, time_limit_ms: u.time_limit_ms, memory_limit_kb: u.memory_limit_kb })),
             };
             const refRes = await callRunner(refPayload);
             const refDetails = refRes.details ?? [];
@@ -106,7 +139,7 @@ export async function POST(req: Request) {
             }
 
             // Fill expectedOutput in userBatch
-            batch = userBatch.map(u => ({
+            batch = userBatch.map((u: any) => ({
               ...u,
               expectedOutput: refMap.get(u.id) ?? "",
             }));
@@ -225,49 +258,131 @@ export async function POST(req: Request) {
     let passed = 0;
     let total = 0;
     let marksObtained = 0;
-    const predefinedResults = allResults.filter(r => !String(r.test_case_id).startsWith("user-"));
+    const predefinedResults = allResults.filter((r: any) => !String(r.test_case_id).startsWith("user-"));
+
+    const { data: practicalData } = await supabaseAdmin
+      .from("practicals")
+      .select("deadline")
+      .eq("id", pid)
+      .single();
+
+    const globalDeadline = practicalData?.deadline ? new Date(practicalData.deadline) : null;
 
     if (mode === "submit" && submissionId) {
-      for (const tcr of predefinedResults) {
-        try {
-          await supabaseAdmin.from("test_case_results").upsert(
-            {
-              submission_id: submissionId,
-              test_case_id: tcr.test_case_id,
-              status: tcr.status,
-              stdout: tcr.stdout,
-              stderr: tcr.error ?? "",
-              execution_time_ms: tcr.time_ms,
-              memory_used_kb: tcr.memory_kb,
-            },
-            { onConflict: "submission_id,test_case_id" }
-          );
-        } catch (e) {
-          console.error("Failed to upsert test_case_result:", e);
-        }
+      // Calculate marks first
+      passed = predefinedResults.filter((r: any) => r.status === "passed").length;
+      total = predefinedResults.length;
+      const baseMarks = total > 0 ? Math.round((passed / total) * maxMarks) : 0;
+
+      // Check existing marks and fetch student_id for deadline check
+      let shouldUpdate = true;
+      let studentId = null;
+      try {
+        const { data: currentSub } = await supabaseAdmin
+          .from("submissions")
+          .select("marks_obtained, student_id")
+          .eq("id", submissionId)
+          .single();
+
+        studentId = currentSub?.student_id;
+
+        // We will compare final calculated marks (with penalty) later, but for now strict logic of "highest marks" implies comparing final results.
+        // However, if we need to check deadline, we need to calculate final marks first.
+      } catch (e) {
+        console.error("Error checking existing marks:", e);
       }
 
-      passed = predefinedResults.filter(r => r.status === "passed").length;
-      total = predefinedResults.length;
-      marksObtained = total > 0 ? Math.round((passed / total) * 10) : 0;
+      // Calculate Lateness & Penalty
+      let penalty = 0;
+      if (globalDeadline && studentId) {
+        try {
+          // Check for individual assignment deadline override
+          const { data: assignment } = await supabaseAdmin
+            .from("student_practicals")
+            .select("assigned_deadline")
+            .eq("practical_id", pid)
+            .eq("student_id", studentId)
+            .single();
 
+          const effectiveDeadline = assignment?.assigned_deadline ? new Date(assignment.assigned_deadline) : globalDeadline;
+
+          if (new Date() > effectiveDeadline) {
+            penalty = 1;
+          }
+        } catch (e: any) {
+          // Fallback to global deadline if assignment check fails
+          if (globalDeadline && new Date() > globalDeadline) {
+            penalty = 1;
+          }
+        }
+      } else if (globalDeadline && new Date() > globalDeadline) {
+        penalty = 1;
+      }
+
+      marksObtained = Math.max(0, baseMarks - penalty);
+      const newStatus = marksObtained >= 4 ? "passed" : "failed";
+
+      // Re-check shouldUpdate with FINAL marks
       try {
-        await supabaseAdmin
+        const { data: currentSub } = await supabaseAdmin
           .from("submissions")
-          .update({ status: "evaluated", marks_obtained: marksObtained })
-          .eq("id", submissionId);
-      } catch (e) {
-        console.error("Failed to update submission:", e);
+          .select("marks_obtained")
+          .eq("id", submissionId)
+          .single();
+
+        if (currentSub && (currentSub.marks_obtained || 0) > marksObtained) {
+          shouldUpdate = false;
+        }
+      } catch (e) { }
+
+      if (shouldUpdate) {
+        // Update test case results
+        for (const tcr of predefinedResults) {
+          try {
+            await supabaseAdmin.from("test_case_results").upsert(
+              {
+                submission_id: submissionId,
+                test_case_id: tcr.test_case_id,
+                status: tcr.status,
+                stdout: tcr.stdout,
+                stderr: tcr.error ?? "",
+                execution_time_ms: tcr.time_ms,
+                memory_used_kb: tcr.memory_kb,
+              },
+              { onConflict: "submission_id,test_case_id" }
+            );
+          } catch (e) {
+            console.error("Failed to upsert test_case_result:", e);
+          }
+        }
+
+        // Update submission with new marks, status, AND latest code/language
+        try {
+          await supabaseAdmin
+            .from("submissions")
+            .update({
+              status: newStatus,
+              marks_obtained: marksObtained,
+              code,
+              language: reqLangNorm || lang
+            })
+            .eq("id", submissionId);
+        } catch (e) {
+          console.error("Failed to update submission:", e);
+        }
+      } else {
+        // If we didn't update the DB, we might want to return the actual calculated status for the user feedback
+        // But keeping the consistent pattern.
       }
     } else {
-      passed = predefinedResults.filter(r => r.status === "passed").length;
+      passed = predefinedResults.filter((r: any) => r.status === "passed").length;
       total = predefinedResults.length;
-      marksObtained = total > 0 ? Math.round((passed / total) * 10) : 0;
+      marksObtained = total > 0 ? Math.round((passed / total) * maxMarks) : 0;
     }
 
     return NextResponse.json({
       results: allResults,
-      verdict: "evaluated",
+      verdict: marksObtained >= 4 ? "passed" : "failed", // Return calculated verdict
       marksObtained,
       passedTestCases: passed,
       totalTestCases: total,

@@ -8,6 +8,7 @@ import { EditorToolbar } from "./EditorToolbar";
 import { AssistantPanel } from "./AssistantPanel";
 import { FileExplorer, FileData } from "./FileExplorer";
 import { StatusBar } from "./StatusBar";
+import { X, FileCode2 } from "lucide-react";
 
 interface CodeEditorProps {
     code: string;
@@ -33,6 +34,8 @@ interface CodeEditorProps {
     onFileCreate?: (fileName: string) => void;
     onFileDelete?: (fileName: string) => void;
     onFileChange?: (fileName: string, newContent: string) => void;
+    onFileRename?: (oldName: string, newName: string) => void;
+    onFileUpload?: (fileName: string, content: string) => void;
     // External control props
     externalShowAssistant?: boolean;
     externalSetShowAssistant?: (show: boolean) => void;
@@ -62,6 +65,8 @@ export default function CodeEditor({
     onFileCreate,
     onFileDelete,
     onFileChange,
+    onFileRename,
+    onFileUpload,
     externalShowAssistant,
     externalSetShowAssistant,
     renderAssistantExternally = false,
@@ -205,10 +210,46 @@ export default function CodeEditor({
                         onFileSelect={onFileSelect}
                         onFileCreate={onFileCreate}
                         onFileDelete={onFileDelete}
+                        onFileRename={onFileRename}
+                        onFileUpload={onFileUpload}
                     />
                 )}
 
                 <div className="flex-1 relative flex flex-col min-w-0">
+
+                    {/* Tab Bar */}
+                    {files && files.length > 0 && onFileSelect && (
+                        <div className="flex items-center bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 overflow-x-auto scrollbar-hide">
+                            {files.map(file => (
+                                <div
+                                    key={file.name}
+                                    className={`
+                                        group flex items-center gap-2 px-3 py-2 text-sm border-r border-gray-200 dark:border-gray-800 cursor-pointer min-w-[120px] max-w-[200px] select-none transition-colors
+                                        ${activeFileName === file.name
+                                            ? "bg-white dark:bg-gray-900 text-blue-600 dark:text-blue-400 border-t-2 border-t-blue-500 font-medium"
+                                            : "bg-gray-100 dark:bg-gray-950 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800"
+                                        }
+                                    `}
+                                    onClick={() => onFileSelect(file.name)}
+                                >
+                                    <FileCode2 size={14} className={activeFileName === file.name ? "text-blue-500" : "text-gray-400"} />
+                                    <span className="truncate flex-1">{file.name}</span>
+                                    {onFileDelete && files.length > 1 && (
+                                        <button
+                                            className="opacity-0 group-hover:opacity-100 p-0.5 rounded-md hover:bg-red-100 dark:hover:bg-red-900/30 hover:text-red-500 transition-all"
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                onFileDelete(file.name);
+                                            }}
+                                        >
+                                            <X size={12} />
+                                        </button>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                    )}
+
                     <div className="flex-1 relative">
                         <Editor
                             height="100%"

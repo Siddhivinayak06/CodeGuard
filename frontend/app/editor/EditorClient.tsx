@@ -367,6 +367,7 @@ rl.on('line', (line) => {
         lang,
         practicalId,
         mode: "run",
+        level: activeLevel,
         // Tell server explicitly whether we want to run custom cases
         useCustomTestCases: customCases.length > 0,
         userTestCases: customCases.map((tc, idx) => ({
@@ -430,6 +431,7 @@ rl.on('line', (line) => {
         practicalId,
         submissionId: submission.id,
         mode: "submit",
+        level: activeLevel,
       });
 
       const verdict = runRes.data.verdict || "evaluated";

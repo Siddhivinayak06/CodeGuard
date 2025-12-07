@@ -3,7 +3,6 @@
 import { useState, useRef, useEffect, useMemo } from "react";
 import dynamic from "next/dynamic";
 import CodeEditor from "@/components/CodeEditor";
-import useProctoring from "@/hooks/useProctoring";
 import { ModeToggle } from "@/components/ModeToggle";
 import { ChevronDown } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
@@ -42,7 +41,6 @@ export default function Home() {
     { name: "main.py", content: LANGUAGE_TEMPLATES.python, language: "python" }
   ]);
   const [activeFileName, setActiveFileName] = useState("main.py");
-  const { violations, locked } = useProctoring(3);
 
   const interactiveTerminalRef = useRef<any>(null);
   const [interactiveOutput, setInteractiveOutput] = useState<string>("");
@@ -126,11 +124,42 @@ export default function Home() {
     });
   };
 
+  const handleFileRename = (oldName: string, newName: string) => {
+    if (!newName.trim()) return;
+    if (files.some(f => f.name === newName)) {
+      alert("File with this name already exists!");
+      return;
+    }
+    setFiles(prev => prev.map(f =>
+      f.name === oldName ? { ...f, name: newName } : f
+    ));
+    if (activeFileName === oldName) {
+      setActiveFileName(newName);
+    }
+  };
+
   const handleFileChange = (fileName: string, newContent: string) => {
     setFiles(prev => prev.map(f =>
       f.name === fileName ? { ...f, content: newContent } : f
     ));
   };
+
+  const handleFileUpload = (fileName: string, content: string) => {
+    if (files.some(f => f.name === fileName)) {
+      alert("File with this name already exists!");
+      return;
+    }
+    const ext = fileName.split('.').pop()?.toLowerCase();
+    let language: string = lang;
+    if (ext === 'py') language = 'python';
+    else if (ext === 'java') language = 'java';
+    else if (ext === 'c' || ext === 'cpp') language = 'c';
+    else if (ext === 'js') language = 'javascript';
+
+    setFiles(prev => [...prev, { name: fileName, content, language }]);
+    setActiveFileName(fileName);
+  };
+
 
   const handleLangChange = (newLang: string) => {
     if (newLang !== "java" && newLang !== "python" && newLang !== "c") return;
@@ -193,7 +222,7 @@ export default function Home() {
                   <CodeEditor
                     code={files.find(f => f.name === activeFileName)?.content || ""}
                     setCode={(newCode) => handleFileChange(activeFileName, newCode)}
-                    disabled={locked}
+                    disabled={false}
                     onRun={() => {
                       setInteractiveOutput("");
                       setPlotImages([]);
@@ -204,14 +233,15 @@ export default function Home() {
                     onDownload={downloadPdf}
                     onSubmit={() => { }}
                     loading={false}
-                    locked={locked}
+                    locked={false}
                     lang={lang}
                     onLangChange={handleLangChange}
                     showInputToggle={false}
                     showInput={false}
                     setShowInput={() => { }}
                     terminalRef={interactiveTerminalRef}
-                    violations={violations || 0}
+
+                    violations={0}
                     isFullscreen={true}
                     files={files}
                     activeFileName={activeFileName}
@@ -219,6 +249,8 @@ export default function Home() {
                     onFileCreate={handleFileCreate}
                     onFileDelete={handleFileDelete}
                     onFileChange={handleFileChange}
+                    onFileRename={handleFileRename}
+                    onFileUpload={handleFileUpload}
                     externalShowAssistant={showAssistant}
                     externalSetShowAssistant={setShowAssistant}
                     renderAssistantExternally={true}

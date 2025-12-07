@@ -9,21 +9,31 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
     }
 
-    // Upsert submission: if student already has submission for this practical, update code
+    // Check if submission already exists
+    const { data: existingSubmission } = await supabaseAdmin
+      .from("submissions")
+      .select("*")
+      .eq("student_id", student_id)
+      .eq("practical_id", practical_id)
+      .single();
+
+    if (existingSubmission) {
+      // Return existing submission without modifying it (preserves marks)
+      return NextResponse.json({ submission: existingSubmission });
+    }
+
+    // Insert new submission if none exists
     const { data: submission, error } = await supabaseAdmin
       .from("submissions")
-      .upsert(
-        {
-          student_id,
-          practical_id,
-          code,
-          language,
-          status,
-          output: "",
-          marks_obtained,
-        },
-        { onConflict: "student_id,practical_id", ignoreDuplicates: false }
-      )
+      .insert({
+        student_id,
+        practical_id,
+        code,
+        language,
+        status,
+        output: "",
+        marks_obtained: marks_obtained || 0,
+      })
       .select("*")
       .single();
 
