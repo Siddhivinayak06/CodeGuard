@@ -3,7 +3,6 @@
 import React, { useEffect, useMemo, useRef, useState, Suspense } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useSearchParams } from "next/navigation";
-import Navbar from "@/components/Navbar";
 import { generatePdfClient } from "@/lib/ClientPdf";
 import {
   CheckCircle2,
@@ -335,7 +334,6 @@ function FacultySubmissionsContent() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50/30 to-purple-50/30 dark:from-gray-950 dark:via-indigo-950/10 dark:to-purple-950/10">
-      <Navbar />
 
       <main className="pt-24 pb-12 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto space-y-8">
 

@@ -4,7 +4,6 @@ import { useCallback, useEffect, useRef, useState, useMemo } from "react";
 import axios from "axios";
 import { ChevronDown } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
-import Navbar from "@/components/Navbar";
 import CodeEditor from "@/components/CodeEditor";
 import OutputPane from "@/components/OutputPane";
 import InputPane from "@/components/InputPane";
@@ -159,7 +158,6 @@ int main(void) {
   return (
     <div className="flex flex-col h-screen overflow-hidden bg-gradient-to-br from-gray-50 via-white to-gray-100 dark:from-gray-900 dark:via-gray-950 dark:to-black">
       {/* Glass Navbar */}
-      <Navbar />
 
       {/* Editor Section: fills remaining space, full width and height minus navbar */}
       <div className="flex-1 pt-16">

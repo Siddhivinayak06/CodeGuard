@@ -158,21 +158,72 @@ export default function EditorClient() {
   const mountedRef = useRef(true);
 
   const practicalId = searchParams?.get("practicalId");
+  const languageFromUrl = searchParams?.get("language")?.toLowerCase() || "java";
+  const hasLevelsParam = searchParams?.get("hasLevels") === "true";
 
-  // DEFAULT LANGUAGE SET TO JAVA and provide a starter template
-  const javaStarter = `public class Main {
+  // Starter templates for each language
+  const starterTemplates: Record<string, string> = {
+    java: `public class Main {
     public static void main(String[] args) {
         java.util.Scanner sc = new java.util.Scanner(System.in);
-        // Read all tokens from stdin and print them (example)
+        // Read input and process
         while (sc.hasNext()) {
             System.out.println(sc.next());
         }
         sc.close();
     }
-}`;
+}`,
+    python: `# Read input and process
+import sys
 
-  const [lang, setLang] = useState("java");
-  const [code, setCode] = useState(javaStarter);
+for line in sys.stdin:
+    print(line.strip())
+`,
+    c: `#include <stdio.h>
+
+int main() {
+    char buffer[1024];
+    // Read input and process
+    while (fgets(buffer, sizeof(buffer), stdin) != NULL) {
+        printf("%s", buffer);
+    }
+    return 0;
+}
+`,
+    cpp: `#include <iostream>
+#include <string>
+using namespace std;
+
+int main() {
+    string line;
+    // Read input and process
+    while (getline(cin, line)) {
+        cout << line << endl;
+    }
+    return 0;
+}
+`,
+    javascript: `// Read input and process
+const readline = require('readline');
+const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout
+});
+
+rl.on('line', (line) => {
+    console.log(line);
+});
+`,
+  };
+
+  // Get starter code for the selected language
+  const getStarterCode = (language: string) => {
+    return starterTemplates[language.toLowerCase()] || starterTemplates.java;
+  };
+
+  // Use language from URL if provided, otherwise default to java
+  const [lang, setLang] = useState(languageFromUrl);
+  const [code, setCode] = useState(getStarterCode(languageFromUrl));
   const [loading, setLoading] = useState(false);
   const { violations, locked } = useProctoring(3);
   const [practical, setPractical] = useState<any>(null);
@@ -189,6 +240,10 @@ export default function EditorClient() {
 
   // NEW: examples from test_cases table
   const [examplesFromDB, setExamplesFromDB] = useState<Array<{ input: string; output: string }>>([]);
+
+  // Multi-level practical support
+  const [practicalLevels, setPracticalLevels] = useState<Array<{ id: number; level: string; title: string; description: string; max_marks: number }>>([]);
+  const [activeLevel, setActiveLevel] = useState<string>("easy");
 
   // expanded state for LeetCode-style test case cards
   const [expandedCases, setExpandedCases] = useState<Record<number, boolean>>({});
@@ -225,9 +280,29 @@ export default function EditorClient() {
           subject_name: data.subjects?.subject_name || "Unknown",
         });
       }
+
+      // Fetch levels if this is a multi-level practical
+      if (hasLevelsParam) {
+        const { data: levelsData, error: levelsError } = await supabase
+          .from("practical_levels")
+          .select("*")
+          .eq("practical_id", Number(practicalId))
+          .order("id", { ascending: true });
+
+        if (!levelsError && levelsData && mountedRef.current) {
+          const sorted = levelsData.sort((a, b) => {
+            const order: Record<string, number> = { easy: 0, medium: 1, hard: 2 };
+            return (order[a.level] || 0) - (order[b.level] || 0);
+          });
+          setPracticalLevels(sorted);
+          if (sorted.length > 0) {
+            setActiveLevel(sorted[0].level);
+          }
+        }
+      }
     };
     fetchPractical();
-  }, [practicalId, supabase]);
+  }, [practicalId, supabase, hasLevelsParam]);
 
   // ========================
   // Fetch examples (test_cases) from DB for this practical
@@ -321,7 +396,7 @@ export default function EditorClient() {
       }));
 
       setTestCaseResults(results);
-           setShowUserTestCases(false); // ← Add this line to switch to results tab
+      setShowUserTestCases(false); // ← Add this line to switch to results tab
       console.log("Run results:", results);
     } catch (err: any) {
       console.error(err);
@@ -456,15 +531,44 @@ export default function EditorClient() {
                 {practical?.title || "Problem Title"}
               </h1>
 
+              {/* Level Selector Tabs (for multi-level practicals) */}
+              {hasLevelsParam && practicalLevels.length > 0 && (
+                <div className="flex gap-2 mb-4">
+                  {practicalLevels.map((level) => {
+                    const colors: Record<string, { active: string; inactive: string }> = {
+                      easy: { active: 'bg-emerald-500 text-white', inactive: 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200' },
+                      medium: { active: 'bg-amber-500 text-white', inactive: 'bg-amber-100 text-amber-700 hover:bg-amber-200' },
+                      hard: { active: 'bg-red-500 text-white', inactive: 'bg-red-100 text-red-700 hover:bg-red-200' },
+                    };
+                    const color = colors[level.level] || colors.easy;
+                    const isActive = activeLevel === level.level;
+                    return (
+                      <button
+                        key={level.id}
+                        onClick={() => setActiveLevel(level.level)}
+                        className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${isActive ? color.active : color.inactive}`}
+                      >
+                        {level.level.charAt(0).toUpperCase() + level.level.slice(1)}
+                        <span className="ml-1 opacity-75">({level.max_marks}pts)</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+
               {/* Badges / meta row */}
               <div className="flex items-center gap-2 mb-4">
-                <div className="text-xs font-semibold px-2 py-1 rounded-md bg-yellow-100 text-yellow-800">Medium</div>
-                <div className="text-xs px-2 py-1 rounded-md bg-gray-100 text-gray-700">Java</div>
+                <div className="text-xs font-semibold px-2 py-1 rounded-md bg-yellow-100 text-yellow-800">
+                  {hasLevelsParam ? activeLevel.charAt(0).toUpperCase() + activeLevel.slice(1) : 'Medium'}
+                </div>
+                <div className="text-xs px-2 py-1 rounded-md bg-gray-100 text-gray-700">{lang || 'Java'}</div>
               </div>
 
               {/* Problem statement paragraph */}
               <div className="text-gray-700 dark:text-gray-300 leading-relaxed mb-6 whitespace-pre-wrap">
-                {problemStmt}
+                {hasLevelsParam && practicalLevels.length > 0
+                  ? practicalLevels.find(l => l.level === activeLevel)?.description || problemStmt
+                  : problemStmt}
               </div>
 
               {/* Examples */}
@@ -529,7 +633,7 @@ export default function EditorClient() {
 
           <ResizableHandle className="w-1 bg-gray-200 dark:bg-gray-700 hover:bg-blue-400 dark:hover:bg-blue-600 transition-colors duration-200 rounded" />
 
-{/* RIGHT: Code Editor + Bottom Section */}
+          {/* RIGHT: Code Editor + Bottom Section */}
           <ResizablePanel defaultSize={60} minSize={40}>
             <ResizablePanelGroup direction="vertical" className="h-full gap-3 rounded-2xl overflow-hidden">
               {/* Code Editor */}
@@ -559,26 +663,24 @@ export default function EditorClient() {
               {/* Bottom Section - Tabs like LeetCode */}
               <ResizablePanel defaultSize={35} minSize={20}>
                 <div className="h-full flex flex-col bg-white/10 dark:bg-gray-900/30 backdrop-blur-md rounded-xl border border-gray-300 dark:border-gray-700">
-                  
+
                   {/* Tab Headers */}
                   <div className="flex-shrink-0 flex border-b border-gray-300 dark:border-gray-700">
                     <button
                       onClick={() => setShowUserTestCases(false)}
-                      className={`px-4 py-3 text-sm font-medium transition-colors ${
-                        !showUserTestCases
-                          ? 'text-blue-600 dark:text-blue-400 border-b-2 border-blue-600 dark:border-blue-400 bg-blue-50/50 dark:bg-blue-900/20'
-                          : 'text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200'
-                      }`}
+                      className={`px-4 py-3 text-sm font-medium transition-colors ${!showUserTestCases
+                        ? 'text-blue-600 dark:text-blue-400 border-b-2 border-blue-600 dark:border-blue-400 bg-blue-50/50 dark:bg-blue-900/20'
+                        : 'text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200'
+                        }`}
                     >
                       Testcase Result
                     </button>
                     <button
                       onClick={() => setShowUserTestCases(true)}
-                      className={`px-4 py-3 text-sm font-medium transition-colors ${
-                        showUserTestCases
-                          ? 'text-blue-600 dark:text-blue-400 border-b-2 border-blue-600 dark:border-blue-400 bg-blue-50/50 dark:bg-blue-900/20'
-                          : 'text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200'
-                      }`}
+                      className={`px-4 py-3 text-sm font-medium transition-colors ${showUserTestCases
+                        ? 'text-blue-600 dark:text-blue-400 border-b-2 border-blue-600 dark:border-blue-400 bg-blue-50/50 dark:bg-blue-900/20'
+                        : 'text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200'
+                        }`}
                     >
                       Test Cases
                     </button>
@@ -586,7 +688,7 @@ export default function EditorClient() {
 
                   {/* Tab Content */}
                   <div className="flex-1 overflow-auto">
-                    
+
                     {/* Test Case Results Tab */}
                     {!showUserTestCases && (
                       <div className="h-full p-4">

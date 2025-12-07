@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import Navbar from "@/components/Navbar";
+import Link from "next/link";
 import {
   Users,
   BookOpen,
@@ -15,6 +15,11 @@ import {
   Trash2,
   X,
   Shield,
+  ArrowUpRight,
+  Settings,
+  BarChart3,
+  UserCog,
+  ChevronRight,
 } from "lucide-react";
 
 type Subject = {
@@ -30,27 +35,68 @@ function StatCard({
   label,
   value,
   icon,
-  color,
+  gradient,
+  delay = 0,
 }: {
   label: string;
   value: number;
   icon: React.ReactNode;
-  color: string;
+  gradient: string;
+  delay?: number;
 }) {
   return (
-    <div className="glass-card-premium rounded-2xl p-5 hover-lift">
+    <div
+      className="glass-card-premium rounded-3xl p-6 hover-lift animate-slideUp"
+      style={{ animationDelay: `${delay}ms` }}
+    >
       <div className="flex items-center justify-between">
         <div>
-          <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+          <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
             {label}
           </p>
-          <p className="text-3xl font-bold text-gray-900 dark:text-white mt-1">
+          <p className="text-4xl font-bold text-gray-900 dark:text-white mt-2">
             {value}
           </p>
         </div>
-        <div className={`icon-container-lg ${color}`}>{icon}</div>
+        <div className={`w-14 h-14 rounded-2xl ${gradient} flex items-center justify-center shadow-lg`}>
+          {icon}
+        </div>
       </div>
     </div>
+  );
+}
+
+// Quick Action Card
+function QuickActionCard({
+  title,
+  description,
+  icon,
+  href,
+  gradient,
+  delay = 0,
+}: {
+  title: string;
+  description: string;
+  icon: React.ReactNode;
+  href: string;
+  gradient: string;
+  delay?: number;
+}) {
+  return (
+    <Link
+      href={href}
+      className={`glass-card rounded-3xl p-6 hover-lift group animate-slideUp ${gradient} border-0`}
+      style={{ animationDelay: `${delay}ms` }}
+    >
+      <div className="flex items-start justify-between mb-4">
+        <div className="p-3 rounded-xl bg-white/20 backdrop-blur-sm">
+          {icon}
+        </div>
+        <ArrowUpRight className="w-5 h-5 text-white/60 group-hover:text-white group-hover:-translate-y-0.5 group-hover:translate-x-0.5 transition-all" />
+      </div>
+      <h3 className="text-lg font-bold text-white">{title}</h3>
+      <p className="text-white/70 text-sm mt-1">{description}</p>
+    </Link>
   );
 }
 
@@ -83,6 +129,7 @@ export default function AdminDashboard() {
   const supabase = useMemo(() => createClient(), []);
 
   const [user, setUser] = useState<any | null>(null);
+  const [userName, setUserName] = useState<string>("");
   const [stats, setStats] = useState<Record<string, number>>({});
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
@@ -114,6 +161,14 @@ export default function AdminDashboard() {
           return;
         }
         if (mountedRef.current) setUser(user);
+
+        // Get display name
+        const { data: userData } = await supabase
+          .from("users")
+          .select("name")
+          .eq("uid", user.id)
+          .single();
+        if (userData) setUserName(userData.name);
       } catch (err) {
         console.error("Auth fetch error:", err);
         router.push("/auth/login");
@@ -288,31 +343,41 @@ export default function AdminDashboard() {
     }
   };
 
+  // Greeting based on time
+  const getGreeting = () => {
+    const hour = new Date().getHours();
+    if (hour < 12) return "Good morning";
+    if (hour < 17) return "Good afternoon";
+    return "Good evening";
+  };
+
   if (!user)
     return (
-      <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-100 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950">
+      <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50/30 to-purple-50/30 dark:from-gray-950 dark:via-indigo-950/10 dark:to-purple-950/10">
         <div className="flex flex-col items-center gap-4">
-          <div className="w-12 h-12 border-4 border-red-500 border-t-transparent rounded-full animate-spin" />
+          <div className="w-12 h-12 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin" />
           <p className="text-gray-500 dark:text-gray-400">Loading...</p>
         </div>
       </div>
     );
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-red-50/20 to-orange-50/20 dark:from-gray-950 dark:via-red-950/10 dark:to-orange-950/10">
-      <Navbar />
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50/30 to-purple-50/30 dark:from-gray-950 dark:via-indigo-950/10 dark:to-purple-950/10">
 
       <main className="pt-24 pb-12 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
         {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8 animate-slideUp">
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 rounded-xl bg-gradient-to-br from-red-500 to-orange-600 shadow-lg shadow-red-500/25">
-              <Shield className="w-6 h-6 text-white" />
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 mb-8 animate-slideUp">
+          <div className="flex items-center gap-4">
+            <div className="p-3 rounded-2xl bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 shadow-lg shadow-purple-500/25">
+              <Shield className="w-8 h-8 text-white" />
             </div>
             <div>
-              <h1 className="text-3xl font-bold text-gradient-warm">Admin Dashboard</h1>
-              <p className="text-sm text-gray-600 dark:text-gray-400">
-                Manage subjects, users, and system settings
+              <p className="text-gray-500 dark:text-gray-400 text-sm">{getGreeting()},</p>
+              <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
+                {userName || "Admin"} 👋
+              </h1>
+              <p className="text-sm text-gray-600 dark:text-gray-400 mt-0.5">
+                Manage your platform from here
               </p>
             </div>
           </div>
@@ -321,7 +386,7 @@ export default function AdminDashboard() {
             <button
               onClick={openAddForm}
               disabled={busy}
-              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 text-white font-medium shadow-lg shadow-emerald-500/25 hover:shadow-emerald-500/40 hover:-translate-y-0.5 transition-all disabled:opacity-60"
+              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 text-white font-medium shadow-lg shadow-purple-500/25 hover:shadow-purple-500/40 hover:-translate-y-0.5 transition-all disabled:opacity-60"
             >
               <Plus className="w-4 h-4" />
               Add Subject
@@ -338,59 +403,99 @@ export default function AdminDashboard() {
         </div>
 
         {/* Stats Grid */}
-        <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 mb-10 animate-slideUp animation-delay-100">
+        <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 mb-8">
           <StatCard
             label="Students"
             value={stats.students ?? 0}
-            icon={<GraduationCap className="w-6 h-6 text-blue-600 dark:text-blue-400" />}
-            color="bg-blue-100 dark:bg-blue-900/30"
+            icon={<GraduationCap className="w-7 h-7 text-white" />}
+            gradient="bg-gradient-to-br from-blue-500 to-cyan-500 shadow-blue-500/25"
+            delay={100}
           />
           <StatCard
             label="Faculty"
             value={stats.faculty ?? 0}
-            icon={<Users className="w-6 h-6 text-purple-600 dark:text-purple-400" />}
-            color="bg-purple-100 dark:bg-purple-900/30"
+            icon={<Users className="w-7 h-7 text-white" />}
+            gradient="bg-gradient-to-br from-purple-500 to-pink-500 shadow-purple-500/25"
+            delay={150}
           />
           <StatCard
             label="Subjects"
             value={stats.subjects ?? 0}
-            icon={<BookOpen className="w-6 h-6 text-amber-600 dark:text-amber-400" />}
-            color="bg-amber-100 dark:bg-amber-900/30"
+            icon={<BookOpen className="w-7 h-7 text-white" />}
+            gradient="bg-gradient-to-br from-indigo-500 to-purple-500 shadow-indigo-500/25"
+            delay={200}
           />
           <StatCard
             label="Practicals"
             value={stats.practicals ?? 0}
-            icon={<FileCode className="w-6 h-6 text-emerald-600 dark:text-emerald-400" />}
-            color="bg-emerald-100 dark:bg-emerald-900/30"
+            icon={<FileCode className="w-7 h-7 text-white" />}
+            gradient="bg-gradient-to-br from-emerald-500 to-teal-500 shadow-emerald-500/25"
+            delay={250}
+          />
+        </section>
+
+        {/* Quick Actions */}
+        <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 mb-8">
+          <QuickActionCard
+            title="Manage Users"
+            description="Add, edit, or remove users"
+            icon={<UserCog className="w-6 h-6 text-white" />}
+            href="/admin/users"
+            gradient="bg-gradient-to-br from-indigo-600 to-purple-600"
+            delay={300}
+          />
+          <QuickActionCard
+            title="Manage Subjects"
+            description="Configure courses and subjects"
+            icon={<BookOpen className="w-6 h-6 text-white" />}
+            href="/admin/subjects"
+            gradient="bg-gradient-to-br from-purple-600 to-pink-600"
+            delay={350}
+          />
+          <QuickActionCard
+            title="System Analytics"
+            description="View platform statistics"
+            icon={<BarChart3 className="w-6 h-6 text-white" />}
+            href="/admin/analytics"
+            gradient="bg-gradient-to-br from-pink-600 to-rose-600"
+            delay={400}
           />
         </section>
 
         {/* Subjects Table */}
-        <section className="glass-card rounded-2xl overflow-hidden animate-slideUp animation-delay-200">
-          <div className="px-6 py-4 border-b border-gray-200/50 dark:border-gray-700/50 bg-gray-50/50 dark:bg-gray-800/50">
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
-              <BookOpen className="w-5 h-5 text-amber-500" />
-              Subjects Management
-            </h2>
+        <section className="glass-card-premium rounded-3xl overflow-hidden animate-slideUp" style={{ animationDelay: "450ms" }}>
+          <div className="px-6 py-5 border-b border-gray-200/50 dark:border-gray-700/50 bg-gradient-to-r from-indigo-50/50 to-purple-50/50 dark:from-indigo-900/20 dark:to-purple-900/20">
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                <BookOpen className="w-5 h-5 text-indigo-500" />
+                Recent Subjects
+              </h2>
+              <Link
+                href="/admin/subjects"
+                className="text-sm font-medium text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 flex items-center gap-1"
+              >
+                View All <ChevronRight className="w-4 h-4" />
+              </Link>
+            </div>
           </div>
 
           <div className="overflow-x-auto">
             <table className="w-full min-w-[700px]">
-              <thead className="bg-gray-100/70 dark:bg-gray-800/70">
+              <thead className="bg-gray-50/70 dark:bg-gray-800/70">
                 <tr>
-                  <th className="px-5 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">
+                  <th className="px-5 py-3.5 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">
                     Code
                   </th>
-                  <th className="px-5 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">
+                  <th className="px-5 py-3.5 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">
                     Subject
                   </th>
-                  <th className="px-5 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">
+                  <th className="px-5 py-3.5 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">
                     Faculty
                   </th>
-                  <th className="px-5 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">
+                  <th className="px-5 py-3.5 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">
                     Semester
                   </th>
-                  <th className="px-5 py-3 text-right text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">
+                  <th className="px-5 py-3.5 text-right text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">
                     Actions
                   </th>
                 </tr>
@@ -402,20 +507,25 @@ export default function AdminDashboard() {
                 ) : subjects.length === 0 ? (
                   <tr>
                     <td colSpan={5} className="px-5 py-12 text-center">
-                      <BookOpen className="w-12 h-12 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
-                      <p className="text-gray-500 dark:text-gray-400">
-                        No subjects found. Add your first subject!
+                      <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
+                        <BookOpen className="w-8 h-8 text-gray-400" />
+                      </div>
+                      <p className="text-gray-500 dark:text-gray-400 font-medium">
+                        No subjects found
+                      </p>
+                      <p className="text-sm text-gray-400 dark:text-gray-500 mt-1">
+                        Add your first subject to get started
                       </p>
                     </td>
                   </tr>
                 ) : (
-                  subjects.map((s) => (
+                  subjects.slice(0, 5).map((s) => (
                     <tr
                       key={s.id}
-                      className="hover:bg-gray-50/60 dark:hover:bg-gray-800/60 transition-colors"
+                      className="hover:bg-indigo-50/30 dark:hover:bg-indigo-900/10 transition-colors"
                     >
                       <td className="px-5 py-4">
-                        <span className="inline-flex px-2.5 py-1 text-xs font-semibold bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-lg">
+                        <span className="inline-flex px-3 py-1.5 text-xs font-semibold bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400 rounded-lg">
                           {s.subject_code ?? "—"}
                         </span>
                       </td>
@@ -427,7 +537,7 @@ export default function AdminDashboard() {
                       </td>
                       <td className="px-5 py-4">
                         {s.semester ? (
-                          <span className="inline-flex px-2.5 py-1 text-xs font-semibold bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400 rounded-lg">
+                          <span className="inline-flex px-3 py-1.5 text-xs font-semibold bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400 rounded-lg">
                             Sem {s.semester}
                           </span>
                         ) : (
@@ -439,7 +549,7 @@ export default function AdminDashboard() {
                           <button
                             onClick={() => openEditForm(s)}
                             disabled={busy}
-                            className="p-2 rounded-lg text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors disabled:opacity-50"
+                            className="p-2 rounded-lg text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors disabled:opacity-50"
                             title="Edit"
                           >
                             <Pencil className="w-4 h-4" />
@@ -471,12 +581,17 @@ export default function AdminDashboard() {
             />
             <form
               onSubmit={handleFormSubmit}
-              className="relative w-full max-w-lg glass-card-premium rounded-2xl p-6 shadow-2xl animate-scaleIn"
+              className="relative w-full max-w-lg glass-card-premium rounded-3xl p-8 shadow-2xl animate-scaleIn"
             >
               <div className="flex items-center justify-between mb-6">
-                <h3 className="text-xl font-bold text-gray-900 dark:text-white">
-                  {isEditing ? "Edit Subject" : "Add Subject"}
-                </h3>
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-500">
+                    <BookOpen className="w-5 h-5 text-white" />
+                  </div>
+                  <h3 className="text-xl font-bold text-gray-900 dark:text-white">
+                    {isEditing ? "Edit Subject" : "Add Subject"}
+                  </h3>
+                </div>
                 <button
                   type="button"
                   onClick={() => setFormOpen(false)}
@@ -488,47 +603,59 @@ export default function AdminDashboard() {
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <input
-                  className="input-premium"
-                  placeholder="Subject Code (CS101)"
-                  value={formData.subject_code}
-                  onChange={(e) => setFormData((f) => ({ ...f, subject_code: e.target.value }))}
-                  required
-                />
-                <input
-                  className="input-premium"
-                  placeholder="Semester (number)"
-                  value={formData.semester}
-                  onChange={(e) => setFormData((f) => ({ ...f, semester: e.target.value }))}
-                  inputMode="numeric"
-                />
-                <input
-                  className="input-premium sm:col-span-2"
-                  placeholder="Subject Name"
-                  value={formData.subject_name}
-                  onChange={(e) => setFormData((f) => ({ ...f, subject_name: e.target.value }))}
-                  required
-                />
-                <input
-                  className="input-premium sm:col-span-2"
-                  placeholder="Faculty Name (optional)"
-                  value={formData.faculty_name}
-                  onChange={(e) => setFormData((f) => ({ ...f, faculty_name: e.target.value }))}
-                />
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-gray-700 dark:text-gray-300">Subject Code</label>
+                  <input
+                    className="input-premium"
+                    placeholder="e.g., CS101"
+                    value={formData.subject_code}
+                    onChange={(e) => setFormData((f) => ({ ...f, subject_code: e.target.value }))}
+                    required
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-gray-700 dark:text-gray-300">Semester</label>
+                  <input
+                    className="input-premium"
+                    placeholder="e.g., 1"
+                    value={formData.semester}
+                    onChange={(e) => setFormData((f) => ({ ...f, semester: e.target.value }))}
+                    inputMode="numeric"
+                  />
+                </div>
+                <div className="space-y-1.5 sm:col-span-2">
+                  <label className="text-xs font-medium text-gray-700 dark:text-gray-300">Subject Name</label>
+                  <input
+                    className="input-premium"
+                    placeholder="Enter subject name"
+                    value={formData.subject_name}
+                    onChange={(e) => setFormData((f) => ({ ...f, subject_name: e.target.value }))}
+                    required
+                  />
+                </div>
+                <div className="space-y-1.5 sm:col-span-2">
+                  <label className="text-xs font-medium text-gray-700 dark:text-gray-300">Faculty Name (optional)</label>
+                  <input
+                    className="input-premium"
+                    placeholder="Enter faculty name"
+                    value={formData.faculty_name}
+                    onChange={(e) => setFormData((f) => ({ ...f, faculty_name: e.target.value }))}
+                  />
+                </div>
               </div>
 
               <div className="flex justify-end gap-3 mt-6">
                 <button
                   type="button"
                   onClick={() => setFormOpen(false)}
-                  className="btn-secondary"
+                  className="px-5 py-2.5 rounded-xl bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 font-medium hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
                   disabled={busy}
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="btn-primary"
+                  className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-medium shadow-lg shadow-indigo-500/25 hover:shadow-indigo-500/40 transition-all"
                   disabled={busy}
                 >
                   {busy ? "Saving..." : "Save"}

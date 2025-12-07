@@ -3,7 +3,6 @@
 import { useEffect, useState, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import Navbar from "@/components/Navbar";
 import { Button } from "@/components/ui/button";
 import { generatePdfClient } from "@/lib/ClientPdf";
 import type { User } from "@supabase/supabase-js";
@@ -247,7 +246,6 @@ export default function StudentSubmissions() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50/30 to-purple-50/30 dark:from-gray-950 dark:via-indigo-950/10 dark:to-purple-950/10">
-      <Navbar />
 
       <div className="pt-24 pb-12 px-4 sm:px-6 lg:px-8 max-w-6xl mx-auto">
         {/* Header */}

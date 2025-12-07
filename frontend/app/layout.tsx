@@ -5,6 +5,7 @@ import { Analytics } from '@vercel/analytics/next'
 import './globals.css'
 import { ThemeProvider } from "@/components/theme-provider";
 import { SpeedInsights } from "@vercel/speed-insights/next"
+import NavbarLayout from "@/components/NavbarLayout";
 
 export const metadata: Metadata = {
   title: "CodeGuard – Secure Python Editor",
@@ -28,7 +29,8 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          {/* ✅ Wrap whole app with AuthProvider */}
+          {/* ✅ Navbar in layout - persists across page navigations */}
+          <NavbarLayout />
           <div className="h-full flex flex-col">
             {children}
             <SpeedInsights />

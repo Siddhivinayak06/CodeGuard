@@ -4,7 +4,6 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import Navbar from "@/components/Navbar";
 import { Button } from "@/components/ui/button";
 import type { User } from "@supabase/supabase-js";
 import {
@@ -242,7 +241,6 @@ useEffect(() => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50 dark:from-gray-950 dark:via-purple-950/20 dark:to-blue-950/20">
-      <Navbar />
 
       <main className="pt-24 px-6 md:px-12 max-w-7xl mx-auto pb-12">
         {/* Header */}

@@ -53,9 +53,9 @@ export async function POST(request: Request) {
     // Check if practical exists and user has access to it
     const { data: practical, error: practicalError } = await supabaseAdmin
       .from("practicals")
-      .select("id, subject_id, subjects(faculty_id)")
+      .select("id, title, subject_id, subjects(faculty_id)")
       .eq("id", practical_id)
-      .single();
+      .single<any>();
 
     if (practicalError || !practical) {
       return NextResponse.json({ success: false, error: "Practical not found" }, { status: 404 });
@@ -130,12 +130,28 @@ export async function POST(request: Request) {
 
     if (error) throw error;
 
+    // Create notifications for assigned students
+    try {
+      const notifications = newAssignments.map(student_id => ({
+        user_id: student_id,
+        type: "practical_assigned", // Corrected type to match frontend
+        title: "New Practical Assigned",
+        message: `You have been assigned practical: ${practical.title}`,
+        link: `/editor?practicalId=${practical_id}`,
+        metadata: { practical_id, subject_id: practical.subject_id }
+      }));
+
+      await supabaseAdmin.from("notifications").insert(notifications);
+    } catch (notifyErr) {
+      console.error("Error creating notifications:", notifyErr);
+      // Don't fail the request if notifications fail
+    }
+
     return NextResponse.json({
       success: true,
       data,
-      message: `Assigned practical to ${newAssignments.length} student(s)${
-        existingStudentIds.length > 0 ? ` (${existingStudentIds.length} were already assigned)` : ""
-      }`
+      message: `Assigned practical to ${newAssignments.length} student(s)${existingStudentIds.length > 0 ? ` (${existingStudentIds.length} were already assigned)` : ""
+        }`
     }, { status: 201 });
   } catch (err: any) {
     console.error("Error assigning practical:", err);

@@ -81,6 +81,22 @@ export default function PracticalForm({
 }: PracticalFormProps) {
   const { theme } = useTheme();
 
+  // Level type for multi-level practicals
+  type Level = {
+    id?: number;
+    level: 'easy' | 'medium' | 'hard';
+    title: string;
+    description: string;
+    max_marks: number;
+    testCases: TestCase[];
+  };
+
+  const defaultLevels: Level[] = [
+    { level: 'easy', title: 'Easy', description: '', max_marks: 5, testCases: [{ input: '', expected_output: '', is_hidden: false, time_limit_ms: 2000, memory_limit_kb: 65536 }] },
+    { level: 'medium', title: 'Medium', description: '', max_marks: 10, testCases: [{ input: '', expected_output: '', is_hidden: false, time_limit_ms: 2000, memory_limit_kb: 65536 }] },
+    { level: 'hard', title: 'Hard', description: '', max_marks: 15, testCases: [{ input: '', expected_output: '', is_hidden: false, time_limit_ms: 2000, memory_limit_kb: 65536 }] },
+  ];
+
   const [form, setForm] = useState<Practical>({
     id: 0,
     title: "",
@@ -95,6 +111,11 @@ export default function PracticalForm({
     { input: "", expected_output: "", is_hidden: false, time_limit_ms: 2000, memory_limit_kb: 65536 },
   ]);
 
+  // Multi-level support
+  const [levels, setLevels] = useState<Level[]>(defaultLevels);
+  const [activeLevel, setActiveLevel] = useState<'easy' | 'medium' | 'hard'>('easy');
+  const [enableLevels, setEnableLevels] = useState(false);
+
   const [step, setStep] = useState<1 | 2>(1);
   const [students, setStudents] = useState<Student[]>([]);
   const [selectedStudents, setSelectedStudents] = useState<Student[]>([]);
@@ -107,6 +128,13 @@ export default function PracticalForm({
 
   const [filters, setFilters] = useState({ query: "", semester: "" });
 
+  // Reset step when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      setStep(1);
+    }
+  }, [isOpen]);
+
   // set initial state when practical prop changes
   useEffect(() => {
     if (practical) {
@@ -116,6 +144,7 @@ export default function PracticalForm({
         deadline: practical.deadline ? String(practical.deadline).slice(0, 16) : new Date().toISOString().slice(0, 16),
       });
       setAssignmentDeadline(practical.deadline ? String(practical.deadline).slice(0, 16) : new Date().toISOString().slice(0, 16));
+      setStep(1); // Reset to step 1 when opening/editing a practical
 
       // load test cases for existing practical
       supabase.from("test_cases").select("*").eq("practical_id", practical.id).then(({ data }: any) => {
@@ -123,6 +152,22 @@ export default function PracticalForm({
       }).catch((e: any) => {
         console.error("Failed to fetch test cases:", e);
       });
+
+      // load already assigned students for existing practical
+      supabase
+        .from("student_practicals")
+        .select("student_id")
+        .eq("practical_id", practical.id)
+        .then(({ data, error }: any) => {
+          if (!error && data && data.length > 0) {
+            const assignedIds = data.map((sp: any) => sp.student_id);
+            // Store the IDs temporarily - we'll match with students when they load
+            (window as any).__assignedStudentIds = assignedIds;
+          }
+        })
+        .catch((e: any) => {
+          console.error("Failed to fetch assigned students:", e);
+        });
     } else {
       // reset for new practical
       setForm(prev => ({
@@ -137,13 +182,14 @@ export default function PracticalForm({
       }));
       setTestCases([{ input: "", expected_output: "", is_hidden: false, time_limit_ms: 2000, memory_limit_kb: 65536 }]);
       setAssignmentDeadline(new Date().toISOString().slice(0, 16));
+      setSelectedStudents([]); // Clear selected students for new practical
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [practical, subjects]);
 
   // fetch students (with student_details) for assignment
   useEffect(() => {
-    const fetch = async () => {
+    const fetchStudents = async () => {
       try {
         const { data, error } = await supabase
           .from("users")
@@ -179,14 +225,24 @@ export default function PracticalForm({
           semester: s.student_details?.semester || "",
         }));
         setStudents(mapped);
+
+        // Check if there are pre-assigned students to select
+        const assignedIds = (window as any).__assignedStudentIds;
+        if (assignedIds && assignedIds.length > 0) {
+          const preSelected = mapped.filter((s: Student) => assignedIds.includes(s.uid));
+          if (preSelected.length > 0) {
+            setSelectedStudents(preSelected);
+          }
+          delete (window as any).__assignedStudentIds; // Clean up
+        }
       } catch (err) {
         console.error("Error fetching students:", err);
         setError("Failed to load students.");
       }
     };
 
-    fetch();
-  }, [supabase]);
+    fetchStudents();
+  }, [supabase, practical]);
 
   // ---------- handlers ----------
   const handleInput = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
@@ -204,6 +260,38 @@ export default function PracticalForm({
 
   const addTestCase = () => setTestCases(prev => [...prev, { input: "", expected_output: "", is_hidden: false, time_limit_ms: 2000, memory_limit_kb: 65536 }]);
   const removeTestCase = (index: number) => setTestCases(prev => prev.filter((_, i) => i !== index));
+
+  // Level management helpers
+  const updateLevelField = (level: 'easy' | 'medium' | 'hard', field: string, value: any) => {
+    setLevels(prev => prev.map(l => l.level === level ? { ...l, [field]: value } : l));
+  };
+
+  const addLevelTestCase = (level: 'easy' | 'medium' | 'hard') => {
+    setLevels(prev => prev.map(l =>
+      l.level === level
+        ? { ...l, testCases: [...l.testCases, { input: '', expected_output: '', is_hidden: false, time_limit_ms: 2000, memory_limit_kb: 65536 }] }
+        : l
+    ));
+  };
+
+  const removeLevelTestCase = (level: 'easy' | 'medium' | 'hard', index: number) => {
+    setLevels(prev => prev.map(l =>
+      l.level === level
+        ? { ...l, testCases: l.testCases.filter((_, i) => i !== index) }
+        : l
+    ));
+  };
+
+  const updateLevelTestCase = (level: 'easy' | 'medium' | 'hard', index: number, field: keyof TestCase, value: any) => {
+    setLevels(prev => prev.map(l => {
+      if (l.level !== level) return l;
+      const newTestCases = [...l.testCases];
+      (newTestCases[index] as any)[field] = value;
+      return { ...l, testCases: newTestCases };
+    }));
+  };
+
+  const getCurrentLevel = () => levels.find(l => l.level === activeLevel)!;
 
   const generateTestCases = async () => {
     if (!form.description || form.description.length < 10) {
@@ -309,48 +397,85 @@ export default function PracticalForm({
       const payload = {
         title: form.title,
         subject_id: form.subject_id,
-        description: form.description,
+        description: enableLevels ? '' : form.description, // Use level descriptions when levels enabled
         language: form.language,
         deadline: form.deadline,
-        max_marks: form.max_marks,
+        max_marks: enableLevels ? levels.reduce((sum, l) => sum + l.max_marks, 0) : form.max_marks,
       };
 
       if (practicalId && practicalId > 0) {
         const { data, error } = await supabase.from("practicals").update(payload).eq("id", practicalId).select().single();
         if (error) throw error;
         practicalId = data.id;
-        // delete old test cases then re-insert below
-        const { error: delErr } = await supabase.from("test_cases").delete().eq("practical_id", practicalId);
-        if (delErr) throw delErr;
+        // delete old test cases and levels then re-insert below
+        await supabase.from("test_cases").delete().eq("practical_id", practicalId);
+        await supabase.from("practical_levels").delete().eq("practical_id", practicalId);
       } else {
         const { data, error } = await supabase.from("practicals").insert(payload).select().single();
         if (error) throw error;
         practicalId = data.id;
       }
 
-      if (practicalId && testCases.length > 0) {
-        const insertData = testCases.map(tc => ({
-          practical_id: practicalId,
-          input: tc.input,
-          expected_output: tc.expected_output,
-          is_hidden: tc.is_hidden || false,
-          time_limit_ms: Number(tc.time_limit_ms) || 2000,
-          memory_limit_kb: Number(tc.memory_limit_kb) || 65536,
-        }));
-        const { error: tcErr } = await supabase.from("test_cases").insert(insertData);
-        if (tcErr) throw tcErr;
+      if (enableLevels) {
+        // Save levels with their test cases
+        for (const level of levels) {
+          // Insert level
+          const { data: levelData, error: levelErr } = await supabase
+            .from("practical_levels")
+            .insert({
+              practical_id: practicalId,
+              level: level.level,
+              title: level.title,
+              description: level.description,
+              max_marks: level.max_marks,
+            })
+            .select()
+            .single();
+
+          if (levelErr) throw levelErr;
+
+          // Insert test cases for this level
+          if (levelData && level.testCases.length > 0) {
+            const tcData = level.testCases.map(tc => ({
+              practical_id: practicalId,
+              level_id: levelData.id,
+              input: tc.input,
+              expected_output: tc.expected_output,
+              is_hidden: tc.is_hidden || false,
+              time_limit_ms: Number(tc.time_limit_ms) || 2000,
+              memory_limit_kb: Number(tc.memory_limit_kb) || 65536,
+            }));
+            const { error: tcErr } = await supabase.from("test_cases").insert(tcData);
+            if (tcErr) throw tcErr;
+          }
+        }
+      } else {
+        // Original single-level test cases
+        if (practicalId && testCases.length > 0) {
+          const insertData = testCases.map(tc => ({
+            practical_id: practicalId,
+            input: tc.input,
+            expected_output: tc.expected_output,
+            is_hidden: tc.is_hidden || false,
+            time_limit_ms: Number(tc.time_limit_ms) || 2000,
+            memory_limit_kb: Number(tc.memory_limit_kb) || 65536,
+          }));
+          const { error: tcErr } = await supabase.from("test_cases").insert(insertData);
+          if (tcErr) throw tcErr;
+        }
       }
 
       // update local form id
       setForm(prev => ({ ...prev, id: practicalId }));
-      onSaved();
+      return true; // Return success - let caller decide what to do next
     } catch (err: any) {
       console.error("Error saving practical:", err);
       alert("Failed to save practical: " + (err?.message || String(err)));
+      return false; // Return failure
     } finally {
       setSaving(false);
     }
-  }, [form, testCases, onSaved, supabase]);
+  }, [form, testCases, levels, enableLevels, supabase]);
 
   // Assign practical to selected students
   const assign = async () => {
@@ -440,28 +565,36 @@ export default function PracticalForm({
               </div>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-3">
               <button
                 onClick={onClose}
-                className="px-3 py-2 rounded-md bg-transparent border border-gray-200 dark:border-gray-700 text-sm hover:bg-gray-50 dark:hover:bg-gray-800 transition"
-                title="Cancel and close"
-                aria-label="Cancel"
+                className="px-4 py-2.5 rounded-xl bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition"
               >
                 Cancel
               </button>
 
               <button
-                onClick={async () => { await handleSave(); if (step === 1) setStep(2); }}
-                disabled={saving}
-                title="Save practical (Ctrl/Cmd+S)"
-                aria-label="Save practical"
+                onClick={async () => {
+                  if (step === 1) {
+                    const success = await handleSave();
+                    if (success) {
+                      setStep(2);
+                    }
+                  } else {
+                    // Step 2: Assign to students (assign() calls onSaved on success)
+                    await assign();
+                  }
+                }}
+                disabled={saving || loading}
                 className={cx(
-                  "inline-flex items-center gap-2 px-4 py-2 rounded-md text-sm font-semibold transition-transform",
-                  saving ? "bg-gray-300 text-gray-700 cursor-wait" : "bg-gradient-to-r from-blue-600 to-purple-600 text-white hover:scale-[1.02] shadow-sm"
+                  "inline-flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-bold transition-all shadow-lg",
+                  (saving || loading)
+                    ? "bg-gray-300 dark:bg-gray-700 text-gray-500 cursor-wait"
+                    : "bg-gradient-to-r from-indigo-600 to-purple-600 text-white hover:from-indigo-700 hover:to-purple-700 hover:scale-[1.02] shadow-indigo-500/30"
                 )}
               >
-                {saving ? <LoadingSpinner /> : null}
-                {saving ? "Saving..." : "Save & Next"}
+                {(saving || loading) ? <LoadingSpinner /> : null}
+                {saving ? "Saving..." : loading ? "Assigning..." : step === 1 ? "Save & Next →" : "Assign to Students"}
               </button>
             </div>
           </div>
@@ -499,48 +632,69 @@ export default function PracticalForm({
             <div className="space-y-6">
 
               {/* 1. Basic Information (Top Row) */}
-              <div className="glass-card rounded-xl p-6">
-                <div className="flex items-center gap-3 pb-4 border-b border-gray-200 dark:border-gray-700 mb-6">
-                  <div className="p-2 bg-gradient-to-br from-blue-600 to-purple-600 rounded-lg text-white shadow-md">
-                    <InfoIcon size={20} />
+              <div className="glass-card rounded-2xl p-5 shadow-sm">
+                <div className="flex items-center gap-3 pb-3 border-b border-gray-200 dark:border-gray-700 mb-5">
+                  <div className="p-2 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl text-white shadow-lg shadow-indigo-500/25">
+                    <InfoIcon size={18} />
                   </div>
                   <div>
-                    <h3 className="font-bold text-lg text-gray-900 dark:text-white">Basic Information</h3>
+                    <h3 className="font-bold text-gray-900 dark:text-white">Basic Information</h3>
                     <p className="text-xs text-gray-500 dark:text-gray-400">Essential details for the practical</p>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                  <div className="lg:col-span-2">
-                    <label className="block text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2">
-                      Practical Title <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      name="title"
-                      value={form.title}
-                      onChange={handleInput}
-                      placeholder="e.g., Binary Search Implementation"
-                      className="w-full px-4 py-3 bg-white/50 dark:bg-gray-900/50 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all text-gray-900 dark:text-white"
-                    />
-                  </div>
+                {/* Row 1: Title (full width) */}
+                <div className="mb-4">
+                  <label className="block text-xs font-bold uppercase tracking-wide text-gray-600 dark:text-gray-400 mb-1.5">
+                    Practical Title <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    name="title"
+                    value={form.title}
+                    onChange={handleInput}
+                    placeholder="e.g., Binary Search Implementation"
+                    className="w-full px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all text-gray-900 dark:text-white text-sm"
+                  />
+                </div>
 
+                {/* Row 2: Subject, Language, Deadline */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
                   <div>
-                    <label className="block text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2">
+                    <label className="block text-xs font-bold uppercase tracking-wide text-gray-600 dark:text-gray-400 mb-1.5">
                       Subject <span className="text-red-500">*</span>
                     </label>
                     <select
                       name="subject_id"
                       value={form.subject_id}
                       onChange={handleInput}
-                      className="w-full px-4 py-3 bg-white/50 dark:bg-gray-900/50 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all text-gray-900 dark:text-white"
+                      className="w-full px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all text-gray-900 dark:text-white text-sm"
                     >
                       {subjects.map(s => <option key={s.id} value={s.id}>{s.subject_name}</option>)}
                     </select>
                   </div>
 
                   <div>
-                    <label className="block text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2">
+                    <label className="block text-xs font-bold uppercase tracking-wide text-gray-600 dark:text-gray-400 mb-1.5">
+                      Language
+                    </label>
+                    <select
+                      name="language"
+                      value={form.language || ''}
+                      onChange={handleInput}
+                      className="w-full px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all text-gray-900 dark:text-white text-sm"
+                    >
+                      <option value="">Any Language</option>
+                      <option value="java">Java</option>
+                      <option value="python">Python</option>
+                      <option value="c">C</option>
+                      <option value="cpp">C++</option>
+                      <option value="javascript">JavaScript</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold uppercase tracking-wide text-gray-600 dark:text-gray-400 mb-1.5">
                       Deadline <span className="text-red-500">*</span>
                     </label>
                     <input
@@ -548,175 +702,346 @@ export default function PracticalForm({
                       name="deadline"
                       value={form.deadline}
                       onChange={handleInput}
-                      className="w-full px-4 py-3 bg-white/50 dark:bg-gray-900/50 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all text-gray-900 dark:text-white"
+                      className="w-full px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all text-gray-900 dark:text-white text-sm"
                     />
                   </div>
+                </div>
 
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2">
-                      Max Marks <span className="text-red-500">*</span>
+                {/* Row 3: Max Marks + Multi-Level Toggle */}
+                <div className="flex items-end justify-between gap-4 pt-4 border-t border-gray-100 dark:border-gray-800">
+                  <div className="w-32">
+                    <label className="block text-xs font-bold uppercase tracking-wide text-gray-600 dark:text-gray-400 mb-1.5">
+                      Max Marks
                     </label>
                     <input
                       type="number"
                       name="max_marks"
-                      value={form.max_marks}
+                      value={enableLevels ? levels.reduce((sum, l) => sum + l.max_marks, 0) : form.max_marks}
                       onChange={handleInput}
-                      className="w-full px-4 py-3 bg-white/50 dark:bg-gray-900/50 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all text-gray-900 dark:text-white"
+                      disabled={enableLevels}
+                      className={cx(
+                        "w-full px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all text-gray-900 dark:text-white text-sm text-center font-bold",
+                        enableLevels && "opacity-50 cursor-not-allowed"
+                      )}
                     />
                   </div>
 
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2">
-                      Language
-                    </label>
-                    <input
-                      type="text"
-                      name="language"
-                      value={form.language}
-                      onChange={handleInput}
-                      placeholder="e.g., C, Python, Java"
-                      className="w-full px-4 py-3 bg-white/50 dark:bg-gray-900/50 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all text-gray-900 dark:text-white"
-                    />
+                  {/* Multi-Level Toggle */}
+                  <div className="flex items-center gap-3 px-4 py-2.5 bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-900/10 dark:to-orange-900/10 rounded-xl border border-amber-200 dark:border-amber-800/50">
+                    <div className="flex items-center gap-2">
+                      <Sparkles size={16} className="text-amber-600" />
+                      <span className="text-sm font-semibold text-amber-800 dark:text-amber-200">Multi-Level</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setEnableLevels(!enableLevels)}
+                      className={cx(
+                        "relative inline-flex h-6 w-11 items-center rounded-full transition-colors",
+                        enableLevels ? "bg-gradient-to-r from-amber-500 to-orange-600" : "bg-gray-300 dark:bg-gray-600"
+                      )}
+                    >
+                      <span
+                        className={cx(
+                          "inline-block h-4 w-4 transform rounded-full bg-white shadow-md transition-transform",
+                          enableLevels ? "translate-x-6" : "translate-x-1"
+                        )}
+                      />
+                    </button>
                   </div>
                 </div>
               </div>
 
-              {/* 2. Description (Full Width) */}
-              <div className="glass-card rounded-xl p-6">
-                <div className="flex items-center gap-3 pb-4 border-b border-gray-200 dark:border-gray-700 mb-4">
-                  <div className="p-2 bg-gradient-to-br from-purple-600 to-pink-600 rounded-lg text-white shadow-md">
-                    <FileText size={20} />
+              {/* Level Tabs (when enabled) */}
+              {enableLevels && (
+                <div className="glass-card rounded-xl p-6">
+                  <div className="flex items-center gap-3 pb-4 border-b border-gray-200 dark:border-gray-700 mb-4">
+                    <div className="p-2 bg-gradient-to-br from-amber-500 to-orange-600 rounded-lg text-white shadow-md">
+                      <Sparkles size={20} />
+                    </div>
+                    <div>
+                      <h3 className="font-bold text-lg text-gray-900 dark:text-white">Difficulty Levels</h3>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">Configure each difficulty level separately</p>
+                    </div>
                   </div>
-                  <div>
-                    <h3 className="font-bold text-lg text-gray-900 dark:text-white">Problem Description</h3>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">Detailed problem statement and requirements</p>
+
+                  {/* Level Tabs */}
+                  <div className="flex gap-2 mb-6">
+                    {(['easy', 'medium', 'hard'] as const).map((lvl) => {
+                      const levelInfo = { easy: { label: 'Easy', color: 'emerald' }, medium: { label: 'Medium', color: 'amber' }, hard: { label: 'Hard', color: 'red' } }[lvl];
+                      const isActive = activeLevel === lvl;
+                      return (
+                        <button
+                          key={lvl}
+                          type="button"
+                          onClick={() => setActiveLevel(lvl)}
+                          className={cx(
+                            "flex-1 px-4 py-3 rounded-xl font-semibold text-sm transition-all",
+                            isActive
+                              ? `bg-${levelInfo.color}-100 dark:bg-${levelInfo.color}-900/30 text-${levelInfo.color}-700 dark:text-${levelInfo.color}-400 border-2 border-${levelInfo.color}-500`
+                              : "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 border-2 border-transparent hover:border-gray-300"
+                          )}
+                        >
+                          {levelInfo.label}
+                          <span className="ml-2 text-xs opacity-70">({levels.find(l => l.level === lvl)?.max_marks} pts)</span>
+                        </button>
+                      );
+                    })}
                   </div>
-                  <div className="ml-auto px-3 py-1 bg-purple-50 dark:bg-purple-900/30 text-purple-700 dark:text-purple-200 text-xs font-bold rounded-full border border-purple-100 dark:border-purple-800">
-                    {String(form.description || "").length} chars
+
+                  {/* Active Level Content */}
+                  <div className="space-y-4">
+                    {/* Level Marks */}
+                    <div className="flex items-center gap-4">
+                      <label className="text-sm font-semibold text-gray-700 dark:text-gray-300">Marks for this level:</label>
+                      <input
+                        type="number"
+                        value={getCurrentLevel().max_marks}
+                        onChange={(e) => updateLevelField(activeLevel, 'max_marks', Number(e.target.value))}
+                        className="w-24 px-3 py-2 bg-white/50 dark:bg-gray-900/50 border border-gray-300 dark:border-gray-600 rounded-lg text-center font-bold"
+                      />
+                    </div>
+
+                    {/* Level Description */}
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                        Problem Description for {activeLevel.charAt(0).toUpperCase() + activeLevel.slice(1)} Level
+                      </label>
+                      <textarea
+                        value={getCurrentLevel().description}
+                        onChange={(e) => updateLevelField(activeLevel, 'description', e.target.value)}
+                        placeholder={`Describe the ${activeLevel} level problem...`}
+                        className="w-full min-h-[150px] px-4 py-3 bg-white/50 dark:bg-gray-900/50 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-amber-500 transition-all font-mono text-sm"
+                      />
+                    </div>
+
+                    {/* Level Test Cases */}
+                    <div className="mt-4">
+                      <div className="flex items-center justify-between mb-3">
+                        <h4 className="font-semibold text-gray-800 dark:text-gray-200">Test Cases for {activeLevel.charAt(0).toUpperCase() + activeLevel.slice(1)}</h4>
+                        <button
+                          type="button"
+                          onClick={() => addLevelTestCase(activeLevel)}
+                          className="inline-flex items-center gap-1 px-3 py-1.5 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 rounded-lg text-xs font-bold hover:bg-emerald-200 transition"
+                        >
+                          <PlusIcon size={14} /> Add Test Case
+                        </button>
+                      </div>
+                      <div className="space-y-3 max-h-[300px] overflow-y-auto">
+                        {getCurrentLevel().testCases.map((tc, i) => (
+                          <div key={i} className="bg-white/50 dark:bg-gray-900/50 rounded-lg p-3 border border-gray-200 dark:border-gray-700">
+                            <div className="flex items-center justify-between mb-2">
+                              <span className="text-xs font-bold text-gray-500">Test Case {i + 1}</span>
+                              <div className="flex items-center gap-2">
+                                <label className="inline-flex items-center gap-1 text-xs">
+                                  <input
+                                    type="checkbox"
+                                    checked={tc.is_hidden}
+                                    onChange={(e) => updateLevelTestCase(activeLevel, i, 'is_hidden', e.target.checked)}
+                                    className="rounded text-amber-600"
+                                  />
+                                  Hidden
+                                </label>
+                                {getCurrentLevel().testCases.length > 1 && (
+                                  <button
+                                    type="button"
+                                    onClick={() => removeLevelTestCase(activeLevel, i)}
+                                    className="text-red-500 hover:text-red-700"
+                                  >
+                                    <TrashIcon size={14} />
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                            <div className="grid grid-cols-2 gap-2">
+                              <textarea
+                                placeholder="Input"
+                                value={tc.input}
+                                onChange={(e) => updateLevelTestCase(activeLevel, i, 'input', e.target.value)}
+                                rows={2}
+                                className="px-3 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-xs font-mono resize-none"
+                              />
+                              <textarea
+                                placeholder="Expected Output"
+                                value={tc.expected_output}
+                                onChange={(e) => updateLevelTestCase(activeLevel, i, 'expected_output', e.target.value)}
+                                rows={2}
+                                className="px-3 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-xs font-mono resize-none"
+                              />
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
                   </div>
                 </div>
+              )}
 
-                <textarea
-                  name="description"
-                  value={form.description}
-                  onChange={handleInput}
-                  placeholder="# Problem Statement\n\nWrite a program that...\n\n## Input Format\n...\n\n## Output Format\n..."
-                  className="w-full min-h-[300px] px-5 py-4 bg-white/50 dark:bg-gray-900/50 border border-gray-300 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all resize-y text-gray-900 dark:text-white font-mono text-sm leading-relaxed"
-                />
-              </div>
+              {/* 2. Description (Full Width) - Only when levels disabled */}
+              {!enableLevels && (
+                <div className="glass-card rounded-xl p-6">
+                  <div className="flex items-center gap-3 pb-4 border-b border-gray-200 dark:border-gray-700 mb-4">
+                    <div className="p-2 bg-gradient-to-br from-purple-600 to-pink-600 rounded-lg text-white shadow-md">
+                      <FileText size={20} />
+                    </div>
+                    <div>
+                      <h3 className="font-bold text-lg text-gray-900 dark:text-white">Problem Description</h3>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">Detailed problem statement and requirements</p>
+                    </div>
+                    <div className="ml-auto px-3 py-1 bg-purple-50 dark:bg-purple-900/30 text-purple-700 dark:text-purple-200 text-xs font-bold rounded-full border border-purple-100 dark:border-purple-800">
+                      {String(form.description || "").length} chars
+                    </div>
+                  </div>
+
+                  <textarea
+                    name="description"
+                    value={form.description}
+                    onChange={handleInput}
+                    placeholder="# Problem Statement\n\nWrite a program that...\n\n## Input Format\n...\n\n## Output Format\n..."
+                    className="w-full min-h-[300px] px-5 py-4 bg-white/50 dark:bg-gray-900/50 border border-gray-300 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all resize-y text-gray-900 dark:text-white font-mono text-sm leading-relaxed"
+                  />
+                </div>
+              )}
 
               {/* 3. Bottom Section: Test Cases & Reference Code */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-
-                {/* Test Cases */}
-                <div className="glass-card rounded-xl p-6 flex flex-col h-full">
-                  <div className="flex items-center justify-between pb-4 border-b border-gray-200 dark:border-gray-700 mb-4">
-                    <div className="flex items-center gap-3">
-                      <div className="p-2 bg-gradient-to-br from-emerald-600 to-teal-600 rounded-lg text-white shadow-md">
-                        <TestIcon />
+              {!enableLevels ? (
+                /* Standard mode: 2-column layout */
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  {/* Test Cases */}
+                  <div className="glass-card rounded-2xl p-5 flex flex-col h-full">
+                    <div className="flex items-center justify-between pb-3 border-b border-gray-200 dark:border-gray-700 mb-4">
+                      <div className="flex items-center gap-3">
+                        <div className="p-2 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-xl text-white shadow-lg shadow-emerald-500/25">
+                          <TestIcon size={18} />
+                        </div>
+                        <div>
+                          <h3 className="font-bold text-gray-900 dark:text-white">Test Cases</h3>
+                          <p className="text-xs text-gray-500 dark:text-gray-400">Auto-grading criteria</p>
+                        </div>
                       </div>
-                      <div>
-                        <h3 className="font-bold text-lg text-gray-900 dark:text-white">Test Cases</h3>
-                        <p className="text-xs text-gray-500 dark:text-gray-400">Auto-grading criteria</p>
+
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={generateTestCases}
+                          disabled={generatingTests}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded-lg text-xs font-bold hover:bg-purple-200 transition"
+                          title="Generate with AI"
+                        >
+                          {generatingTests ? <LoadingSpinner /> : <Sparkles className="w-3.5 h-3.5" />}
+                          AI
+                        </button>
+                        <button
+                          onClick={addTestCase}
+                          className="inline-flex items-center gap-1 px-3 py-1.5 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 rounded-lg text-xs font-bold hover:bg-emerald-200 transition"
+                        >
+                          <PlusIcon size={14} />
+                        </button>
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={generateTestCases}
-                        disabled={generatingTests}
-                        className="inline-flex items-center gap-2 px-3 py-1.5 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded-lg text-xs font-bold hover:bg-purple-200 dark:hover:bg-purple-900/50 transition border border-purple-200 dark:border-purple-800"
-                        title="Generate with AI"
-                      >
-                        {generatingTests ? <LoadingSpinner /> : <Sparkles className="w-3.5 h-3.5" />}
-                        AI Generate
-                      </button>
-                      <button
-                        onClick={addTestCase}
-                        className="inline-flex items-center gap-2 px-3 py-1.5 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 rounded-lg text-xs font-bold hover:bg-emerald-200 dark:hover:bg-emerald-900/50 transition border border-emerald-200 dark:border-emerald-800"
-                      >
-                        <PlusIcon />
-                        Add
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="space-y-4 flex-1 overflow-y-auto max-h-[500px] pr-2 custom-scrollbar">
-                    {testCases.length === 0 && (
-                      <div className="text-center py-10 text-gray-400 dark:text-gray-500 italic">
-                        No test cases added yet. Use AI or add manually.
-                      </div>
-                    )}
-                    {testCases.map((tc, i) => (
-                      <div key={i} className="bg-white/40 dark:bg-gray-900/40 rounded-xl p-4 border border-gray-200 dark:border-gray-700 space-y-3 shadow-sm hover:shadow-md transition-shadow">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-3">
-                            <div className="w-6 h-6 rounded-full bg-emerald-100 dark:bg-emerald-900/50 text-emerald-600 dark:text-emerald-400 flex items-center justify-center text-xs font-bold border border-emerald-200 dark:border-emerald-800">
-                              {i + 1}
+                    <div className="space-y-3 flex-1 overflow-y-auto max-h-[400px] pr-2 custom-scrollbar">
+                      {testCases.length === 0 && (
+                        <div className="text-center py-8 text-gray-400 dark:text-gray-500 italic text-sm">
+                          No test cases yet. Use AI or add manually.
+                        </div>
+                      )}
+                      {testCases.map((tc, i) => (
+                        <div key={i} className="bg-white dark:bg-gray-800 rounded-xl p-3 border border-gray-200 dark:border-gray-700 space-y-2">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <span className="w-5 h-5 rounded-full bg-emerald-100 dark:bg-emerald-900/50 text-emerald-600 text-[10px] font-bold flex items-center justify-center">
+                                {i + 1}
+                              </span>
+                              <label className="inline-flex items-center gap-1.5 text-xs text-gray-500">
+                                <input
+                                  type="checkbox"
+                                  checked={!!tc.is_hidden}
+                                  onChange={(e) => handleTestCaseChange(i, "is_hidden", e.target.checked)}
+                                  className="rounded text-emerald-600 w-3 h-3"
+                                />
+                                Hidden
+                              </label>
                             </div>
-                            <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">Test Case</span>
-                          </div>
-                          <div className="flex items-center gap-3">
-                            <label className="inline-flex items-center gap-2 text-xs font-medium text-gray-600 dark:text-gray-400 cursor-pointer select-none">
-                              <input
-                                type="checkbox"
-                                checked={!!tc.is_hidden}
-                                onChange={(e) => handleTestCaseChange(i, "is_hidden", e.target.checked)}
-                                className="rounded text-emerald-600 focus:ring-emerald-500"
-                              />
-                              Hidden
-                            </label>
-                            <button
-                              onClick={() => removeTestCase(i)}
-                              className="text-gray-400 hover:text-red-500 transition-colors"
-                            >
-                              <TrashIcon size={16} />
+                            <button onClick={() => removeTestCase(i)} className="text-gray-400 hover:text-red-500 transition">
+                              <TrashIcon size={14} />
                             </button>
                           </div>
+                          <div className="grid grid-cols-2 gap-2">
+                            <div>
+                              <textarea
+                                placeholder="Input"
+                                value={tc.input}
+                                onChange={(e) => handleTestCaseChange(i, "input", e.target.value)}
+                                rows={2}
+                                className="w-full px-2.5 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg text-xs font-mono resize-none"
+                              />
+                            </div>
+                            <div>
+                              <textarea
+                                placeholder="Expected Output"
+                                value={tc.expected_output}
+                                onChange={(e) => handleTestCaseChange(i, "expected_output", e.target.value)}
+                                rows={2}
+                                className="w-full px-2.5 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg text-xs font-mono resize-none"
+                              />
+                            </div>
+                          </div>
                         </div>
+                      ))}
+                    </div>
+                  </div>
 
-                        <div className="grid grid-cols-2 gap-3">
-                          <div>
-                            <label className="block text-[10px] uppercase tracking-wider font-bold text-gray-500 dark:text-gray-500 mb-1">Input</label>
-                            <textarea
-                              value={tc.input}
-                              onChange={(e) => handleTestCaseChange(i, "input", e.target.value)}
-                              rows={2}
-                              className="w-full px-3 py-2 bg-white dark:bg-gray-950 border border-gray-200 dark:border-gray-800 rounded-lg text-xs font-mono focus:ring-2 focus:ring-emerald-500 focus:border-transparent resize-none"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-[10px] uppercase tracking-wider font-bold text-gray-500 dark:text-gray-500 mb-1">Output</label>
-                            <textarea
-                              value={tc.expected_output}
-                              onChange={(e) => handleTestCaseChange(i, "expected_output", e.target.value)}
-                              rows={2}
-                              className="w-full px-3 py-2 bg-white dark:bg-gray-950 border border-gray-200 dark:border-gray-800 rounded-lg text-xs font-mono focus:ring-2 focus:ring-emerald-500 focus:border-transparent resize-none"
-                            />
-                          </div>
+                  {/* Reference Code */}
+                  <div className="glass-card rounded-2xl p-5 flex flex-col h-full">
+                    <div className="flex items-center justify-between pb-3 border-b border-gray-200 dark:border-gray-700 mb-4">
+                      <div className="flex items-center gap-3">
+                        <div className="p-2 bg-gradient-to-br from-amber-500 to-orange-600 rounded-xl text-white shadow-lg shadow-amber-500/25">
+                          <CodeIcon size={18} />
+                        </div>
+                        <div>
+                          <h3 className="font-bold text-gray-900 dark:text-white">Reference Code</h3>
+                          <p className="text-xs text-gray-500 dark:text-gray-400">For AI context (Optional)</p>
                         </div>
                       </div>
-                    ))}
+                      <select
+                        value={sampleLanguage}
+                        onChange={(e) => setSampleLanguage(e.target.value)}
+                        className="px-2 py-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-xs font-medium"
+                      >
+                        <option value="c">C</option>
+                        <option value="python">Python</option>
+                        <option value="cpp">C++</option>
+                        <option value="java">Java</option>
+                      </select>
+                    </div>
+                    <div className="flex-1 rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50 min-h-[300px]">
+                      <CodeMirror
+                        value={sampleCode}
+                        onChange={setSampleCode}
+                        height="100%"
+                        theme={theme === "dark" ? oneDark : undefined}
+                        extensions={[getLanguageExtension()]}
+                        className="h-full text-sm"
+                      />
+                    </div>
                   </div>
                 </div>
-
-                {/* Reference Code */}
-                <div className="glass-card rounded-xl p-6 flex flex-col h-full">
-                  <div className="flex items-center justify-between pb-4 border-b border-gray-200 dark:border-gray-700 mb-4">
+              ) : (
+                /* Multi-level mode: Reference code in full width */
+                <div className="glass-card rounded-2xl p-5">
+                  <div className="flex items-center justify-between pb-3 border-b border-gray-200 dark:border-gray-700 mb-4">
                     <div className="flex items-center gap-3">
-                      <div className="p-2 bg-gradient-to-br from-amber-500 to-orange-600 rounded-lg text-white shadow-md">
-                        <CodeIcon />
+                      <div className="p-2 bg-gradient-to-br from-amber-500 to-orange-600 rounded-xl text-white shadow-lg shadow-amber-500/25">
+                        <CodeIcon size={18} />
                       </div>
                       <div>
-                        <h3 className="font-bold text-lg text-gray-900 dark:text-white">Reference Code</h3>
-                        <p className="text-xs text-gray-500 dark:text-gray-400">For AI context (Optional)</p>
+                        <h3 className="font-bold text-gray-900 dark:text-white">Reference Code</h3>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">For AI context (Optional) - applies to all levels</p>
                       </div>
                     </div>
-
                     <select
                       value={sampleLanguage}
                       onChange={(e) => setSampleLanguage(e.target.value)}
-                      className="px-3 py-1.5 bg-white/50 dark:bg-gray-900/50 border border-gray-300 dark:border-gray-700 rounded-lg text-xs font-medium focus:ring-2 focus:ring-amber-500"
+                      className="px-2 py-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-xs font-medium"
                     >
                       <option value="c">C</option>
                       <option value="python">Python</option>
@@ -724,27 +1049,18 @@ export default function PracticalForm({
                       <option value="java">Java</option>
                     </select>
                   </div>
-
-                  <div className="flex-1 rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50 flex flex-col">
-                    <div className="px-4 py-2 bg-gray-100 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 text-xs text-gray-500 dark:text-gray-400 flex items-center gap-2">
-                      <InfoIcon size={12} />
-                      <span>This code helps AI generate better test cases.</span>
-                    </div>
-                    <div className="flex-1 relative">
-                      <div className="absolute inset-0 overflow-auto">
-                        <CodeMirror
-                          value={sampleCode}
-                          onChange={setSampleCode}
-                          height="100%"
-                          theme={theme === "dark" ? oneDark : undefined}
-                          extensions={[getLanguageExtension()]}
-                          className="h-full text-sm"
-                        />
-                      </div>
-                    </div>
+                  <div className="rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50 h-[250px]">
+                    <CodeMirror
+                      value={sampleCode}
+                      onChange={setSampleCode}
+                      height="100%"
+                      theme={theme === "dark" ? oneDark : undefined}
+                      extensions={[getLanguageExtension()]}
+                      className="h-full text-sm"
+                    />
                   </div>
                 </div>
-              </div>
+              )}
             </div>
           )}
 

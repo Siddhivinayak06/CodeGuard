@@ -9,7 +9,6 @@ import { ChevronDown } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { generatePdfClient } from "@/lib/ClientPdf";
-import Navbar from "@/components/Navbar";
 import {
   ResizableHandle,
   ResizablePanel,
@@ -178,7 +177,6 @@ export default function Home() {
 
   return (
     <div className="flex flex-col h-screen overflow-hidden bg-gradient-to-br from-slate-50 via-indigo-50/30 to-purple-50/30 dark:from-gray-950 dark:via-indigo-950/10 dark:to-purple-950/10">
-      <Navbar />
 
       {/* Main Editor + Terminal */}
       <div className="flex-1 mt-16 p-4 h-[calc(100vh-4rem)] w-full">

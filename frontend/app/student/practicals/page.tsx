@@ -3,7 +3,6 @@
 import { useEffect, useState, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import Navbar from "@/components/Navbar";
 import { Button } from "@/components/ui/button";
 import type { User } from "@supabase/supabase-js";
 import {
@@ -134,7 +133,8 @@ export default function StudentPracticals() {
               description,
               language,
               subject_id,
-              subjects ( subject_name )
+              subjects ( subject_name ),
+              practical_levels ( id, level, title, description, max_marks )
             )
           `)
           .eq("student_id", user.id)
@@ -146,17 +146,25 @@ export default function StudentPracticals() {
           return;
         }
 
-        const formatted = (data || []).map((sp: any) => ({
-          id: sp.practicals.id,
-          title: sp.practicals.title,
-          description: sp.practicals.description,
-          language: sp.practicals.language,
-          deadline: sp.assigned_deadline,
-          subject_id: sp.practicals.subject_id,
-          subject_name: sp.practicals.subjects?.subject_name || "Unknown",
-          status: sp.status,
-          notes: sp.notes,
-        }));
+        const formatted = (data || []).map((sp: any) => {
+          const levels = sp.practicals?.practical_levels || [];
+          return {
+            id: sp.practicals.id,
+            title: sp.practicals.title,
+            description: sp.practicals.description,
+            language: sp.practicals.language,
+            deadline: sp.assigned_deadline,
+            subject_id: sp.practicals.subject_id,
+            subject_name: sp.practicals.subjects?.subject_name || "Unknown",
+            status: sp.status,
+            notes: sp.notes,
+            hasLevels: levels.length > 0,
+            levels: levels.sort((a: any, b: any) => {
+              const order = { easy: 0, medium: 1, hard: 2 };
+              return (order[a.level as keyof typeof order] || 0) - (order[b.level as keyof typeof order] || 0);
+            }),
+          };
+        });
 
         if (!signal.aborted && mountedRef.current) {
           setPracticals(formatted);
@@ -215,7 +223,6 @@ export default function StudentPracticals() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50/30 to-purple-50/30 dark:from-gray-950 dark:via-indigo-950/10 dark:to-purple-950/10">
-      <Navbar />
 
       <div className="pt-24 pb-12 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
         {/* Header */}
@@ -330,6 +337,26 @@ export default function StudentPracticals() {
                             {p.language}
                           </span>
                         )}
+                        {/* Level badges for multi-level practicals */}
+                        {p.hasLevels && (
+                          <div className="flex items-center gap-1">
+                            {p.levels.map((level: any) => {
+                              const colors: Record<string, string> = {
+                                easy: 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800',
+                                medium: 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-800',
+                                hard: 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 border-red-200 dark:border-red-800',
+                              };
+                              return (
+                                <span
+                                  key={level.id}
+                                  className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${colors[level.level] || colors.easy}`}
+                                >
+                                  {level.level.charAt(0).toUpperCase()}
+                                </span>
+                              );
+                            })}
+                          </div>
+                        )}
                       </div>
 
                       <p className="text-sm text-gray-500 dark:text-gray-400 line-clamp-2 mb-4 h-10">
@@ -365,7 +392,7 @@ export default function StudentPracticals() {
                       <Button
                         onClick={() =>
                           router.push(
-                            `/editor?practicalId=${encodeURIComponent(p.id)}&subject=${encodeURIComponent(p.subject_id)}`
+                            `/editor?practicalId=${encodeURIComponent(p.id)}&subject=${encodeURIComponent(p.subject_id)}&language=${encodeURIComponent(p.language || 'java')}${p.hasLevels ? '&hasLevels=true' : ''}`
                           )
                         }
                         className="rounded-xl px-4 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white shadow-md shadow-indigo-500/20 hover:shadow-indigo-500/40 transition-all font-medium"
