@@ -1,19 +1,20 @@
 # 🧠 CodeGuard – Online Code Evaluation Platform
 
-CodeGuard is a full-stack web application that allows users to **write, execute, and evaluate code securely in real-time**.  
-Built using **Next.js**, **Node.js**, **Express.js**, **Supabase**, **Docker**, **Python**, and **C**, it provides a safe, isolated, and scalable environment for coding practice and assessments.
+CodeGuard is a full-stack web application designed for **secure, real-time code execution and evaluation**. It provides a robust environment for coding practice, assessments, and classroom management, powered by isolated Docker containers.
 
 ---
 
 ## 🚀 Features
 
-- 📝 **Code Editor** – Write and run code directly in the browser.  
-- ⚙️ **Multi-Language Support** – Supports C and Python code execution.  
-- 🔒 **Secure Execution** – Runs code in Docker containers for isolation and safety.  
-- ✅ **Automated Evaluation** – Executes code against test cases to verify correctness.  
-- 👤 **User Authentication** – Integrated Supabase for signup, login, and user management.  
-- 📊 **Submission History** – Stores and displays users’ past submissions and results.  
-- 🌐 **Responsive Design** – Modern UI built with Next.js for seamless experience across devices.
+- 📝 **Advanced Code Editor** – Rich text editor with syntax highlighting for C, Python, and Java.
+- ⚙️ **Multi-Language Support** – Securely execute C, Python, and Java code.
+- 🔒 **Sandboxed Execution** – Code runs in isolated Docker containers to ensure security and prevent system access.
+- ⚡ **Interactive Mode** – Real-time code execution with immediate feedback for interactive learning.
+- 👩‍🏫 **Faculty Dashboard** – Comprehensive tools for faculty to manage classes, create assignments, and view student analytics.
+- 📁 **File Integrations** – Support for uploading CSV and Excel files for data-driven assignments.
+- ✅ **Automated Evaluation** – Automatic grading against test cases.
+- 📊 **Submission History** – detailed logs of past submissions and performance.
+- 🛡️ **Role-Based Access** – Secure authentication via Supabase with distinct roles (Student, Faculty, Admin).
 
 ---
 
@@ -21,129 +22,91 @@ Built using **Next.js**, **Node.js**, **Express.js**, **Supabase**, **Docker**, 
 
 | Category | Technologies |
 |-----------|---------------|
-| **Frontend** | Next.js, React, Tailwind CSS |
-| **Backend** | Node.js, Express.js |
+| **Frontend** | Next.js 16, TypeScript, Tailwind CSS, ShadCN UI |
+| **Backend** | Node.js, Express.js, WebSocket, Zod |
 | **Database & Auth** | Supabase |
-| **Code Execution** | Docker, Python, C |
-| **Version Control** | Git & GitHub |
+| **Runtime** | Docker (Alpine Linux), C, Python, Java |
+| **Validation** | Zod (Schema Validation) |
 
 ---
 
 ## 🛠️ Installation & Setup
 
+CodeGuard requires **Docker** to be running for code execution.
+
 ### 1. Clone the repository
 ```bash
 git clone https://github.com/Siddhivinayak06/CodeGuard.git
-cd codeguard
+cd CodeGuard
 ```
 
-### 2. Install dependencies
+### 2. Backend Setup
+The backend handles code execution and API requests.
+
 ```bash
+cd backend
+
+# Install dependencies
 npm install
-```
-### 3. Set up environment variables
-Create a .env.local file and add the following:
-```bash
-SUPABASE_URL=your_supabase_url
-SUPABASE_KEY=your_supabase_key
-```
 
-### 4. Run the development server
-```bash
+# Start the server (ensure Docker is running)
+npm start
+# OR for development
 npm run dev
 ```
-The app will be live at http://localhost:3000
+*The backend runs on http://localhost:5000*
+
+### 3. Frontend Setup
+The frontend provides the user interface.
+
+```bash
+cd frontend
+
+# Install dependencies
+npm install
+
+# Start the development server
+npm run dev
+```
+*The frontend runs on http://localhost:3000*
+
+### 4. Environment Variables
+Create a `.env` file in the `frontend` root:
+```bash
+NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+```
+
+And a `.env` file in the `backend` root:
+```bash
+PORT=5000
+SUPABASE_URL=your_supabase_url
+SUPABASE_KEY=your_supabase_service_role_key
+```
 
 ---
 
 ## 🧱 Project Structure
+
 ```bash
 CodeGuard/
 ├── README.md
-├── package.json
-├── Dockerfile
-├── .env
-├── .env.local
-├── public/
-│   ├── favicon.ico
-│   ├── logo.png
-│   ├── robots.txt
-│   └── (other static assets)
-│
-├── frontend/
-│   ├── package.json
-│   ├── next.config.js
-│   ├── tailwind.config.js
-│   ├── tsconfig.json
-│   ├── postcss.config.js
-│   ├── globals.css
-│   │
-│   ├── app/
-│   │   ├── layout.tsx
-│   │   ├── page.tsx
-│   │   ├── compiler/
-│   │   │   └── page.tsx
-│   │   ├── faculty/
-│   │   │   └── submissions/
-│   │   │       └── page.tsx
-│   │   ├── editor/
-│   │   │   └── EditorClient.tsx
-│   │   └── (other route folders as needed)
-│   │
-│   ├── components/
-│   │   ├── CodeEditor.jsx
-│   │   ├── Navbar.tsx
-│   │   ├── OutputPane.jsx
-│   │   ├── InputPane.jsx
-│   │   ├── ModeToggle.tsx
-│   │   └── ui/
-│   │       ├── button.tsx
-│   │       ├── dropdown-menu.tsx
-│   │       ├── resizable.tsx
-│   │       └── (other shadcn/ui primitives)
-│   │
-│   ├── lib/
-│   │   ├── supabase/
-│   │   │   └── client.ts
-│   │   ├── ClientPdf.ts
-│   │   └── generatePdfClient.ts
-│   │
-│   ├── hooks/
-│   │   └── useProctoring.js
-│   │
-│   └── (other frontend config and build files)
-│
-├── backend/
-│   ├── package.json
-│   ├── Dockerfile.python
-│   ├── Dockerfile.c
-│   ├── interactive_wrapper.c
-│   │
+├── docker-compose.yml
+├── backend/                  # Node.js/Express Backend
 │   ├── src/
-│   │   ├── server.js
-│   │   ├── interactiveserver.js
-│   │   ├── routes/
-│   │   │   └── execute.js
-│   │   ├── utils/
-│   │   │   ├── dockerRunner.js
-│   │   │   ├── sandbox.js
-│   │   │   └── (other helper scripts)
-│   │   └── (other backend source files)
-│   │
-│   └── (logs, temp, or build files)
+│   │   ├── server.js         # Entry point
+│   │   ├── routes/           # API Routes
+│   │   ├── runners/          # Docker Execution Logic
+│   │   └── interactive_wrapper.c # Interactive execution wrapper
+│   ├── Dockerfile.*          # Language-specific Dockerfiles
+│   └── package.json
 │
-└── docker/
-    ├── docker-compose.yml
-    ├── python-runtime/
-    │   └── Dockerfile
-    └── c-runtime/
-        └── Dockerfile
-
+└── frontend/                 # Next.js 16 Frontend
+    ├── app/                  # App Router Pages
+    │   ├── faculty/          # Dashboard Routes
+    │   ├── compiler/         # Code Editor Page
+    │   └── page.tsx          # Landing Page
+    ├── components/           # Reusable UI Components
+    ├── lib/                  # Utilities & Supabase Client
+    └── package.json
 ```
-
-## 🧪 How It Works
-- User writes code in the online editor.
-- The backend sends the code to a Docker container.
-- The container compiles/runs the code (C/Python).
-- The result and output are returned to the user in real-time.
-- Submissions are stored securely in Supabase for later viewing.
