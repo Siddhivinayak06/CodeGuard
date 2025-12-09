@@ -302,7 +302,7 @@ export default function FacultySchedulePage() {
 
             <button
               onClick={openCreate}
-              className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 transition-all duration-200"
+              className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 transition-all duration-200"
             >
               <PlusIcon />
               <span>Add Practical</span>
@@ -375,54 +375,23 @@ export default function FacultySchedulePage() {
           )}
         </div>
 
-        {/* Practical Form Modal */}
-        {modalOpen && (
-          <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/50 backdrop-blur-sm overflow-y-auto pt-16 pb-8">
-            <div className="w-full max-w-5xl mx-4 bg-white dark:bg-gray-900 rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-700 animate-in fade-in slide-in-from-top-4 duration-300">
-              {/* Modal Header */}
-              <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-gradient-to-br from-blue-600 to-purple-600 rounded-lg">
-                    {editingPractical ? (
-                      <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                      </svg>
-                    ) : (
-                      <PlusIcon />
-                    )}
-                  </div>
-                  <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
-                    {editingPractical ? "Edit Practical" : "Create New Practical"}
-                  </h2>
-                </div>
-                <button
-                  onClick={() => setModalOpen(false)}
-                  className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
-                  title="Close"
-                >
-                  <CloseIcon />
-                </button>
-              </div>
-
-              {/* Modal Content */}
-              <div className="max-h-[calc(100vh-12rem)] overflow-y-auto">
-                <PracticalForm
-                  practical={editingPractical}
-                  subjects={subjects}
-                  students={students}
-                  supabase={supabase}
-                  sampleCode={sampleCode}
-                  setSampleCode={setSampleCode}
-                  sampleLanguage={sampleLanguage}
-                  setSampleLanguage={setSampleLanguage}
-                  onClose={() => setModalOpen(false)}
-                  onSaved={fetchPracticals}
-                  isOpen={true}
-                />
-              </div>
-            </div>
-          </div>
-        )}
+        {/* Practical Form Modal logic handled inside component */}
+        <PracticalForm
+          practical={editingPractical}
+          subjects={subjects}
+          // students={students} // Note: PracticalForm definition viewed earlier didn't seem to take students prop, it fetches them internally? Wait, let me check the PracticalForm definition I viewed earlier. Step 29 shows interface PracticalFormProps DOES NOT have students. But earlier usage in this file PASSED students. 
+          // Re-checking Step 29: interface PracticalFormProps { practical: Practical | null; subjects: Subject[]; supabase: any; sampleCode... }
+          // The component does NOT accept `students` prop in the definition I saw.
+          // It fetches students internally. So I should remove `students={students}`.
+          supabase={supabase}
+          sampleCode={sampleCode}
+          setSampleCode={setSampleCode}
+          sampleLanguage={sampleLanguage}
+          setSampleLanguage={setSampleLanguage}
+          onClose={() => setModalOpen(false)}
+          onSaved={fetchPracticals}
+          isOpen={modalOpen}
+        />
 
         {/* Student Assignment Modal */}
         {assignmentModalOpen && selectedPracticalId && (

@@ -100,65 +100,65 @@ export default function FacultySubjects() {
       mountedRef.current = false;
     };
   }, [router, supabase]);
-useEffect(() => {
-  if (!user) return;
-  let isMounted = true;
+  useEffect(() => {
+    if (!user) return;
+    let isMounted = true;
 
-  const fetchSubjects = async () => {
-    setLoading(true);
-    try {
-      if (!user?.id) {
-        console.warn("fetchSubjects: missing user.id", user);
+    const fetchSubjects = async () => {
+      setLoading(true);
+      try {
+        if (!user?.id) {
+          console.warn("fetchSubjects: missing user.id", user);
+          if (isMounted) setSubjects([]);
+          return;
+        }
+
+        const res = await supabase
+          .from("subjects")
+          .select(`id, subject_name, subject_code, practicals(id), semester`)
+          .eq("faculty_id", user.id)
+          .order("subject_name", { ascending: true });
+
+        // Supabase returns { data, error }
+        const { data, error } = res as any;
+
+        if (error) {
+          // Log useful bits (message/code) but avoid over-stringifying large stacks
+          console.error("Supabase error loading subjects:", error?.message ?? error, error?.code ? `code=${error.code}` : "");
+          if (isMounted) setSubjects([]);
+          return;
+        }
+
+        if (!isMounted) return;
+
+        const formatted = (data || []).map((s: any) => ({
+          id: s.id,
+          subject_name: s.subject_name,
+          subject_code: s.subject_code,
+          practical_count: s.practicals?.length || 0,
+          semester: s.semester || "",
+        }));
+
+        if (isMounted) {
+          setSubjects(formatted);
+          if (!selected && formatted.length > 0) setSelected(formatted[0].id);
+        }
+      } catch (err: any) {
+        // Ignore AbortError behavior (shouldn't happen since we removed AbortController),
+        // but handle generically and log a short message.
+        console.error("Unexpected error fetching subjects:", err?.message ?? err);
         if (isMounted) setSubjects([]);
-        return;
+      } finally {
+        if (isMounted) setLoading(false);
       }
+    };
 
-      const res = await supabase
-        .from("subjects")
-        .select(`id, subject_name, subject_code, practicals(id), semester`)
-        .eq("faculty_id", user.id)
-        .order("subject_name", { ascending: true });
+    fetchSubjects();
 
-      // Supabase returns { data, error }
-      const { data, error } = res as any;
-
-      if (error) {
-        // Log useful bits (message/code) but avoid over-stringifying large stacks
-        console.error("Supabase error loading subjects:", error?.message ?? error, error?.code ? `code=${error.code}` : "");
-        if (isMounted) setSubjects([]);
-        return;
-      }
-
-      if (!isMounted) return;
-
-      const formatted = (data || []).map((s: any) => ({
-        id: s.id,
-        subject_name: s.subject_name,
-        subject_code: s.subject_code,
-        practical_count: s.practicals?.length || 0,
-        semester: s.semester || "",
-      }));
-
-      if (isMounted) {
-        setSubjects(formatted);
-        if (!selected && formatted.length > 0) setSelected(formatted[0].id);
-      }
-    } catch (err: any) {
-      // Ignore AbortError behavior (shouldn't happen since we removed AbortController),
-      // but handle generically and log a short message.
-      console.error("Unexpected error fetching subjects:", err?.message ?? err);
-      if (isMounted) setSubjects([]);
-    } finally {
-      if (isMounted) setLoading(false);
-    }
-  };
-
-  fetchSubjects();
-
-  return () => {
-    isMounted = false;
-  };
-}, [user, supabase, refreshKey]);
+    return () => {
+      isMounted = false;
+    };
+  }, [user, supabase, refreshKey]);
 
 
 
@@ -266,14 +266,13 @@ useEffect(() => {
               />
             </div>
 
-            <Button
-              size="sm"
+            <button
               onClick={openNewPractical}
-              className="flex items-center gap-2 bg-gradient-to-r from-blue-500 to-purple-500 text-white shadow-md"
+              className="inline-flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-medium rounded-xl shadow-lg shadow-indigo-500/25 hover:shadow-indigo-500/40 transition-all hover:-translate-y-0.5"
             >
-              <Plus className="w-4 h-4" />
+              <Plus size={20} />
               New Practical
-            </Button>
+            </button>
 
             <Button size="sm" variant="ghost" onClick={() => setRefreshKey(k => k + 1)} className="flex items-center gap-2">
               <RefreshCw className="w-4 h-4" />
@@ -389,9 +388,10 @@ useEffect(() => {
                     <p className="text-gray-600 font-medium">No practicals found</p>
                     <p className="text-gray-500 text-sm mt-2">Create a practical or select another subject.</p>
                     <div className="mt-4">
-                      <Button onClick={openNewPractical}>
-                        <Plus className="w-4 h-4 mr-2" /> Create Practical
-                      </Button>
+                      <button onClick={openNewPractical} className="inline-flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-medium rounded-xl shadow-lg shadow-indigo-500/25 hover:shadow-indigo-500/40 transition-all hover:-translate-y-0.5">
+                        <Plus size={20} />
+                        Create Practical
+                      </button>
                     </div>
                   </div>
                 ) : (
@@ -451,39 +451,18 @@ useEffect(() => {
         </div>
       </main>
 
-      {showPracticalModal && (
-        <div
-          className="fixed top-16 left-0 right-0 bottom-0 z-50 flex flex-col bg-white dark:bg-gray-900 overflow-y-auto"
-        >
-          {/* Top bar inside modal */}
-          <div className="flex justify-between items-center p-4 border-b border-gray-300 dark:border-gray-700">
-            <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">
-              {editingPractical ? "Edit Practical" : "Add Practical"}
-            </h2>
-            <button
-              onClick={handleModalClose}
-              className="px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700 text-sm"
-            >
-              Close
-            </button>
-          </div>
-
-          {/* Practical Form */}
-          <div className="flex-1 ">
-            <PracticalForm
-              practical={editingPractical as any}
-              subjects={subjects}
-              supabase={supabase}
-              sampleCode={sampleCode}
-              setSampleCode={setSampleCode}
-              sampleLanguage={sampleLanguage}
-              setSampleLanguage={setSampleLanguage}
-              onClose={handleModalClose}
-              onSaved={handleSaved}
-            />
-          </div>
-        </div>
-      )}
+      <PracticalForm
+        isOpen={showPracticalModal}
+        practical={editingPractical as any}
+        subjects={subjects}
+        supabase={supabase}
+        sampleCode={sampleCode}
+        setSampleCode={setSampleCode}
+        sampleLanguage={sampleLanguage}
+        setSampleLanguage={setSampleLanguage}
+        onClose={handleModalClose}
+        onSaved={handleSaved}
+      />
 
 
       <style jsx>{`
