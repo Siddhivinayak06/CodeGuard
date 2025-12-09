@@ -4,7 +4,7 @@ import { createClient as createServerClient } from "@/lib/supabase/server";
 import { supabaseAdmin } from "@/lib/supabase/service";
 
 /** Check if current user is admin */
-async function isAdmin(supabaseServerClient: ReturnType<typeof createServerClient>) {
+async function isAdmin(supabaseServerClient: Awaited<ReturnType<typeof createServerClient>>) {
   try {
     const { data: userData, error: userErr } = await (supabaseServerClient as any).auth.getUser();
     if (userErr) {

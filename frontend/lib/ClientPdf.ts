@@ -10,6 +10,7 @@ export async function generatePdfClient({
   submissionDate,
   status,
   marks,
+  output,
   filename = "submission_report.pdf",
 }: {
   studentName: string;
@@ -20,102 +21,128 @@ export async function generatePdfClient({
   submissionDate: string;
   status: string;
   marks?: number;
+  output?: string;
   filename?: string;
 }) {
   const doc = new jsPDF({ unit: "pt", format: "a4" });
-  const marginLeft = 40;
-  const marginTop = 40;
+
+  const margin = 40;
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
-  const usableWidth = pageWidth - marginLeft * 2;
+  const usableWidth = pageWidth - margin * 2;
 
-  const headingFontSize = 18;
-  const subHeadingFontSize = 14;
-  const textFontSize = 11;
-  const monoFont = "courier";
-
-  let cursorY = marginTop;
+  let cursorY = margin;
 
   const newPage = () => {
     doc.addPage();
-    cursorY = marginTop;
+    cursorY = margin;
   };
 
-  // Header Section
+  // -------------------------------------------
+  // Header - Center aligned
+  // -------------------------------------------
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(headingFontSize);
-  doc.setTextColor(63, 81, 181); // Indigo color
-  doc.text("Practical Submission Report", marginLeft, cursorY);
-  cursorY += headingFontSize + 20;
+  doc.setFontSize(22);
+  doc.setTextColor(40, 40, 40);
+  doc.text("Practical Submission Report", pageWidth / 2, cursorY, { align: "center" });
 
-  // Student Details
-  doc.setDrawColor(200);
-  doc.setLineWidth(1);
-  doc.line(marginLeft, cursorY - 10, pageWidth - marginLeft, cursorY - 10);
+  cursorY += 40;
 
-  doc.setTextColor(0);
-  doc.setFontSize(textFontSize);
+  // -------------------------------------------
+  // Student Details Table
+  // -------------------------------------------
+  const rowHeight = 22;
+  const tableData = [
+    ["Student Name", studentName],
+    ["Roll Number", rollNumber],
+    ["Practical Title", practicalTitle],
+    ["Language", language],
+    ["Submission Date", submissionDate],
+    ["Status", status.toUpperCase()],
+    ["Marks", marks !== undefined ? marks.toString() : "-"],
+  ];
 
-  const drawField = (label: string, value: string, xOffset: number = 0) => {
+  doc.setFontSize(11);
+  doc.setFont("helvetica", "normal");
+
+  tableData.forEach(([label, value]) => {
+    doc.setFillColor(245, 245, 245);
+    doc.rect(margin, cursorY, usableWidth, rowHeight, "F");
+
     doc.setFont("helvetica", "bold");
-    doc.text(`${label}:`, marginLeft + xOffset, cursorY);
+    doc.text(label + ":", margin + 10, cursorY + 15);
+
     doc.setFont("helvetica", "normal");
-    doc.text(value, marginLeft + xOffset + doc.getTextWidth(`${label}: `), cursorY);
-  };
+    doc.text(value, margin + 150, cursorY + 15);
 
-  drawField("Student", studentName);
-  drawField("Roll No", rollNumber, 250);
-  cursorY += 20;
-
-  drawField("Practical", practicalTitle);
-  cursorY += 20;
-
-  drawField("Submitted", submissionDate);
-  drawField("Language", language, 250);
-  cursorY += 20;
-
-  drawField("Status", status.toUpperCase());
-  if (marks !== undefined) {
-    drawField("Marks", marks.toString(), 250);
-  }
-  cursorY += 30;
-
-  // Code Section
-  doc.setDrawColor(230);
-  doc.setFillColor(248, 250, 252); // Light gray background
-  doc.rect(marginLeft, cursorY - 15, usableWidth, 25, "F");
-
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(subHeadingFontSize);
-  doc.setTextColor(30);
-  doc.text("Source Code", marginLeft + 10, cursorY + 2);
-  cursorY += 25;
-
-  doc.setFont(monoFont, "normal");
-  doc.setFontSize(10);
-  doc.setTextColor(0);
-
-  const lines = doc.splitTextToSize(code || "No code submitted", usableWidth);
-  const lineHeight = 14;
-
-  lines.forEach((line: string) => {
-    if (cursorY + lineHeight > pageHeight - marginTop) {
-      newPage();
-      doc.setFont(monoFont, "normal");
-      doc.setFontSize(10);
-    }
-    doc.text(line, marginLeft, cursorY);
-    cursorY += lineHeight;
+    cursorY += rowHeight + 4;
   });
 
-  // Footer (on all pages if needed, but simple one at end for now)
-  const totalPages = doc.internal.getNumberOfPages();
+  cursorY += 15;
+
+  // -------------------------------------------
+  // Output Section (if provided)
+  // -------------------------------------------
+  if (output) {
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(14);
+    doc.text("Program Output", margin, cursorY);
+    cursorY += 20;
+
+    // Background box
+    const outputLines = doc.splitTextToSize(output, usableWidth - 20);
+
+    doc.setFillColor(250, 250, 250);
+    doc.rect(margin, cursorY - 12, usableWidth, outputLines.length * 16 + 25, "F");
+
+    doc.setFont("courier", "normal");
+    doc.setFontSize(10);
+
+    outputLines.forEach((line: string) => {
+      if (cursorY + 16 > pageHeight - margin) newPage();
+
+      doc.text(line, margin + 10, cursorY);
+      cursorY += 14;
+    });
+
+    cursorY += 20;
+  }
+
+  // -------------------------------------------
+  // Code Section
+  // -------------------------------------------
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(14);
+  doc.text("Source Code", margin, cursorY);
+  cursorY += 20;
+
+  const codeLines = doc.splitTextToSize(code || "No code submitted", usableWidth - 20);
+
+  doc.setFillColor(245, 248, 250);
+  doc.setDrawColor(210);
+  doc.rect(margin, cursorY - 12, usableWidth, codeLines.length * 16 + 25, "FD");
+
+  doc.setFont("courier", "normal");
+  doc.setFontSize(10);
+
+  codeLines.forEach((line: string) => {
+    if (cursorY + 16 > pageHeight - margin) newPage();
+    doc.text(line, margin + 10, cursorY);
+    cursorY += 14;
+  });
+
+  // -------------------------------------------
+  // Footer (each page)
+  // -------------------------------------------
+  const totalPages = doc.getNumberOfPages();
+
   for (let i = 1; i <= totalPages; i++) {
     doc.setPage(i);
-    doc.setFontSize(9);
-    doc.setTextColor(150);
-    doc.text(`Page ${i} of ${totalPages}`, pageWidth - marginLeft - 50, pageHeight - 20);
-    doc.text("Generated by CodeGuard", marginLeft, pageHeight - 20);
+    doc.setFontSize(10);
+    doc.setTextColor(130);
+
+    doc.text("CodeGuard", margin, pageHeight - 20);
+    doc.text(`Page ${i} of ${totalPages}`, pageWidth - margin - 60, pageHeight - 20);
   }
 
   doc.save(filename);

@@ -72,6 +72,7 @@ export default function Home() {
 
   const supabase = useMemo(() => (typeof window === "undefined" ? null : createClient()), []);
   const [user, setUser] = useState<User | null>(null);
+  const [rollNo, setRollNo] = useState<string | null>(null);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -83,6 +84,15 @@ export default function Home() {
           router.push("/auth/login");
         } else if (mountedRef.current) {
           setUser(data.user);
+          // Fetch roll no
+          const { data: studentData } = await supabase
+            .from("student_details")
+            .select("roll_no")
+            .eq("student_id", data.user.id)
+            .single();
+          if (studentData?.roll_no) {
+            setRollNo(studentData.roll_no);
+          }
         }
       } catch (err) {
         console.error("fetchUser error:", err);
@@ -181,7 +191,7 @@ export default function Home() {
     try {
       await generatePdfClient({
         studentName: user?.user_metadata?.name || user?.email || "Anonymous User",
-        rollNumber: "Interactive Mode",
+        rollNumber: rollNo || "Interactive Mode",
         practicalTitle: "Code Playground Session",
         code: activeFile?.content || "",
         language: lang,

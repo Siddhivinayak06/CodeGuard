@@ -137,9 +137,14 @@ int main(void) {
   const downloadPdf = async () => {
     try {
       await generatePdfClient({
+        studentName: user?.email || user?.user_metadata?.full_name || "Anonymous",
+        rollNumber: "N/A",
+        practicalTitle: "Code Compilation",
         code,
-        output,
-        user: user?.email || user?.user_metadata?.full_name || "Anonymous",
+        language: lang,
+        submissionDate: new Date().toLocaleString(),
+        status: errorOutput ? "Failed" : "Compiled",
+        output: output || errorOutput,
         filename: "code_output.pdf",
       });
     } catch (err) {

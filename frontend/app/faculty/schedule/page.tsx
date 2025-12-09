@@ -10,12 +10,12 @@ import StudentAssignmentForm from "../components/StudentAssignmentForm";
 type Subject = { id: number; subject_name: string; faculty_id?: string };
 type Practical = {
   id: number;
-  subject_id: number;
+  subject_id: number | string;
   title: string;
   description?: string;
   language?: string;
   deadline: string;
-  max_marks: number;
+  max_marks?: number;
 };
 type Student = { id: string; name: string };
 

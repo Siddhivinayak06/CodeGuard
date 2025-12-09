@@ -25,13 +25,12 @@ async function isAdminUsingCookieClient(): Promise<boolean> {
 // ---------------------------
 // PUT: update a single user
 // ---------------------------
-export async function PUT(req: NextRequest, context: { params: { id: string } }) {
+export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const isAdmin = await isAdminUsingCookieClient();
   if (!isAdmin) return NextResponse.json({ success: false, error: "Forbidden" }, { status: 403 });
 
   try {
-    // ✅ Correct way to get dynamic params
-    const { id } = context.params;
+    const { id } = await params;
     if (!id) return NextResponse.json({ success: false, error: "User ID is required" }, { status: 400 });
 
     const body = await req.json();
@@ -60,6 +59,30 @@ export async function PUT(req: NextRequest, context: { params: { id: string } })
     return NextResponse.json({ success: true, data: { ...updatedUser, student_details: studentDetails } });
   } catch (err: any) {
     console.error("PUT /api/admin/users/[id] error:", err);
+    return NextResponse.json({ success: false, error: err.message ?? "Server error" }, { status: 500 });
+  }
+}
+
+// ---------------------------
+// DELETE: remove user by ID
+// ---------------------------
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const isAdmin = await isAdminUsingCookieClient();
+  if (!isAdmin) return NextResponse.json({ success: false, error: "Forbidden" }, { status: 403 });
+
+  try {
+    const { id } = await params;
+    if (!id) return NextResponse.json({ success: false, error: "User ID is required" }, { status: 400 });
+
+    // Delete user and student_details
+    const { error: delErr } = await supabaseAdmin.from("users").delete().eq("uid", id);
+    if (delErr) throw delErr;
+
+    await supabaseAdmin.from("student_details").delete().eq("student_id", id);
+
+    return NextResponse.json({ success: true, message: "User deleted" });
+  } catch (err: any) {
+    console.error("DELETE /api/admin/users/[id] error:", err);
     return NextResponse.json({ success: false, error: err.message ?? "Server error" }, { status: 500 });
   }
 }

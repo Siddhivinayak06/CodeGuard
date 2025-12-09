@@ -28,7 +28,7 @@ interface Practical {
   description?: string;
   language?: string;
   deadline: string;
-  max_marks: number;
+  max_marks?: number;
 }
 
 interface Subject {
@@ -56,6 +56,7 @@ interface PracticalFormProps {
   onClose: () => void;
   onSaved: () => void;
   isOpen?: boolean;
+  defaultSubjectId?: number | string | null;
 }
 
 // ---------------------- Small icons / helpers ----------------------
@@ -78,6 +79,7 @@ export default function PracticalForm({
   onClose,
   onSaved,
   isOpen = false,
+  defaultSubjectId,
 }: PracticalFormProps) {
   const { theme } = useTheme();
 
@@ -178,14 +180,14 @@ export default function PracticalForm({
         language: "",
         deadline: new Date().toISOString().slice(0, 16),
         max_marks: 100,
-        subject_id: subjects[0]?.id ?? prev.subject_id,
+        subject_id: defaultSubjectId ?? (subjects[0]?.id ?? prev.subject_id), // Use defaultSubjectId if provided
       }));
       setTestCases([{ input: "", expected_output: "", is_hidden: false, time_limit_ms: 2000, memory_limit_kb: 65536 }]);
       setAssignmentDeadline(new Date().toISOString().slice(0, 16));
       setSelectedStudents([]); // Clear selected students for new practical
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [practical, subjects]);
+  }, [practical, subjects, defaultSubjectId]);
 
   // fetch students (with student_details) for assignment
   useEffect(() => {
@@ -416,7 +418,7 @@ export default function PracticalForm({
         description: enableLevels ? '' : form.description, // Use level descriptions when levels enabled
         language: form.language,
         deadline: form.deadline,
-        max_marks: enableLevels ? levels.reduce((sum, l) => sum + l.max_marks, 0) : form.max_marks,
+        max_marks: enableLevels ? levels.reduce((sum, l) => sum + l.max_marks, 0) : (form.max_marks ?? 100),
       };
 
       if (practicalId && practicalId > 0) {
@@ -684,7 +686,13 @@ export default function PracticalForm({
                       name="subject_id"
                       value={form.subject_id}
                       onChange={handleInput}
-                      className="w-full px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all text-gray-900 dark:text-white text-sm"
+                      disabled={!!defaultSubjectId}
+                      className={cx(
+                        "w-full px-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all text-sm",
+                        !!defaultSubjectId
+                          ? "bg-gray-100 dark:bg-gray-900/50 text-gray-500 cursor-not-allowed"
+                          : "bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                      )}
                     >
                       {subjects.map(s => <option key={s.id} value={s.id}>{s.subject_name}</option>)}
                     </select>
@@ -704,8 +712,6 @@ export default function PracticalForm({
                       <option value="java">Java</option>
                       <option value="python">Python</option>
                       <option value="c">C</option>
-                      <option value="cpp">C++</option>
-                      <option value="javascript">JavaScript</option>
                     </select>
                   </div>
 

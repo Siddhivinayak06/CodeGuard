@@ -3,9 +3,9 @@ import { supabaseAdmin } from "@/lib/supabase/service";
 
 export async function PUT(
   req: NextRequest,
-  { params }: { params: { id: string } } // destructure here
+  { params }: { params: Promise<{ id: string }> }
 ) {
-  const studentId = params.id;
+  const { id: studentId } = await params;
 
   if (!studentId) {
     return NextResponse.json({ error: "Student ID is required" }, { status: 400 });

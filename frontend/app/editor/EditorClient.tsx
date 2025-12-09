@@ -231,6 +231,8 @@ rl.on('line', (line) => {
 
   const supabase = useMemo(() => createClient(), []);
   const [user, setUser] = useState<User | null>(null);
+  // Roll Number State
+  const [rollNo, setRollNo] = useState<string | null>(null);
 
   const [testCaseResults, setTestCaseResults] = useState<TestCaseResult[]>([]);
   const [scoreSummary, setScoreSummary] = useState<{ passed: number; total: number }>({ passed: 0, total: 0 });
@@ -255,8 +257,22 @@ rl.on('line', (line) => {
     mountedRef.current = true;
     const fetchUser = async () => {
       const { data, error } = await supabase.auth.getUser();
-      if (error || !data?.user) router.push("/auth/login");
-      else if (mountedRef.current) setUser(data.user);
+      if (error || !data?.user) {
+        router.push("/auth/login");
+        return;
+      }
+      if (mountedRef.current) {
+        setUser(data.user);
+        // Fetch roll number if student
+        const { data: studentData } = await supabase
+          .from("student_details")
+          .select("roll_no")
+          .eq("student_id", data.user.id)
+          .single();
+        if (studentData?.roll_no) {
+          setRollNo(studentData.roll_no);
+        }
+      }
     };
     fetchUser();
     return () => { mountedRef.current = false; };
@@ -453,9 +469,14 @@ rl.on('line', (line) => {
   const downloadPdf = async () => {
     try {
       await generatePdfClient({
+        studentName: user?.email || "Anonymous",
+        rollNumber: rollNo || "N/A",
+        practicalTitle: practical?.title || "Practical Submission",
         code,
+        language: lang,
+        submissionDate: new Date().toLocaleString(),
+        status: "N/A", // This is just a download of current code, not a submission result
         output: testCaseResults.map((r) => `${r.status.toUpperCase()}: ${r.stdout}`).join("\n\n"),
-        user: user?.email || "Anonymous",
         filename: practical?.title?.replace(/\s+/g, "_") || "code_output.pdf",
       });
     } catch (err) {

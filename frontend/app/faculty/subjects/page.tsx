@@ -16,7 +16,13 @@ import {
   Plus,
   Search,
   RefreshCw,
-  Award
+  Award,
+  Eye,
+  X,
+  Code2,
+  FileText,
+  CheckCircle2,
+  ListFilter
 } from "lucide-react";
 
 // dynamic import of PracticalForm to avoid SSR issues
@@ -37,6 +43,19 @@ type Practical = {
   submission_count?: number;
 };
 
+type TestCase = {
+  id: number;
+  input: string;
+  expected_output: string;
+  is_hidden: boolean;
+};
+
+interface ViewingPractical extends Practical {
+  description?: string;
+  language?: string;
+  testCases?: TestCase[];
+}
+
 export default function FacultySubjects() {
   const router = useRouter();
   const supabase = useMemo(() => createClient(), []);
@@ -54,6 +73,10 @@ export default function FacultySubjects() {
   const [editingPractical, setEditingPractical] = useState<Practical | null>(null);
   const [sampleCode, setSampleCode] = useState<string>(""); // initial sample code
   const [sampleLanguage, setSampleLanguage] = useState<string>("c");
+
+  // View Modal state
+  const [viewingPractical, setViewingPractical] = useState<ViewingPractical | null>(null);
+  const [loadingPracticalDetails, setLoadingPracticalDetails] = useState(false);
 
   // helpers
   const formatDate = (d?: string | null) => {
@@ -200,6 +223,39 @@ export default function FacultySubjects() {
     if (daysLeft === 0) return { text: "Today", pill: "orange" as const };
     if (daysLeft <= 3) return { text: `${daysLeft} days`, pill: "yellow" as const };
     return { text: `${daysLeft} days`, pill: "green" as const };
+  };
+
+  const handleViewPractical = async (practical: Practical) => {
+    setLoadingPracticalDetails(true);
+    try {
+      // 1. Fetch full practical details
+      const { data: practicalData, error: practicalError } = await supabase
+        .from("practicals")
+        .select("*")
+        .eq("id", practical.id)
+        .single();
+
+      if (practicalError) throw practicalError;
+
+      // 2. Fetch test cases
+      const { data: testCases, error: tcError } = await supabase
+        .from("test_cases")
+        .select("*")
+        .eq("practical_id", practical.id)
+        .order("id", { ascending: true });
+
+      if (tcError) throw tcError;
+
+      setViewingPractical({
+        ...practicalData,
+        testCases: testCases || []
+      });
+    } catch (err) {
+      console.error("Failed to fetch practical details:", err);
+      alert("Failed to load practical details.");
+    } finally {
+      setLoadingPracticalDetails(false);
+    }
   };
 
   const openNewPractical = () => {
@@ -433,10 +489,27 @@ export default function FacultySubjects() {
                                 </div>
                               </td>
                               <td className="px-4 py-4 text-right">
-                                <Button size="sm" onClick={() => router.push(`/dashboard/faculty/submissions?practical=${p.id}`)} className="mr-2 bg-gradient-to-r from-blue-500 to-purple-500 text-white">
-                                  View
-                                </Button>
-                                <Button size="sm" variant="ghost" onClick={() => openEditPractical(p.id)}>Edit</Button>
+                                <div className="flex items-center justify-end gap-2">
+                                  <Button
+                                    size="icon"
+                                    variant="ghost"
+                                    onClick={() => handleViewPractical(p)}
+                                    className="bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 hover:bg-indigo-100 dark:hover:bg-indigo-900/40"
+                                    title="View Details"
+                                  >
+                                    <Eye className="w-4 h-4" />
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    onClick={() => router.push(`/faculty/submissions?practical=${p.id}`)}
+                                    className="bg-gradient-to-r from-blue-500 to-purple-500 text-white"
+                                  >
+                                    Submissions
+                                  </Button>
+                                  <Button size="icon" variant="ghost" onClick={() => openEditPractical(p.id)} title="Edit">
+                                    <FileText className="w-4 h-4" />
+                                  </Button>
+                                </div>
                               </td>
                             </tr>
                           );
@@ -462,7 +535,143 @@ export default function FacultySubjects() {
         setSampleLanguage={setSampleLanguage}
         onClose={handleModalClose}
         onSaved={handleSaved}
+        defaultSubjectId={selected}
       />
+
+      {/* View Practical Modal */}
+      {viewingPractical && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-sm animate-fadeIn">
+          <div className="glass-card-premium rounded-3xl w-full max-w-5xl max-h-[90vh] overflow-hidden flex flex-col animate-scaleIn">
+            <div className="flex items-center justify-between p-6 border-b border-gray-100 dark:border-gray-800 bg-white/50 dark:bg-gray-900/50 backdrop-blur-sm">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 text-white flex items-center justify-center font-bold text-lg shadow-lg">
+                  <FileCheck className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-bold text-gray-900 dark:text-white">
+                    {viewingPractical.title}
+                  </h3>
+                  <div className="flex items-center gap-2 text-sm text-gray-500">
+                    <span className="font-mono">ID: {viewingPractical.id}</span>
+                    <span>•</span>
+                    <span className="text-indigo-600 dark:text-indigo-400 font-medium">
+                      {selectedSubject?.subject_name}
+                    </span>
+                  </div>
+                </div>
+              </div>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setViewingPractical(null)}
+                className="rounded-full hover:bg-gray-100 dark:hover:bg-gray-800"
+              >
+                <X className="w-5 h-5" />
+              </Button>
+            </div>
+
+            <div className="flex-1 overflow-auto p-6 grid grid-cols-1 lg:grid-cols-2 gap-6 bg-gray-50/50 dark:bg-gray-950/50">
+              {/* Left Column: Description */}
+              <div className="space-y-6">
+                <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 overflow-hidden shadow-sm">
+                  <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-900/50 flex items-center justify-between">
+                    <h4 className="font-semibold text-gray-700 dark:text-gray-200 flex items-center gap-2">
+                      <FileText className="w-4 h-4 text-indigo-500" /> Description
+                    </h4>
+                    {viewingPractical.language && (
+                      <span className="text-xs font-mono px-2 py-1 rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 uppercase border border-gray-200 dark:border-gray-600">
+                        {viewingPractical.language}
+                      </span>
+                    )}
+                  </div>
+                  <div className="p-4 text-sm text-gray-600 dark:text-gray-300 whitespace-pre-wrap leading-relaxed">
+                    {viewingPractical.description || <span className="text-gray-400 italic">No description provided</span>}
+                  </div>
+                </div>
+
+                <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 overflow-hidden shadow-sm">
+                  <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-900/50">
+                    <h4 className="font-semibold text-gray-700 dark:text-gray-200 flex items-center gap-2">
+                      <Clock className="w-4 h-4 text-purple-500" /> Details
+                    </h4>
+                  </div>
+                  <div className="p-4 space-y-3 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-gray-500">Subject</span>
+                      <span className="font-medium text-gray-900 dark:text-white">{selectedSubject?.subject_name}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-500">Deadline</span>
+                      <span className="font-medium text-gray-900 dark:text-white">{formatDate(viewingPractical.deadline)}</span>
+                    </div>
+                    {viewingPractical.submission_count !== undefined && (
+                      <div className="flex justify-between">
+                        <span className="text-gray-500">Submissions</span>
+                        <span className="font-medium text-gray-900 dark:text-white">{viewingPractical.submission_count}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Right Column: Test Cases */}
+              <div className="space-y-6">
+                <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 overflow-hidden shadow-sm">
+                  <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-900/50 flex items-center justify-between">
+                    <h4 className="font-semibold text-gray-700 dark:text-gray-200 flex items-center gap-2">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-500" /> Test Cases
+                    </h4>
+                  </div>
+                  <div className="p-4 space-y-3 max-h-[600px] overflow-auto">
+                    {viewingPractical.testCases && viewingPractical.testCases.length > 0 ? (
+                      viewingPractical.testCases.map((tc, idx) => (
+                        <div key={tc.id} className="rounded-xl border border-gray-200 dark:border-gray-700 p-4 bg-gray-50/50 dark:bg-gray-900/50 transition-all hover:bg-white dark:hover:bg-gray-800 hover:shadow-md">
+                          <div className="flex items-center justify-between mb-3">
+                            <span className="w-6 h-6 rounded-full flex items-center justify-center bg-gray-200 dark:bg-gray-700 text-xs font-bold text-gray-600 dark:text-gray-300 shadow-inner">
+                              {idx + 1}
+                            </span>
+                            <span className="font-medium text-xs text-gray-500 dark:text-gray-400">
+                              {tc.is_hidden ? "Hidden" : "Public"}
+                            </span>
+                          </div>
+                          <div className="grid grid-cols-1 gap-3 text-xs">
+                            <div>
+                              <p className="text-gray-500 mb-1 font-medium">Input</p>
+                              <div className="bg-white dark:bg-gray-950 p-2 rounded-lg border border-gray-200 dark:border-gray-700 font-mono truncate">
+                                {tc.input || '—'}
+                              </div>
+                            </div>
+                            <div>
+                              <p className="text-gray-500 mb-1 font-medium">Expected Output</p>
+                              <div className="bg-white dark:bg-gray-950 p-2 rounded-lg border border-gray-200 dark:border-gray-700 font-mono truncate">
+                                {tc.expected_output || '—'}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="flex flex-col items-center justify-center py-8 text-gray-500">
+                        <ListFilter className="w-8 h-8 opacity-20 mb-2" />
+                        <p>No test cases found</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-4 border-t border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 flex justify-end gap-3">
+              <Button
+                variant="outline"
+                onClick={() => setViewingPractical(null)}
+              >
+                Close
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
 
       <style jsx>{`

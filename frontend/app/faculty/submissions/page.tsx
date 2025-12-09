@@ -2,7 +2,7 @@
 
 import React, { useEffect, useMemo, useRef, useState, Suspense } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import { generatePdfClient } from "@/lib/ClientPdf";
 import {
   CheckCircle2,
@@ -16,7 +16,8 @@ import {
   FileText,
   ListFilter,
   Search as SearchIcon,
-  GraduationCap
+  GraduationCap,
+  Filter
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -35,6 +36,7 @@ interface Submission {
   marks_obtained: number | null;
   created_at: string;
   updated_at: string;
+  roll_no?: string;
 }
 
 interface TestCase {
@@ -144,7 +146,9 @@ function FacultySubmissionsContent() {
   const [supabase] = useState(() => createClient());
 
   const searchParams = useSearchParams();
+  const router = useRouter();
   const [submissions, setSubmissions] = useState<Submission[]>([]);
+  const [allPracticals, setAllPracticals] = useState<{ id: number; title: string }[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [viewingSubmission, setViewingSubmission] = useState<ViewingSubmission | null>(null);
   const [pdfLoadingId, setPdfLoadingId] = useState<number | null>(null);
@@ -216,6 +220,10 @@ function FacultySubmissionsContent() {
         const practicalIds = practicals.map(p => p.id);
         const practicalMap = new Map(practicals.map(p => [p.id, p.title]));
 
+        if (isMounted) {
+          setAllPracticals(practicals);
+        }
+
         // 3. Get submissions
         const { data: subs, error } = await supabase
           .from("submissions")
@@ -245,6 +253,14 @@ function FacultySubmissionsContent() {
 
         const userMap = new Map(usersData?.map(u => [u.uid, u]) || []);
 
+        // 5. Fetch student details (roll numbers)
+        const { data: studentDetails } = await supabase
+          .from("student_details")
+          .select("student_id, roll_no")
+          .in("student_id", studentIds);
+
+        const rollNoMap = new Map(studentDetails?.map(sd => [sd.student_id, sd.roll_no]) || []);
+
         const formatted: Submission[] = (subs || []).map((s: any) => ({
           id: s.id,
           submission_id: s.id,
@@ -258,7 +274,8 @@ function FacultySubmissionsContent() {
           status: s.status || "pending",
           marks_obtained: s.marks_obtained,
           created_at: s.created_at,
-          updated_at: s.created_at
+          updated_at: s.created_at,
+          roll_no: rollNoMap.get(s.student_id) || "N/A"
         }));
 
         if (isMounted) {
@@ -285,7 +302,7 @@ function FacultySubmissionsContent() {
       await generatePdfClient(
         {
           studentName: sub.student_name,
-          rollNumber: sub.student_id,
+          rollNumber: sub.roll_no || sub.student_id,
           practicalTitle: sub.practical_title,
           code: sub.code,
           language: sub.language,
@@ -322,7 +339,12 @@ function FacultySubmissionsContent() {
       s.student_name.toLowerCase().includes(query.toLowerCase()) ||
       s.practical_title.toLowerCase().includes(query.toLowerCase());
     const matchesStatus = filterStatus === "all" || s.status.toLowerCase() === filterStatus;
-    return matchesQuery && matchesStatus;
+
+    // Allow filtering by practical ID via URL param
+    const practicalParam = searchParams.get("practical");
+    const matchesPractical = !practicalParam || s.practical_id.toString() === practicalParam;
+
+    return matchesQuery && matchesStatus && matchesPractical;
   });
 
   const stats = useMemo(() => ({
@@ -420,6 +442,42 @@ function FacultySubmissionsContent() {
             <div className="text-sm text-gray-500 hidden sm:block font-medium">
               Showing {filteredSubmissions.length} of {submissions.length} results
             </div>
+
+            {/* Practical Filter Controls */}
+            <div className="flex items-center gap-2">
+              {searchParams.get("practical") ? (
+                <div className="flex items-center gap-2 px-3 py-1.5 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 rounded-lg text-sm font-medium border border-indigo-200 dark:border-indigo-800 animate-fadeIn">
+                  <Filter className="w-3.5 h-3.5" />
+                  <span className="max-w-[150px] truncate">
+                    {allPracticals.find(p => p.id.toString() === searchParams.get("practical"))?.title || "Practical"}
+                  </span>
+                  <button
+                    onClick={() => router.push("/faculty/submissions")}
+                    className="ml-1 hover:bg-indigo-200 dark:hover:bg-indigo-800 rounded-full p-0.5 transition-colors"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              ) : (
+                <div className="relative group">
+                  <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 group-focus-within:text-indigo-500 transition-colors" />
+                  <select
+                    onChange={(e) => {
+                      if (e.target.value) {
+                        router.push(`/faculty/submissions?practical=${e.target.value}`);
+                      }
+                    }}
+                    className="pl-9 pr-8 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white/50 dark:bg-gray-800/50 text-sm font-medium focus:ring-2 focus:ring-indigo-500 outline-none appearance-none cursor-pointer hover:bg-white dark:hover:bg-gray-800 transition-all w-[180px]"
+                    defaultValue=""
+                  >
+                    <option value="" disabled>Filter by Practical</option>
+                    {allPracticals.map(p => (
+                      <option key={p.id} value={p.id}>{p.title}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+            </div>
           </div>
 
           <div className="overflow-x-auto">
@@ -468,7 +526,7 @@ function FacultySubmissionsContent() {
                           </div>
                           <div>
                             <div className="font-semibold text-gray-900 dark:text-white">{s.student_name}</div>
-                            <div className="text-xs text-gray-500 font-mono">{s.student_id}</div>
+                            <div className="text-xs text-gray-500 font-mono">{s.roll_no || s.student_id}</div>
                           </div>
                         </div>
                       </td>
