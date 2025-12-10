@@ -116,7 +116,7 @@ export async function generatePdfClient({
 
     const wrappedOutput = doc.splitTextToSize(safeOutput, usableWidth);
 
-    wrappedOutput.forEach((line) => {
+    wrappedOutput.forEach((line: string) => {
       if (cursorY + 12 > pageHeight - margin) newPage();
       doc.text(line, margin, cursorY);
       cursorY += 12;
@@ -175,7 +175,7 @@ export async function generatePdfClient({
   const safeCode = cleanText(code || "No code submitted");
   const wrappedCode = doc.splitTextToSize(safeCode, usableWidth);
 
-  wrappedCode.forEach((line) => {
+  wrappedCode.forEach((line: string) => {
     if (cursorY + 12 > pageHeight - margin) newPage();
     doc.text(line, margin, cursorY);
     cursorY += 12;
