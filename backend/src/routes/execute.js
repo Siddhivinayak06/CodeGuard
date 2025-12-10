@@ -3,6 +3,7 @@ const express = require('express');
 const router = express.Router();
 const fs = require('fs');
 const path = require('path');
+const logger = require('../utils/logger');
 const { z } = require('zod');
 
 // Validation Schema
@@ -34,20 +35,20 @@ let runCode;
 try {
   runBatchCode = require('../utils/dockerRunner');
 } catch (e) {
-  console.error('Failed to require ../utils/dockerRunner:', e && e.message);
+  logger.error('Failed to require ../utils/dockerRunner:', e && e.message);
 }
 try {
   runCode = require('../utils/runCode');
 } catch (e) {
-  console.error('Failed to require ../utils/runCode:', e && e.message);
+  logger.error('Failed to require ../utils/runCode:', e && e.message);
 }
 
 // sanity checks: ensure modules are functions
 if (typeof runBatchCode !== 'function') {
-  console.warn('Warning: runBatchCode is not a function:', typeof runBatchCode);
+  logger.warn('Warning: runBatchCode is not a function:', typeof runBatchCode);
 }
 if (typeof runCode !== 'function') {
-  console.warn('Warning: runCode is not a function:', typeof runCode);
+  logger.warn('Warning: runCode is not a function:', typeof runCode);
 }
 
 // map language -> reference file extension
@@ -67,16 +68,7 @@ function normalizeOutput(s = '') {
     .trim();
 }
 
-// small helper to ensure a function is provided to router
-function ensureCallable(fn, name) {
-  if (typeof fn !== 'function') {
-    const err = new Error(
-      `${name} is not a function (type=${typeof fn}). Check require path / module.exports.`
-    );
-    err.code = 'NOT_CALLABLE';
-    throw err;
-  }
-}
+// small helper function removed (ensureCallable)
 
 // Wrap main handler into a true function reference (avoids "callback required" mistakes)
 router.post('/', async (req, res) => {
@@ -99,7 +91,7 @@ router.post('/', async (req, res) => {
     // 1️⃣ Batch mode (multiple test cases)
     // ========================
     if (Array.isArray(batch) && batch.length > 0) {
-      console.log(`Queuing batch execution for ${lang}...`);
+      logger.info(`Queuing batch execution for ${lang}...`);
 
       try {
         // Enqueue job and wait for result (simulating synchronous API for now)
@@ -111,7 +103,9 @@ router.post('/', async (req, res) => {
           problem,
         });
 
-        const runnerResults = await job.waitUntilFinished(queueService.queueEvents);
+        const runnerResults = await job.waitUntilFinished(
+          queueService.queueEvents
+        );
 
         for (const result of runnerResults) {
           const tc = batch.find((b) => b.id === result.test_case_id);
@@ -145,7 +139,7 @@ router.post('/', async (req, res) => {
               );
               result.reference_stdout = (refRes.output ?? '').trimEnd();
             } catch (e) {
-              console.error('Reference runCode error:', e);
+              logger.error('Reference runCode error:', e);
               result.reference_stdout = tc.expectedOutput ?? '';
             }
           } else if (tc.is_hidden) {
@@ -163,7 +157,10 @@ router.post('/', async (req, res) => {
             lowErr.includes('error:')
           ) {
             result.status = 'compile_error';
-          } else if (lowErr.includes('timeout') || lowErr.includes('timed out')) {
+          } else if (
+            lowErr.includes('timeout') ||
+            lowErr.includes('timed out')
+          ) {
             result.status = 'time_limit_exceeded';
           } else if (result.stderr && result.stderr !== '') {
             result.status = 'runtime_error';
@@ -172,12 +169,11 @@ router.post('/', async (req, res) => {
           }
         }
         return res.json({ verdict: 'evaluated', details: runnerResults });
-
       } catch (e) {
-        console.error('Queue/Execution failed', e);
+        logger.error('Queue/Execution failed', e);
         return res.status(500).json({
           error: 'Execution failed',
-          detail: e.message
+          detail: e.message,
         });
       }
     }
@@ -188,13 +184,13 @@ router.post('/', async (req, res) => {
     if (!code) return res.status(400).json({ error: 'No code provided.' });
 
     try {
-      console.log(`Queuing single execution for ${lang}...`);
+      logger.info(`Queuing single execution for ${lang}...`);
       const job = await queueService.addJob({
         type: 'single',
         code,
         lang,
         input: stdinInput,
-        problem
+        problem,
       });
 
       const userResult = await job.waitUntilFinished(queueService.queueEvents);
@@ -216,7 +212,9 @@ router.post('/', async (req, res) => {
             const referenceCode = fs.readFileSync(referencePath, 'utf8');
             const refResult = await runCode(referenceCode, lang, stdinInput);
             refOut = (refResult.output ?? '').trim();
-          } catch (e) { console.error(e) }
+          } catch (e) {
+            logger.error(e);
+          }
         }
       }
 
@@ -227,9 +225,15 @@ router.post('/', async (req, res) => {
       let verdict = passed ? 'passed' : 'failed';
       if (!userResult) {
         verdict = 'failed';
-      } else if (userResult.exitCode === 124 || (userResult.error && userResult.error.toLowerCase().includes('timeout'))) {
+      } else if (
+        userResult.exitCode === 124 ||
+        (userResult.error && userResult.error.toLowerCase().includes('timeout'))
+      ) {
         verdict = 'time_limit_exceeded';
-      } else if (userResult.error && /compile|javac|error:/i.test(userResult.error)) {
+      } else if (
+        userResult.error &&
+        /compile|javac|error:/i.test(userResult.error)
+      ) {
         verdict = 'compile_error';
       } else if (userResult.error && userResult.error.trim() !== '') {
         verdict = 'runtime_error';
@@ -244,24 +248,22 @@ router.post('/', async (req, res) => {
         verdict,
         user_stderr: userResult.error || userResult.stderr || '',
       });
-
     } catch (e) {
-      console.error('Single execution failed:', e);
+      logger.error('Single execution failed:', e);
       return res.status(500).json({
         error: 'Runner failed',
-        detail: e.message
+        detail: e.message,
       });
     }
-
   } catch (err) {
-    console.error(
+    logger.error(
       'Execution handler error:',
       err && err.stack ? err.stack : err
     );
     return res.status(500).json({
       error: 'Execution failed.',
       detail: err.message,
-      stack: process.env.NODE_ENV === 'development' ? err.stack : undefined
+      stack: process.env.NODE_ENV === 'development' ? err.stack : undefined,
     });
   }
 });

@@ -1,13 +1,14 @@
 const { spawn } = require('child_process');
 const pty = require('@lydell/node-pty');
 const config = require('../config');
+const logger = require('../utils/logger');
 
 const killIfExists = (proc) => {
   try {
     if (proc && typeof proc.kill === 'function') {
       proc.kill();
     }
-  } catch (e) {
+  } catch (_e) {
     // ignore
   }
 };
@@ -15,13 +16,13 @@ const killIfExists = (proc) => {
 const removeContainer = (name) => {
   try {
     spawn('docker', ['rm', '-f', name]);
-  } catch (e) {
+  } catch (_e) {
     // ignore
   }
 };
 
 const launchContainer = (lang, containerName) => {
-  console.log(`Starting container for language: ${lang}`);
+  logger.info(`Starting container for language: ${lang}`);
 
   let runArgs = [];
   if (lang === 'python') {
@@ -94,10 +95,10 @@ const launchContainer = (lang, containerName) => {
     try {
       const proc = spawn('docker', runArgs);
       proc.on('error', (err) => {
-        console.error(`Failed to spawn docker for ${lang}:`, err);
+        logger.error(`Failed to spawn docker for ${lang}:`, err);
       });
     } catch (e) {
-      console.error(`Exception spawning docker for ${lang}:`, e);
+      logger.error(`Exception spawning docker for ${lang}:`, e);
     }
   }
 };
@@ -153,7 +154,7 @@ const execJava = (containerName, onData, onExit) => {
 };
 
 const execC = (containerName, onData, onExit) => {
-  console.log('Starting C wrapper process inside container with node-pty');
+  logger.info('Starting C wrapper process inside container with node-pty');
 
   const cProcess = pty.spawn(
     'docker',

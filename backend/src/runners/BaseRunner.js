@@ -7,11 +7,7 @@ const { spawn } = require('child_process');
 const { v4: uuidv4 } = require('uuid');
 const config = require('../config');
 const logger = require('../utils/logger');
-const {
-  ExecutionError,
-  TimeoutError,
-  DockerError,
-} = require('../utils/AppError');
+const { TimeoutError, DockerError } = require('../utils/AppError');
 
 /**
  * @typedef {Object} TestCase
@@ -92,7 +88,7 @@ class BaseRunner {
    * @param {string} uniqueId - Unique ID for temp files
    * @returns {string}
    */
-  buildCommand(code, testCase, uniqueId) {
+  buildCommand(_code, _testCase, _uniqueId) {
     throw new Error('Must implement buildCommand');
   }
 

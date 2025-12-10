@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const aiService = require('../services/aiService');
+const logger = require('../utils/logger');
 
 router.post('/chat', async (req, res) => {
   try {
@@ -21,7 +22,7 @@ router.post('/chat', async (req, res) => {
     res.write(`data: [DONE]\n\n`);
     res.end();
   } catch (err) {
-    console.error('AI Chat Error:', err);
+    logger.error('AI Chat Error:', err);
     if (!res.headersSent) {
       res.status(500).json({ error: err.message || 'Internal AI Error' });
     } else {

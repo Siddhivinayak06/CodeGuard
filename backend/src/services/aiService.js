@@ -1,21 +1,10 @@
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 const axios = require('axios');
 const config = require('../config');
+const logger = require('../utils/logger');
 
-let genAI;
-let model;
-
-// Initialize Gemini if configured
-try {
-  if (config.ai.provider === 'gemini' && config.ai.apiKey) {
-    genAI = new GoogleGenerativeAI(config.ai.apiKey);
-    model = genAI.getGenerativeModel({ model: config.ai.model });
-  } else if (config.ai.provider === 'gemini') {
-    console.warn('AI_API_KEY is missing for Gemini provider.');
-  }
-} catch (e) {
-  console.error('Failed to initialize GoogleGenerativeAI:', e);
-}
+// Initialize Gemini checks removed as they were defining unused variables.
+// Validation happens in chatWithGeminiStream.
 
 const chatWithGeminiStream = async (
   messages,
@@ -98,13 +87,13 @@ const chatWithOllamaStream = async (
           if (json.message && json.message.content) {
             onChunk(json.message.content);
           }
-        } catch (e) {
+        } catch (_e) {
           // ignore partial JSON
         }
       }
     }
   } catch (error) {
-    console.error('Ollama Stream Error:', error.message);
+    logger.error('Ollama Stream Error:', error.message);
     throw new Error(
       `Failed to connect to Ollama at ${baseUrl}. Is it running?`
     );

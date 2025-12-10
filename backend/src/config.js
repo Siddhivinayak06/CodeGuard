@@ -27,9 +27,11 @@ const envSchema = z.object({
 const parsed = envSchema.safeParse(process.env);
 
 if (!parsed.success) {
+  // eslint-disable-next-line no-console
   console.error('❌ Invalid environment variables:');
   const errors = parsed.error.flatten().fieldErrors;
   Object.entries(errors).forEach(([key, messages]) => {
+    // eslint-disable-next-line no-console
     console.error(`  ${key}: ${messages.join(', ')}`);
   });
   process.exit(1);

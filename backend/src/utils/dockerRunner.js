@@ -2,6 +2,7 @@
 const { spawn } = require('child_process');
 const { v4: uuidv4 } = require('uuid');
 const config = require('../config');
+const logger = require('../utils/logger');
 
 function escapeForPrintf(s = '') {
   return String(s).replace(/'/g, "'\\''");
@@ -208,7 +209,6 @@ module.exports = async function runBatchCode(
   lang = 'python',
   batch = []
 ) {
-  const results = [];
   const CONCURRENCY_LIMIT = 5;
 
   // Helper for concurrency
@@ -233,11 +233,11 @@ module.exports = async function runBatchCode(
 
   const tasks = batch.map((tc) => () => runTestCase(tc, code, lang));
 
-  console.log(
+  logger.info(
     `Executing ${batch.length} test cases with concurrency ${CONCURRENCY_LIMIT}...`
   );
   const batchResults = await runWithLimit(tasks);
 
-  console.log('📦 Final batch results:', batchResults.length);
+  logger.info(`📦 Final batch results: ${batchResults.length}`);
   return batchResults;
 };
