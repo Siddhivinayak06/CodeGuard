@@ -197,6 +197,8 @@ export default function Home() {
         language: lang,
         submissionDate: new Date().toLocaleDateString(),
         status: "PRACTICE",
+        output: interactiveOutput,
+        plotImages: plotImages,
         filename: "playground_session.pdf",
       });
     } catch (err) {
@@ -272,7 +274,7 @@ export default function Home() {
                 </ResizableHandle>
 
                 {/* Terminal */}
-                <ResizablePanel defaultSize={40} minSize={20} className="bg-gray-50/50 dark:bg-gray-950/50 backdrop-blur-md">
+                <ResizablePanel defaultSize={40} minSize={20} className="bg-gray-50/50 dark:bg-gray-950/50 backdrop-blur-md relative">
                   <div className="h-full flex flex-col">
                     <div className="px-4 py-2 bg-gray-100/50 dark:bg-gray-900/50 border-b border-gray-200/50 dark:border-gray-800/50 flex items-center gap-2">
                       <div className="w-3 h-3 rounded-full bg-red-400/80" />
@@ -291,26 +293,16 @@ export default function Home() {
                         onMount={() => setTerminalMounted(true)}
                         onImage={handleImage}
                       />
-                    </div>
-                  </div>
-                </ResizablePanel>
-
-                {plotImages.length > 0 && (
-                  <>
-                    <ResizableHandle className="h-2 bg-gray-100/50 dark:bg-gray-800/50 hover:bg-indigo-500/50 dark:hover:bg-indigo-500/50 transition-colors duration-300 flex items-center justify-center group">
-                      <div className="w-16 h-1 rounded-full bg-gray-300 dark:bg-gray-700 group-hover:bg-white/80 transition-colors" />
-                    </ResizableHandle>
-                    <ResizablePanel defaultSize={20} minSize={15} className="bg-white dark:bg-black">
-                      <div className="h-full relative">
+                      {plotImages.length > 0 && (
                         <PlotViewer
                           images={plotImages}
                           onClose={() => setPlotImages([])}
                           onClear={() => setPlotImages([])}
                         />
-                      </div>
-                    </ResizablePanel>
-                  </>
-                )}
+                      )}
+                    </div>
+                  </div>
+                </ResizablePanel>
               </ResizablePanelGroup>
             </ResizablePanel>
 

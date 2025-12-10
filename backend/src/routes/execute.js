@@ -81,10 +81,6 @@ function ensureCallable(fn, name) {
 // Wrap main handler into a true function reference (avoids "callback required" mistakes)
 router.post('/', async (req, res) => {
   try {
-    // defensive: check required util functions at runtime before using
-    ensureCallable(runBatchCode, 'runBatchCode');
-    ensureCallable(runCode, 'runCode');
-
     // Validate input
     const parseResult = executeSchema.safeParse(req.body);
     if (!parseResult.success) {
@@ -97,72 +93,93 @@ router.post('/', async (req, res) => {
     const { code, reference_code, lang, batch, stdinInput, problem } =
       parseResult.data;
 
+    const queueService = require('../services/queueService');
+
     // ========================
     // 1️⃣ Batch mode (multiple test cases)
     // ========================
     if (Array.isArray(batch) && batch.length > 0) {
-      console.log(`Executing ${batch.length} test cases for ${lang}...`);
+      console.log(`Queuing batch execution for ${lang}...`);
 
-      let runnerResults;
       try {
-        runnerResults = await runBatchCode(code, lang, batch);
+        // Enqueue job and wait for result (simulating synchronous API for now)
+        const job = await queueService.addJob({
+          type: 'batch',
+          code,
+          lang,
+          batch,
+          problem,
+        });
+
+        const runnerResults = await job.waitUntilFinished(queueService.queueEvents);
+
+        for (const result of runnerResults) {
+          const tc = batch.find((b) => b.id === result.test_case_id);
+          if (!tc) continue;
+
+          // Ensure field exists
+          result.reference_stdout = result.reference_stdout ?? '';
+
+          if (!tc.is_hidden && reference_code) {
+            // If reference code needs to be run, we might need another job or run it here.
+            // For simplicity/perf, let's run it here if it's light, OR we should have sent ref code to worker.
+            // Current design: Run ref code HERE (server side) or assume it was done.
+            // BETTER: Let's assume we can run ref code here for now to avoid complexity,
+            // BUT ideally ref code should also run in the worker to be safe.
+            // Given keeping it simple: Run ref code using direct runner (careful of load)
+            // OR send ref code to worker.
+            // Let's stick to the previous pattern: Ref code run is separate?
+            // Actually, the previous code ran ref code AFTER student code.
+            // We will keep running ref code directly here for now to minimize refactor risk,
+            // but strictly speaking it should be queued too.
+            // A better approach for scalability: The worker should handle reference code too.
+            // For this task, we will focus on student code queuing.
+
+            try {
+              // We need runCode for reference.
+              if (!runCode) runCode = require('../utils/runCode');
+              const refRes = await runCode(
+                reference_code,
+                lang,
+                tc.stdinInput ?? tc.input ?? ''
+              );
+              result.reference_stdout = (refRes.output ?? '').trimEnd();
+            } catch (e) {
+              console.error('Reference runCode error:', e);
+              result.reference_stdout = tc.expectedOutput ?? '';
+            }
+          } else if (tc.is_hidden) {
+            result.reference_stdout = tc.expectedOutput ?? '';
+          }
+
+          const userOut = (result.stdout ?? '').trimEnd();
+          const refOut = (result.reference_stdout ?? '').trimEnd();
+          const lowErr = (result.stderr ?? '').toLowerCase();
+
+          // Verdict logic
+          if (
+            lowErr.includes('compile') ||
+            lowErr.includes('javac') ||
+            lowErr.includes('error:')
+          ) {
+            result.status = 'compile_error';
+          } else if (lowErr.includes('timeout') || lowErr.includes('timed out')) {
+            result.status = 'time_limit_exceeded';
+          } else if (result.stderr && result.stderr !== '') {
+            result.status = 'runtime_error';
+          } else {
+            result.status = userOut === refOut ? 'passed' : 'failed';
+          }
+        }
+        return res.json({ verdict: 'evaluated', details: runnerResults });
+
       } catch (e) {
-        console.error('runBatchCode threw:', e && e.stack ? e.stack : e);
+        console.error('Queue/Execution failed', e);
         return res.status(500).json({
-          error: 'Runner failed',
-          detail: String(e && e.message ? e.message : e),
+          error: 'Execution failed',
+          detail: e.message
         });
       }
-
-      for (const result of runnerResults) {
-        const tc = batch.find((b) => b.id === result.test_case_id);
-        if (!tc) continue;
-
-        // Ensure field exists
-        result.reference_stdout = result.reference_stdout ?? '';
-
-        if (!tc.is_hidden && reference_code) {
-          try {
-            const refRes = await runCode(
-              reference_code,
-              lang,
-              tc.stdinInput ?? tc.input ?? ''
-            );
-            result.reference_stdout = (refRes.output ?? '').trimEnd();
-          } catch (e) {
-            console.error('Reference runCode error:', e);
-            result.reference_stdout = tc.expectedOutput ?? '';
-            result.reference_error = String(e && e.message ? e.message : e);
-          }
-        } else if (tc.is_hidden) {
-          result.reference_stdout = tc.expectedOutput ?? '';
-        }
-
-        // Useful logs for debugging
-        console.log('Test case:', tc.id);
-        console.log('Student stdout:', result.stdout);
-        console.log('Expected (reference_stdout):', result.reference_stdout);
-
-        const userOut = (result.stdout ?? '').trimEnd();
-        const refOut = (result.reference_stdout ?? '').trimEnd();
-
-        const lowErr = (result.stderr ?? '').toLowerCase();
-        if (
-          lowErr.includes('compile') ||
-          lowErr.includes('javac') ||
-          lowErr.includes('error:')
-        ) {
-          result.status = 'compile_error';
-        } else if (lowErr.includes('timeout') || lowErr.includes('timed out')) {
-          result.status = 'time_limit_exceeded';
-        } else if (result.stderr && result.stderr !== '') {
-          result.status = 'runtime_error';
-        } else {
-          result.status = userOut === refOut ? 'passed' : 'failed';
-        }
-      }
-
-      return res.json({ verdict: 'evaluated', details: runnerResults });
     }
 
     // ========================
@@ -170,80 +187,82 @@ router.post('/', async (req, res) => {
     // ========================
     if (!code) return res.status(400).json({ error: 'No code provided.' });
 
-    // Run user's code
-    let userResult;
     try {
-      userResult = await runCode(code, lang, stdinInput);
+      console.log(`Queuing single execution for ${lang}...`);
+      const job = await queueService.addJob({
+        type: 'single',
+        code,
+        lang,
+        input: stdinInput,
+        problem
+      });
+
+      const userResult = await job.waitUntilFinished(queueService.queueEvents);
+
+      // If a problem is provided, compare with reference code
+      let refOut = '';
+      if (problem) {
+        // Ref code logic... keeping it local for now as per minimal change strategy
+        // Ideally: Queue this too.
+        const ext = LANG_EXT[lang] || 'c';
+        const referencePath = path.join(
+          process.cwd(),
+          'reference',
+          `${problem}.${ext}`
+        );
+        if (fs.existsSync(referencePath)) {
+          try {
+            if (!runCode) runCode = require('../utils/runCode');
+            const referenceCode = fs.readFileSync(referencePath, 'utf8');
+            const refResult = await runCode(referenceCode, lang, stdinInput);
+            refOut = (refResult.output ?? '').trim();
+          } catch (e) { console.error(e) }
+        }
+      }
+
+      const userOut = normalizeOutput(userResult.output);
+      const expectedOut = normalizeOutput(refOut || userOut);
+      const passed = refOut ? userOut === refOut : true;
+
+      let verdict = passed ? 'passed' : 'failed';
+      if (!userResult) {
+        verdict = 'failed';
+      } else if (userResult.exitCode === 124 || (userResult.error && userResult.error.toLowerCase().includes('timeout'))) {
+        verdict = 'time_limit_exceeded';
+      } else if (userResult.error && /compile|javac|error:/i.test(userResult.error)) {
+        verdict = 'compile_error';
+      } else if (userResult.error && userResult.error.trim() !== '') {
+        verdict = 'runtime_error';
+      }
+
+      return res.json({
+        mode: 'manual',
+        problem: problem || 'manual_run',
+        input: stdinInput,
+        expected: expectedOut,
+        output: userOut,
+        verdict,
+        user_stderr: userResult.error || userResult.stderr || '',
+      });
+
     } catch (e) {
-      console.error('runCode threw:', e && e.stack ? e.stack : e);
+      console.error('Single execution failed:', e);
       return res.status(500).json({
         error: 'Runner failed',
-        detail: String(e && e.message ? e.message : e),
+        detail: e.message
       });
     }
 
-    // If a problem is provided, compare with reference code
-    let refOut = '';
-    if (problem) {
-      const ext = LANG_EXT[lang] || 'c';
-      const referencePath = path.join(
-        process.cwd(),
-        'reference',
-        `${problem}.${ext}`
-      );
-      if (fs.existsSync(referencePath)) {
-        try {
-          const referenceCode = fs.readFileSync(referencePath, 'utf8');
-          const refResult = await runCode(referenceCode, lang, stdinInput);
-          refOut = (refResult.output ?? '').trim();
-        } catch (e) {
-          console.error('Reference runCode error:', e);
-        }
-      } else {
-        console.warn(`Reference file not found: ${referencePath}`);
-      }
-    }
-
-    const userOut = normalizeOutput(userResult.output);
-    const expectedOut = normalizeOutput(refOut || userOut);
-    const passed = refOut ? userOut === refOut : true;
-
-    // compute verdict and capture stderr/error message
-    let verdict = passed ? 'passed' : 'failed';
-    if (!userResult) {
-      verdict = 'failed';
-    } else if (
-      userResult.exitCode === 124 ||
-      (userResult.error && userResult.error.toLowerCase().includes('timeout'))
-    ) {
-      verdict = 'time_limit_exceeded';
-    } else if (
-      userResult.error &&
-      /compile|javac|error:/i.test(userResult.error)
-    ) {
-      verdict = 'compile_error';
-    } else if (userResult.error && userResult.error.trim() !== '') {
-      verdict = 'runtime_error';
-    }
-
-    return res.json({
-      mode: 'manual',
-      problem: problem || 'manual_run',
-      input: stdinInput,
-      expected: expectedOut,
-      output: userOut,
-      verdict,
-      user_stderr: userResult.error || userResult.stderr || '',
-    });
   } catch (err) {
     console.error(
       'Execution handler error:',
       err && err.stack ? err.stack : err
     );
-    if (err && err.code === 'NOT_CALLABLE') {
-      return res.status(500).json({ error: err.message });
-    }
-    return res.status(500).json({ error: 'Execution failed.' });
+    return res.status(500).json({
+      error: 'Execution failed.',
+      detail: err.message,
+      stack: process.env.NODE_ENV === 'development' ? err.stack : undefined
+    });
   }
 });
 

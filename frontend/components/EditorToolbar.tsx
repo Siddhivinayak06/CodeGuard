@@ -72,6 +72,8 @@ export function EditorToolbar({
                             <SelectItem value="python">Python</SelectItem>
                             <SelectItem value="java">Java</SelectItem>
                             <SelectItem value="c">C</SelectItem>
+                            <SelectItem value="cpp">C++</SelectItem>
+                         
                         </SelectContent>
                     </Select>
                 </div>

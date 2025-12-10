@@ -3,7 +3,7 @@ import { supabaseAdmin } from "@/lib/supabase/service";
 
 export async function POST(req: Request) {
   try {
-    const { student_id, practical_id, code, language, status = "submitted", marks_obtained = 0 } = await req.json();
+    const { student_id, practical_id, code, language, status = "pending", marks_obtained = 0 } = await req.json();
 
     if (!student_id || !practical_id || !code || !language) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });

@@ -19,6 +19,8 @@ const envSchema = z.object({
   AI_MODEL: z.string().default('gemini-1.5-flash'),
   OLLAMA_URL: z.string().default('http://127.0.0.1:11434'),
   LOG_LEVEL: z.enum(['error', 'warn', 'info', 'http', 'debug']).default('info'),
+  REDIS_URL: z.string().default('redis://localhost:6379'),
+  MAX_CONCURRENT_JOBS: z.string().transform(Number).default('20'),
 });
 
 // Validate environment variables
@@ -66,5 +68,11 @@ module.exports = {
   },
   logging: {
     level: env.LOG_LEVEL,
+  },
+  redis: {
+    url: env.REDIS_URL,
+  },
+  queue: {
+    maxConcurrentJobs: env.MAX_CONCURRENT_JOBS,
   },
 };

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/service";
 
 // Allowed status values (must match DB check constraint)
-const VALID_STATUSES = ["submitted", "evaluated", "pending"];
+const VALID_STATUSES = ["pending", "passed", "failed"];
 
 export async function POST(req: Request) {
   try {

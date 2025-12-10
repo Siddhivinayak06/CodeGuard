@@ -83,6 +83,34 @@ printf "%s" '${escapeForPrintf(stdinInput)}' | timeout ${timeoutSec} /tmp/${uniq
       ],
       { stdio: ['ignore', 'pipe', 'pipe'] }
     );
+  } else if (lang === 'cpp' || lang === 'c++') {
+    cmd = `
+mkdir -p /tmp/${uniqueId} &&
+printf "%s" '${escapeForPrintf(escapedCode)}' > /tmp/${uniqueId}/code.cpp &&
+g++ /tmp/${uniqueId}/code.cpp -o /tmp/${uniqueId}/a.out -lm 2>/tmp/${uniqueId}/gcc_err.txt || true &&
+cat /tmp/${uniqueId}/gcc_err.txt 1>&2 || true &&
+printf "%s" '${escapeForPrintf(stdinInput)}' | timeout ${timeoutSec} /tmp/${uniqueId}/a.out
+`;
+    docker = spawn(
+      'docker',
+      [
+        'run',
+        '--rm',
+        '--network',
+        'none',
+        '--cap-drop=ALL',
+        '-m',
+        memoryLimit,
+        '--cpus=' + config.docker.cpus,
+        '--pids-limit',
+        config.docker.pidsLimit,
+        'codeguard-c', // Reusing the C container assuming it has g++
+        'sh',
+        '-c',
+        cmd,
+      ],
+      { stdio: ['ignore', 'pipe', 'pipe'] }
+    );
   } else if (lang === 'java') {
     cmd = `
 mkdir -p /tmp/${uniqueId} &&

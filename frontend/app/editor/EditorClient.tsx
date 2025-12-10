@@ -450,13 +450,23 @@ rl.on('line', (line) => {
         level: activeLevel,
       });
 
-      const verdict = runRes.data.verdict || "evaluated";
+      const verdict = runRes.data.verdict || "pending";
       const marksObtained = runRes.data.marksObtained ?? 0;
       const passedTestCases = runRes.data.passedTestCases ?? 0;
       const totalTestCases = runRes.data.totalTestCases ?? 0;
 
-      setSubmissionStatus(verdict === "evaluated" ? "evaluated" : "submitted");
-      alert(`Practical submitted successfully! Marks: ${marksObtained} / 10 (${passedTestCases}/${totalTestCases} test cases passed)`);
+      // Map verdict to UI state
+      let uiStatus: "idle" | "pending" | "evaluated" | "submitted" = "evaluated";
+      if (verdict === "passed" || verdict === "failed") {
+        uiStatus = "evaluated"; // Or maybe "graded"? Keeping "evaluated" for now or switch to match DB
+      } else if (verdict === "pending") {
+        uiStatus = "pending";
+      }
+
+      setSubmissionStatus(uiStatus);
+      const statusText = verdict === "passed" ? "Passed" : verdict === "failed" ? "Failed" : "Pending";
+      alert(`Practical submitted successfully! Status: ${statusText}. Marks: ${marksObtained} / 10 (${passedTestCases}/${totalTestCases} test cases passed)`);
+      router.push('/student/submissions');
 
     } catch (err: any) {
       console.error(err);
