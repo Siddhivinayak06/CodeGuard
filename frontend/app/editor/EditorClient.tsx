@@ -486,7 +486,7 @@ rl.on('line', (line) => {
         language: lang,
         submissionDate: new Date().toLocaleString(),
         status: "N/A", // This is just a download of current code, not a submission result
-        output: testCaseResults.map((r) => `${r.status.toUpperCase()}: ${r.stdout}`).join("\n\n"),
+        output: testCaseResults.map((r) => `${r.status.toUpperCase()}: ${r.is_hidden ? "Hidden Test Case" : r.stdout}`).join("\n\n"),
         filename: practical?.title?.replace(/\s+/g, "_") || "code_output.pdf",
       });
     } catch (err) {
@@ -749,7 +749,10 @@ rl.on('line', (line) => {
 
                           return (
                             <div key={idx} className={`mb-4 rounded-lg p-0 overflow-hidden shadow-sm ${leftBorderClass} bg-white/30 dark:bg-gray-800/30 border border-gray-200 dark:border-gray-700`}>
-                              <div className="flex items-center justify-between p-3 cursor-pointer" onClick={() => setExpandedCases(prev => ({ ...prev, [idx]: !prev[idx] }))}>
+                              <div
+                                className={`flex items-center justify-between p-3 ${r.is_hidden ? 'cursor-default' : 'cursor-pointer'}`}
+                                onClick={() => !r.is_hidden && setExpandedCases(prev => ({ ...prev, [idx]: !prev[idx] }))}
+                              >
                                 <div className="flex items-center gap-3">
                                   <div className={`w-10 h-10 flex items-center justify-center rounded-full bg-white/60 dark:bg-black/40 ${r.status === 'passed' ? 'text-green-600' : r.status === 'failed' ? 'text-red-600' : 'text-yellow-600'} font-semibold`}>{idx + 1}</div>
                                   <div>
@@ -762,7 +765,7 @@ rl.on('line', (line) => {
                                 </div>
                               </div>
 
-                              {isExpanded && (
+                              {isExpanded && !r.is_hidden && (
                                 <div className="p-3 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900">
                                   <div className="grid grid-cols-2 gap-4">
                                     <div>

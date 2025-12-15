@@ -84,6 +84,7 @@ export default function CodeEditor({
     const editorRef = useRef<any>(null);
     const langRef = useRef(lang);
     const lockedRef = useRef(locked);
+    const isAiFeatureUnlockedRef = useRef(false);
 
     // sync refs
     useEffect(() => { langRef.current = lang; }, [lang]);
@@ -135,11 +136,13 @@ export default function CodeEditor({
 
         // disable paste via events
         editor.onDidPaste?.(() => {
+            if (isAiFeatureUnlockedRef.current) return;
             showToast("Pasting is disabled!");
             try { editor.trigger("keyboard", "undo", null); } catch (e) { }
         });
 
         editor.onKeyDown?.((e) => {
+            if (isAiFeatureUnlockedRef.current) return;
             if ((e.ctrlKey || e.metaKey) && ["KeyV", "KeyC", "KeyX"].includes(e.code)) {
                 e.preventDefault();
                 showToast("Clipboard actions are disabled!");
@@ -161,6 +164,7 @@ export default function CodeEditor({
                 e.preventDefault();
                 setIsAiFeatureUnlocked((prev) => {
                     const newState = !prev;
+                    isAiFeatureUnlockedRef.current = newState;
                     showToast(newState ? "AI Assistant Unlocked 🔓" : "AI Assistant Locked 🔒");
                     if (!newState) setShowAssistant(false);
                     return newState;

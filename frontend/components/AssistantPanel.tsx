@@ -8,6 +8,19 @@ import { Send, X, Sparkles, Loader2, Copy, Check } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import rehypeHighlight from "rehype-highlight";
 
+function extractTextFromChildren(children: any): string {
+    if (!children) return "";
+    if (typeof children === "string") return children;
+    if (typeof children === "number") return String(children);
+    if (Array.isArray(children)) {
+        return children.map(extractTextFromChildren).join("");
+    }
+    if (children?.props?.children) {
+        return extractTextFromChildren(children.props.children);
+    }
+    return "";
+}
+
 function CopyButton({ text }: { text: string }) {
     const [copied, setCopied] = useState(false);
 
@@ -183,14 +196,14 @@ export function AssistantPanel({ codeContext, onClose }: AssistantPanelProps) {
                                                         const match = /language-(\w+)/.exec(className || "");
                                                         const language = match ? match[1] : "";
 
-                                                        if (!inline && match) {
+                                                        if (!inline) {
                                                             return (
                                                                 <div className="relative my-4 rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900">
                                                                     <div className="flex items-center justify-between px-3 py-1.5 bg-gray-100 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
                                                                         <span className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
-                                                                            {language}
+                                                                            {language || "text"}
                                                                         </span>
-                                                                        <CopyButton text={String(children).replace(/\n$/, '')} />
+                                                                        <CopyButton text={extractTextFromChildren(children).replace(/\n$/, '')} />
                                                                     </div>
                                                                     <div className="p-3 overflow-x-auto">
                                                                         <code className={`${className} !bg-transparent !p-0`} {...props}>
