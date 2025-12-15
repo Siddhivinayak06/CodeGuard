@@ -20,7 +20,7 @@ module.exports = async function runCode(
     throw new Error('No code provided');
   }
 
-  const supported = ['python', 'py', 'c', 'java'];
+  const supported = ['python', 'py', 'c', 'cpp', 'java'];
   if (!supported.includes(lang)) {
     return {
       output: '',
@@ -47,6 +47,14 @@ printf "%s" '${escapeForPrintf(stdinInput)}' | timeout ${timeoutSec} python3 /tm
 mkdir -p /tmp/${uniqueId} &&
 printf "%s" '${escapeForPrintf(escapedCode)}' > /tmp/${uniqueId}/code.c &&
  gcc /tmp/${uniqueId}/code.c -o /tmp/${uniqueId}/a.out -lm 2>/tmp/${uniqueId}/gcc_err.txt || true &&
+cat /tmp/${uniqueId}/gcc_err.txt 1>&2 || true &&
+printf "%s" '${escapeForPrintf(stdinInput)}' | timeout ${timeoutSec} /tmp/${uniqueId}/a.out
+`;
+  } else if (lang === 'cpp') {
+    cmd = `
+mkdir -p /tmp/${uniqueId} &&
+printf "%s" '${escapeForPrintf(escapedCode)}' > /tmp/${uniqueId}/code.cpp &&
+ g++ /tmp/${uniqueId}/code.cpp -o /tmp/${uniqueId}/a.out -lm 2>/tmp/${uniqueId}/gcc_err.txt || true &&
 cat /tmp/${uniqueId}/gcc_err.txt 1>&2 || true &&
 printf "%s" '${escapeForPrintf(stdinInput)}' | timeout ${timeoutSec} /tmp/${uniqueId}/a.out
 `;
@@ -113,7 +121,7 @@ fi
   const image =
     lang === 'python'
       ? 'codeguard-python'
-      : lang === 'c'
+      : lang === 'c' || lang === 'cpp'
         ? 'codeguard-c'
         : 'codeguard-java';
 

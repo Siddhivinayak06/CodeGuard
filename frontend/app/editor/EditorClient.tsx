@@ -336,6 +336,7 @@ rl.on('line', (line) => {
           .from("test_cases")
           .select("input, expected_output")
           .eq("practical_id", Number(practicalId))
+          .eq("is_hidden", false)
           .order("id", { ascending: true })
           .limit(10);
 

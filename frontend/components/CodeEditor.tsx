@@ -79,6 +79,39 @@ export default function CodeEditor({
     const [contextMenuPos, setContextMenuPos] = useState({ x: 0, y: 0 });
     const [showContextMenu, setShowContextMenu] = useState(false);
 
+    // Assistant Resize State
+    const [assistantWidth, setAssistantWidth] = useState(400);
+    const [isResizing, setIsResizing] = useState(false);
+
+    const startResizing = (e: React.MouseEvent) => {
+        setIsResizing(true);
+        e.preventDefault();
+    };
+
+    useEffect(() => {
+        if (!isResizing) return;
+
+        const handleMouseMove = (e: MouseEvent) => {
+            const newWidth = window.innerWidth - e.clientX;
+            // Min width 300px, Max width 80% of screen
+            if (newWidth > 300 && newWidth < window.innerWidth * 0.8) {
+                setAssistantWidth(newWidth);
+            }
+        };
+
+        const handleMouseUp = () => {
+            setIsResizing(false);
+        };
+
+        window.addEventListener("mousemove", handleMouseMove);
+        window.addEventListener("mouseup", handleMouseUp);
+
+        return () => {
+            window.removeEventListener("mousemove", handleMouseMove);
+            window.removeEventListener("mouseup", handleMouseUp);
+        };
+    }, [isResizing]);
+
     const [currentMode, setCurrentMode] = useState("Static");
     const showSubmitButton = pathname === "/editor";
     const editorRef = useRef<any>(null);
@@ -308,7 +341,18 @@ export default function CodeEditor({
 
                 {/* Assistant Panel - Absolute Positioned Overlay */}
                 {!renderAssistantExternally && showAssistant && (
-                    <div className="absolute top-0 right-0 bottom-0 z-40 flex h-full shadow-2xl border-l border-gray-200 dark:border-gray-700">
+                    <div
+                        className="absolute top-0 right-0 bottom-0 z-40 flex h-full shadow-2xl border-l border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900"
+                        style={{ width: assistantWidth }}
+                    >
+                        {/* Resize Handle */}
+                        <div
+                            className="absolute left-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-blue-500 transition-colors z-50 flex flex-col justify-center items-center group"
+                            onMouseDown={startResizing}
+                        >
+                            <div className="h-8 w-1 bg-gray-300 dark:bg-gray-600 rounded-full group-hover:bg-blue-400" />
+                        </div>
+
                         <AssistantPanel
                             codeContext={{
                                 code: files ? files.find(f => f.name === activeFileName)?.content || "" : code,

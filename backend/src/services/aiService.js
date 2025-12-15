@@ -3,166 +3,187 @@ const axios = require('axios');
 const config = require('../config');
 const logger = require('../utils/logger');
 
-// Initialize Gemini checks removed as they were defining unused variables.
-// Validation happens in chatWithGeminiStream.
+/* ----------------------------- HELPERS ----------------------------- */
+
+const buildSystemPrompt = (contextData) => {
+  let codeContext = '';
+  let meta = [];
+
+  if (typeof contextData === 'string') {
+    codeContext = contextData;
+  } else if (contextData) {
+    if (contextData.activeFile)
+      meta.push(`Active File: ${contextData.activeFile}`);
+    if (contextData.cursorPosition)
+      meta.push(
+        `Cursor: Ln ${contextData.cursorPosition.lineNumber}, Col ${contextData.cursorPosition.column}`
+      );
+    if (contextData.files?.length)
+      meta.push(
+        `Project Files: ${contextData.files.map((f) => f.name).join(', ')}`
+      );
+
+    codeContext = contextData.code || '';
+  }
+
+  return `
+You are an expert software engineer and coding assistant.
+
+${meta.length ? meta.join('\n') : ''}
+
+Current Code Context:
+\`\`\`
+${codeContext || 'No code provided'}
+\`\`\`
+
+Guidelines:
+- Give precise, correct solutions
+- Modify only what is necessary
+- Prefer clean, production-ready code
+- Explain briefly if required
+`.trim();
+};
+
+const normalizeMessages = (messages) =>
+  messages.map((m) => ({
+    role: m.role === 'model' ? 'assistant' : 'user',
+    content: m.parts?.[0]?.text || '',
+  }));
+
+/* ----------------------------- GEMINI ----------------------------- */
 
 const chatWithGeminiStream = async (
   messages,
   systemPrompt,
   configOverrides,
-  onChunk
+  onChunk,
+  abortSignal
 ) => {
   const apiKey = configOverrides?.apiKey || config.ai.apiKey;
-  const modelName = configOverrides?.model || config.ai.model;
+  const modelName =
+    configOverrides?.model || config.ai.model || 'gemini-2.5-flash';
 
-  if (!apiKey)
-    throw new Error('Gemini API Key is missing. Please set it in Settings.');
+  if (!apiKey) throw new Error('Gemini API key missing');
 
   const genAI = new GoogleGenerativeAI(apiKey);
   const model = genAI.getGenerativeModel({ model: modelName });
 
-  const chatSession = model.startChat({
+  const chat = model.startChat({
     history: [
-      {
-        role: 'user',
-        parts: [{ text: systemPrompt }],
-      },
-      {
-        role: 'model',
-        parts: [{ text: 'Understood. I am ready to help with the code.' }],
-      },
+      { role: 'user', parts: [{ text: systemPrompt }] },
+      { role: 'model', parts: [{ text: 'Ready.' }] },
       ...messages.slice(0, -1),
     ],
   });
 
-  const lastMsg = messages[messages.length - 1];
-  const result = await chatSession.sendMessageStream(lastMsg.parts[0].text);
+  const lastMessage = messages[messages.length - 1]?.parts?.[0]?.text;
+  if (!lastMessage) return;
+
+  const result = await chat.sendMessageStream(lastMessage, {
+    signal: abortSignal,
+  });
 
   for await (const chunk of result.stream) {
-    const chunkText = chunk.text();
-    if (chunkText) onChunk(chunkText);
+    const text = chunk.text();
+    if (text) onChunk(text);
   }
-  return '';
 };
+
+/* ----------------------------- OLLAMA ----------------------------- */
 
 const chatWithOllamaStream = async (
   messages,
   systemPrompt,
   configOverrides,
-  onChunk
+  onChunk,
+  abortSignal
 ) => {
   const baseUrl = configOverrides?.ollamaUrl || config.ai.ollamaUrl;
-  const modelName = configOverrides?.model || config.ai.model || 'mistral';
-  const ollamaUrl = `${baseUrl}/api/chat`;
+  const model = configOverrides?.model || config.ai.model || 'mistral';
 
-  const ollamaMessages = [
-    { role: 'system', content: systemPrompt },
-    ...messages.map((m) => ({
-      role: m.role === 'model' ? 'assistant' : 'user',
-      content: m.parts[0].text,
-    })),
-  ];
+  const payload = {
+    model,
+    stream: true,
+    messages: [{ role: 'system', content: systemPrompt }, ...normalizeMessages(messages)],
+  };
 
   try {
-    const response = await axios.post(
-      ollamaUrl,
-      {
-        model: modelName,
-        messages: ollamaMessages,
-        stream: true,
-      },
-      {
-        responseType: 'stream',
-      }
-    );
+    const response = await axios.post(`${baseUrl}/api/chat`, payload, {
+      responseType: 'stream',
+      signal: abortSignal,
+    });
 
     for await (const chunk of response.data) {
-      const lines = chunk
-        .toString()
-        .split('\n')
-        .filter((line) => line.trim() !== '');
+      const lines = chunk.toString().split('\n').filter(Boolean);
+
       for (const line of lines) {
         try {
           const json = JSON.parse(line);
-          if (json.message && json.message.content) {
+          if (json.message?.content) {
             onChunk(json.message.content);
           }
-        } catch (_e) {
-          // ignore partial JSON
+        } catch {
+          /* ignore partial JSON */
         }
       }
     }
-  } catch (error) {
-    logger.error('Ollama Stream Error:', error.message);
-    throw new Error(
-      `Failed to connect to Ollama at ${baseUrl}. Is it running?`
-    );
+  } catch (err) {
+    logger.error('Ollama error:', err.message);
+    throw new Error(`Ollama not reachable at ${baseUrl}`);
   }
 };
+
+/* ----------------------------- MOCK ----------------------------- */
 
 const chatWithMockStream = async (onChunk) => {
-  const mockText =
-    'This is a mock response from the AI Assistant. Streaming is simulated. 🤖';
-  const chunks = mockText.split(' ');
-  for (const chunk of chunks) {
-    onChunk(chunk + ' ');
-    await new Promise((r) => setTimeout(r, 100)); // Simulate delay
+  const text = 'Mock AI streaming response.';
+  for (const word of text.split(' ')) {
+    onChunk(word + ' ');
+    await new Promise((r) => setTimeout(r, 80));
   }
 };
 
-const chatStream = async (messages, contextData, configOverrides, onChunk) => {
-  // Handle optional configOverrides argument
+/* ----------------------------- MAIN API ----------------------------- */
+
+const chatStream = async (
+  messages = [],
+  contextData,
+  configOverrides = {},
+  onChunk,
+  abortSignal
+) => {
   if (typeof configOverrides === 'function') {
     onChunk = configOverrides;
     configOverrides = {};
   }
 
-  // contextData can be a string (old way) or object (new way)
-  let codeContext = '';
-  let extraContext = '';
+  if (!messages.length) return;
 
-  if (typeof contextData === 'string') {
-    codeContext = contextData;
-  } else if (contextData) {
-    codeContext = contextData.code || '';
-    if (contextData.activeFile)
-      extraContext += `Active File: ${contextData.activeFile}\n`;
-    if (contextData.cursorPosition)
-      extraContext += `Cursor: Ln ${contextData.cursorPosition.lineNumber}, Col ${contextData.cursorPosition.column}\n`;
-    if (contextData.files)
-      extraContext += `Project Files: ${contextData.files.map((f) => f.name).join(', ')}\n`;
-  }
+  const systemPrompt = buildSystemPrompt(contextData);
+  const provider = configOverrides?.provider || config.ai.provider || 'gemini';
 
-  const systemPrompt = `You are an expert coding assistant. 
-  ${extraContext}
-  Current Code Context:
-  \`\`\`
-  ${codeContext || 'No code provided'}
-  \`\`\`
-  
-  Answer the user's question based on this context. Be concise and helpful.`;
-
-  const provider = configOverrides?.provider || config.ai.provider;
-
-  if (provider === 'gemini') {
-    await chatWithGeminiStream(
-      messages,
-      systemPrompt,
-      configOverrides,
-      onChunk
-    );
-  } else if (provider === 'ollama') {
-    await chatWithOllamaStream(
-      messages,
-      systemPrompt,
-      configOverrides,
-      onChunk
-    );
-  } else if (provider === 'mock') {
-    await chatWithMockStream(onChunk);
-  } else {
-    throw new Error(`Unknown AI provider: ${provider}`);
+  switch (provider) {
+    case 'gemini':
+      return chatWithGeminiStream(
+        messages,
+        systemPrompt,
+        configOverrides,
+        onChunk,
+        abortSignal
+      );
+    case 'ollama':
+      return chatWithOllamaStream(
+        messages,
+        systemPrompt,
+        configOverrides,
+        onChunk,
+        abortSignal
+      );
+    case 'mock':
+      return chatWithMockStream(onChunk);
+    default:
+      throw new Error(`Unknown provider: ${provider}`);
   }
 };
 
-module.exports = { chat: chatStream }; // Export as chat for compatibility, but it now expects onChunk
+module.exports = { chat: chatStream };
