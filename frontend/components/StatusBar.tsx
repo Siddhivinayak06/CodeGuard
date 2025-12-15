@@ -10,7 +10,7 @@ interface StatusBarProps {
 
 export function StatusBar({ lang, cursorPosition, readOnly, violations }: StatusBarProps) {
     return (
-        <div className="h-6 bg-blue-600 text-white flex items-center justify-between px-3 text-xs select-none">
+        <div className="h-6 bg-white/10 dark:bg-black/20 backdrop-blur-md border-t border-white/20 dark:border-gray-800 text-gray-600 dark:text-gray-400 flex items-center justify-between px-3 text-xs select-none">
             <div className="flex items-center gap-4">
                 <div className="flex items-center gap-1.5">
                     <FileCode size={12} />
@@ -40,8 +40,8 @@ export function StatusBar({ lang, cursorPosition, readOnly, violations }: Status
                         </>
                     ) : (
                         <>
-                            <Unlock size={10} />
-                            <span>Ready</span>
+                            <Unlock size={10} className="text-green-500" />
+                            <span className="text-green-600 dark:text-green-400">Ready</span>
                         </>
                     )}
                 </div>

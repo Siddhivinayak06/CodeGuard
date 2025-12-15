@@ -4,14 +4,15 @@ import { useEffect, useRef, forwardRef, useImperativeHandle } from "react";
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import "@xterm/xterm/css/xterm.css";
+import { useTheme } from "next-themes";
 import { FileData } from "./FileExplorer";
 
 interface InteractiveTerminalProps {
   wsUrl?: string;
   fontSize?: number;
   fontFamily?: string;
-  onOutput?: (data: string) => void; // ✅ new prop
-  onMount?: () => void; // ✅ new prop
+  onOutput?: (data: string) => void;
+  onMount?: () => void;
   onImage?: (base64: string) => void;
 }
 
@@ -24,6 +25,7 @@ const InteractiveTerminal = forwardRef<
   InteractiveTerminalHandle,
   InteractiveTerminalProps
 >(({ wsUrl, fontSize = 16, fontFamily = "monospace", onOutput, onMount, onImage }, ref) => {
+  const { theme, resolvedTheme } = useTheme();
   const terminalRef = useRef<HTMLDivElement | null>(null);
   const term = useRef<Terminal | null>(null);
   const fitAddon = useRef<FitAddon | null>(null);
@@ -32,8 +34,30 @@ const InteractiveTerminal = forwardRef<
 
   const currentLang = useRef<string>("python"); // default
 
-
   const wsEndpoint = wsUrl || "ws://localhost:5002";
+
+  // Define themes
+  const lightTheme = {
+    background: "#ffffff",
+    foreground: "#000000",
+    cursor: "#000000",
+    cursorAccent: "#ffffff",
+    selectionBackground: "rgba(0, 0, 0, 0.3)",
+  };
+
+  const darkTheme = {
+    background: "#1a1b26", // Specific dark background
+    foreground: "#a9b1d6", // Tokyo Night foreground
+    cursor: "#c0caf5",
+    cursorAccent: "#1a1b26",
+    selectionBackground: "rgba(113, 131, 184, 0.3)",
+  };
+
+  // Determine initial theme
+  const getTheme = () => {
+    const isDark = theme === "dark" || resolvedTheme === "dark";
+    return isDark ? darkTheme : lightTheme;
+  };
 
   useEffect(() => {
     if (!terminalRef.current) return;
@@ -44,12 +68,7 @@ const InteractiveTerminal = forwardRef<
       fontSize,
       fontFamily,
       scrollback: 1000,
-      theme: {
-        background: "#ffffff",
-        foreground: "#000000",
-        cursor: "#000000",
-        cursorAccent: "#ffffff",
-      },
+      theme: getTheme(),
     });
 
     fitAddon.current = new FitAddon();
@@ -166,6 +185,17 @@ const InteractiveTerminal = forwardRef<
     };
   }, [wsEndpoint, fontSize, fontFamily]);
 
+  // Update theme dynamically
+  useEffect(() => {
+    if (!term.current) return;
+    const currentTheme = getTheme();
+    term.current.options.theme = currentTheme;
+    // Also update container background
+    if (terminalRef.current) {
+      terminalRef.current.style.backgroundColor = currentTheme.background || "#ffffff";
+    }
+  }, [theme, resolvedTheme]);
+
 
   useImperativeHandle(ref, () => ({
     startExecution: (filesOrCode: FileData[] | string, activeFileOrLang?: string, lang?: string) => {
@@ -180,7 +210,7 @@ const InteractiveTerminal = forwardRef<
       if (isMultiFile) {
         const files = filesOrCode as FileData[];
         const activeFileName = activeFileOrLang!;
-        const language = lang!;
+        // const language = lang!;
 
         // Send all files to the backend
         files.forEach((file, index) => {
@@ -215,11 +245,11 @@ const InteractiveTerminal = forwardRef<
 
   return (
     <div className="h-full flex flex-col rounded border border-gray-200 dark:border-gray-700 overflow-hidden">
-      
+
       <div
         ref={terminalRef}
         className="flex-1"
-        style={{ overflow: "hidden", backgroundColor: "#ffffff" }}
+        style={{ overflow: "hidden", backgroundColor: getTheme().background }}
       />
     </div>
   );

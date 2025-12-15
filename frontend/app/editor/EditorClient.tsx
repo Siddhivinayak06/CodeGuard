@@ -559,9 +559,9 @@ rl.on('line', (line) => {
         <ResizablePanelGroup direction="horizontal" className="h-full gap-4">
           {/* LEFT: LeetCode-style Problem Panel */}
           <ResizablePanel defaultSize={40} minSize={20}>
-            <div className="h-full p-6 overflow-auto bg-white dark:bg-gray-900 rounded-2xl shadow-inner border border-gray-200 dark:border-gray-700">
+            <div className="h-full p-6 overflow-auto bg-white/60 dark:bg-gray-900/60 backdrop-blur-md rounded-2xl shadow-inner border border-white/20 dark:border-gray-800/50">
               {/* Title large */}
-              <h1 className="text-2xl font-extrabold text-gray-900 dark:text-gray-50 mb-3">
+              <h1 className="text-2xl font-extrabold text-gray-900 dark:text-gray-50 mb-3 bg-clip-text text-transparent bg-gradient-to-r from-gray-900 via-gray-700 to-gray-900 dark:from-white dark:via-gray-200 dark:to-white">
                 {practical?.title || "Problem Title"}
               </h1>
 
@@ -570,9 +570,9 @@ rl.on('line', (line) => {
                 <div className="flex gap-2 mb-4">
                   {practicalLevels.map((level) => {
                     const colors: Record<string, { active: string; inactive: string }> = {
-                      easy: { active: 'bg-emerald-500 text-white', inactive: 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200' },
-                      medium: { active: 'bg-amber-500 text-white', inactive: 'bg-amber-100 text-amber-700 hover:bg-amber-200' },
-                      hard: { active: 'bg-red-500 text-white', inactive: 'bg-red-100 text-red-700 hover:bg-red-200' },
+                      easy: { active: 'bg-emerald-500/90 text-white shadow-lg shadow-emerald-500/20', inactive: 'bg-emerald-100/50 text-emerald-700 hover:bg-emerald-200/50' },
+                      medium: { active: 'bg-amber-500/90 text-white shadow-lg shadow-amber-500/20', inactive: 'bg-amber-100/50 text-amber-700 hover:bg-amber-200/50' },
+                      hard: { active: 'bg-red-500/90 text-white shadow-lg shadow-red-500/20', inactive: 'bg-red-100/50 text-red-700 hover:bg-red-200/50' },
                     };
                     const color = colors[level.level] || colors.easy;
                     const isActive = activeLevel === level.level;
@@ -669,7 +669,7 @@ rl.on('line', (line) => {
 
           {/* RIGHT: Code Editor + Bottom Section */}
           <ResizablePanel defaultSize={60} minSize={40}>
-            <ResizablePanelGroup direction="vertical" className="h-full gap-3 rounded-2xl overflow-hidden">
+            <ResizablePanelGroup direction="vertical" className="h-full gap-3 rounded-2xl overflow-hidden backdrop-blur-sm bg-white/20 dark:bg-gray-900/20 border border-white/20 dark:border-gray-800/20">
               {/* Code Editor */}
               <ResizablePanel defaultSize={65} minSize={30}>
                 <div className="h-full">
@@ -696,24 +696,24 @@ rl.on('line', (line) => {
 
               {/* Bottom Section - Tabs like LeetCode */}
               <ResizablePanel defaultSize={35} minSize={20}>
-                <div className="h-full flex flex-col bg-white/10 dark:bg-gray-900/30 backdrop-blur-md rounded-xl border border-gray-300 dark:border-gray-700">
+                <div className="h-full flex flex-col bg-white/60 dark:bg-gray-900/60 backdrop-blur-md rounded-xl border border-white/20 dark:border-gray-800/50 overflow-hidden">
 
                   {/* Tab Headers */}
-                  <div className="flex-shrink-0 flex border-b border-gray-300 dark:border-gray-700">
+                  <div className="flex-shrink-0 flex border-b border-gray-200/50 dark:border-gray-800/50 bg-white/40 dark:bg-gray-900/40">
                     <button
                       onClick={() => setShowUserTestCases(false)}
-                      className={`px-4 py-3 text-sm font-medium transition-colors ${!showUserTestCases
-                        ? 'text-blue-600 dark:text-blue-400 border-b-2 border-blue-600 dark:border-blue-400 bg-blue-50/50 dark:bg-blue-900/20'
-                        : 'text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200'
+                      className={`px-4 py-3 text-sm font-medium transition-all relative overflow-hidden ${!showUserTestCases
+                        ? 'text-blue-600 dark:text-blue-400 bg-blue-50/50 dark:bg-blue-900/20 after:absolute after:bottom-0 after:left-0 after:right-0 after:h-0.5 after:bg-blue-500'
+                        : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-gray-50/30'
                         }`}
                     >
                       Testcase Result
                     </button>
                     <button
                       onClick={() => setShowUserTestCases(true)}
-                      className={`px-4 py-3 text-sm font-medium transition-colors ${showUserTestCases
-                        ? 'text-blue-600 dark:text-blue-400 border-b-2 border-blue-600 dark:border-blue-400 bg-blue-50/50 dark:bg-blue-900/20'
-                        : 'text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200'
+                      className={`px-4 py-3 text-sm font-medium transition-all relative overflow-hidden ${showUserTestCases
+                        ? 'text-blue-600 dark:text-blue-400 bg-blue-50/50 dark:bg-blue-900/20 after:absolute after:bottom-0 after:left-0 after:right-0 after:h-0.5 after:bg-blue-500'
+                        : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-gray-50/30'
                         }`}
                     >
                       Test Cases

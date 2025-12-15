@@ -57,7 +57,7 @@ export default function CodeEditor({
     showInput,
     setShowInput,
     isFullscreen = true,
-    terminalRef,
+    // terminalRef,
     violations = 0,
     files,
     activeFileName,
@@ -144,9 +144,34 @@ export default function CodeEditor({
 
     const [cursorPosition, setCursorPosition] = useState({ lineNumber: 1, column: 1 });
 
-    const handleEditorMount: OnMount = (editor) => {
+    const handleEditorMount: OnMount = (editor, monaco) => {
         editorRef.current = editor;
         editor.updateOptions({ contextmenu: false });
+
+        // Define Glassmorphism Themes
+        monaco.editor.defineTheme('glass-light', {
+            base: 'vs',
+            inherit: true,
+            rules: [
+                { token: '', background: '00000000' } // Transparent
+            ],
+            colors: {
+                'editor.background': '#00000000', // Transparent
+            }
+        });
+
+        monaco.editor.defineTheme('glass-dark', {
+            base: 'vs-dark',
+            inherit: true,
+            rules: [
+                { token: '', background: '00000000' } // Transparent
+            ],
+            colors: {
+                'editor.background': '#00000000', // Transparent
+            }
+        });
+
+        monaco.editor.setTheme(theme === 'dark' ? 'glass-dark' : 'glass-light');
 
         // Track cursor position
         editor.onDidChangeCursorPosition((e) => {
@@ -171,7 +196,9 @@ export default function CodeEditor({
         editor.onDidPaste?.(() => {
             if (isAiFeatureUnlockedRef.current) return;
             showToast("Pasting is disabled!");
-            try { editor.trigger("keyboard", "undo", null); } catch (e) { }
+            try { editor.trigger("keyboard", "undo", null); } catch (error) {
+                console.error("Failed to format code:", error);
+            }
         });
 
         editor.onKeyDown?.((e) => {
@@ -211,7 +238,7 @@ export default function CodeEditor({
 
     return (
         <div
-            className="h-full flex flex-col bg-white dark:bg-gray-900 overflow-hidden"
+            className="h-full flex flex-col bg-transparent overflow-hidden"
             onClick={() => setShowContextMenu(false)}
         >
             <EditorToolbar
@@ -292,7 +319,7 @@ export default function CodeEditor({
                             height="100%"
                             language={files ? files.find(f => f.name === activeFileName)?.language || lang : lang}
                             value={files ? files.find(f => f.name === activeFileName)?.content || "" : code}
-                            theme={theme === "dark" ? "vs-dark" : "light"}
+                            theme={theme === "dark" ? "glass-dark" : "glass-light"}
                             onChange={(value) => {
                                 if (files && activeFileName && onFileChange) {
                                     onFileChange(activeFileName, value || "");

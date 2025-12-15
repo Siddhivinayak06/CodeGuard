@@ -37,10 +37,17 @@ ${codeContext || 'No code provided'}
 \`\`\`
 
 Guidelines:
-- Give precise, correct solutions
-- Modify only what is necessary
-- Prefer clean, production-ready code
-- Explain briefly if required
+- Give precise, correct solutions.
+- IF the user asks for CODE:
+  - CRITICAL: Output ONLY valid code wrapped in markdown code blocks (e.g., \`\`\`javascript ... \`\`\`).
+  - CRITICAL: Do NOT include any text outside the code blocks. No "Here is the code", no conversational filler.
+  - CRITICAL: Do NOT include any comments in the code. Remove all comments.
+  - CRITICAL: Provide COMPLETELY EXECUTABLE code.
+- IF the user asks for an EXPLANATION:
+  - Provide a clear, concise explanation in PLAIN TEXT.
+  - Do NOT wrap the explanation in markdown code blocks (no \`\`\`).
+  - You may use markdown for formatting (bold, italic, lists).
+- Default behavior should be code-only if the intent is ambiguous.
 `.trim();
 };
 
@@ -61,7 +68,7 @@ const chatWithGeminiStream = async (
 ) => {
   const apiKey = configOverrides?.apiKey || config.ai.apiKey;
   const modelName =
-    configOverrides?.model || config.ai.model || 'gemini-2.5-flash';
+    configOverrides?.model || config.ai.model || 'gemini-1.5-flash';
 
   if (!apiKey) throw new Error('Gemini API key missing');
 

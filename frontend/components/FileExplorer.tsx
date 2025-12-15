@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { File, FilePlus, Trash2, FolderOpen, ChevronDown, FileCode2, Edit2, Upload } from 'lucide-react';
+import { File, FilePlus, Trash2, FolderOpen, ChevronDown, FileCode2, Edit2, Upload, Search, Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -45,7 +45,17 @@ export function FileExplorer({
     const [isCreating, setIsCreating] = useState(false);
     const [newFileName, setNewFileName] = useState('');
     const [mobileOpen, setMobileOpen] = useState(false);
+    const [searchQuery, setSearchQuery] = useState('');
+    const [contextMenu, setContextMenu] = useState<{ x: number; y: number; fileName: string } | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const contextMenuRef = useRef<HTMLDivElement>(null);
+
+    // Close context menu on click outside
+    useEffect(() => {
+        const handleClick = () => setContextMenu(null);
+        window.addEventListener('click', handleClick);
+        return () => window.removeEventListener('click', handleClick);
+    }, []);
 
     const handleFileRead = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -118,13 +128,49 @@ export function FileExplorer({
         setEditingFile(null);
     };
 
+    const handleDownload = (fileName: string) => {
+        const file = files.find(f => f.name === fileName);
+        if (!file) return;
+        const blob = new Blob([file.content], { type: 'text/plain' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    };
+
+    const handleContextMenu = (e: React.MouseEvent, fileName: string) => {
+        e.preventDefault();
+        setContextMenu({ x: e.clientX, y: e.clientY, fileName });
+    };
+
+    const handleKeyDown = (e: React.KeyboardEvent, fileName: string) => {
+        if (e.key === 'F2') {
+            // We can't easily Trigger startRenaming from here without the mouse event, 
+            // but we can set state directly
+            if (onFileRename) {
+                setEditingFile(fileName);
+                setEditName(fileName);
+            }
+        } else if (e.key === 'Delete') {
+            if (files.length > 1) {
+                onFileDelete(fileName);
+            }
+        }
+    };
+
+    const filteredFiles = files.filter(f => f.name.toLowerCase().includes(searchQuery.toLowerCase()));
+
     const [isCollapsed, setIsCollapsed] = useState(false);
 
     return (
         <>
             {/* Desktop: Sidebar */}
-            <div className={`hidden md:flex flex-col h-full bg-gray-50 dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 transition-all duration-300 ease-in-out ${isCollapsed ? 'w-12' : 'w-48'} ${className}`}>
-                <div className="p-2 border-b border-gray-200 dark:border-gray-800 flex items-center justify-between h-12">
+            <div className={`hidden md:flex flex-col h-full backdrop-blur-md bg-white/40 dark:bg-gray-900/40 border-r border-white/20 dark:border-gray-800/50 transition-all duration-300 ease-in-out ${isCollapsed ? 'w-12' : 'w-56'} ${className}`}>
+                <div className="p-2 border-b border-white/20 dark:border-gray-800/50 flex items-center justify-between h-12">
                     {!isCollapsed && (
                         <div className="flex items-center gap-2 text-sm font-semibold text-gray-700 dark:text-gray-200 px-2">
                             <FolderOpen size={16} />
@@ -144,27 +190,40 @@ export function FileExplorer({
 
                 {!isCollapsed && (
                     <>
-                        <div className="px-2 py-2 flex gap-1">
+                        <div className="px-2 py-2 flex flex-col gap-2">
+                            <div className="flex gap-1">
+                                <div className="relative flex-1">
+                                    <Search size={12} className="absolute left-2 top-2 text-gray-500" />
+                                    <Input
+                                        placeholder="Search..."
+                                        value={searchQuery}
+                                        onChange={(e) => setSearchQuery(e.target.value)}
+                                        className="h-8 pl-7 text-xs bg-white/50 dark:bg-gray-800/50 border-white/20 dark:border-gray-700 focus-visible:ring-1 focus-visible:ring-blue-500"
+                                    />
+                                </div>
+                                {onFileUpload && (
+                                    <Button
+                                        variant="outline"
+                                        size="icon"
+                                        className="h-8 w-8 bg-white/50 dark:bg-gray-800/50 border-white/20 dark:border-gray-700"
+                                        onClick={() => fileInputRef.current?.click()}
+                                        title="Upload File"
+                                    >
+                                        <Upload size={14} />
+                                    </Button>
+                                )}
+                            </div>
+
                             <Button
                                 variant="outline"
                                 size="sm"
-                                className="flex-1 justify-start h-8 text-xs bg-white dark:bg-gray-800"
+                                className="w-full justify-start h-8 text-xs bg-white/50 dark:bg-gray-800/50 border-white/20 dark:border-gray-700 hover:bg-blue-50 dark:hover:bg-blue-900/20 text-blue-600 dark:text-blue-400"
                                 onClick={() => setIsCreating(true)}
                             >
                                 <FilePlus size={14} className="mr-2" />
                                 New File
                             </Button>
-                            {onFileUpload && (
-                                <Button
-                                    variant="outline"
-                                    size="icon"
-                                    className="h-8 w-8 bg-white dark:bg-gray-800"
-                                    onClick={() => fileInputRef.current?.click()}
-                                    title="Upload File"
-                                >
-                                    <Upload size={14} />
-                                </Button>
-                            )}
+
                             <input
                                 type="file"
                                 ref={fileInputRef}
@@ -175,15 +234,18 @@ export function FileExplorer({
 
                         <ScrollArea className="flex-1">
                             <div className="p-2 space-y-1">
-                                {files.map((file) => (
+                                {filteredFiles.map((file) => (
                                     <div
                                         key={file.name}
-                                        className={`group flex items-center justify-between px-3 py-2 rounded-md text-sm cursor-pointer transition-colors ${activeFile === file.name
-                                            ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
-                                            : 'hover:bg-gray-200 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300'
+                                        className={`group flex items-center justify-between px-3 py-2 rounded-md text-sm cursor-pointer transition-all duration-200 border border-transparent ${activeFile === file.name
+                                            ? 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-200/50 dark:border-blue-800/50 font-medium'
+                                            : 'hover:bg-white/40 dark:hover:bg-white/5 text-gray-700 dark:text-gray-300'
                                             }`}
                                         onClick={() => onFileSelect(file.name)}
                                         onDoubleClick={(e) => startRenaming(e, file.name)}
+                                        onContextMenu={(e) => handleContextMenu(e, file.name)}
+                                        onKeyDown={(e) => handleKeyDown(e, file.name)}
+                                        tabIndex={0}
                                     >
                                         {editingFile === file.name ? (
                                             <form onSubmit={handleRenameSubmit} className="flex-1 flex items-center gap-1" onClick={e => e.stopPropagation()}>
@@ -193,23 +255,33 @@ export function FileExplorer({
                                                     value={editName}
                                                     onChange={(e) => setEditName(e.target.value)}
                                                     onBlur={handleRenameSubmit}
-                                                    className="h-6 text-xs px-1 py-0"
+                                                    className="h-6 text-xs px-1 py-0 bg-white dark:bg-gray-800"
                                                 />
                                             </form>
                                         ) : (
                                             <>
-                                                <div className="flex items-center gap-2 overflow-hidden">
+                                                <div className="flex items-center gap-2 overflow-hidden flex-1">
                                                     <FileCode2 size={14} className={`shrink-0 ${getFileIconColor(file.name)}`} />
                                                     <span className="truncate">{file.name}</span>
                                                 </div>
 
-                                                <div className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity gap-1">
+                                                <div className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity gap-0.5">
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        className="h-6 w-6 text-gray-400 hover:text-blue-600"
+                                                        onClick={(e) => { e.stopPropagation(); handleDownload(file.name); }}
+                                                        title="Download"
+                                                    >
+                                                        <Download size={12} />
+                                                    </Button>
                                                     {onFileRename && (
                                                         <Button
                                                             variant="ghost"
                                                             size="icon"
-                                                            className="h-6 w-6 text-gray-500 hover:text-blue-600"
+                                                            className="h-6 w-6 text-gray-400 hover:text-blue-600"
                                                             onClick={(e) => startRenaming(e, file.name)}
+                                                            title="Rename"
                                                         >
                                                             <Edit2 size={12} />
                                                         </Button>
@@ -218,11 +290,12 @@ export function FileExplorer({
                                                         <Button
                                                             variant="ghost"
                                                             size="icon"
-                                                            className="h-6 w-6 text-red-500 hover:text-red-600 hover:bg-red-100 dark:hover:bg-red-900/30"
+                                                            className="h-6 w-6 text-gray-400 hover:text-red-500 hover:bg-red-100/50 dark:hover:bg-red-900/20"
                                                             onClick={(e) => {
                                                                 e.stopPropagation();
                                                                 onFileDelete(file.name);
                                                             }}
+                                                            title="Delete"
                                                         >
                                                             <Trash2 size={12} />
                                                         </Button>
@@ -344,6 +417,55 @@ export function FileExplorer({
                     </SheetContent>
                 </Sheet>
             </div>
+
+            {/* Context Menu Portal */}
+            {contextMenu && (
+                <div
+                    ref={contextMenuRef}
+                    className="fixed z-50 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl py-1 w-40 animate-in fade-in zoom-in-95 duration-100"
+                    style={{ top: contextMenu.y, left: contextMenu.x }}
+                    onClick={(e) => e.stopPropagation()}
+                >
+                    <button
+                        className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
+                        onClick={() => {
+                            if (contextMenu) {
+                                handleDownload(contextMenu.fileName);
+                                setContextMenu(null);
+                            }
+                        }}
+                    >
+                        <Download size={14} /> Download
+                    </button>
+                    {onFileRename && (
+                        <button
+                            className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
+                            onClick={() => {
+                                if (contextMenu) {
+                                    setEditingFile(contextMenu.fileName);
+                                    setEditName(contextMenu.fileName);
+                                    setContextMenu(null);
+                                }
+                            }}
+                        >
+                            <Edit2 size={14} /> Rename
+                        </button>
+                    )}
+                    {files.length > 1 && (
+                        <button
+                            className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-2"
+                            onClick={() => {
+                                if (contextMenu) {
+                                    onFileDelete(contextMenu.fileName);
+                                    setContextMenu(null);
+                                }
+                            }}
+                        >
+                            <Trash2 size={14} /> Delete
+                        </button>
+                    )}
+                </div>
+            )}
         </>
     );
 }

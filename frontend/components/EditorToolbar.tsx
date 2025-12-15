@@ -59,7 +59,7 @@ export function EditorToolbar({
     isAiFeatureUnlocked,
 }: EditorToolbarProps) {
     return (
-        <div className="flex items-center justify-between bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 px-4 h-14 shrink-0 gap-4">
+        <div className="flex items-center justify-between bg-white/80 dark:bg-gray-900/80 backdrop-blur-md border-b border-gray-200/50 dark:border-gray-800/50 px-4 h-14 shrink-0 gap-4">
             {/* Left: Language & Mode */}
             <div className="flex items-center gap-4">
                 <div className="flex items-center gap-2">
@@ -73,7 +73,7 @@ export function EditorToolbar({
                             <SelectItem value="java">Java</SelectItem>
                             <SelectItem value="c">C</SelectItem>
                             <SelectItem value="cpp">C++</SelectItem>
-                         
+
                         </SelectContent>
                     </Select>
                 </div>
