@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useRef, useState, Suspense } from "react";
+import React, { useEffect, useMemo, useState, Suspense } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useSearchParams, useRouter } from "next/navigation";
 import { generatePdfClient } from "@/lib/ClientPdf";

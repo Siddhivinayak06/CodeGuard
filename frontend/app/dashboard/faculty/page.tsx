@@ -9,8 +9,6 @@ import dynamic from "next/dynamic";
 import type { User } from "@supabase/supabase-js";
 import PracticalForm from "../../faculty/components/PracticalForm";
 import {
-  BarChart,
-  Bar,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -28,15 +26,9 @@ import {
   FileCheck,
   TrendingUp,
   Clock,
-  CalendarDays,
   Plus,
-  ArrowUpRight,
-  MoreVertical,
-  CheckCircle2,
-  AlertCircle
+  ArrowUpRight
 } from "lucide-react";
-
-const CodeMirror = dynamic(() => import("@uiw/react-codemirror"), { ssr: false });
 
 // ---------------------- Types ----------------------
 type Subject = { id: number; subject_name: string; faculty_id?: string };
@@ -57,6 +49,13 @@ type TestCase = {
   time_limit_ms?: number;
   memory_limit_kb?: number;
 };
+
+interface Submission {
+  id: number;
+  status: string;
+  created_at: string;
+  practical_id: number;
+}
 
 // ---------------------- Initial States ----------------------
 const initialPracticalForm: Practical = {
@@ -166,13 +165,11 @@ export default function FacultyDashboardPage() {
   const [loading, setLoading] = useState(true);
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [practicals, setPracticals] = useState<Practical[]>([]);
-  const [submissions, setSubmissions] = useState<any[]>([]);
+  const [submissions, setSubmissions] = useState<Submission[]>([]);
   const [selected, setSelected] = useState<Date>(new Date());
   const [modalOpen, setModalOpen] = useState(false);
 
   const [editingPractical, setEditingPractical] = useState<Practical | null>(null);
-  const [form, setForm] = useState<Practical>(initialPracticalForm);
-  const [testCases, setTestCases] = useState<TestCase[]>([initialTestCase]);
   const [sampleCode, setSampleCode] = useState<string>("");
   const [sampleLanguage, setSampleLanguage] = useState<string>("c");
 
@@ -210,7 +207,7 @@ export default function FacultyDashboardPage() {
       }
 
       // 3. Fetch practicals
-      const subjectIds = (subjData ?? []).map((s: any) => s.id);
+      const subjectIds = (subjData ?? []).map((s) => s.id);
       if (subjectIds.length > 0) {
         const { data: pracData } = await supabase
           .from("practicals")
@@ -253,13 +250,7 @@ export default function FacultyDashboardPage() {
   };
 
   const openCreate = (date?: Date) => {
-    const deadline = date
-      ? new Date(date.getFullYear(), date.getMonth(), date.getDate(), 9, 0).toISOString().slice(0, 16)
-      : new Date().toISOString().slice(0, 16);
-
     setEditingPractical(null);
-    setForm({ ...initialPracticalForm, deadline });
-    setTestCases([initialTestCase]);
     setSampleCode("");
     setSampleLanguage("c");
     setModalOpen(true);
@@ -267,10 +258,6 @@ export default function FacultyDashboardPage() {
 
   const openEdit = async (p: Practical) => {
     setEditingPractical(p);
-    setForm({ ...p, deadline: p.deadline.slice(0, 16) });
-
-    const { data: tcs } = await supabase.from("test_cases").select("*").eq("practical_id", p.id);
-    setTestCases(tcs && tcs.length > 0 ? tcs : [initialTestCase]);
 
     const { data: refs } = await supabase
       .from("reference_codes")

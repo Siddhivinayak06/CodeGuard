@@ -16,10 +16,8 @@ import {
   Plus,
   Search,
   RefreshCw,
-  Award,
   Eye,
   X,
-  Code2,
   FileText,
   CheckCircle2,
   ListFilter
@@ -41,6 +39,7 @@ type Practical = {
   title: string;
   deadline: string | null;
   submission_count?: number;
+  subject_id?: number;
 };
 
 type TestCase = {
@@ -76,7 +75,6 @@ export default function FacultySubjects() {
 
   // View Modal state
   const [viewingPractical, setViewingPractical] = useState<ViewingPractical | null>(null);
-  const [loadingPracticalDetails, setLoadingPracticalDetails] = useState(false);
 
   // helpers
   const formatDate = (d?: string | null) => {
@@ -143,7 +141,7 @@ export default function FacultySubjects() {
           .order("subject_name", { ascending: true });
 
         // Supabase returns { data, error }
-        const { data, error } = res as any;
+        const { data, error } = res;
 
         if (error) {
           // Log useful bits (message/code) but avoid over-stringifying large stacks
@@ -154,22 +152,27 @@ export default function FacultySubjects() {
 
         if (!isMounted) return;
 
-        const formatted = (data || []).map((s: any) => ({
+        const formatted = (data || []).map((s) => ({
           id: s.id,
           subject_name: s.subject_name,
           subject_code: s.subject_code,
-          practical_count: s.practicals?.length || 0,
+          practical_count: Array.isArray(s.practicals) ? s.practicals.length : 0,
           semester: s.semester || "",
         }));
 
         if (isMounted) {
           setSubjects(formatted);
-          if (!selected && formatted.length > 0) setSelected(formatted[0].id);
+          // Only auto-select if nothing is selected
+          const firstId = formatted[0]?.id;
+          if (firstId) {
+            setSelected((prev) => prev || firstId);
+          }
         }
-      } catch (err: any) {
+      } catch (err) {
         // Ignore AbortError behavior (shouldn't happen since we removed AbortController),
         // but handle generically and log a short message.
-        console.error("Unexpected error fetching subjects:", err?.message ?? err);
+        const msg = err instanceof Error ? err.message : String(err);
+        console.error("Unexpected error fetching subjects:", msg);
         if (isMounted) setSubjects([]);
       } finally {
         if (isMounted) setLoading(false);
@@ -197,7 +200,7 @@ export default function FacultySubjects() {
 
       if (error) throw error;
 
-      const formatted = (data || []).map((p: any) => ({
+      const formatted = (data || []).map((p) => ({
         id: p.id,
         title: p.title,
         deadline: p.deadline,
@@ -226,7 +229,6 @@ export default function FacultySubjects() {
   };
 
   const handleViewPractical = async (practical: Practical) => {
-    setLoadingPracticalDetails(true);
     try {
       // 1. Fetch full practical details
       const { data: practicalData, error: practicalError } = await supabase
@@ -253,8 +255,6 @@ export default function FacultySubjects() {
     } catch (err) {
       console.error("Failed to fetch practical details:", err);
       alert("Failed to load practical details.");
-    } finally {
-      setLoadingPracticalDetails(false);
     }
   };
 
@@ -270,7 +270,8 @@ export default function FacultySubjects() {
     try {
       const { data, error } = await supabase.from("practicals").select("*").eq("id", practicalId).single();
       if (error) throw error;
-      setEditingPractical(data as any);
+      setEditingPractical(data as Practical);
+
       // optionally load sample code from your DB if you store it
       setShowPracticalModal(true);
     } catch (err) {
@@ -526,7 +527,7 @@ export default function FacultySubjects() {
 
       <PracticalForm
         isOpen={showPracticalModal}
-        practical={editingPractical as any}
+        practical={editingPractical}
         subjects={subjects}
         supabase={supabase}
         sampleCode={sampleCode}
@@ -688,6 +689,6 @@ export default function FacultySubjects() {
 }
 
 // helper to detect empty practicals gracefully
-function practialsEmpty(list: any[]) {
+function practialsEmpty(list: unknown[]) {
   return !list || list.length === 0;
 }

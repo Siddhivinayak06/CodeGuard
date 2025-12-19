@@ -1,36 +1,55 @@
-# Use a lightweight Node.js runtime
-FROM node:20-slim
+# Stage 1: Build native modules (node-pty)
+FROM node:20-alpine AS builder
 
-# Install build tools for native modules and Docker CLI
-RUN apt-get update && apt-get install -y \
-    build-essential \
+# Install build tools for native modules
+RUN apk add --no-cache \
     python3 \
-    docker.io \
-    curl \
-    && rm -rf /var/lib/apt/lists/*
+    make \
+    g++ \
+    gcc \
+    linux-headers
 
-# Set working directory
 WORKDIR /app
-
-# Copy dependency manifests first for caching
 COPY package*.json ./
-
-# Install dependencies (this will build node-pty correctly)
+# Install dependencies (only production)
 RUN npm install --omit=dev
 
-# Copy the rest of the app
-COPY . .
+# Stage 2: Final lightweight runtime
+FROM node:20-alpine
 
-# Expose ports for both services
-EXPOSE 5000
+# Install ONLY the Docker CLI (instead of the huge docker.io package)
+# libc6-compat provides compatibility for native modules built on Alpine
+RUN apk add --no-cache \
+    docker-cli \
+    curl \
+    libc6-compat
 
-# Set environment variables defaults (can be overridden via docker-compose)
-ENV NODE_ENV=production
-ENV PORT=5000
-ENV WORKSPACE_DIR=/app/workspace
+WORKDIR /app
 
-# Create workspace directory if it doesn't exist
-RUN mkdir -p /app/workspace
+# Copy only the compiled node_modules from the builder stage
+COPY --from=builder /app/node_modules ./node_modules
+COPY package*.json ./
+COPY src ./src
 
-# Run the combined server (Express + WebSocket)
+# Expose backend port
+EXPOSE 5002
+
+# Set environment variables
+ENV NODE_ENV=production \
+    PORT=5002 \
+    WORKSPACE_DIR=/app/workspace
+
+# Create workspace directory
+RUN mkdir -p /app/workspace && \
+    adduser -D -u 1000 appuser && \
+    chown -R appuser:appuser /app
+
+# Switch to non-root user for security
+USER appuser
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+    CMD curl -fs http://localhost:5002/health || exit 1
+
+# Run the server
 CMD ["node", "src/server.js"]

@@ -1,9 +1,13 @@
-FROM gcc:12.2
+# Optimized C/C++ runtime using Alpine
+FROM alpine:3.19
 
-# Install core tools
-RUN apt-get update && \
-    apt-get install -y coreutils bsdutils && \
-    rm -rf /var/lib/apt/lists/*
+# Install minimal GCC/G++ toolchain
+RUN apk add --no-cache \
+    gcc \
+    g++ \
+    musl-dev \
+    coreutils \
+    bash
 
 # Set working directory
 WORKDIR /app
@@ -11,22 +15,19 @@ WORKDIR /app
 # Copy the interactive C wrapper
 COPY interactive_wrapper.c /app/
 
-# Compile the wrapper with proper permissions
-RUN gcc /app/interactive_wrapper.c -o /app/interactive_wrapper.out && \
-    chmod 755 /app/interactive_wrapper.out
+# Compile the wrapper with optimizations
+RUN gcc -O2 -static /app/interactive_wrapper.c -o /app/interactive_wrapper.out && \
+    chmod 755 /app/interactive_wrapper.out && \
+    rm /app/interactive_wrapper.c
 
 # Create non-root user
-RUN useradd -m -u 1000 -s /bin/bash runner
-
-# Set ownership and permissions for /app
-RUN chown -R runner:runner /app && chmod -R 755 /app
-
-# Create workspace directory
-RUN mkdir -p /app/workspace
+RUN adduser -D -u 1000 runner && \
+    mkdir -p /app/workspace && \
+    chown -R runner:runner /app
 
 # Switch to non-root user
 USER runner
 WORKDIR /app
 
-# Default shell
-CMD ["/bin/bash"]
+# Keep container alive
+CMD ["tail", "-f", "/dev/null"]

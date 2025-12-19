@@ -111,6 +111,7 @@ export async function generatePdfClient({
     doc.setFontSize(10);
 
     const safeOutput = cleanText(
+      // eslint-disable-next-line no-control-regex
       output.replace(/\x1B\[[0-9;]*[A-Za-z]/g, "")
     );
 

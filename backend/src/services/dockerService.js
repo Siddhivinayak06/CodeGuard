@@ -47,7 +47,8 @@ const launchContainer = (lang, containerName) => {
       '-f',
       '/dev/null',
     ];
-  } else if (lang === 'c') {
+  } else if (lang === 'c' || lang === 'cpp') {
+    // C and C++ share the same container (has both gcc and g++)
     runArgs = [
       'run',
       '--rm',
@@ -63,6 +64,8 @@ const launchContainer = (lang, containerName) => {
       config.docker.pidsLimit,
       '--tmpfs',
       '/app/workspace:exec,rw,size=64m,uid=1000,gid=1000,mode=1777',
+      '-e',
+      `LANG_MODE=${lang}`, // Pass language mode to container
       'codeguard-c',
       'tail',
       '-f',
@@ -163,6 +166,8 @@ const execC = (containerName, onData, onExit) => {
       '-it',
       '-u',
       'runner',
+      '-e',
+      'COMPILER=gcc',
       containerName,
       '/app/interactive_wrapper.out',
     ],
@@ -184,6 +189,39 @@ const execC = (containerName, onData, onExit) => {
   return cProcess;
 };
 
+const execCpp = (containerName, onData, onExit) => {
+  logger.info('Starting C++ wrapper process inside container with node-pty');
+
+  const cppProcess = pty.spawn(
+    'docker',
+    [
+      'exec',
+      '-it',
+      '-u',
+      'runner',
+      '-e',
+      'COMPILER=g++',
+      containerName,
+      '/app/interactive_wrapper.out',
+    ],
+    {
+      name: 'xterm-color',
+      cols: 80,
+      rows: 24,
+      cwd: process.cwd(),
+      env: process.env,
+    }
+  );
+
+  cppProcess.onData(onData);
+
+  if (onExit) {
+    cppProcess.onExit(onExit);
+  }
+
+  return cppProcess;
+};
+
 module.exports = {
   killIfExists,
   removeContainer,
@@ -191,4 +229,5 @@ module.exports = {
   execPython,
   execJava,
   execC,
+  execCpp,
 };

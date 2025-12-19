@@ -57,14 +57,25 @@ export async function POST(req: Request) {
 
     if (tcErr) console.error("Failed to fetch test cases:", tcErr);
 
-    // Fetch reference code
-    const { data: refsData } = await supabaseAdmin
+    // Fetch reference code - Prefer matching language, otherwise fallback to primary
+    let { data: refsData } = await supabaseAdmin
       .from("reference_codes")
       .select("id, language, code, is_primary, created_at")
       .eq("practical_id", pid)
-      .order("is_primary", { ascending: false })
-      .order("created_at", { ascending: false })
+      .eq("language", lang)
       .limit(1);
+
+    // If no language-specific match, fallback to primary/latest
+    if (!refsData || refsData.length === 0) {
+      const { data: fallbackData } = await supabaseAdmin
+        .from("reference_codes")
+        .select("id, language, code, is_primary, created_at")
+        .eq("practical_id", pid)
+        .order("is_primary", { ascending: false })
+        .order("created_at", { ascending: false })
+        .limit(1);
+      refsData = fallbackData;
+    }
 
     const refs = refsData || [];
     const ref = refs[0] || null;
@@ -82,7 +93,9 @@ export async function POST(req: Request) {
     const reqLangNorm = normalizeLang(String(lang));
     const refLangNorm = normalizeLang(referenceLang);
     if (refLangNorm && reqLangNorm && refLangNorm !== reqLangNorm) {
-      console.warn(`Runner language (${reqLangNorm}) does not match reference language (${refLangNorm})`);
+      // Reduced to low-level log or removed if we expect mismatch often
+      // Use informative log instead of warn if we found a fallback
+      console.log(`Using fallback reference language (${refLangNorm}) for runner language (${reqLangNorm})`);
     }
 
     // helper to call runner service
@@ -114,7 +127,7 @@ export async function POST(req: Request) {
             expectedOutput: utc.expectedOutput ?? "", // will be filled from reference if available
             is_hidden: false,
             time_limit_ms: utc.time_limit_ms ?? 2000,
-            memory_limit_kb: utc.memory_limit_kb ?? 65536,
+            memory_limit_kb: utc.memory_limit_kb ?? (reqLangNorm === 'java' ? 262144 : 65536),
           }));
 
         usedTestCaseSource = "user";
@@ -160,7 +173,7 @@ export async function POST(req: Request) {
           expectedOutput: tc.expected_output ?? "",
           is_hidden: tc.is_hidden ?? true,
           time_limit_ms: tc.time_limit_ms ?? 2000,
-          memory_limit_kb: tc.memory_limit_kb ?? 65536,
+          memory_limit_kb: tc.memory_limit_kb ?? (reqLangNorm === 'java' ? 262144 : 65536),
         }));
         usedTestCaseSource = "db";
       }
@@ -179,7 +192,7 @@ export async function POST(req: Request) {
         expectedOutput: tc.expected_output ?? "",
         is_hidden: tc.is_hidden ?? true,
         time_limit_ms: tc.time_limit_ms ?? 2000,
-        memory_limit_kb: tc.memory_limit_kb ?? 65536,
+        memory_limit_kb: tc.memory_limit_kb ?? (reqLangNorm === 'java' ? 262144 : 65536),
       }));
 
       usedTestCaseSource = "db";
@@ -198,6 +211,7 @@ export async function POST(req: Request) {
       runnerResults = await callRunner({
         code,
         reference_code: referenceCode || undefined,
+        reference_lang: refLangNorm || referenceLang || undefined,
         lang: reqLangNorm || lang,
         batch,
       });
@@ -333,7 +347,9 @@ export async function POST(req: Request) {
         if (currentSub && (currentSub.marks_obtained || 0) > marksObtained) {
           shouldUpdate = false;
         }
-      } catch (e) { }
+      } catch (e) {
+        console.warn("Failed to update submission with final marks:", e);
+      }
 
       if (shouldUpdate) {
         // Update test case results

@@ -70,13 +70,51 @@ function SkeletonRow() {
   );
 }
 
+interface PracticalLevel {
+  id: number;
+  level: string;
+  title: string;
+  description: string;
+  max_marks: number;
+}
+
+interface StudentPracticalJoined {
+  id: number;
+  assigned_deadline: string;
+  status: string;
+  notes: string;
+  practicals: {
+    id: number;
+    title: string;
+    description: string;
+    language: string;
+    subject_id: number;
+    subjects: { subject_name: string } | null;
+    practical_levels: PracticalLevel[];
+  };
+}
+
+interface FormattedPractical {
+  id: number;
+  title: string;
+  description: string;
+  language: string;
+  deadline: string;
+  subject_id: number;
+  subject_name: string;
+  status: string;
+  notes: string;
+  hasLevels: boolean;
+  levels: PracticalLevel[];
+}
+
 export default function StudentPracticals() {
   const router = useRouter();
   const supabase = useMemo(() => createClient(), []);
   const mountedRef = useRef<boolean>(false);
 
   const [user, setUser] = useState<User | null>(null);
-  const [practicals, setPracticals] = useState<any[]>([]);
+  const [practicals, setPracticals] = useState<FormattedPractical[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
 
   // Fetch the logged-in user
@@ -146,7 +184,7 @@ export default function StudentPracticals() {
           return;
         }
 
-        const formatted = (data || []).map((sp: any) => {
+        const formatted = (data as unknown as StudentPracticalJoined[] || []).map((sp) => {
           const levels = sp.practicals?.practical_levels || [];
           return {
             id: sp.practicals.id,
@@ -159,9 +197,9 @@ export default function StudentPracticals() {
             status: sp.status,
             notes: sp.notes,
             hasLevels: levels.length > 0,
-            levels: levels.sort((a: any, b: any) => {
-              const order = { easy: 0, medium: 1, hard: 2 };
-              return (order[a.level as keyof typeof order] || 0) - (order[b.level as keyof typeof order] || 0);
+            levels: levels.sort((a, b) => {
+              const order: Record<string, number> = { easy: 0, medium: 1, hard: 2 };
+              return (order[a.level] || 0) - (order[b.level] || 0);
             }),
           };
         });
@@ -169,8 +207,13 @@ export default function StudentPracticals() {
         if (!signal.aborted && mountedRef.current) {
           setPracticals(formatted);
         }
+        if (error) {
+          if ((error as any).code !== "PGRST116" && (error as any).message !== "JSON object requested, multiple (or no) rows returned") {
+            console.error("Error fetching practicals:", error);
+          }
+        }
       } catch (err) {
-        if ((err as any).name !== "AbortError") {
+        if (err instanceof Error && err.name !== "AbortError") {
           console.error("Unexpected fetch error:", err);
         }
       } finally {
@@ -340,7 +383,7 @@ export default function StudentPracticals() {
                         {/* Level badges for multi-level practicals */}
                         {p.hasLevels && (
                           <div className="flex items-center gap-1">
-                            {p.levels.map((level: any) => {
+                            {p.levels.map((level) => {
                               const colors: Record<string, string> = {
                                 easy: 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800',
                                 medium: 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-800',

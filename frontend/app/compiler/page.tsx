@@ -52,9 +52,17 @@ int main(void) {
     return 0;
 }
 `,
+    cpp: `// C++ starter template
+#include <iostream>
+
+int main() {
+    std::cout << "Hello, World!" << std::endl;
+    return 0;
+}
+`,
   };
 
-  const [lang, setLang] = useState<"java" | "python" | "c">("java");
+  const [lang, setLang] = useState<"java" | "python" | "c" | "cpp">("java");
   const [code, setCode] = useState<string>(LANGUAGE_TEMPLATES["java"]);
   const [input, setInput] = useState("");
   const [output, setOutput] = useState("");
@@ -106,7 +114,7 @@ int main(void) {
     router.push("/");
   };
 
-  const handleLangChange = (newLang: "java" | "python" | "c") => {
+  const handleLangChange = (newLang: "java" | "python" | "c" | "cpp") => {
     setLang(newLang);
     const currentTemplate = LANGUAGE_TEMPLATES[lang];
     const nextTemplate = LANGUAGE_TEMPLATES[newLang];
@@ -181,7 +189,7 @@ int main(void) {
                     loading={loading}
                     locked={locked}
                     lang={lang}
-                    onLangChange={(l) => handleLangChange(l as "java" | "python" | "c")}
+                    onLangChange={(l) => handleLangChange(l as "java" | "python" | "c" | "cpp")}
                     showInput={showInput}
                     setShowInput={setShowInput}
                     showInputToggle={showInputToggle}

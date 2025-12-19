@@ -29,14 +29,15 @@ const InteractiveTerminal = dynamic(
 const LANGUAGE_TEMPLATES = {
   python: "# Welcome to Python Code Editor\n# Write your Python code here\n\nprint('Hello, World!')\n",
   java: "public class Main {\n    public static void main(String[] args) {\n        System.out.println(\"Hello, World!\");\n    }\n}",
-  c: "#include <stdio.h>\n\nint main() {\n    printf(\"Hello, World!\\n\");\n    return 0;\n}"
+  c: "#include <stdio.h>\n\nint main() {\n    printf(\"Hello, World!\\n\");\n    return 0;\n}",
+  cpp: "#include <iostream>\n\nint main() {\n    std::cout << \"Hello, World!\" << std::endl;\n    return 0;\n}"
 };
 
 export default function Home() {
   const router = useRouter();
   const pathname = usePathname();
   const mountedRef = useRef(true);
-  const [lang, setLang] = useState<"java" | "python" | "c">("python");
+  const [lang, setLang] = useState<"java" | "python" | "c" | "cpp">("python");
   const [files, setFiles] = useState<FileData[]>([
     { name: "main.py", content: LANGUAGE_TEMPLATES.python, language: "python" }
   ]);
@@ -115,10 +116,11 @@ export default function Home() {
 
   const handleFileCreate = (fileName: string) => {
     const extension = fileName.split('.').pop()?.toLowerCase();
-    let language = lang;
+    let language: "python" | "java" | "c" | "cpp" = lang;
     if (extension === 'py') language = 'python';
     else if (extension === 'java') language = 'java';
     else if (extension === 'c') language = 'c';
+    else if (extension === 'cpp' || extension === 'cc' || extension === 'hpp') language = 'cpp';
 
     setFiles(prev => [...prev, { name: fileName, content: '', language }]);
     setActiveFileName(fileName);
@@ -163,7 +165,8 @@ export default function Home() {
     let language: string = lang;
     if (ext === 'py') language = 'python';
     else if (ext === 'java') language = 'java';
-    else if (ext === 'c' || ext === 'cpp') language = 'c';
+    else if (ext === 'c') language = 'c';
+    else if (ext === 'cpp' || ext === 'cc') language = 'cpp';
     else if (ext === 'js') language = 'javascript';
 
     setFiles(prev => [...prev, { name: fileName, content, language }]);
@@ -172,12 +175,12 @@ export default function Home() {
 
 
   const handleLangChange = (newLang: string) => {
-    if (newLang !== "java" && newLang !== "python" && newLang !== "c") return;
-    setLang(newLang);
+    if (newLang !== "java" && newLang !== "python" && newLang !== "c" && newLang !== "cpp") return;
+    setLang(newLang as "java" | "python" | "c" | "cpp");
 
     // Reset files to default template for new language
-    const nextTemplate = LANGUAGE_TEMPLATES[newLang];
-    const defaultFileName = newLang === 'python' ? 'main.py' : newLang === 'java' ? 'Main.java' : 'main.c';
+    const nextTemplate = (LANGUAGE_TEMPLATES as any)[newLang];
+    const defaultFileName = newLang === 'python' ? 'main.py' : newLang === 'java' ? 'Main.java' : newLang === 'cpp' ? 'main.cpp' : 'main.c';
     setFiles([{ name: defaultFileName, content: nextTemplate, language: newLang }]);
     setActiveFileName(defaultFileName);
   };

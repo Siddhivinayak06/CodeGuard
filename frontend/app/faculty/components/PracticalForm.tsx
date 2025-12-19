@@ -1,11 +1,11 @@
 "use client";
 
-import React, { useEffect, useMemo, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import dynamic from "next/dynamic";
 import { cpp } from "@codemirror/lang-cpp";
 import { python } from "@codemirror/lang-python";
 import { oneDark } from "@codemirror/theme-one-dark";
-import { createClient } from "@/lib/supabase/client";
+import { SupabaseClient } from "@supabase/supabase-js";
 import { useTheme } from "next-themes";
 import { Sparkles, Info as InfoIcon, Code as CodeIcon, FlaskConical as TestIcon, Plus as PlusIcon, Trash2 as TrashIcon, Users as UsersIcon, FileText, Search as SearchIcon, Check as CheckIcon, Loader2 } from "lucide-react";
 
@@ -48,7 +48,7 @@ interface Student {
 interface PracticalFormProps {
   practical: Practical | null;
   subjects: Subject[];
-  supabase: any;
+  supabase: SupabaseClient;
   sampleCode?: string;
   setSampleCode: (code: string) => void;
   sampleLanguage?: string;
@@ -58,6 +58,7 @@ interface PracticalFormProps {
   isOpen?: boolean;
   defaultSubjectId?: number | string | null;
 }
+
 
 // ---------------------- Small icons / helpers ----------------------
 const LoadingSpinner = () => <Loader2 className="animate-spin h-5 w-5" />;
@@ -138,6 +139,7 @@ export default function PracticalForm({
   }, [isOpen]);
 
   // set initial state when practical prop changes
+  // set initial state when practical prop changes
   useEffect(() => {
     if (practical) {
       setForm({
@@ -148,28 +150,31 @@ export default function PracticalForm({
       setAssignmentDeadline(practical.deadline ? String(practical.deadline).slice(0, 16) : new Date().toISOString().slice(0, 16));
       setStep(1); // Reset to step 1 when opening/editing a practical
 
-      // load test cases for existing practical
-      supabase.from("test_cases").select("*").eq("practical_id", practical.id).then(({ data }: any) => {
-        if (data && data.length > 0) setTestCases(data);
-      }).catch((e: any) => {
-        console.error("Failed to fetch test cases:", e);
-      });
-
-      // load already assigned students for existing practical
-      supabase
-        .from("student_practicals")
-        .select("student_id")
-        .eq("practical_id", practical.id)
-        .then(({ data, error }: any) => {
-          if (!error && data && data.length > 0) {
-            const assignedIds = data.map((sp: any) => sp.student_id);
-            // Store the IDs temporarily - we'll match with students when they load
-            (window as any).__assignedStudentIds = assignedIds;
+      const loadData = async () => {
+        try {
+          // load test cases for existing practical
+          const { data: testData } = await supabase.from("test_cases").select("*").eq("practical_id", practical.id);
+          if (testData && testData.length > 0) {
+            setTestCases(testData as TestCase[]);
           }
-        })
-        .catch((e: any) => {
-          console.error("Failed to fetch assigned students:", e);
-        });
+
+          // load already assigned students for existing practical
+          const { data: studentData, error: studentError } = await supabase
+            .from("student_practicals")
+            .select("student_id")
+            .eq("practical_id", practical.id);
+
+          if (!studentError && studentData && studentData.length > 0) {
+            const assignedIds = studentData.map((sp: { student_id: string }) => sp.student_id);
+            // Store the IDs temporarily - we'll match with students when they load
+            (window as unknown as { __assignedStudentIds: string[] }).__assignedStudentIds = assignedIds;
+          }
+        } catch (e) {
+          console.error("Failed to fetch practical data:", e);
+        }
+      };
+
+      loadData();
     } else {
       // reset for new practical
       setForm(prev => ({
@@ -219,7 +224,7 @@ export default function PracticalForm({
           return;
         }
 
-        const mapped = data.map((s: any) => ({
+        const mapped = (data as any[]).map((s) => ({
           uid: s.uid,
           name: s.name,
           email: s.email,
@@ -229,13 +234,13 @@ export default function PracticalForm({
         setStudents(mapped);
 
         // Check if there are pre-assigned students to select
-        const assignedIds = (window as any).__assignedStudentIds;
+        const assignedIds = (window as unknown as { __assignedStudentIds: string[] }).__assignedStudentIds;
         if (assignedIds && assignedIds.length > 0) {
           const preSelected = mapped.filter((s: Student) => assignedIds.includes(s.uid));
           if (preSelected.length > 0) {
             setSelectedStudents(preSelected);
           }
-          delete (window as any).__assignedStudentIds; // Clean up
+          delete (window as unknown as { __assignedStudentIds?: string[] }).__assignedStudentIds; // Clean up
         }
       } catch (err) {
         console.error("Error fetching students:", err);
@@ -252,10 +257,12 @@ export default function PracticalForm({
     setForm(prev => ({ ...prev, [name]: name === "max_marks" ? Number(value) : value }));
   };
 
-  const handleTestCaseChange = (index: number, field: keyof TestCase, value: any) => {
+  const handleTestCaseChange = (index: number, field: keyof TestCase, value: string | number | boolean) => {
     setTestCases(prev => {
       const copy = [...prev];
-      (copy[index] as any)[field] = value;
+      if (copy[index]) {
+        (copy[index] as any)[field] = value;
+      }
       return copy;
     });
   };
@@ -264,7 +271,7 @@ export default function PracticalForm({
   const removeTestCase = (index: number) => setTestCases(prev => prev.filter((_, i) => i !== index));
 
   // Level management helpers
-  const updateLevelField = (level: 'easy' | 'medium' | 'hard', field: string, value: any) => {
+  const updateLevelField = (level: 'easy' | 'medium' | 'hard', field: string, value: string | number | boolean) => {
     setLevels(prev => prev.map(l => l.level === level ? { ...l, [field]: value } : l));
   };
 
@@ -284,7 +291,7 @@ export default function PracticalForm({
     ));
   };
 
-  const updateLevelTestCase = (level: 'easy' | 'medium' | 'hard', index: number, field: keyof TestCase, value: any) => {
+  const updateLevelTestCase = (level: 'easy' | 'medium' | 'hard', index: number, field: keyof TestCase, value: string | number | boolean) => {
     setLevels(prev => prev.map(l => {
       if (l.level !== level) return l;
       const newTestCases = [...l.testCases];
@@ -686,10 +693,10 @@ export default function PracticalForm({
                       name="subject_id"
                       value={form.subject_id}
                       onChange={handleInput}
-                      disabled={!!defaultSubjectId}
+                      disabled={Boolean(defaultSubjectId)}
                       className={cx(
                         "w-full px-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all text-sm",
-                        !!defaultSubjectId
+                        defaultSubjectId
                           ? "bg-gray-100 dark:bg-gray-900/50 text-gray-500 cursor-not-allowed"
                           : "bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
                       )}
@@ -986,7 +993,7 @@ export default function PracticalForm({
                               <label className="inline-flex items-center gap-1.5 text-xs text-gray-500">
                                 <input
                                   type="checkbox"
-                                  checked={!!tc.is_hidden}
+                                  checked={tc.is_hidden}
                                   onChange={(e) => handleTestCaseChange(i, "is_hidden", e.target.checked)}
                                   className="rounded text-emerald-600 w-3 h-3"
                                 />

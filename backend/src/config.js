@@ -7,12 +7,13 @@ const envSchema = z.object({
   NODE_ENV: z
     .enum(['development', 'production', 'test'])
     .default('development'),
-  DOCKER_MEMORY_LIMIT: z.string().default('128m'),
-  DOCKER_CPU_LIMIT: z.string().default('0.5'),
-  DOCKER_PIDS_LIMIT: z.string().default('64'),
-  DOCKER_JAVA_MEMORY_LIMIT: z.string().default('256m'),
-  DOCKER_JAVA_PIDS_LIMIT: z.string().default('128'),
-  RATE_LIMIT_MAX: z.string().transform(Number).default('100'),
+  DOCKER_MEMORY_LIMIT: z.string().default('64m'),
+  DOCKER_CPU_LIMIT: z.string().default('0.1'),
+  DOCKER_PIDS_LIMIT: z.string().default('16'),
+  DOCKER_JAVA_MEMORY_LIMIT: z.string().default('128m'),
+  DOCKER_JAVA_PIDS_LIMIT: z.string().default('32'),
+  RATE_LIMIT_MAX: z.string().transform(Number).default('500'),
+  MAX_CONCURRENT_CONNECTIONS: z.string().transform(Number).default('200'),
   CORS_ORIGIN: z.string().default('http://localhost:3000'),
   AI_PROVIDER: z.enum(['gemini', 'ollama', 'mock']).default('gemini'),
   AI_API_KEY: z.string().optional(),
@@ -20,7 +21,7 @@ const envSchema = z.object({
   OLLAMA_URL: z.string().default('http://127.0.0.1:11434'),
   LOG_LEVEL: z.enum(['error', 'warn', 'info', 'http', 'debug']).default('info'),
   REDIS_URL: z.string().default('redis://localhost:6379'),
-  MAX_CONCURRENT_JOBS: z.string().transform(Number).default('20'),
+  MAX_CONCURRENT_JOBS: z.string().transform(Number).default('50'),
 });
 
 // Validate environment variables
@@ -58,6 +59,7 @@ module.exports = {
   rateLimit: {
     windowMs: 15 * 60 * 1000, // 15 minutes
     max: env.RATE_LIMIT_MAX,
+    maxConcurrentConnections: env.MAX_CONCURRENT_CONNECTIONS,
   },
   cors: {
     origin: env.CORS_ORIGIN,

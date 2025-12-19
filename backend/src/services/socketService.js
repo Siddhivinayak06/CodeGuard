@@ -40,6 +40,7 @@ const handleConnection = (ws) => {
   const sessionId = uuidv4();
   let containerName = `interactive-${sessionId}`;
   let cProcess = null;
+  let cppProcess = null;
   let pythonProcess = null;
   let javaProcess = null;
   let lang = 'python';
@@ -48,6 +49,7 @@ const handleConnection = (ws) => {
 
   const cleanup = () => {
     dockerService.killIfExists(cProcess);
+    dockerService.killIfExists(cppProcess);
     dockerService.killIfExists(pythonProcess);
     dockerService.killIfExists(javaProcess);
     dockerService.removeContainer(containerName);
@@ -92,6 +94,30 @@ const handleConnection = (ws) => {
           },
           ({ exitCode }) => {
             logger.info(`C wrapper exited with code ${exitCode}`);
+            suppressNextOutput = false;
+          }
+        );
+      }, 1500);
+    } else if (newLang === 'cpp') {
+      setTimeout(() => {
+        cppProcess = dockerService.execCpp(
+          containerName,
+          (data) => {
+            if (suppressNextOutput) {
+              if (
+                data.includes('✅') ||
+                data.includes('❌') ||
+                data.includes('...Program')
+              ) {
+                suppressNextOutput = false;
+                safeSend(ws, data);
+              }
+              return;
+            }
+            safeSend(ws, data);
+          },
+          ({ exitCode }) => {
+            logger.info(`C++ wrapper exited with code ${exitCode}`);
             suppressNextOutput = false;
           }
         );

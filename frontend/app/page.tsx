@@ -13,13 +13,13 @@ export default async function HomePage() {
   }
 
   // ✅ Fetch role from your 'profiles' table or user metadata
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("role")
-    .eq("id", user.id)
-    .single();
+  // const { data: profile } = await supabase
+  //   .from("profiles")
+  //   .select("role")
+  //   .eq("id", user.id)
+  //   .single();
 
-const role = user.user_metadata?.role || "student";
+  const role = user.user_metadata?.role || "student";
 
 
   // ✅ Role-based redirection

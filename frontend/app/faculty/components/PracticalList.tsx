@@ -88,7 +88,7 @@ function PracticalCard({
   const isPast = deadlineDate ? deadlineDate.getTime() < Date.now() : false;
 
   const status = isPast ? "closed" : days <= 2 ? "due" : "active";
-  
+
   const statusConfig = {
     closed: {
       bg: "bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-700",
@@ -183,8 +183,8 @@ function PracticalCard({
               <span className={cn(
                 "inline-flex items-center gap-1 px-2 py-1 rounded-md font-semibold",
                 days <= 1 ? "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-200" :
-                days <= 3 ? "bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-200" :
-                "bg-sky-100 dark:bg-sky-900/30 text-sky-700 dark:text-sky-200"
+                  days <= 3 ? "bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-200" :
+                    "bg-sky-100 dark:bg-sky-900/30 text-sky-700 dark:text-sky-200"
               )}>
                 <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
                   <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
@@ -271,7 +271,7 @@ function ActionMenu({
             </svg>
             Edit Practical
           </button>
-          
+
           <button
             onClick={() => { setOpen(false); if (!disabledAssign) onAssign?.(); }}
             disabled={disabledAssign}
@@ -287,9 +287,9 @@ function ActionMenu({
             </svg>
             Assign to Students
           </button>
-          
+
           <div className="h-px bg-gray-100 dark:bg-gray-800" />
-          
+
           <button
             onClick={() => { setOpen(false); onDelete?.(); }}
             className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
@@ -333,10 +333,9 @@ export default function PracticalList({
   const [mode, setMode] = useState<"grid" | "list">("list");
   const [searchQuery, setSearchQuery] = useState("");
 
-  if (!practicals) return <PracticalListSkeleton />;
-
   // Filter practicals based on search query
   const filteredPracticals = useMemo(() => {
+    if (!practicals) return [];
     if (!searchQuery.trim()) return practicals;
     const query = searchQuery.toLowerCase();
     return practicals.filter((p) => {
@@ -349,6 +348,8 @@ export default function PracticalList({
       );
     });
   }, [practicals, subjects, searchQuery]);
+
+  if (!practicals) return <PracticalListSkeleton />;
 
   if (practicals.length === 0) {
     return (

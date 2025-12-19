@@ -10,6 +10,7 @@ const { z } = require('zod');
 const executeSchema = z.object({
   code: z.string().optional(),
   reference_code: z.string().optional(),
+  reference_lang: z.string().optional(),
   lang: z.enum(['c', 'cpp', 'python', 'py', 'java']).default('c'),
   batch: z
     .array(
@@ -82,7 +83,7 @@ router.post('/', async (req, res) => {
       });
     }
 
-    const { code, reference_code, lang, batch, stdinInput, problem } =
+    const { code, reference_code, reference_lang, lang, batch, stdinInput, problem } =
       parseResult.data;
 
     const queueService = require('../services/queueService');
@@ -134,7 +135,7 @@ router.post('/', async (req, res) => {
               if (!runCode) runCode = require('../utils/runCode');
               const refRes = await runCode(
                 reference_code,
-                lang,
+                reference_lang || lang,
                 tc.stdinInput ?? tc.input ?? ''
               );
               result.reference_stdout = (refRes.output ?? '').trimEnd();

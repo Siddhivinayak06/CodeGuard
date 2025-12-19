@@ -119,9 +119,9 @@ function extractExamplesFromText(text?: string) {
   const examples: Array<{ title: string; input?: string; output?: string; explanation?: string; raw?: string }> = [];
 
   for (const p of parts) {
-    const inputMatch = p.match(/Input\s*[:\-]?\s*(?:s\s*=\s*)?["']?([^"\n]+?)["']?(?:\n|$)/i);
-    const outputMatch = p.match(/Output\s*[:\-]?\s*["']?([^"\n]+?)["']?(?:\n|$)/i);
-    const explMatch = p.match(/Explanation\s*[:\-]?\s*([\s\S]+)/i);
+    const inputMatch = p.match(/Input\s*[:-]?\s*(?:s\s*=\s*)?["']?([^"\n]+?)["']?(?:\n|$)/i);
+    const outputMatch = p.match(/Output\s*[:-]?\s*["']?([^"\n]+?)["']?(?:\n|$)/i);
+    const explMatch = p.match(/Explanation\s*[:-]?\s*([\s\S]+)/i);
 
     if (inputMatch || outputMatch || /^(Example|Example \d+)/i.test(p)) {
       examples.push({
@@ -140,8 +140,8 @@ function extractExamplesFromText(text?: string) {
       const outL = lines.find(l => /Output/i);
       examples.push({
         title: "Example",
-        input: inL ? inL.replace(/Input\s*[:\-]?\s*/i, "") : undefined,
-        output: outL ? outL.replace(/Output\s*[:\-]?\s*/i, "") : undefined,
+        input: inL ? inL.replace(/Input\s*[:-]?\s*/i, "") : undefined,
+        output: outL ? outL.replace(/Output\s*[:-]?\s*/i, "") : undefined,
         explanation: undefined,
         raw: p,
       });
@@ -656,8 +656,8 @@ rl.on('line', (line) => {
                   <div className="text-sm text-gray-600 dark:text-gray-400 whitespace-pre-wrap">{constraintSection.body}</div>
                 ) : (
                   <ul className="list-disc list-inside text-sm text-gray-600 dark:text-gray-400">
-                    <li>Input length and ranges will be reasonable for Java programs.</li>
-                    <li>Use efficient algorithms for large inputs (if required).</li>
+                    <li><pre className="inline">/\b(public|private|protected|class|static|void|int|double|float|string|if|else|for|while|return|new)\b/</pre></li>
+                    <li><pre className="inline">/\b(include|int|float|double|char|void|if|else|for|while|return|struct|class|public|private|protected)\b/</pre></li>
                     <li>Mind stack/heap usage — large recursion may cause StackOverflowError in Java.</li>
                   </ul>
                 )}

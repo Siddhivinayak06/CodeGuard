@@ -1,0 +1,15 @@
+node_modules
+npm-debug.log
+Dockerfile*
+*.out
+*.class
+*.jar
+tests
+coverage
+logs
+.git
+.gitignore
+.dockerignore
+.vscode
+.DS_Store
+README.md

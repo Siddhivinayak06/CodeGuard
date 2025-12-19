@@ -10,14 +10,12 @@ import {
     Shield,
     Key,
     GraduationCap,
-    Calendar,
     Save,
     Loader2,
     Camera,
     CheckCircle2,
     AlertCircle
 } from "lucide-react";
-import { format } from "date-fns";
 
 export default function ProfilePage() {
     const router = useRouter();

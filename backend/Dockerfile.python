@@ -1,26 +1,35 @@
-FROM python:3.11-slim
+# Optimized Python runtime for code execution
+FROM python:3.11-alpine
 
-# Install timeout command
-RUN apt-get update && apt-get install -y coreutils && rm -rf /var/lib/apt/lists/*
+# Install minimal dependencies
+RUN apk add --no-cache \
+    coreutils \
+    gcc \
+    musl-dev \
+    python3-dev \
+    linux-headers
 
-# Install safe/common libraries
+# Install essential libraries
 RUN pip install --no-cache-dir \
     numpy \
-    pandas \
-    matplotlib \
-    seaborn \
-    scipy \
-    scikit-learn
+    pandas
 
 # Set Matplotlib config dir to writable location
-ENV MPLCONFIGDIR=/tmp
+ENV MPLCONFIGDIR=/tmp \
+    PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1
 
 # Set working directory
 WORKDIR /app
 
-# Copy wrapper script into the container
+# Copy wrapper script
 COPY interactive_wrapper.py /app/
 
-# Create a non-root user for running code
-RUN useradd -m runner
+# Create non-root user
+RUN adduser -D -u 1000 runner && \
+    chown -R runner:runner /app
+
 USER runner
+
+# Keep container alive
+CMD ["tail", "-f", "/dev/null"]

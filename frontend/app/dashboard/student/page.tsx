@@ -12,14 +12,8 @@ import {
     Code,
     FileText,
     ChevronRight,
-    Sparkles,
-    Calendar,
-    Award,
-    Target,
-    Zap,
     ArrowUpRight,
     GraduationCap,
-    Trophy,
 } from "lucide-react";
 import Link from "next/link";
 

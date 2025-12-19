@@ -9,7 +9,7 @@ import ReactMarkdown from "react-markdown";
 import rehypeHighlight from "rehype-highlight";
 
 // --------- helpers ---------
-function extractText(children: any): string {
+function extractText(children: React.ReactNode): string {
     if (children == null) return "";
     if (typeof children === "string" || typeof children === "number") return String(children);
     if (Array.isArray(children)) return children.map(extractText).join("");
@@ -44,8 +44,15 @@ interface Message {
     text: string;
 }
 
+interface CodeContext {
+    code: string;
+    activeFile?: string;
+    files?: { name: string; language: string }[];
+    cursorPosition?: { lineNumber: number; column: number };
+}
+
 interface AssistantPanelProps {
-    codeContext: any;
+    codeContext: CodeContext;
     onClose: () => void;
 }
 
@@ -63,7 +70,7 @@ export function AssistantPanel({ codeContext, onClose }: AssistantPanelProps) {
         viewportRef.current?.scrollTo({ top: viewportRef.current.scrollHeight, behavior: "smooth" });
     }, [messages, loading]);
 
-    const md = useMemo(() => ({ rehypePlugins: [rehypeHighlight] as any[] }), []);
+    const md = useMemo(() => ({ rehypePlugins: [rehypeHighlight] }), []);
 
     async function handleSend() {
         if (!input.trim() || loading) return;
@@ -111,8 +118,9 @@ export function AssistantPanel({ codeContext, onClose }: AssistantPanelProps) {
                     }
                 }
             }
-        } catch (e: any) {
-            setMessages((p) => p.map((m) => (m.role === "model" && !m.text ? { ...m, text: `Error: ${e.message || e}` } : m)));
+        } catch (e) {
+            const errMsg = e instanceof Error ? e.message : String(e);
+            setMessages((p) => p.map((m) => (m.role === "model" && !m.text ? { ...m, text: `Error: ${errMsg}` } : m)));
         } finally {
             setLoading(false);
         }
@@ -143,7 +151,7 @@ export function AssistantPanel({ codeContext, onClose }: AssistantPanelProps) {
                                             <ReactMarkdown
                                                 {...md}
                                                 components={{
-                                                    code({ inline, className, children, ...props }: any) {
+                                                    code({ inline, className, children, ...props }: React.ComponentPropsWithoutRef<"code"> & { inline?: boolean }) {
                                                         const lang = /language-(\w+)/.exec(className || "")?.[1];
                                                         // Treat single-line, no-language blocks as inline text to avoid noisy TEXT boxes
                                                         const text = extractText(children);

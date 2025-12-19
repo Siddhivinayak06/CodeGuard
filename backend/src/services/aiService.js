@@ -111,7 +111,10 @@ const chatWithOllamaStream = async (
   const payload = {
     model,
     stream: true,
-    messages: [{ role: 'system', content: systemPrompt }, ...normalizeMessages(messages)],
+    messages: [
+      { role: 'system', content: systemPrompt },
+      ...normalizeMessages(messages),
+    ],
   };
 
   try {

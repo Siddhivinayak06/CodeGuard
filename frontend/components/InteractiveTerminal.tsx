@@ -21,6 +21,22 @@ export interface InteractiveTerminalHandle {
   switchLanguage: (lang: string) => void;
 }
 
+const lightTheme = {
+  background: "#ffffff",
+  foreground: "#000000",
+  cursor: "#000000",
+  cursorAccent: "#ffffff",
+  selectionBackground: "rgba(0, 0, 0, 0.3)",
+};
+
+const darkTheme = {
+  background: "#1a1b26",
+  foreground: "#a9b1d6",
+  cursor: "#c0caf5",
+  cursorAccent: "#1a1b26",
+  selectionBackground: "rgba(113, 131, 184, 0.3)",
+};
+
 const InteractiveTerminal = forwardRef<
   InteractiveTerminalHandle,
   InteractiveTerminalProps
@@ -36,51 +52,33 @@ const InteractiveTerminal = forwardRef<
 
   const wsEndpoint = wsUrl || "ws://localhost:5002";
 
-  // Define themes
-  const lightTheme = {
-    background: "#ffffff",
-    foreground: "#000000",
-    cursor: "#000000",
-    cursorAccent: "#ffffff",
-    selectionBackground: "rgba(0, 0, 0, 0.3)",
-  };
 
-  const darkTheme = {
-    background: "#1a1b26", // Specific dark background
-    foreground: "#a9b1d6", // Tokyo Night foreground
-    cursor: "#c0caf5",
-    cursorAccent: "#1a1b26",
-    selectionBackground: "rgba(113, 131, 184, 0.3)",
-  };
 
-  // Determine initial theme
-  const getTheme = () => {
-    const isDark = theme === "dark" || resolvedTheme === "dark";
-    return isDark ? darkTheme : lightTheme;
-  };
-
+  // Initialize terminal
   useEffect(() => {
     if (!terminalRef.current) return;
 
     // Initialize terminal
+    const isDark = theme === "dark" || (theme === "system" && resolvedTheme === "dark");
+    const currentTheme = isDark ? darkTheme : lightTheme;
+
     term.current = new Terminal({
       cursorBlink: true,
       fontSize,
       fontFamily,
       scrollback: 1000,
-      theme: getTheme(),
+      theme: currentTheme,
     });
 
     fitAddon.current = new FitAddon();
     term.current.loadAddon(fitAddon.current);
     term.current.open(terminalRef.current);
 
-    // 🧠 ResizeObserver — auto-fit terminal when container size changes
     const observer = new ResizeObserver(() => fitAddon.current?.fit());
     observer.observe(terminalRef.current);
 
-    // Delay initial fit to ensure terminal is fully initialized
-    setTimeout(() => {
+    // Delay initial fit
+    const fitTimeout = setTimeout(() => {
       try {
         if (terminalRef.current && terminalRef.current.offsetWidth > 0 && terminalRef.current.offsetHeight > 0) {
           fitAddon.current?.fit();
@@ -90,15 +88,16 @@ const InteractiveTerminal = forwardRef<
       }
     }, 200);
 
-    // WebSocket connection
-    socket.current = new WebSocket(wsEndpoint);
+    // WebSocket setup
+    const ws = new WebSocket(wsEndpoint);
+    socket.current = ws;
 
-    socket.current.onopen = () => {
+    ws.onopen = () => {
       console.log("WebSocket connected:", wsEndpoint);
       if (onMount) onMount();
     };
 
-    socket.current.onmessage = (event: MessageEvent) => {
+    ws.onmessage = (event: MessageEvent) => {
       if (!term.current) return;
 
       let msg;
@@ -109,13 +108,10 @@ const InteractiveTerminal = forwardRef<
       }
 
       if (msg.type === "lang") {
-        // Update language display in terminal
         term.current.write(`\r\n✅ Language set to ${msg.lang}\r\n`);
-        currentLang.current = msg.lang; // store current language for execution
+        currentLang.current = msg.lang;
       } else {
         const data = msg.data ?? msg;
-
-        // Check for image delimiters
         const imgStart = "__IMAGE_START__";
         const imgEnd = "__IMAGE_END__";
 
@@ -144,11 +140,10 @@ const InteractiveTerminal = forwardRef<
       }
     };
 
-    socket.current.onclose = (event: CloseEvent) => {
+    ws.onclose = (event: CloseEvent) => {
       console.log("WebSocket closed:", event.code, event.reason);
     };
 
-    // Handle typed input
     term.current.onData((data: string) => {
       if (data === "\r") {
         term.current?.write("\r\n");
@@ -165,40 +160,42 @@ const InteractiveTerminal = forwardRef<
       }
     });
 
-    const handleResize = () => {
-      if (fitAddon.current) {
-        try {
-          fitAddon.current.fit();
-        } catch (error) {
-          console.error("Error fitting terminal on resize:", error);
-        }
-      }
+    const handleResizeWindow = () => {
+      fitAddon.current?.fit();
     };
-    window.addEventListener("resize", handleResize);
+    window.addEventListener("resize", handleResizeWindow);
 
-    // 🧹 Cleanup
     return () => {
       observer.disconnect();
-      window.removeEventListener("resize", handleResize);
+      window.removeEventListener("resize", handleResizeWindow);
       term.current?.dispose();
-      socket.current?.close();
+      ws.close();
+      clearTimeout(fitTimeout);
     };
-  }, [wsEndpoint, fontSize, fontFamily]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [wsEndpoint]); // Re-run only if endpoint changes
 
-  // Update theme dynamically
+  // Update options dynamically
   useEffect(() => {
     if (!term.current) return;
-    const currentTheme = getTheme();
+
+    // Calculate theme inside effect
+    const isDark = theme === "dark" || (theme === "system" && resolvedTheme === "dark");
+    const currentTheme = isDark ? darkTheme : lightTheme;
+
+    term.current.options.fontSize = fontSize;
+    term.current.options.fontFamily = fontFamily;
     term.current.options.theme = currentTheme;
-    // Also update container background
+
     if (terminalRef.current) {
       terminalRef.current.style.backgroundColor = currentTheme.background || "#ffffff";
     }
-  }, [theme, resolvedTheme]);
+    fitAddon.current?.fit();
+  }, [fontSize, fontFamily, theme, resolvedTheme]);
 
 
   useImperativeHandle(ref, () => ({
-    startExecution: (filesOrCode: FileData[] | string, activeFileOrLang?: string, lang?: string) => {
+    startExecution: (filesOrCode: FileData[] | string, activeFileOrLang?: string) => {
       if (!socket.current || socket.current.readyState !== WebSocket.OPEN) {
         term.current?.write("\r\n❌ WebSocket not connected!\r\n");
         return;
@@ -228,7 +225,7 @@ const InteractiveTerminal = forwardRef<
       } else {
         // Single-file mode (backward compatibility)
         const code = filesOrCode as string;
-        const language = activeFileOrLang!;
+        // const language = activeFileOrLang!;
         const msg = JSON.stringify({ type: "code", data: code });
         socket.current?.send(msg);
         term.current?.write(`\r\n🚀 Running code...\r\n`);

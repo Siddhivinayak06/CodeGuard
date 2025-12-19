@@ -110,7 +110,7 @@ function StatCard({
 }: {
   label: string;
   value: number;
-  icon: any;
+  icon: React.ComponentType<{ className?: string }>;
   color: string;
   delay?: number;
 }) {
@@ -150,6 +150,19 @@ function SkeletonCard() {
       </div>
     </div>
   );
+}
+
+interface SubmissionFetched {
+  id: number;
+  code: string;
+  output: string;
+  language: string;
+  status: string;
+  created_at: string;
+  practical_id: number;
+  marks_obtained: number | null;
+  practicals: { title: string } | null;
+  test_case_results: TestCaseResult[];
 }
 
 export default function StudentSubmissions() {
@@ -236,7 +249,7 @@ export default function StudentSubmissions() {
 
         if (error) throw error;
 
-        const formatted: Submission[] = data.map((s: any) => ({
+        const formatted: Submission[] = (data as unknown as SubmissionFetched[]).map((s) => ({
           id: s.id,
           practical_id: s.practical_id,
           practical_title: s.practicals?.title || "Unknown",
@@ -250,7 +263,7 @@ export default function StudentSubmissions() {
         }));
 
         if (mountedRef.current) setSubmissions(formatted);
-      } catch (err: any) {
+      } catch (err) {
         console.error("Supabase fetch error:", err);
       } finally {
         if (mountedRef.current) setLoading(false);
@@ -406,7 +419,7 @@ export default function StudentSubmissions() {
                 <p className="text-gray-500 dark:text-gray-400">Try adjusting your filters or search query.</p>
               </div>
             ) : (
-              filteredSubmissions.map((s, index) => (
+              filteredSubmissions.map((s) => (
                 <div
                   key={s.id}
                   className="glass-card rounded-2xl p-5 hover-lift group border border-white/40 dark:border-gray-800"

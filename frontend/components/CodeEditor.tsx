@@ -25,7 +25,7 @@ interface CodeEditorProps {
     showInput: boolean;
     setShowInput: (show: boolean) => void;
     isFullscreen?: boolean;
-    terminalRef?: any;
+    terminalRef?: React.MutableRefObject<any>;
     violations?: number;
     // Multi-file props
     files?: FileData[];
@@ -114,7 +114,7 @@ export default function CodeEditor({
 
     const [currentMode, setCurrentMode] = useState("Static");
     const showSubmitButton = pathname === "/editor";
-    const editorRef = useRef<any>(null);
+    const editorRef = useRef<Parameters<OnMount>[0] | null>(null);
     const langRef = useRef(lang);
     const lockedRef = useRef(locked);
     const isAiFeatureUnlockedRef = useRef(false);

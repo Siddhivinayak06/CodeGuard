@@ -4,8 +4,6 @@ import {
     DropdownMenu,
     DropdownMenuContent,
     DropdownMenuItem,
-    DropdownMenuLabel,
-    DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
@@ -13,9 +11,7 @@ import {
     SelectTrigger, SelectValue
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { ChevronDown, Sparkles, Play, Download, Send, Lock, AlertTriangle, Eye, EyeOff, MoreVertical, Loader2 } from "lucide-react";
-import { ModeToggle } from "@/components/ModeToggle";
-import { SettingsDialog } from "@/components/SettingsDialog";
+import { Sparkles, Play, Download, Send, Eye, EyeOff, MoreVertical, Loader2 } from "lucide-react";
 
 interface EditorToolbarProps {
     lang: string;

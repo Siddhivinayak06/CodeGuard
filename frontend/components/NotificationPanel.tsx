@@ -4,7 +4,6 @@ import { useState, useEffect, useMemo, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
 import {
     Bell,
-    Check,
     CheckCheck,
     FileCode,
     GraduationCap,
@@ -258,8 +257,8 @@ export default function NotificationPanel() {
                                         <div
                                             key={notification.id}
                                             className={`p-4 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors cursor-pointer ${!notification.is_read
-                                                    ? "bg-indigo-50/50 dark:bg-indigo-900/10"
-                                                    : ""
+                                                ? "bg-indigo-50/50 dark:bg-indigo-900/10"
+                                                : ""
                                                 }`}
                                             onClick={() => {
                                                 if (!notification.is_read) {
@@ -329,8 +328,8 @@ function NotificationContent({
                 <div className="flex items-start justify-between gap-2">
                     <p
                         className={`text-sm font-medium ${!notification.is_read
-                                ? "text-gray-900 dark:text-white"
-                                : "text-gray-700 dark:text-gray-300"
+                            ? "text-gray-900 dark:text-white"
+                            : "text-gray-700 dark:text-gray-300"
                             }`}
                     >
                         {notification.title}
