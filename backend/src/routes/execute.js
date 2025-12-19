@@ -83,8 +83,15 @@ router.post('/', async (req, res) => {
       });
     }
 
-    const { code, reference_code, reference_lang, lang, batch, stdinInput, problem } =
-      parseResult.data;
+    const {
+      code,
+      reference_code,
+      reference_lang,
+      lang,
+      batch,
+      stdinInput,
+      problem,
+    } = parseResult.data;
 
     const queueService = require('../services/queueService');
 

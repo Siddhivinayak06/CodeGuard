@@ -128,7 +128,9 @@ fi
   // Determine resource limits
   const isJava = lang === 'java';
   const memLimit = isJava ? config.docker.javaMemory : config.docker.memory;
-  const pidsLimit = isJava ? config.docker.javaPidsLimit : config.docker.pidsLimit;
+  const pidsLimit = isJava
+    ? config.docker.javaPidsLimit
+    : config.docker.pidsLimit;
 
   // Spawn docker - do not swallow spawn errors
   let docker;

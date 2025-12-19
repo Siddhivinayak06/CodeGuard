@@ -153,7 +153,7 @@ const handleConnection = (ws) => {
         name:
           parsed.filename ||
           'main' +
-          (lang === 'python' ? '.py' : lang === 'java' ? '.java' : '.c'),
+            (lang === 'python' ? '.py' : lang === 'java' ? '.java' : '.c'),
         content: parsed.data || '',
         isActive: parsed.activeFile || false,
       });
