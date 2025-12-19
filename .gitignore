@@ -19,44 +19,64 @@ dist/
 *.css.map
 
 # ----------------------
+# Compiled Language Artifacts (Local Runs)
+# ----------------------
+*.out
+*.o
+*.class
+*.jar
+*.pyc
+__pycache__/
+
+# ----------------------
 # Backend
 # ----------------------
 backend/tmp/
 backend/logs/
+backend/node_modules/
 *.log
 coverage/
-
-# PDF / Exported files
-*.pdf
-
-# ----------------------
-# Docker
-# ----------------------
-.docker/
-
-# ----------------------
-# OS & Editor files
-# ----------------------
-.DS_Store
-Thumbs.db
-.vscode/
-!.vscode/settings.json
-!.vscode/extensions.json
-.turbo/
-.idea/
 
 # ----------------------
 # Environment & Secrets
 # ----------------------
 .env
 .env.local
-.env.*.local
+.env.development.local
+.env.test.local
+.env.production.local
+.env.*
+!.env.example
 *.pem
 *.key
 
 # ----------------------
-# Misc
+# OS & Editor files
 # ----------------------
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+.vscode/
+!.vscode/settings.json
+!.vscode/extensions.json
+.idea/
 *.swp
 *.swo
+.project
+.settings/
+.sublime-project
+.sublime-workspace
+
+# ----------------------
+# Misc
+# ----------------------
+.turbo/
 workspace/
+temp/
+tmp/
+*.pdf
