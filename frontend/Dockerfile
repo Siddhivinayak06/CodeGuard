@@ -63,7 +63,6 @@ COPY --from=builder /app/.next ./.next
 COPY --from=builder /app/public ./public
 # COPY other required files if needed
 # COPY --from=builder /app/server.js ./server.js
-COPY --from=builder /app/app/api/run/reference ./app/api/run/reference
 
 # Set runtime environment defaults
 ENV NODE_ENV=production
