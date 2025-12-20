@@ -4,125 +4,141 @@ const logger = require('../utils/logger');
 const { v4: uuidv4 } = require('uuid');
 
 class PoolManager {
-    constructor() {
-        this.pools = {
-            cpp: [],
-            python: [],
-            java: [],
-            c: []
-        };
-        this.waiting = {
-            cpp: [],
-            python: [],
-            java: [],
-            c: []
-        };
-        this.initialized = false;
+  constructor() {
+    this.pools = {
+      cpp: [],
+      python: [],
+      java: [],
+      c: [],
+    };
+    this.waiting = {
+      cpp: [],
+      python: [],
+      java: [],
+      c: [],
+    };
+    this.initialized = false;
+  }
+
+  async initialize() {
+    if (this.initialized) return;
+    logger.info('🚀 Initializing Container Pool...');
+
+    const promises = [];
+    for (const [lang, size] of Object.entries(config.docker.pool)) {
+      for (let i = 0; i < size; i++) {
+        promises.push(this._createContainer(lang));
+      }
     }
 
-    async initialize() {
-        if (this.initialized) return;
-        logger.info('🚀 Initializing Container Pool...');
+    await Promise.all(promises);
+    this.initialized = true;
+    logger.info('✅ Container Pool Initialized');
+  }
 
-        const promises = [];
-        for (const [lang, size] of Object.entries(config.docker.pool)) {
-            for (let i = 0; i < size; i++) {
-                promises.push(this._createContainer(lang));
-            }
+  async _createContainer(lang) {
+    const containerName = `pool-${lang}-${uuidv4().slice(0, 8)}`;
+    const image =
+      lang === 'java'
+        ? 'codeguard-java'
+        : lang === 'python'
+          ? 'codeguard-python'
+          : 'codeguard-c';
+    const memoryLimit =
+      lang === 'java' ? config.docker.javaMemory : config.docker.memory;
+    const pidsLimit =
+      lang === 'java' ? config.docker.javaPidsLimit : config.docker.pidsLimit;
+
+    const runArgs = [
+      'run',
+      '--rm',
+      '--name',
+      containerName,
+      '-d',
+      '--network',
+      'none',
+      '--read-only',
+      '--tmpfs',
+      `/tmp:exec,rw,size=${memoryLimit}`,
+      '-m',
+      memoryLimit,
+      '--cpus=' + config.docker.cpus,
+      '--pids-limit',
+      pidsLimit,
+      image,
+      'tail',
+      '-f',
+      '/dev/null',
+    ];
+
+    return new Promise((resolve, reject) => {
+      const proc = spawn('docker', runArgs);
+      proc.on('close', (code) => {
+        if (code === 0) {
+          this.pools[lang].push({ id: containerName, busy: false });
+          resolve(containerName);
+        } else {
+          logger.error(`Failed to create container for ${lang}`);
+          reject(new Error(`Docker run failed with code ${code}`));
         }
+      });
+    });
+  }
 
-        await Promise.all(promises);
-        this.initialized = true;
-        logger.info('✅ Container Pool Initialized');
+  async acquire(lang) {
+    const pool = this.pools[lang] || this.pools.cpp; // fallback to cpp/c if lang mismatch
+    const available = pool.find((c) => !c.busy);
+
+    if (available) {
+      available.busy = true;
+      return available.id;
     }
 
-    async _createContainer(lang) {
-        const containerName = `pool-${lang}-${uuidv4().slice(0, 8)}`;
-        const image = lang === 'java' ? 'codeguard-java' : (lang === 'python' ? 'codeguard-python' : 'codeguard-c');
-        const memoryLimit = (lang === 'java' ? config.docker.javaMemory : config.docker.memory);
-        const pidsLimit = (lang === 'java' ? config.docker.javaPidsLimit : config.docker.pidsLimit);
+    // No available containers, wait in queue
+    return new Promise((resolve) => {
+      this.waiting[lang].push(resolve);
+    });
+  }
 
-        const runArgs = [
-            'run',
-            '--rm',
-            '--name', containerName,
-            '-d',
-            '--network', 'none',
-            '--read-only',
-            '--tmpfs', `/tmp:exec,rw,size=${memoryLimit}`,
-            '-m', memoryLimit,
-            '--cpus=' + config.docker.cpus,
-            '--pids-limit', pidsLimit,
-            image,
-            'tail', '-f', '/dev/null'
-        ];
+  async release(lang, containerId) {
+    const pool = this.pools[lang];
+    if (!pool) return;
 
-        return new Promise((resolve, reject) => {
-            const proc = spawn('docker', runArgs);
-            proc.on('close', (code) => {
-                if (code === 0) {
-                    this.pools[lang].push({ id: containerName, busy: false });
-                    resolve(containerName);
-                } else {
-                    logger.error(`Failed to create container for ${lang}`);
-                    reject(new Error(`Docker run failed with code ${code}`));
-                }
-            });
-        });
+    await this.resetContainer(containerId);
+
+    const container = pool.find((c) => c.id === containerId);
+    if (container) {
+      if (this.waiting[lang].length > 0) {
+        const next = this.waiting[lang].shift();
+        next(containerId);
+      } else {
+        container.busy = false;
+      }
     }
+  }
 
-    async acquire(lang) {
-        const pool = this.pools[lang] || this.pools.cpp; // fallback to cpp/c if lang mismatch
-        const available = pool.find(c => !c.busy);
+  async resetContainer(containerId) {
+    logger.info(`Cleaning up container ${containerId}...`);
+    // 1. Wipe /tmp (the tmpfs)
+    // 2. Kill stray user processes (UID 1000 is 'runner')
+    // We do this inside the pooled container to ensure a clean slate.
+    const resetCmd = `rm -rf /tmp/* && (pkill -u 1000 -x python3 || pkill -u 1000 -x a.out || true)`;
 
-        if (available) {
-            available.busy = true;
-            return available.id;
-        }
+    return new Promise((resolve) => {
+      const proc = spawn('docker', ['exec', containerId, 'sh', '-c', resetCmd]);
+      proc.on('close', resolve);
+    });
+  }
 
-        // No available containers, wait in queue
-        return new Promise((resolve) => {
-            this.waiting[lang].push(resolve);
-        });
+  async cleanup() {
+    logger.info('Shutting down Container Pool...');
+    const allContainers = Object.values(this.pools)
+      .flat()
+      .map((c) => c.id);
+    for (const id of allContainers) {
+      spawn('docker', ['rm', '-f', id]);
     }
-
-    async release(lang, containerId) {
-        const pool = this.pools[lang];
-        if (!pool) return;
-
-        await this.resetContainer(containerId);
-
-        const container = pool.find(c => c.id === containerId);
-        if (container) {
-            if (this.waiting[lang].length > 0) {
-                const next = this.waiting[lang].shift();
-                next(containerId);
-            } else {
-                container.busy = false;
-            }
-        }
-    }
-
-    async resetContainer(containerId) {
-        logger.info(`Cleaning up container ${containerId}...`);
-        // 1. Wipe /tmp (the tmpfs)
-        // 2. Kill stray user processes (UID 1000 is 'runner')
-        // We do this inside the pooled container to ensure a clean slate.
-        const resetCmd = `rm -rf /tmp/* && (pkill -u 1000 -x python3 || pkill -u 1000 -x a.out || true)`;
-
-        return new Promise((resolve) => {
-            const proc = spawn('docker', ['exec', containerId, 'sh', '-c', resetCmd]);
-            proc.on('close', resolve);
-        });
-    }
-
-    async cleanup() {
-        logger.info('Shutting down Container Pool...');
-        const allContainers = Object.values(this.pools).flat().map(c => c.id);
-        for (const id of allContainers) {
-            spawn('docker', ['rm', '-f', id]);
-        }
-    }
+  }
 }
 
 module.exports = new PoolManager();

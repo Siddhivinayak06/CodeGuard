@@ -1,7 +1,6 @@
 // src/utils/dockerRunner.js
 const { spawn } = require('child_process');
 const { v4: uuidv4 } = require('uuid');
-const config = require('../config');
 const logger = require('../utils/logger');
 const poolManager = require('../services/poolManager');
 
@@ -10,7 +9,10 @@ function escapeForPrintf(s = '') {
 }
 
 async function runCommand(args, options = {}) {
-  const proc = spawn('docker', args, { stdio: ['ignore', 'pipe', 'pipe'], ...options });
+  const proc = spawn('docker', args, {
+    stdio: ['ignore', 'pipe', 'pipe'],
+    ...options,
+  });
   let stdout = '';
   let stderr = '';
 
@@ -74,7 +76,10 @@ java -cp /tmp/${uniqueId} $MAIN_CLASS
 `;
   }
 
-  const timeCmd = (lang === 'java') ? '/usr/bin/time -f "CPU:%U|%S MEM:%M"' : '/usr/bin/time -p';
+  const timeCmd =
+    lang === 'java'
+      ? '/usr/bin/time -f "CPU:%U|%S MEM:%M"'
+      : '/usr/bin/time -p';
   const runCmd = `printf "%s" '${escapeForPrintf(stdinInput)}' | timeout ${timeoutSec} ${timeCmd} sh -c '${baseRunCmd.trim().replace(/'/g, "'\\''")}'`;
 
   const result = await runCommand(['exec', containerName, 'sh', '-c', runCmd]);
@@ -110,17 +115,29 @@ java -cp /tmp/${uniqueId} $MAIN_CLASS
     exitCode: result.exitCode,
     is_hidden,
     cpuTime,
-    memoryKB
+    memoryKB,
   };
 }
 
-module.exports = async function runBatchCode(code, lang = 'python', batch = [], options = {}) {
+module.exports = async function runBatchCode(
+  code,
+  lang = 'python',
+  batch = [],
+  options = {}
+) {
   const CONCURRENCY_LIMIT = 1;
   const { earlyExit = true } = options;
   const uniqueId = uuidv4();
 
   let containerId = null;
-  const poolLang = (lang === 'cpp' || lang === 'c++') ? 'cpp' : (lang === 'c' ? 'c' : (lang === 'python' ? 'python' : 'java'));
+  const poolLang =
+    lang === 'cpp' || lang === 'c++'
+      ? 'cpp'
+      : lang === 'c'
+        ? 'c'
+        : lang === 'python'
+          ? 'python'
+          : 'java';
 
   try {
     logger.info(`Acquiring container from pool for ${lang}...`);
@@ -128,11 +145,16 @@ module.exports = async function runBatchCode(code, lang = 'python', batch = [], 
     logger.info(`Acquired container ${containerId}`);
 
     logger.info(`Compiling code in container ${containerId}...`);
-    const compileResult = await compileInContainer(containerId, code, lang, uniqueId);
+    const compileResult = await compileInContainer(
+      containerId,
+      code,
+      lang,
+      uniqueId
+    );
 
     if (compileResult.exitCode !== 0) {
       logger.warn(`Compilation failed for ${containerId}`);
-      return batch.map(tc => ({
+      return batch.map((tc) => ({
         test_case_id: tc.id,
         input: tc.stdinInput,
         expectedOutput: tc.expectedOutput,
@@ -178,14 +200,18 @@ module.exports = async function runBatchCode(code, lang = 'python', batch = [], 
     const batchResults = await runWithEarlyExit();
 
     logger.info(`📦 Final batch results: ${batchResults.length}`);
-    return batchResults.sort((a, b) => batch.findIndex(tc => tc.id === a.test_case_id) - batch.findIndex(tc => tc.id === b.test_case_id));
+    return batchResults.sort(
+      (a, b) =>
+        batch.findIndex((tc) => tc.id === a.test_case_id) -
+        batch.findIndex((tc) => tc.id === b.test_case_id)
+    );
   } catch (e) {
     logger.error(`Batch execution failed: ${e.message}`);
     throw e;
   } finally {
     if (containerId) {
       logger.info(`Releasing container ${containerId} back to pool...`);
-      // Use fire-and-forget release or await it? 
+      // Use fire-and-forget release or await it?
       // PoolManager.release handles its own internal cleanup.
       poolManager.release(poolLang, containerId);
     }

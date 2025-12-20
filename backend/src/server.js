@@ -21,7 +21,7 @@ logger.info(`Initializing CodeGuard server`, {
 wss.on('connection', socketService.handleConnection);
 
 // Initialize Pool
-poolManager.initialize().catch(err => {
+poolManager.initialize().catch((err) => {
   logger.error('Failed to initialize container pool', { error: err.message });
 });
 
