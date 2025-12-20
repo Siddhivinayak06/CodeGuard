@@ -151,13 +151,11 @@ export default function ProfilePage() {
         }
     };
 
-    if (loading) {
-        return (
-            <div className="flex items-center justify-center min-h-screen bg-gray-50 dark:bg-gray-950">
-                <Loader2 className="w-10 h-10 animate-spin text-indigo-500" />
-            </div>
-        );
-    }
+    if (loading) return (
+        <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-gray-950">
+            <Loader2 className="w-10 h-10 text-indigo-600 animate-spin" />
+        </div>
+    );
 
     return (
         <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950">

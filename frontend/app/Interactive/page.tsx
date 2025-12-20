@@ -4,7 +4,7 @@ import { useState, useRef, useEffect, useMemo } from "react";
 import dynamic from "next/dynamic";
 import CodeEditor from "@/components/CodeEditor";
 import { ModeToggle } from "@/components/ModeToggle";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, Loader2 } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { generatePdfClient } from "@/lib/ClientPdf";
@@ -19,6 +19,7 @@ import { Button } from "@/components/ui/button";
 import type { User } from "@supabase/supabase-js";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { AssistantPanel } from "@/components/AssistantPanel";
+import { motion, AnimatePresence } from "framer-motion";
 
 // Dynamically import InteractiveTerminal
 const InteractiveTerminal = dynamic(
@@ -47,6 +48,7 @@ export default function Home() {
   const [interactiveOutput, setInteractiveOutput] = useState<string>("");
   const [terminalMounted, setTerminalMounted] = useState<boolean>(false);
   const [plotImages, setPlotImages] = useState<string[]>([]);
+  const [isExecuting, setIsExecuting] = useState(false);
 
   const [currentMode, setCurrentMode] = useState("Static");
   const [showAssistant, setShowAssistant] = useState(false);
@@ -211,11 +213,8 @@ export default function Home() {
   };
 
   if (!user) return (
-    <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50/30 to-purple-50/30 dark:from-gray-950 dark:via-indigo-950/10 dark:to-purple-950/10">
-      <div className="glass-card p-8 rounded-2xl flex flex-col items-center gap-4">
-        <div className="w-12 h-12 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin" />
-        <p className="text-gray-500 dark:text-gray-400 font-medium">Loading environment...</p>
-      </div>
+    <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-gray-950">
+      <Loader2 className="w-10 h-10 text-indigo-600 animate-spin" />
     </div>
   );
 
@@ -234,42 +233,65 @@ export default function Home() {
                 {/* Code Editor */}
                 <ResizablePanel defaultSize={60} minSize={30} className="relative transition-all duration-300">
                   <div className="absolute inset-0 bg-white/40 dark:bg-gray-900/50 backdrop-blur-sm -z-10" />
-                  <CodeEditor
-                    code={files.find(f => f.name === activeFileName)?.content || ""}
-                    setCode={(newCode) => handleFileChange(activeFileName, newCode)}
-                    disabled={false}
-                    onRun={() => {
-                      setInteractiveOutput("");
-                      setPlotImages([]);
-                      if (terminalMounted && interactiveTerminalRef.current) {
-                        interactiveTerminalRef.current.startExecution(files, activeFileName, lang);
-                      }
-                    }}
-                    onDownload={downloadPdf}
-                    onSubmit={() => { }}
-                    loading={false}
-                    locked={false}
-                    lang={lang}
-                    onLangChange={handleLangChange}
-                    showInputToggle={false}
-                    showInput={false}
-                    setShowInput={() => { }}
-                    terminalRef={interactiveTerminalRef}
+                  <AnimatePresence mode="wait">
+                    <motion.div
+                      key={lang}
+                      initial={{ opacity: 0, x: 20 }}
+                      animate={{
+                        opacity: 1,
+                        x: 0,
+                        boxShadow: isExecuting ? "0 0 20px rgba(79, 70, 229, 0.4)" : "none",
+                        scale: isExecuting ? 1.002 : 1
+                      }}
+                      exit={{ opacity: 0, x: -20 }}
+                      transition={{
+                        opacity: { duration: 0.3 },
+                        x: { duration: 0.3 },
+                        boxShadow: { duration: 0.5, repeat: Infinity, repeatType: "reverse" }
+                      }}
+                      className="h-full w-full rounded-2xl overflow-hidden"
+                    >
+                      <CodeEditor
+                        code={files.find(f => f.name === activeFileName)?.content || ""}
+                        setCode={(newCode) => handleFileChange(activeFileName, newCode)}
+                        disabled={false}
+                        onRun={() => {
+                          setInteractiveOutput("");
+                          setPlotImages([]);
+                          setIsExecuting(true);
+                          if (terminalMounted && interactiveTerminalRef.current) {
+                            interactiveTerminalRef.current.startExecution(files, activeFileName, lang);
+                          }
+                          // Mock reset for now or integrate with terminal events
+                          setTimeout(() => setIsExecuting(false), 2000);
+                        }}
+                        onDownload={downloadPdf}
+                        onSubmit={() => { }}
+                        loading={false}
+                        locked={false}
+                        lang={lang}
+                        onLangChange={handleLangChange}
+                        showInputToggle={false}
+                        showInput={false}
+                        setShowInput={() => { }}
+                        terminalRef={interactiveTerminalRef}
 
-                    violations={0}
-                    isFullscreen={true}
-                    files={files}
-                    activeFileName={activeFileName}
-                    onFileSelect={handleFileSelect}
-                    onFileCreate={handleFileCreate}
-                    onFileDelete={handleFileDelete}
-                    onFileChange={handleFileChange}
-                    onFileRename={handleFileRename}
-                    onFileUpload={handleFileUpload}
-                    externalShowAssistant={showAssistant}
-                    externalSetShowAssistant={setShowAssistant}
-                    renderAssistantExternally={true}
-                  />
+                        violations={0}
+                        isFullscreen={true}
+                        files={files}
+                        activeFileName={activeFileName}
+                        onFileSelect={handleFileSelect}
+                        onFileCreate={handleFileCreate}
+                        onFileDelete={handleFileDelete}
+                        onFileChange={handleFileChange}
+                        onFileRename={handleFileRename}
+                        onFileUpload={handleFileUpload}
+                        externalShowAssistant={showAssistant}
+                        externalSetShowAssistant={setShowAssistant}
+                        renderAssistantExternally={true}
+                      />
+                    </motion.div>
+                  </AnimatePresence>
                 </ResizablePanel>
 
                 <ResizableHandle className="h-2 bg-gray-100/50 dark:bg-gray-800/50 hover:bg-indigo-500/50 dark:hover:bg-indigo-500/50 transition-colors duration-300 flex items-center justify-center group outline-none focus-visible:ring-2 focus-visible:ring-indigo-500">

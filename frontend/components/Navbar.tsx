@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, useMemo } from "react";
 import { createClient } from "@/lib/supabase/client";
@@ -20,10 +21,10 @@ import {
     Code,
     FileText,
     Sparkles,
-    Shield,
     User as UserIcon,
     BarChart3,
 } from "lucide-react";
+import { motion } from "framer-motion";
 
 // Get initials from name
 const getInitials = (name: string) => {
@@ -134,18 +135,15 @@ export default function Navbar() {
                             onClick={() => router.push("/")}
                             className="flex items-center gap-3 cursor-pointer group"
                         >
-                            {/* Animated Logo Icon */}
-                            <div className="relative w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 flex items-center justify-center shadow-lg shadow-purple-500/25 group-hover:shadow-purple-500/40 transition-all duration-300 group-hover:scale-105">
-                                <Shield className="w-5 h-5 text-white" />
-                                <div className="absolute inset-0 rounded-xl bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 animate-pulse opacity-50" />
-                            </div>
-                            <div className="flex flex-col">
-                                <h1 className="text-xl font-extrabold bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 bg-clip-text text-transparent select-none">
-                                    CodeGuard
-                                </h1>
-                                <span className="text-[10px] font-medium text-gray-500 dark:text-gray-400 -mt-0.5 hidden sm:block">
-                                    Secure Programming
-                                </span>
+                            <div className="relative flex items-center">
+                                <Image
+                                    src="/CodeGuard_Logo.png"
+                                    alt="CodeGuard Logo"
+                                    width={140}
+                                    height={40}
+                                    className="h-13 w-auto object-contain"
+                                    priority
+                                />
                             </div>
                         </div>
 
@@ -240,14 +238,47 @@ export default function Navbar() {
                                 {/* User Menu */}
                                 {user ? (
                                     <div className="relative">
-                                        <button
+                                        <motion.button
                                             onClick={() => setUserMenuOpen(!userMenuOpen)}
-                                            className="flex items-center gap-3 pl-3 pr-4 py-1.5 rounded-2xl bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 transition-all"
+                                            whileHover="hover"
+                                            className="flex items-center gap-3 pl-3 pr-4 py-1.5 rounded-2xl bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 transition-all border border-transparent hover:border-indigo-500/30 group"
                                         >
-                                            {/* Avatar */}
-                                            <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 flex items-center justify-center text-white text-sm font-bold shadow-lg">
+                                            {/* Avatar with floating and hover effects */}
+                                            <motion.div
+                                                variants={{
+                                                    hover: {
+                                                        scale: 1.1,
+                                                        rotateY: 15,
+                                                        rotateX: -10,
+                                                        boxShadow: "0 0 20px rgba(99, 102, 241, 0.6)",
+                                                        transition: { type: "spring", stiffness: 400, damping: 10 }
+                                                    }
+                                                }}
+                                                animate={{
+                                                    y: [0, -4, 0],
+                                                }}
+                                                transition={{
+                                                    duration: 4,
+                                                    repeat: Infinity,
+                                                    ease: "easeInOut"
+                                                }}
+                                                className="w-8 h-8 rounded-xl bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 flex items-center justify-center text-white text-sm font-bold shadow-lg relative z-10"
+                                            >
                                                 {getInitials(userName)}
-                                            </div>
+                                                {/* Soft pulse glow behind avatar */}
+                                                <motion.div
+                                                    className="absolute inset-0 rounded-xl bg-indigo-500/20 -z-10"
+                                                    animate={{
+                                                        scale: [1, 1.4, 1],
+                                                        opacity: [0.5, 0, 0.5],
+                                                    }}
+                                                    transition={{
+                                                        duration: 2,
+                                                        repeat: Infinity,
+                                                        ease: "easeInOut"
+                                                    }}
+                                                />
+                                            </motion.div>
                                             <div className="hidden lg:flex flex-col items-start">
                                                 <span className="text-sm font-semibold text-gray-900 dark:text-white leading-tight">
                                                     {userName || "User"}
@@ -260,9 +291,9 @@ export default function Navbar() {
                                             </div>
                                             <ChevronDown
                                                 size={14}
-                                                className={`text-gray-400 transition-transform ${userMenuOpen ? "rotate-180" : ""}`}
+                                                className={`text-gray-400 transition-transform duration-300 ${userMenuOpen ? "rotate-180" : ""}`}
                                             />
-                                        </button>
+                                        </motion.button>
 
                                         {/* User Dropdown */}
                                         {userMenuOpen && (

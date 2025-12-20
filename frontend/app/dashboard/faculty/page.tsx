@@ -29,6 +29,44 @@ import {
   Plus,
   ArrowUpRight
 } from "lucide-react";
+import { motion } from "framer-motion";
+import { Skeleton } from "@/components/ui/skeleton";
+import FacultyDashboardSkeleton from "@/components/skeletons/FacultyDashboardSkeleton";
+import FullPageLoader from "@/components/loaders/FullPageLoader";
+
+const containerVariants = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: {
+      staggerChildren: 0.1,
+      delayChildren: 0.2
+    }
+  }
+} as const;
+
+const shellVariants = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: { duration: 0.3 }
+  }
+} as const;
+
+const revealVariants = {
+  hidden: { y: 10, opacity: 0 },
+  visible: {
+    y: 0,
+    opacity: 1,
+    transition: {
+      type: "spring" as const,
+      stiffness: 260,
+      damping: 30
+    }
+  }
+} as const;
+
+const itemVariants = revealVariants; // Aliasing for compatibility with existing code
 
 // ---------------------- Types ----------------------
 type Subject = { id: number; subject_name: string; faculty_id?: string };
@@ -163,6 +201,7 @@ export default function FacultyDashboardPage() {
   const [user, setUser] = useState<User | null>(null);
   const [userName, setUserName] = useState<string>("");
   const [loading, setLoading] = useState(true);
+  const [dataLoading, setDataLoading] = useState(true);
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [practicals, setPracticals] = useState<Practical[]>([]);
   const [submissions, setSubmissions] = useState<Submission[]>([]);
@@ -195,6 +234,7 @@ export default function FacultyDashboardPage() {
       setLoading(false);
 
       // 2. Fetch subjects for this faculty
+      setDataLoading(true);
       const { data: subjData, error: subjErr } = await supabase
         .from("subjects")
         .select("*")
@@ -230,6 +270,7 @@ export default function FacultyDashboardPage() {
           }
         }
       }
+      setDataLoading(false);
     };
 
     init();
@@ -291,7 +332,7 @@ export default function FacultyDashboardPage() {
       { name: 'Passed', value: counts.passed, color: '#10b981' }, // green
       { name: 'Failed', value: counts.failed, color: '#ef4444' }, // red
       { name: 'Pending', value: counts.pending, color: '#fbbf24' }, // amber
-     
+
     ].filter(d => d.value > 0);
   }, [submissions]);
 
@@ -325,23 +366,19 @@ export default function FacultyDashboardPage() {
     return map;
   }, [practicals]);
 
-  if (loading)
-    return (
-      <div className="flex items-center justify-center min-h-screen bg-gray-50 dark:bg-gray-900">
-        <div className="w-12 h-12 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin" />
-      </div>
-    );
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50 dark:from-gray-950 dark:via-gray-900 dark:to-gray-800">
-
       <main className="pt-24 pb-12 px-4 sm:px-6 lg:px-8 max-w-[1600px] mx-auto">
-
         {/* Header Section */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8 animate-slideUp">
+        <motion.div
+          variants={shellVariants}
+          initial="hidden"
+          animate="visible"
+          className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8"
+        >
           <div>
             <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-              Welcome back, {userName || "Faculty"} 👋
+              Welcome back, {userName || (loading ? "..." : "Faculty")} 👋
             </h1>
             <p className="text-gray-600 dark:text-gray-400 mt-1">
               Manage your practicals and track student performance.
@@ -354,184 +391,208 @@ export default function FacultyDashboardPage() {
             <Plus size={20} />
             Create Practical
           </button>
-        </div>
+        </motion.div>
 
         {/* BENTO GRID */}
-        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-6">
-
-          {/* 1. Quick Stats (Row 1) */}
-          <div className="glass-card-premium rounded-3xl p-6 flex items-center justify-between animate-slideUp animation-delay-100">
-            <div>
-              <p className="text-sm text-gray-500 dark:text-gray-400 font-medium">Active Practicals</p>
-              <h3 className="text-3xl font-bold text-gray-900 dark:text-white mt-1">{activePracticalsCount}</h3>
-            </div>
-            <div className="w-12 h-12 rounded-2xl bg-indigo-100 dark:bg-indigo-900/40 flex items-center justify-center text-indigo-600 dark:text-indigo-400">
-              <FileCheck size={24} />
-            </div>
-          </div>
-
-          <div className="glass-card-premium rounded-3xl p-6 flex items-center justify-between animate-slideUp animation-delay-150">
-            <div>
-              <p className="text-sm text-gray-500 dark:text-gray-400 font-medium">Total Submissions</p>
-              <h3 className="text-3xl font-bold text-gray-900 dark:text-white mt-1">{submissions.length}</h3>
-            </div>
-            <div className="w-12 h-12 rounded-2xl bg-purple-100 dark:bg-purple-900/40 flex items-center justify-center text-purple-600 dark:text-purple-400">
-              <TrendingUp size={24} />
-            </div>
-          </div>
-
-          <div className="glass-card-premium rounded-3xl p-6 flex items-center justify-between animate-slideUp animation-delay-200">
-            <div>
-              <p className="text-sm text-gray-500 dark:text-gray-400 font-medium">Students Assigned</p>
-              <h3 className="text-3xl font-bold text-gray-900 dark:text-white mt-1">--</h3>
-            </div>
-            <div className="w-12 h-12 rounded-2xl bg-pink-100 dark:bg-pink-900/40 flex items-center justify-center text-pink-600 dark:text-pink-400">
-              <Users size={24} />
-            </div>
-          </div>
-
-          {/* Quick Action Tile */}
-          <div
-            onClick={() => router.push("/faculty/submissions")}
-            className="glass-card-premium rounded-3xl p-6 flex flex-col justify-center cursor-pointer hover:scale-[1.02] transition-transform animate-slideUp animation-delay-250 bg-gradient-to-br from-indigo-600 to-purple-600 text-white"
+        {loading || dataLoading ? (
+          <FacultyDashboardSkeleton />
+        ) : (
+          <motion.div
+            variants={containerVariants}
+            initial="hidden"
+            animate="visible"
+            className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-6"
           >
-            <div className="flex items-center justify-between mb-2">
-              <FileCheck size={28} className="text-white/80" />
-              <ArrowUpRight size={24} className="text-white/60" />
-            </div>
-            <h3 className="text-lg font-bold">Review Submissions</h3>
-            <p className="text-white/70 text-sm">Grading pending for 5 students</p>
-          </div>
 
-
-          {/* 2. Charts Row (Row 2, split 2:2 or 3:1) */}
-
-          {/* Activity Chart (Wide) */}
-          <div className="md:col-span-2 lg:col-span-3 glass-card rounded-3xl p-6 animate-slideUp animation-delay-300">
-            <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-6">Submission Activity</h3>
-            <div className="h-[250px] w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={activityData}>
-                  <defs>
-                    <linearGradient id="colorSubs" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.8} />
-                      <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(156, 163, 175, 0.2)" />
-                  <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fill: '#9ca3af', fontSize: 12 }} />
-                  <YAxis axisLine={false} tickLine={false} tick={{ fill: '#9ca3af', fontSize: 12 }} />
-                  <Tooltip
-                    contentStyle={{ backgroundColor: 'rgba(255, 255, 255, 0.8)', borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' }}
-                  />
-                  <Area type="monotone" dataKey="submissions" stroke="#8b5cf6" strokeWidth={3} fillOpacity={1} fill="url(#colorSubs)" />
-                </AreaChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-
-          {/* Status Donut Chart */}
-          <div className="md:col-span-1 glass-card rounded-3xl p-6 animate-slideUp animation-delay-300 flex flex-col">
-            <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">Submission Status</h3>
-            <div className="flex-1 min-h-[200px] relative">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={statusData}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={60}
-                    outerRadius={80}
-                    paddingAngle={5}
-                    dataKey="value"
-                  >
-                    {statusData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} />
-                    ))}
-                  </Pie>
-                  <Tooltip />
-                  <Legend verticalAlign="bottom" height={36} />
-                </PieChart>
-              </ResponsiveContainer>
-              {/* Center Stat */}
-              <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none pb-8">
-                <span className="text-3xl font-bold text-gray-900 dark:text-white">{submissions.length}</span>
-                <span className="text-xs text-gray-500">Total</span>
+            {/* 1. Quick Stats (Row 1) */}
+            <motion.div variants={itemVariants} className="glass-card-premium rounded-3xl p-6 flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-500 dark:text-gray-400 font-medium">Active Practicals</p>
+                <h3 className="text-3xl font-bold text-gray-900 dark:text-white mt-1">{activePracticalsCount}</h3>
               </div>
-            </div>
-          </div>
+              <div className="w-12 h-12 rounded-2xl bg-indigo-100 dark:bg-indigo-900/40 flex items-center justify-center text-indigo-600 dark:text-indigo-400">
+                <FileCheck size={24} />
+              </div>
+            </motion.div>
 
-          {/* 3. Main Content: List & Calendar */}
+            <motion.div variants={itemVariants} className="glass-card-premium rounded-3xl p-6 flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-500 dark:text-gray-400 font-medium">Total Submissions</p>
+                <h3 className="text-3xl font-bold text-gray-900 dark:text-white mt-1">{submissions.length}</h3>
+              </div>
+              <div className="w-12 h-12 rounded-2xl bg-purple-100 dark:bg-purple-900/40 flex items-center justify-center text-purple-600 dark:text-purple-400">
+                <TrendingUp size={24} />
+              </div>
+            </motion.div>
 
-          {/* Practicals List (Wide) */}
-          <div className="md:col-span-2 lg:col-span-3 glass-card rounded-3xl p-6 animate-slideUp animation-delay-400 min-h-[400px]">
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-lg font-bold text-gray-900 dark:text-white">All Practicals</h3>
-            </div>
+            <motion.div variants={itemVariants} className="glass-card-premium rounded-3xl p-6 flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-500 dark:text-gray-400 font-medium">Students Assigned</p>
+                <h3 className="text-3xl font-bold text-gray-900 dark:text-white mt-1">--</h3>
+              </div>
+              <div className="w-12 h-12 rounded-2xl bg-pink-100 dark:bg-pink-900/40 flex items-center justify-center text-pink-600 dark:text-pink-400">
+                <Users size={24} />
+              </div>
+            </motion.div>
 
-            <div className="space-y-4">
-              {practicals.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-12 text-center">
-                  <div className="w-16 h-16 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center mb-4">
-                    <FileCheck className="text-gray-400" size={32} />
-                  </div>
-                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white">No practicals found</h3>
-                  <p className="text-gray-500 max-w-xs mx-auto mt-2">Create your first practical to start assigning work to students.</p>
+            {/* Quick Action Tile */}
+            <motion.div
+              variants={itemVariants}
+              onClick={() => router.push("/faculty/submissions")}
+              className="glass-card-premium rounded-3xl p-6 flex flex-col justify-center cursor-pointer hover:scale-[1.02] transition-transform bg-gradient-to-br from-indigo-600 to-purple-600 text-white"
+            >
+              <div className="flex items-center justify-between mb-2">
+                <FileCheck size={28} className="text-white/80" />
+                <ArrowUpRight size={24} className="text-white/60" />
+              </div>
+              <h3 className="text-lg font-bold">Review Submissions</h3>
+              <p className="text-white/70 text-sm">Grading pending for 5 students</p>
+            </motion.div>
+
+
+            {/* 2. Charts Row (Row 2, split 2:2 or 3:1) */}
+
+            {/* Activity Chart (Wide) */}
+            <motion.div variants={itemVariants} className="md:col-span-2 lg:col-span-3 glass-card rounded-3xl p-6 min-h-[350px]">
+              <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-6">Submission Activity</h3>
+              <div className="h-[250px] w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={activityData}>
+                    <defs>
+                      <linearGradient id="colorSubs" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.8} />
+                        <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(156, 163, 175, 0.2)" />
+                    <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fill: '#9ca3af', fontSize: 12 }} />
+                    <YAxis axisLine={false} tickLine={false} tick={{ fill: '#9ca3af', fontSize: 12 }} />
+                    <Tooltip
+                      contentStyle={{ backgroundColor: 'rgba(255, 255, 255, 0.8)', borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' }}
+                    />
+                    <Area
+                      type="monotone"
+                      dataKey="submissions"
+                      stroke="#8b5cf6"
+                      strokeWidth={3}
+                      fillOpacity={1}
+                      fill="url(#colorSubs)"
+                      isAnimationActive={true}
+                      animationDuration={1500}
+                      animationEasing="ease-in-out"
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+            </motion.div>
+
+            {/* Status Donut Chart */}
+            <motion.div variants={itemVariants} className="md:col-span-1 glass-card rounded-3xl p-6 flex flex-col">
+              <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">Submission Status</h3>
+              <div className="flex-1 min-h-[200px] relative">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={statusData}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={60}
+                      outerRadius={80}
+                      paddingAngle={5}
+                      dataKey="value"
+                      isAnimationActive={true}
+                      animationBegin={500}
+                      animationDuration={1200}
+                      animationEasing="ease-out"
+                    >
+                      {statusData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <Tooltip />
+                    <Legend verticalAlign="bottom" height={36} />
+                  </PieChart>
+                </ResponsiveContainer>
+                {/* Center Stat */}
+                <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none pb-8">
+                  <span className="text-3xl font-bold text-gray-900 dark:text-white">{submissions.length}</span>
+                  <span className="text-xs text-gray-500">Total</span>
                 </div>
-              ) : (
-                practicals.map(p => {
-                  const subj = subjects.find(s => s.id === p.subject_id)?.subject_name || "Subject";
-                  return <PracticalCard key={p.id} practical={p} subject={subj} onEdit={openEdit} onDelete={deletePractical} />;
-                })
-              )}
-            </div>
-          </div>
+              </div>
+            </motion.div>
 
-          {/* Calendar (Narrow) */}
-          <div className="md:col-span-1 glass-card rounded-3xl p-6 animate-slideUp animation-delay-400">
-            <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">Schedule</h3>
-            <Calendar
-              mode="single"
-              selected={selected}
-              onSelect={(d) => d && setSelected(d)}
-              className="rounded-xl border border-gray-100 dark:border-gray-800"
-              components={{
-                DayButton: ({ day, ...props }) => {
-                  const date = day.date;
-                  if (!(date instanceof Date) || isNaN(date.getTime())) return <></>;
-                  const iso = date.toISOString().slice(0, 10);
-                  const hasEvent = eventsByDate.has(iso);
-                  return (
-                    <div className="relative w-full h-full flex items-center justify-center" onClick={() => openCreate(date)}>
-                      <CalendarDayButton day={day} {...props} className={cn(
-                        props.className,
-                        hasEvent && "font-bold text-indigo-600 bg-indigo-50 dark:bg-indigo-900/30 dark:text-indigo-400"
-                      )} />
-                      {hasEvent && <div className="absolute bottom-1 w-1 h-1 bg-indigo-500 rounded-full" />}
+            {/* 3. Main Content: List & Calendar */}
+
+            {/* Practicals List (Wide) */}
+            <motion.div variants={itemVariants} className="md:col-span-2 lg:col-span-3 glass-card rounded-3xl p-6 min-h-[400px]">
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-lg font-bold text-gray-900 dark:text-white">All Practicals</h3>
+              </div>
+
+              <div className="space-y-4">
+                {practicals.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-12 text-center">
+                    <div className="w-16 h-16 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center mb-4">
+                      <FileCheck className="text-gray-400" size={32} />
                     </div>
-                  )
-                }
-              }}
-            />
-
-            {/* Upcoming Events List */}
-            <div className="mt-6 space-y-3">
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Upcoming Deadlines</p>
-              {practicals.filter(p => new Date(p.deadline) >= new Date()).slice(0, 3).map(p => (
-                <div key={p.id} className="flex items-center gap-3 p-3 rounded-xl bg-gray-50 dark:bg-gray-800/50">
-                  <div className="p-2 bg-white dark:bg-gray-700 rounded-lg shadow-sm">
-                    <Clock size={16} className="text-indigo-500" />
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white">No practicals found</h3>
+                    <p className="text-gray-500 max-w-xs mx-auto mt-2">Create your first practical to start assigning work to students.</p>
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-gray-900 dark:text-white truncate">{p.title}</p>
-                    <p className="text-xs text-gray-500">{new Date(p.deadline).toLocaleDateString()}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
+                ) : (
+                  practicals.map(p => {
+                    const subj = subjects.find(s => s.id === p.subject_id)?.subject_name || "Subject";
+                    return <PracticalCard key={p.id} practical={p} subject={subj} onEdit={openEdit} onDelete={deletePractical} />;
+                  })
+                )}
+              </div>
+            </motion.div>
 
-        </div>
+            {/* Calendar (Narrow) */}
+            <motion.div variants={itemVariants} className="md:col-span-1 glass-card rounded-3xl p-6">
+              <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">Schedule</h3>
+              <Calendar
+                mode="single"
+                selected={selected}
+                onSelect={(d) => d && setSelected(d)}
+                className="rounded-xl border border-gray-100 dark:border-gray-800"
+                components={{
+                  DayButton: ({ day, ...props }) => {
+                    const date = day.date;
+                    if (!(date instanceof Date) || isNaN(date.getTime())) return <></>;
+                    const iso = date.toISOString().slice(0, 10);
+                    const hasEvent = eventsByDate.has(iso);
+                    return (
+                      <div className="relative w-full h-full flex items-center justify-center" onClick={() => openCreate(date)}>
+                        <CalendarDayButton day={day} {...props} className={cn(
+                          props.className,
+                          hasEvent && "font-bold text-indigo-600 bg-indigo-50 dark:bg-indigo-900/30 dark:text-indigo-400"
+                        )} />
+                        {hasEvent && <div className="absolute bottom-1 w-1 h-1 bg-indigo-500 rounded-full" />}
+                      </div>
+                    )
+                  }
+                }}
+              />
+
+              {/* Upcoming Events List */}
+              <div className="mt-6 space-y-3">
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Upcoming Deadlines</p>
+                {practicals.filter(p => new Date(p.deadline) >= new Date()).slice(0, 3).map(p => (
+                  <div key={p.id} className="flex items-center gap-3 p-3 rounded-xl bg-gray-50 dark:bg-gray-800/50">
+                    <div className="p-2 bg-white dark:bg-gray-700 rounded-lg shadow-sm">
+                      <Clock size={16} className="text-indigo-500" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-gray-900 dark:text-white truncate">{p.title}</p>
+                      <p className="text-xs text-gray-500">{new Date(p.deadline).toLocaleDateString()}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </motion.div>
+
+          </motion.div>
+        )}
 
         {/* Practical Modal */}
         <PracticalForm

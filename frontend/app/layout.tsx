@@ -6,6 +6,7 @@ import './globals.css'
 import { ThemeProvider } from "@/components/theme-provider";
 import { SpeedInsights } from "@vercel/speed-insights/next"
 import NavbarLayout from "@/components/NavbarLayout";
+import PageTransition from "@/components/PageTransition";
 
 export const metadata: Metadata = {
   title: "CodeGuard – Secure Python Editor",
@@ -31,10 +32,12 @@ export default function RootLayout({
         >
           {/* ✅ Navbar in layout - persists across page navigations */}
           <NavbarLayout />
-          <div className="h-full flex flex-col">
-            {children}
-            <SpeedInsights />
-          </div>
+          <PageTransition>
+            <div className="h-full flex flex-col">
+              {children}
+              <SpeedInsights />
+            </div>
+          </PageTransition>
         </ThemeProvider>
         {process.env.VERCEL && <Analytics />}
       </body>
