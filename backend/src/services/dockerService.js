@@ -113,7 +113,7 @@ const execPython = (containerName, onData, onExit) => {
       'exec',
       '-i',
       containerName,
-      'python',
+      'python3',
       '-u',
       '/app/interactive_wrapper.py',
     ],
@@ -121,10 +121,18 @@ const execPython = (containerName, onData, onExit) => {
   );
 
   pythonProcess.stdout.on('data', onData);
-  pythonProcess.stderr.on('data', onData);
+  pythonProcess.stderr.on('data', (data) => {
+    logger.error(`Python stderr: ${data.toString()}`);
+    onData(data);
+  });
 
   if (onExit) {
-    pythonProcess.on('exit', onExit);
+    pythonProcess.on('exit', (code) => {
+      if (code !== 0) {
+        logger.error(`Python process exited with non-zero code: ${code}`);
+      }
+      onExit(code);
+    });
   }
 
   return pythonProcess;

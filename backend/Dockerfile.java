@@ -36,6 +36,7 @@ RUN set -eux; \
        unzip \
        zip \
        netcat-openbsd \
+       time \
        locales; \
     rm -rf /var/lib/apt/lists/*
 

@@ -163,29 +163,33 @@ export default function EditorClient() {
 
   // Starter templates for each language
   const starterTemplates: Record<string, string> = {
-  java: `public class Main {
+    java: `public class Main {
   public static void main(String[] args) {
     System.out.println("Hello World");
   }
 }`,
 
-  python: `print("Hello World")`,
+    python: `print("Hello World")`,
 
-  c: `#include <stdio.h>
+    c: `#include <stdio.h>
 int main() {
   printf("Hello World");
   return 0;
 }`,
 
-  cpp: `#include <iostream>
+    cpp: `#include <iostream>
 using namespace std;
+
 int main() {
-  cout << "Hello World";
-  return 0;
+    ios_base::sync_with_stdio(false);
+    cin.tie(NULL);
+
+    cout << "Hello World";
+    return 0;
 }`,
 
-  javascript: `console.log("Hello World")`
-};
+    javascript: `console.log("Hello World")`
+  };
 
   // Get starter code for the selected language
   const getStarterCode = (language: string) => {

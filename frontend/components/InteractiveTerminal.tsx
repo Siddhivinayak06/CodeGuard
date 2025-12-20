@@ -42,6 +42,11 @@ const InteractiveTerminal = forwardRef<
   InteractiveTerminalProps
 >(({ wsUrl, fontSize = 16, fontFamily = "monospace", onOutput, onMount, onImage }, ref) => {
   const { theme, resolvedTheme } = useTheme();
+
+  // Derive theme for both effects and render
+  const isDark = theme === "dark" || (theme === "system" && resolvedTheme === "dark");
+  const currentTheme = isDark ? darkTheme : lightTheme;
+
   const terminalRef = useRef<HTMLDivElement | null>(null);
   const term = useRef<Terminal | null>(null);
   const fitAddon = useRef<FitAddon | null>(null);
@@ -49,18 +54,11 @@ const InteractiveTerminal = forwardRef<
   const inputBuffer = useRef<string>("");
 
   const currentLang = useRef<string>("python"); // default
-
   const wsEndpoint = wsUrl || "ws://localhost:5002";
-
-
 
   // Initialize terminal
   useEffect(() => {
     if (!terminalRef.current) return;
-
-    // Initialize terminal
-    const isDark = theme === "dark" || (theme === "system" && resolvedTheme === "dark");
-    const currentTheme = isDark ? darkTheme : lightTheme;
 
     term.current = new Terminal({
       cursorBlink: true,
@@ -179,10 +177,6 @@ const InteractiveTerminal = forwardRef<
   useEffect(() => {
     if (!term.current) return;
 
-    // Calculate theme inside effect
-    const isDark = theme === "dark" || (theme === "system" && resolvedTheme === "dark");
-    const currentTheme = isDark ? darkTheme : lightTheme;
-
     term.current.options.fontSize = fontSize;
     term.current.options.fontFamily = fontFamily;
     term.current.options.theme = currentTheme;
@@ -191,7 +185,7 @@ const InteractiveTerminal = forwardRef<
       terminalRef.current.style.backgroundColor = currentTheme.background || "#ffffff";
     }
     fitAddon.current?.fit();
-  }, [fontSize, fontFamily, theme, resolvedTheme]);
+  }, [fontSize, fontFamily, currentTheme]);
 
 
   useImperativeHandle(ref, () => ({
@@ -246,7 +240,7 @@ const InteractiveTerminal = forwardRef<
       <div
         ref={terminalRef}
         className="flex-1"
-        style={{ overflow: "hidden", backgroundColor: getTheme().background }}
+        style={{ overflow: "hidden", backgroundColor: currentTheme.background }}
       />
     </div>
   );

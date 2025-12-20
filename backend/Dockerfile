@@ -41,11 +41,11 @@ ENV NODE_ENV=production \
 
 # Create workspace directory
 RUN mkdir -p /app/workspace && \
-    adduser -D -u 1000 appuser && \
+    adduser -D  appuser && \
     chown -R appuser:appuser /app
 
 # Switch to non-root user for security
-USER appuser
+# USER appuser
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \

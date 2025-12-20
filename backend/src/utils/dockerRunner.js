@@ -8,236 +8,209 @@ function escapeForPrintf(s = '') {
   return String(s).replace(/'/g, "'\\''");
 }
 
-async function runTestCase(tc, code, lang) {
+async function runCommand(args, options = {}) {
+  const proc = spawn('docker', args, { stdio: ['ignore', 'pipe', 'pipe'], ...options });
+  let stdout = '';
+  let stderr = '';
+
+  proc.stdout.on('data', (data) => (stdout += data.toString()));
+  proc.stderr.on('data', (data) => (stderr += data.toString()));
+
+  const exitCode = await new Promise((resolve) => {
+    proc.on('close', resolve);
+    proc.on('error', () => resolve(1));
+  });
+
+  return { stdout, stderr, exitCode };
+}
+
+async function startBatchContainer(containerName, lang) {
+  const image = lang === 'java' ? 'codeguard-java' : (lang === 'python' ? 'codeguard-python' : 'codeguard-c');
+  const memoryLimit = (lang === 'java' ? config.docker.javaMemory : config.docker.memory);
+  const pidsLimit = (lang === 'java' ? config.docker.javaPidsLimit : config.docker.pidsLimit);
+
+  const runArgs = [
+    'run',
+    '--rm',
+    '--name', containerName,
+    '-d',
+    '--network', 'none',
+    '--read-only',
+    '--tmpfs', `/tmp:exec,rw,size=${memoryLimit}`,
+    '-m', memoryLimit,
+    '--cpus=' + config.docker.cpus,
+    '--pids-limit', pidsLimit,
+    image,
+    'tail', '-f', '/dev/null'
+  ];
+
+  await runCommand(runArgs);
+}
+
+async function compileInContainer(containerName, code, lang, uniqueId) {
+  const escapedCode = code.replace(/\r/g, '');
+  let cmd = '';
+
+  if (lang === 'python') {
+    cmd = `mkdir -p /tmp/${uniqueId} && printf "%s" '${escapeForPrintf(escapedCode)}' > /tmp/${uniqueId}/code.py`;
+  } else if (lang === 'c') {
+    cmd = `mkdir -p /tmp/${uniqueId} && printf "%s" '${escapeForPrintf(escapedCode)}' > /tmp/${uniqueId}/code.c && gcc -O2 /tmp/${uniqueId}/code.c -o /tmp/${uniqueId}/a.out -lm 2>/tmp/${uniqueId}/gcc_err.txt || (cat /tmp/${uniqueId}/gcc_err.txt 1>&2 && exit 1)`;
+  } else if (lang === 'cpp' || lang === 'c++') {
+    cmd = `mkdir -p /tmp/${uniqueId} && printf "%s" '${escapeForPrintf(escapedCode)}' > /tmp/${uniqueId}/code.cpp && g++ -O2 /tmp/${uniqueId}/code.cpp -o /tmp/${uniqueId}/a.out -lm 2>/tmp/${uniqueId}/gcc_err.txt || (cat /tmp/${uniqueId}/gcc_err.txt 1>&2 && exit 1)`;
+  } else if (lang === 'java') {
+    cmd = `
+mkdir -p /tmp/${uniqueId} &&
+printf "%s" '${escapeForPrintf(escapedCode)}' > /tmp/${uniqueId}/TempUserCode.java &&
+class_name=$(grep -Eo '^[[:space:]]*(public[[:space:]]+)?class[[:space:]]+[A-Za-z_][A-Za-z0-9_]*' /tmp/${uniqueId}/TempUserCode.java | head -n1 | awk '{print $NF}') &&
+if [ -n "$class_name" ]; then code_file=/tmp/${uniqueId}/$class_name.java; else code_file=/tmp/${uniqueId}/UserCode.java; fi &&
+mv /tmp/${uniqueId}/TempUserCode.java "$code_file" &&
+javac /tmp/${uniqueId}/*.java 2> /tmp/${uniqueId}/compile_err.txt || (cat /tmp/${uniqueId}/compile_err.txt 1>&2 && exit 1)
+`;
+  }
+
+  return await runCommand(['exec', containerName, 'sh', '-c', cmd]);
+}
+
+async function execTestCase(containerName, tc, lang, uniqueId) {
   const {
     id,
     stdinInput = '',
     expectedOutput = '',
     time_limit_ms = 5000,
-    memory_limit_kb = 65536,
     is_hidden = false,
   } = tc;
 
-  let docker;
-  let stdout = '';
-  let stderr = '';
-  const uniqueId = uuidv4();
-  const escapedCode = code.replace(/\r/g, '');
   const timeoutSec = Math.max(1, Math.ceil(time_limit_ms / 1000));
+  let baseRunCmd = '';
 
-  // Use config limits if not overridden by test case (though test case usually takes precedence or we clamp it)
-  // For now, we'll stick to the test case's limit or default, but ensuring we use the config's CPU/PIDs limits.
-  const memoryLimit = memory_limit_kb + 'k';
-
-  let cmd;
   if (lang === 'python') {
-    cmd = `
-mkdir -p /tmp/${uniqueId} &&
-printf "%s" '${escapeForPrintf(escapedCode)}' > /tmp/${uniqueId}/code.py &&
-printf "%s" '${escapeForPrintf(stdinInput)}' | timeout ${timeoutSec} python3 /tmp/${uniqueId}/code.py
-`;
-    docker = spawn(
-      'docker',
-      [
-        'run',
-        '--rm',
-        '--network',
-        'none',
-        '--cap-drop=ALL',
-        '-m',
-        memoryLimit,
-        '--cpus=' + config.docker.cpus,
-        '--pids-limit',
-        config.docker.pidsLimit,
-        'codeguard-python',
-        'sh',
-        '-c',
-        cmd,
-      ],
-      { stdio: ['ignore', 'pipe', 'pipe'] }
-    );
-  } else if (lang === 'c') {
-    cmd = `
-mkdir -p /tmp/${uniqueId} &&
-printf "%s" '${escapeForPrintf(escapedCode)}' > /tmp/${uniqueId}/code.c &&
-gcc /tmp/${uniqueId}/code.c -o /tmp/${uniqueId}/a.out -lm 2>/tmp/${uniqueId}/gcc_err.txt || true &&
-cat /tmp/${uniqueId}/gcc_err.txt 1>&2 || true &&
-printf "%s" '${escapeForPrintf(stdinInput)}' | timeout ${timeoutSec} /tmp/${uniqueId}/a.out
-`;
-    docker = spawn(
-      'docker',
-      [
-        'run',
-        '--rm',
-        '--network',
-        'none',
-        '--cap-drop=ALL',
-        '-m',
-        memoryLimit,
-        '--cpus=' + config.docker.cpus,
-        '--pids-limit',
-        config.docker.pidsLimit,
-        'codeguard-c',
-        'sh',
-        '-c',
-        cmd,
-      ],
-      { stdio: ['ignore', 'pipe', 'pipe'] }
-    );
-  } else if (lang === 'cpp' || lang === 'c++') {
-    cmd = `
-mkdir -p /tmp/${uniqueId} &&
-printf "%s" '${escapeForPrintf(escapedCode)}' > /tmp/${uniqueId}/code.cpp &&
-g++ /tmp/${uniqueId}/code.cpp -o /tmp/${uniqueId}/a.out -lm 2>/tmp/${uniqueId}/gcc_err.txt || true &&
-cat /tmp/${uniqueId}/gcc_err.txt 1>&2 || true &&
-printf "%s" '${escapeForPrintf(stdinInput)}' | timeout ${timeoutSec} /tmp/${uniqueId}/a.out
-`;
-    docker = spawn(
-      'docker',
-      [
-        'run',
-        '--rm',
-        '--network',
-        'none',
-        '--cap-drop=ALL',
-        '-m',
-        memoryLimit,
-        '--cpus=' + config.docker.cpus,
-        '--pids-limit',
-        config.docker.pidsLimit,
-        'codeguard-c', // Reusing the C container assuming it has g++
-        'sh',
-        '-c',
-        cmd,
-      ],
-      { stdio: ['ignore', 'pipe', 'pipe'] }
-    );
+    baseRunCmd = `python3 /tmp/${uniqueId}/code.py`;
+  } else if (lang === 'c' || lang === 'cpp' || lang === 'c++') {
+    baseRunCmd = `/tmp/${uniqueId}/a.out`;
   } else if (lang === 'java') {
-    cmd = `
-mkdir -p /tmp/${uniqueId} &&
-printf "%s" '${escapeForPrintf(escapedCode)}' > /tmp/${uniqueId}/TempUserCode.java || true &&
-pkg_line=$(grep -E '^[[:space:]]*package[[:space:]]+[a-zA-Z0-9_.]+' /tmp/${uniqueId}/TempUserCode.java | head -n1 | sed 's/;//') || true &&
-class_name=$(grep -Eo '^[[:space:]]*(public[[:space:]]+)?class[[:space:]]+[A-Za-z_][A-Za-z0-9_]*' /tmp/${uniqueId}/TempUserCode.java | head -n1 | awk '{print $NF}') || true &&
-if [ -n "$class_name" ]; then code_file=/tmp/${uniqueId}/$class_name.java; else code_file=/tmp/${uniqueId}/UserCode.java; fi &&
-mv /tmp/${uniqueId}/TempUserCode.java "$code_file" || cp /tmp/${uniqueId}/TempUserCode.java "$code_file" &&
-if grep -q 'public[[:space:]]\\+static[[:space:]]\\+void[[:space:]]\\+main[[:space:]]*(' "$code_file"; then has_main=1; else has_main=0; fi &&
-if [ "$has_main" -eq 1 ] && [ "$class_name" != "Main" ]; then
-  wrapper_file=/tmp/${uniqueId}/Main.java
-  if [ -n "$pkg_line" ]; then echo "$pkg_line;" > "$wrapper_file"; else : > "$wrapper_file"; fi
-  cat >> "$wrapper_file" <<'WRAPPER'
-public class Main {
-    public static void main(String[] args) {
-        try {
-            %CLASS_NAME%.main(args);
-        } catch (Throwable t) {
-            t.printStackTrace();
-            System.exit(1);
-        }
-    }
-}
-WRAPPER
-  sed -i "s/%CLASS_NAME%/$class_name/g" "$wrapper_file"
-fi &&
-javac /tmp/${uniqueId}/*.java 2> /tmp/${uniqueId}/compile_err.txt || true &&
-if [ -s /tmp/${uniqueId}/compile_err.txt ]; then
-  cat /tmp/${uniqueId}/compile_err.txt 1>&2
-  exit 1
-else
-  printf "%s" '${escapeForPrintf(stdinInput)}' | timeout ${timeoutSec} java -cp /tmp/${uniqueId} Main
-fi
+    baseRunCmd = `
+MAIN_CLASS=$(grep -l "public static void main" /tmp/${uniqueId}/*.java | head -n1 | xargs basename -s .java)
+if [ -z "$MAIN_CLASS" ]; then MAIN_CLASS=$(ls /tmp/${uniqueId}/*.class | head -n1 | xargs basename -s .class); fi
+java -cp /tmp/${uniqueId} $MAIN_CLASS
 `;
-    docker = spawn(
-      'docker',
-      [
-        'run',
-        '--rm',
-        '--network',
-        'none',
-        '--cap-drop=ALL',
-        '-m',
-        memoryLimit,
-        '--cpus=' + config.docker.cpus,
-        '--pids-limit',
-        config.docker.javaPidsLimit,
-        'codeguard-java',
-        'sh',
-        '-c',
-        cmd,
-      ],
-      { stdio: ['ignore', 'pipe', 'pipe'] }
-    );
-  } else {
-    return {
-      test_case_id: id,
-      input: stdinInput,
-      expectedOutput,
-      stdout: '',
-      stderr: 'Unsupported language',
-      exitCode: null,
-      is_hidden,
-    };
   }
 
-  // Collect output
-  docker.stdout.on('data', (data) => (stdout += data.toString()));
-  docker.stderr.on('data', (data) => (stderr += data.toString()));
+  // Use /usr/bin/time -p for basic POSIX timing (real, user, sys)
+  // For Java, we might have GNU time which supports -f for memory
+  const timeCmd = (lang === 'java') ? '/usr/bin/time -f "CPU:%U|%S MEM:%M"' : '/usr/bin/time -p';
+  const runCmd = `printf "%s" '${escapeForPrintf(stdinInput)}' | timeout ${timeoutSec} ${timeCmd} sh -c '${baseRunCmd.trim().replace(/'/g, "'\\''")}'`;
 
-  const exitCode = await new Promise((resolve) => {
-    docker.on('close', (code) =>
-      resolve(typeof code === 'number' ? code : null)
-    );
-    docker.on('error', () => resolve(1));
-  });
+  const result = await runCommand(['exec', containerName, 'sh', '-c', runCmd]);
 
-  // Trim results
-  const result = {
+  let cpuTime = 0;
+  let memoryKB = 0;
+
+  if (lang === 'java') {
+    // Parse GNU time format: "CPU:0.01|0.02 MEM:1234"
+    const match = result.stderr.match(/CPU:([\d.]+)\|([\d.]+) MEM:(\d+)/);
+    if (match) {
+      cpuTime = parseFloat(match[1]) + parseFloat(match[2]);
+      memoryKB = parseInt(match[3]);
+    }
+  } else {
+    // Parse POSIX time format:
+    // real 0.00
+    // user 0.00
+    // sys 0.00
+    const userMatch = result.stderr.match(/user ([\d.]+)/);
+    const sysMatch = result.stderr.match(/sys ([\d.]+)/);
+    if (userMatch && sysMatch) {
+      cpuTime = parseFloat(userMatch[1]) + parseFloat(sysMatch[1]);
+    }
+  }
+
+  // Clean stderr from time output to avoid cluttering user errors
+  const cleanedStderr = result.stderr
+    .replace(/CPU:[\d.]+\|[\d.]+ MEM:\d+/, '')
+    .replace(/real [\d.]+\nuser [\d.]+\nsys [\d.]+/, '')
+    .trim();
+
+  return {
     test_case_id: id,
     input: stdinInput,
     expectedOutput,
-    stdout: stdout.trim(),
-    stderr: stderr.trim(),
-    exitCode,
+    stdout: result.stdout.trim(),
+    stderr: cleanedStderr,
+    exitCode: result.exitCode,
     is_hidden,
+    cpuTime,
+    memoryKB
   };
-
-  // console.log(`✅ Test case done (id=${id})`);
-  return result;
 }
 
-module.exports = async function runBatchCode(
-  code,
-  lang = 'python',
-  batch = []
-) {
-  const CONCURRENCY_LIMIT = 5;
+module.exports = async function runBatchCode(code, lang = 'python', batch = [], options = {}) {
+  const CONCURRENCY_LIMIT = 1; // Serial execution inside container for better timing consistency
+  const { earlyExit = true } = options;
+  const uniqueId = uuidv4();
+  const containerName = `batch-${uniqueId}`;
 
-  // Helper for concurrency
-  const runWithLimit = async (tasks) => {
-    const executing = [];
-    const finalResults = [];
+  try {
+    logger.info(`Starting batch container ${containerName} for ${lang}...`);
+    await startBatchContainer(containerName, lang);
 
-    for (const task of tasks) {
-      const p = Promise.resolve().then(() => task());
-      finalResults.push(p);
+    logger.info(`Compiling code in container ${containerName}...`);
+    const compileResult = await compileInContainer(containerName, code, lang, uniqueId);
 
-      if (CONCURRENCY_LIMIT <= tasks.length) {
-        const e = p.then(() => executing.splice(executing.indexOf(e), 1));
-        executing.push(e);
-        if (executing.length >= CONCURRENCY_LIMIT) {
-          await Promise.race(executing);
-        }
-      }
+    if (compileResult.exitCode !== 0) {
+      logger.warn(`Compilation failed for ${containerName}`);
+      return batch.map(tc => ({
+        test_case_id: tc.id,
+        input: tc.stdinInput,
+        expectedOutput: tc.expectedOutput,
+        stdout: '',
+        stderr: compileResult.stderr,
+        exitCode: compileResult.exitCode,
+        is_hidden: tc.is_hidden,
+      }));
     }
-    return Promise.all(finalResults);
-  };
 
-  const tasks = batch.map((tc) => () => runTestCase(tc, code, lang));
+    const results = [];
+    let hasFailed = false;
 
-  logger.info(
-    `Executing ${batch.length} test cases with concurrency ${CONCURRENCY_LIMIT}...`
-  );
-  const batchResults = await runWithLimit(tasks);
+    // Helper for concurrency with early exit support
+    const runWithEarlyExit = async () => {
+      const queue = [...batch];
 
-  logger.info(`📦 Final batch results: ${batchResults.length}`);
-  return batchResults;
+      const runWorker = async () => {
+        while (queue.length > 0) {
+          if (earlyExit && hasFailed) break;
+          const tc = queue.shift();
+          if (!tc) break;
+
+          const result = await execTestCase(containerName, tc, lang, uniqueId);
+          results.push(result);
+
+          if (result.exitCode !== 0) {
+            hasFailed = true;
+          }
+        }
+      };
+
+      const workers = [];
+      const numWorkers = Math.min(CONCURRENCY_LIMIT, batch.length);
+      for (let i = 0; i < numWorkers; i++) {
+        workers.push(runWorker());
+      }
+
+      await Promise.all(workers);
+      return results;
+    };
+
+    logger.info(`Executing ${batch.length} test cases in ${containerName} (earlyExit: ${earlyExit})...`);
+    const batchResults = await runWithEarlyExit();
+
+    logger.info(`📦 Final batch results: ${batchResults.length}`);
+    return batchResults.sort((a, b) => batch.findIndex(tc => tc.id === a.test_case_id) - batch.findIndex(tc => tc.id === b.test_case_id));
+  } catch (e) {
+    logger.error(`Batch execution failed: ${e.message}`);
+    throw e;
+  } finally {
+    // Always cleanup
+    spawn('docker', ['rm', '-f', containerName]);
+  }
 };
