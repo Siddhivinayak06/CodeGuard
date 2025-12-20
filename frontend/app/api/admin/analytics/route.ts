@@ -29,33 +29,24 @@ export async function GET() {
             supabaseAdmin.from("submissions").select("*", { count: "exact", head: true }),
         ]);
 
-        // Get submission status breakdown (using correct status values from schema)
-        const [submittedRes, evaluatedRes, pendingRes] = await Promise.all([
+        // Get submission status breakdown (using correct status values from schema: passed, failed, pending)
+        const [passedRes, failedRes, pendingRes] = await Promise.all([
             supabaseAdmin
                 .from("submissions")
                 .select("*", { count: "exact", head: true })
-                .eq("status", "submitted"),
+                .eq("status", "passed"),
             supabaseAdmin
                 .from("submissions")
                 .select("*", { count: "exact", head: true })
-                .eq("status", "evaluated"),
+                .eq("status", "failed"),
             supabaseAdmin
                 .from("submissions")
                 .select("*", { count: "exact", head: true })
                 .eq("status", "pending"),
         ]);
 
-        // Get execution results breakdown (actual pass/fail from execution_results table)
-        const [acceptedRes, failedRes] = await Promise.all([
-            supabaseAdmin
-                .from("execution_results")
-                .select("*", { count: "exact", head: true })
-                .eq("verdict", "accepted"),
-            supabaseAdmin
-                .from("execution_results")
-                .select("*", { count: "exact", head: true })
-                .in("verdict", ["wrong_answer", "compile_error", "runtime_error", "time_limit_exceeded", "error"]),
-        ]);
+        const totalEvaluated = (passedRes.count ?? 0) + (failedRes.count ?? 0);
+        const totalSubmissions = totalEvaluated + (pendingRes.count ?? 0);
 
         // Get recent submissions for activity chart (last 7 days)
         const sevenDaysAgo = new Date();
@@ -85,8 +76,8 @@ export async function GET() {
             const dayName = days[date.getDay()];
             if (activityByDay[dayName]) {
                 activityByDay[dayName].total++;
-                if (sub.status === "evaluated") activityByDay[dayName].evaluated++;
-                if (sub.status === "pending" || sub.status === "submitted") activityByDay[dayName].pending++;
+                if (sub.status === "passed" || sub.status === "failed") activityByDay[dayName].evaluated++;
+                if (sub.status === "pending") activityByDay[dayName].pending++;
             }
         });
 
@@ -177,10 +168,9 @@ export async function GET() {
             });
         }
 
-        // Calculate success rate from execution_results
-        const totalExecutions = (acceptedRes.count ?? 0) + (failedRes.count ?? 0);
-        const successRate = totalExecutions > 0
-            ? Math.round(((acceptedRes.count ?? 0) / totalExecutions) * 100)
+        // Calculate success rate from submissions table
+        const successRate = totalEvaluated > 0
+            ? Math.round(((passedRes.count ?? 0) / totalEvaluated) * 100)
             : 0;
 
         return NextResponse.json({
@@ -193,11 +183,11 @@ export async function GET() {
                 totalSubmissions: submissionsRes.count ?? 0,
             },
             submissions: {
-                submitted: submittedRes.count ?? 0,
-                evaluated: evaluatedRes.count ?? 0,
+                submitted: totalSubmissions,
+                evaluated: totalEvaluated,
                 pending: pendingRes.count ?? 0,
-                // From execution_results
-                accepted: acceptedRes.count ?? 0,
+                // Map passed/failed to accepted/failed for backward compatibility or UI labels
+                accepted: passedRes.count ?? 0,
                 failed: failedRes.count ?? 0,
                 successRate,
             },

@@ -6,18 +6,7 @@ import PracticalForm from "../components/PracticalForm";
 import PracticalList from "../components/PracticalList";
 import StudentAssignmentForm from "../components/StudentAssignmentForm";
 
-// ---------------------- Types ----------------------
-type Subject = { id: number; subject_name: string; faculty_id?: string };
-type Practical = {
-  id: number;
-  subject_id: number | string;
-  title: string;
-  description?: string;
-  language?: string;
-  deadline: string;
-  max_marks?: number;
-};
-type Student = { id: string; name: string };
+import { Practical, Subject, Student } from "../types";
 
 // ---------------------- Icons ----------------------
 const PlusIcon = () => (
@@ -219,9 +208,12 @@ export default function FacultySchedulePage() {
 
       const mapped = (data as any[])
         .filter((u) => u && u.uid)
-        .map((u) => ({ id: String(u.uid), name: u.name }));
+        .map((u) => ({
+          uid: String(u.uid), // Changed id to uid
+          name: u.name
+        }));
 
-      setStudents(mapped);
+      setStudents(mapped as Student[]);
     } catch (err) {
       console.error("Unexpected error fetching students:", err);
       setStudents([]);

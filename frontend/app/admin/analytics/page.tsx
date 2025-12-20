@@ -214,9 +214,9 @@ export default function AnalyticsPage() {
         { name: "Admins", value: data.overview.admins, color: "#ec4899" },
     ] : [];
 
-    // Submission status data for pie chart (from execution_results)
-    const submissionStatus = data ? [
-        { name: "Accepted", value: data.submissions.accepted, color: STATUS_COLORS.passed },
+    // Submission status data for pie chart (from submissions)
+    const submissionStatusData = data ? [
+        { name: "Passed", value: data.submissions.accepted, color: STATUS_COLORS.passed },
         { name: "Failed", value: data.submissions.failed, color: STATUS_COLORS.failed },
         { name: "Pending", value: data.submissions.pending, color: STATUS_COLORS.pending },
     ] : [];
@@ -311,7 +311,7 @@ export default function AnalyticsPage() {
                                 </div>
                                 <div>
                                     <p className="text-2xl font-bold text-gray-900 dark:text-white">{data.submissions.accepted}</p>
-                                    <p className="text-sm text-gray-500 dark:text-gray-400">Accepted</p>
+                                    <p className="text-sm text-gray-500 dark:text-gray-400">Passed</p>
                                 </div>
                             </div>
                             <div className="glass-card rounded-2xl p-5 flex items-center gap-4 animate-slideUp" style={{ animationDelay: "350ms" }}>
@@ -388,9 +388,9 @@ export default function AnalyticsPage() {
                                 </div>
                             </ChartCard>
 
-                            {/* User Distribution Pie Chart */}
+                            {/* Submission Status Pie Chart */}
                             <ChartCard
-                                title="User Distribution"
+                                title="Submission Status"
                                 icon={<PieChartIcon className="w-5 h-5 text-purple-500" />}
                                 delay={500}
                             >
@@ -398,7 +398,7 @@ export default function AnalyticsPage() {
                                     <ResponsiveContainer width="100%" height="100%">
                                         <PieChart>
                                             <Pie
-                                                data={userDistribution}
+                                                data={submissionStatusData}
                                                 cx="50%"
                                                 cy="50%"
                                                 innerRadius={60}
@@ -406,7 +406,7 @@ export default function AnalyticsPage() {
                                                 paddingAngle={3}
                                                 dataKey="value"
                                             >
-                                                {userDistribution.map((entry, index) => (
+                                                {submissionStatusData.map((entry, index) => (
                                                     <Cell key={`cell-${index}`} fill={entry.color} />
                                                 ))}
                                             </Pie>

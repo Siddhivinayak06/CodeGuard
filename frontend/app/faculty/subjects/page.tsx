@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
@@ -23,31 +23,10 @@ import {
   ListFilter
 } from "lucide-react";
 
+import { Practical, Subject, TestCase } from "../types";
+
 // dynamic import of PracticalForm to avoid SSR issues
 const PracticalForm = dynamic(() => import("../components/PracticalForm"), { ssr: false });
-
-type Subject = {
-  id: number;
-  subject_name: string;
-  subject_code: string;
-  practical_count?: number;
-  semester?: string;
-};
-
-type Practical = {
-  id: number;
-  title: string;
-  deadline: string | null;
-  submission_count?: number;
-  subject_id?: number;
-};
-
-type TestCase = {
-  id: number;
-  input: string;
-  expected_output: string;
-  is_hidden: boolean;
-};
 
 interface ViewingPractical extends Practical {
   description?: string;
@@ -62,7 +41,7 @@ export default function FacultySubjects() {
 
   const [user, setUser] = useState<User | null>(null);
   const [subjects, setSubjects] = useState<Subject[]>([]);
-  const [selected, setSelected] = useState<number | null>(null);
+  const [selected, setSelected] = useState<number | string | null>(null);
   const [practicals, setPracticals] = useState<Practical[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshKey, setRefreshKey] = useState(0);
@@ -188,8 +167,7 @@ export default function FacultySubjects() {
 
 
 
-  const loadPracticals = async (subjectId: number) => {
-    setSelected(subjectId);
+  const loadPracticals = useCallback(async (subjectId: number | string) => {
     setLoading(true);
     try {
       const { data, error } = await supabase
@@ -203,8 +181,9 @@ export default function FacultySubjects() {
       const formatted = (data || []).map((p) => ({
         id: p.id,
         title: p.title,
-        deadline: p.deadline,
+        deadline: p.deadline as string | null,
         submission_count: p.submissions?.length || 0,
+        subject_id: subjectId, // Added subject_id
       }));
 
       setPracticals(formatted);
@@ -214,7 +193,13 @@ export default function FacultySubjects() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [supabase]);
+
+  useEffect(() => {
+    if (selected) {
+      loadPracticals(selected);
+    }
+  }, [selected, loadPracticals]);
 
   const getDeadlineStatus = (deadline: string | null) => {
     if (!deadline) return { text: "No deadline", pill: "gray" as const };
@@ -265,7 +250,7 @@ export default function FacultySubjects() {
     setShowPracticalModal(true);
   };
 
-  const openEditPractical = async (practicalId: number) => {
+  const openEditPractical = async (practicalId: number | string) => {
     // fetch practical to edit (optional, if not already loaded)
     try {
       const { data, error } = await supabase.from("practicals").select("*").eq("id", practicalId).single();
@@ -368,7 +353,7 @@ export default function FacultySubjects() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-500">Active Subject</p>
-                <p className="text-2xl font-bold">{selectedSubject ? selectedSubject.subject_name : "—"}</p>
+                <p className="text-2xl font-bold">{selectedSubject ? (selectedSubject.subject_name || selectedSubject.name) : "—"}</p>
               </div>
               <div className="p-3 bg-pink-500/10 rounded-xl">
                 <Sparkles className="w-6 h-6 text-pink-600" />
@@ -396,7 +381,7 @@ export default function FacultySubjects() {
                   subjects.map((s) => (
                     <button
                       key={s.id}
-                      onClick={() => loadPracticals(s.id)}
+                      onClick={() => setSelected(s.id)}
                       className={`w-full text-left flex items-center gap-3 p-3 rounded-lg transition-all ${selected === s.id ? "bg-gradient-to-r from-blue-500/10 to-purple-500/10 border border-blue-200" : "hover:bg-white/30"}`}
                       aria-pressed={selected === s.id}
                     >

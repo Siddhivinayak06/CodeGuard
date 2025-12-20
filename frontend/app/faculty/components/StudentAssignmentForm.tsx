@@ -49,13 +49,7 @@ const LoadingSpinner = () => (
   </svg>
 );
 
-interface Student {
-  uid: string;
-  name: string;
-  email: string;
-  roll: string;
-  semester: string;
-}
+import { Student } from "../types";
 
 interface Props {
   practicalId: number;
@@ -126,8 +120,8 @@ export default function StudentAssignmentForm({ practicalId, close, refresh }: P
   const filteredStudents = students.filter(
     (s) =>
       s.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      s.roll.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      s.email.toLowerCase().includes(searchQuery.toLowerCase())
+      (s.roll?.toLowerCase() || "").includes(searchQuery.toLowerCase()) ||
+      (s.email?.toLowerCase() || "").includes(searchQuery.toLowerCase())
   );
 
   const assign = async () => {

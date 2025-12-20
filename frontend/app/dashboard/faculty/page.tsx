@@ -281,17 +281,17 @@ export default function FacultyDashboardPage() {
   // --- Chart Data Preparation ---
   // 1. Status Distribution
   const statusData = useMemo(() => {
-    const counts = { submitted: 0, graded: 0, pending: 0, rejected: 0 };
+    const counts = { passed: 0, failed: 0, pending: 0 };
     submissions.forEach(s => {
       const st = (s.status || "pending").toLowerCase();
       if (counts[st as keyof typeof counts] !== undefined) counts[st as keyof typeof counts]++;
       else counts.pending++;
     });
     return [
-      { name: 'Submitted', value: counts.submitted, color: '#3b82f6' }, // blue
-      { name: 'Graded', value: counts.graded, color: '#10b981' }, // green
+      { name: 'Passed', value: counts.passed, color: '#10b981' }, // green
+      { name: 'Failed', value: counts.failed, color: '#ef4444' }, // red
       { name: 'Pending', value: counts.pending, color: '#fbbf24' }, // amber
-      { name: 'Rejected', value: counts.rejected, color: '#ef4444' } // red
+     
     ].filter(d => d.value > 0);
   }, [submissions]);
 

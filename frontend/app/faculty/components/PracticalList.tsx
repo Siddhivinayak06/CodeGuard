@@ -2,19 +2,7 @@
 
 import React, { useMemo, useState, useRef, useEffect } from "react";
 
-/* Types */
-type Practical = {
-  id: number;
-  subject_id: number | string;
-  title: string;
-  description?: string;
-  language?: string;
-  deadline: string;
-  max_marks?: number;
-  created_at?: string;
-};
-
-type Subject = { id: number | string; subject_name?: string; name?: string };
+import { Practical, Subject } from "../types";
 
 /* Utilities */
 function cn(...parts: Array<string | false | null | undefined>) {

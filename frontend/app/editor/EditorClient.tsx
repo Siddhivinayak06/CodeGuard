@@ -163,58 +163,29 @@ export default function EditorClient() {
 
   // Starter templates for each language
   const starterTemplates: Record<string, string> = {
-    java: `public class Main {
-    public static void main(String[] args) {
-        java.util.Scanner sc = new java.util.Scanner(System.in);
-        // Read input and process
-        while (sc.hasNext()) {
-            System.out.println(sc.next());
-        }
-        sc.close();
-    }
+  java: `public class Main {
+  public static void main(String[] args) {
+    System.out.println("Hello World");
+  }
 }`,
-    python: `# Read input and process
-import sys
 
-for line in sys.stdin:
-    print(line.strip())
-`,
-    c: `#include <stdio.h>
+  python: `print("Hello World")`,
 
+  c: `#include <stdio.h>
 int main() {
-    char buffer[1024];
-    // Read input and process
-    while (fgets(buffer, sizeof(buffer), stdin) != NULL) {
-        printf("%s", buffer);
-    }
-    return 0;
-}
-`,
-    cpp: `#include <iostream>
-#include <string>
+  printf("Hello World");
+  return 0;
+}`,
+
+  cpp: `#include <iostream>
 using namespace std;
-
 int main() {
-    string line;
-    // Read input and process
-    while (getline(cin, line)) {
-        cout << line << endl;
-    }
-    return 0;
-}
-`,
-    javascript: `// Read input and process
-const readline = require('readline');
-const rl = readline.createInterface({
-    input: process.stdin,
-    output: process.stdout
-});
+  cout << "Hello World";
+  return 0;
+}`,
 
-rl.on('line', (line) => {
-    console.log(line);
-});
-`,
-  };
+  javascript: `console.log("Hello World")`
+};
 
   // Get starter code for the selected language
   const getStarterCode = (language: string) => {
@@ -687,7 +658,7 @@ rl.on('line', (line) => {
                     showInputToggle={false}
                     showInput={false}
                     setShowInput={() => { }}
-                    terminalRef={null}
+                    terminalRef={undefined}
                   />
                 </div>
               </ResizablePanel>

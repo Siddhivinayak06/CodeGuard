@@ -12,38 +12,7 @@ import { Sparkles, Info as InfoIcon, Code as CodeIcon, FlaskConical as TestIcon,
 // dynamic to avoid SSR issues
 const CodeMirror = dynamic(() => import("@uiw/react-codemirror"), { ssr: false });
 
-// ---------------------- Types ----------------------
-interface TestCase {
-  input: string;
-  expected_output: string;
-  is_hidden?: boolean;
-  time_limit_ms?: number;
-  memory_limit_kb?: number;
-}
-
-interface Practical {
-  id: number;
-  title: string;
-  subject_id: number | string;
-  description?: string;
-  language?: string;
-  deadline: string;
-  max_marks?: number;
-}
-
-interface Subject {
-  id: number | string;
-  subject_name?: string;
-  semester?: string;
-}
-
-interface Student {
-  uid: string;
-  name: string;
-  email?: string;
-  roll?: string;
-  semester?: string;
-}
+import { Practical, Subject, TestCase, Level, Student } from "../types";
 
 interface PracticalFormProps {
   practical: Practical | null;
@@ -84,15 +53,7 @@ export default function PracticalForm({
 }: PracticalFormProps) {
   const { theme } = useTheme();
 
-  // Level type for multi-level practicals
-  type Level = {
-    id?: number;
-    level: 'easy' | 'medium' | 'hard';
-    title: string;
-    description: string;
-    max_marks: number;
-    testCases: TestCase[];
-  };
+  // Level type for multi-level practicals - now using shared type
 
   const defaultLevels: Level[] = [
     { level: 'easy', title: 'Easy', description: '', max_marks: 5, testCases: [{ input: '', expected_output: '', is_hidden: false, time_limit_ms: 2000, memory_limit_kb: 65536 }] },
@@ -122,7 +83,7 @@ export default function PracticalForm({
   const [step, setStep] = useState<1 | 2>(1);
   const [students, setStudents] = useState<Student[]>([]);
   const [selectedStudents, setSelectedStudents] = useState<Student[]>([]);
-  const [assignmentDeadline, setAssignmentDeadline] = useState<string>(form.deadline);
+  const [assignmentDeadline, setAssignmentDeadline] = useState<string>(form.deadline || "");
   const [notes, setNotes] = useState("");
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -142,12 +103,12 @@ export default function PracticalForm({
   // set initial state when practical prop changes
   useEffect(() => {
     if (practical) {
+      const deadline = practical.deadline ? (practical.deadline as string).slice(0, 16) : "";
       setForm({
         ...practical,
-        // ensure datetime-local format
-        deadline: practical.deadline ? String(practical.deadline).slice(0, 16) : new Date().toISOString().slice(0, 16),
+        deadline,
       });
-      setAssignmentDeadline(practical.deadline ? String(practical.deadline).slice(0, 16) : new Date().toISOString().slice(0, 16));
+      setAssignmentDeadline(deadline);
       setStep(1); // Reset to step 1 when opening/editing a practical
 
       const loadData = async () => {
@@ -557,7 +518,7 @@ export default function PracticalForm({
   // small visual helpers
   const isPast = (() => {
     try {
-      return new Date(form.deadline) < new Date();
+      return new Date(form.deadline as string) < new Date();
     } catch {
       return false;
     }
@@ -691,7 +652,7 @@ export default function PracticalForm({
                     </label>
                     <select
                       name="subject_id"
-                      value={form.subject_id}
+                      value={(form.subject_id as string) || ""}
                       onChange={handleInput}
                       disabled={Boolean(defaultSubjectId)}
                       className={cx(
@@ -729,7 +690,7 @@ export default function PracticalForm({
                     <input
                       type="datetime-local"
                       name="deadline"
-                      value={form.deadline}
+                      value={form.deadline || ""}
                       onChange={handleInput}
                       className="w-full px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all text-gray-900 dark:text-white text-sm"
                     />
