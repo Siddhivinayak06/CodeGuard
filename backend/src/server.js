@@ -5,6 +5,7 @@ const app = require('./app');
 const socketService = require('./services/socketService');
 const config = require('./config');
 const logger = require('./utils/logger');
+const poolManager = require('./services/poolManager');
 
 const PORT = config.port;
 const server = http.createServer(app);
@@ -19,6 +20,11 @@ logger.info(`Initializing CodeGuard server`, {
 
 wss.on('connection', socketService.handleConnection);
 
+// Initialize Pool
+poolManager.initialize().catch(err => {
+  logger.error('Failed to initialize container pool', { error: err.message });
+});
+
 // Start the server
 server.listen(PORT, () => {
   logger.info(`Server started successfully`, {
@@ -31,10 +37,11 @@ server.listen(PORT, () => {
 const shutdown = (signal) => {
   logger.warn(`Received ${signal}, shutting down gracefully`);
 
-  server.close(() => {
+  server.close(async () => {
     logger.info('HTTP server closed');
     socketService.cleanupAll();
     logger.info('WebSocket connections cleaned up');
+    await poolManager.cleanup();
     process.exit(0);
   });
 

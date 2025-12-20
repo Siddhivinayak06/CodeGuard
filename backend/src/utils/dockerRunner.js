@@ -3,6 +3,7 @@ const { spawn } = require('child_process');
 const { v4: uuidv4 } = require('uuid');
 const config = require('../config');
 const logger = require('../utils/logger');
+const poolManager = require('../services/poolManager');
 
 function escapeForPrintf(s = '') {
   return String(s).replace(/'/g, "'\\''");
@@ -24,33 +25,11 @@ async function runCommand(args, options = {}) {
   return { stdout, stderr, exitCode };
 }
 
-async function startBatchContainer(containerName, lang) {
-  const image = lang === 'java' ? 'codeguard-java' : (lang === 'python' ? 'codeguard-python' : 'codeguard-c');
-  const memoryLimit = (lang === 'java' ? config.docker.javaMemory : config.docker.memory);
-  const pidsLimit = (lang === 'java' ? config.docker.javaPidsLimit : config.docker.pidsLimit);
-
-  const runArgs = [
-    'run',
-    '--rm',
-    '--name', containerName,
-    '-d',
-    '--network', 'none',
-    '--read-only',
-    '--tmpfs', `/tmp:exec,rw,size=${memoryLimit}`,
-    '-m', memoryLimit,
-    '--cpus=' + config.docker.cpus,
-    '--pids-limit', pidsLimit,
-    image,
-    'tail', '-f', '/dev/null'
-  ];
-
-  await runCommand(runArgs);
-}
-
 async function compileInContainer(containerName, code, lang, uniqueId) {
   const escapedCode = code.replace(/\r/g, '');
   let cmd = '';
 
+  // Pooled containers use /tmp/${uniqueId} for isolation
   if (lang === 'python') {
     cmd = `mkdir -p /tmp/${uniqueId} && printf "%s" '${escapeForPrintf(escapedCode)}' > /tmp/${uniqueId}/code.py`;
   } else if (lang === 'c') {
@@ -95,8 +74,6 @@ java -cp /tmp/${uniqueId} $MAIN_CLASS
 `;
   }
 
-  // Use /usr/bin/time -p for basic POSIX timing (real, user, sys)
-  // For Java, we might have GNU time which supports -f for memory
   const timeCmd = (lang === 'java') ? '/usr/bin/time -f "CPU:%U|%S MEM:%M"' : '/usr/bin/time -p';
   const runCmd = `printf "%s" '${escapeForPrintf(stdinInput)}' | timeout ${timeoutSec} ${timeCmd} sh -c '${baseRunCmd.trim().replace(/'/g, "'\\''")}'`;
 
@@ -106,17 +83,12 @@ java -cp /tmp/${uniqueId} $MAIN_CLASS
   let memoryKB = 0;
 
   if (lang === 'java') {
-    // Parse GNU time format: "CPU:0.01|0.02 MEM:1234"
     const match = result.stderr.match(/CPU:([\d.]+)\|([\d.]+) MEM:(\d+)/);
     if (match) {
       cpuTime = parseFloat(match[1]) + parseFloat(match[2]);
       memoryKB = parseInt(match[3]);
     }
   } else {
-    // Parse POSIX time format:
-    // real 0.00
-    // user 0.00
-    // sys 0.00
     const userMatch = result.stderr.match(/user ([\d.]+)/);
     const sysMatch = result.stderr.match(/sys ([\d.]+)/);
     if (userMatch && sysMatch) {
@@ -124,7 +96,6 @@ java -cp /tmp/${uniqueId} $MAIN_CLASS
     }
   }
 
-  // Clean stderr from time output to avoid cluttering user errors
   const cleanedStderr = result.stderr
     .replace(/CPU:[\d.]+\|[\d.]+ MEM:\d+/, '')
     .replace(/real [\d.]+\nuser [\d.]+\nsys [\d.]+/, '')
@@ -144,20 +115,23 @@ java -cp /tmp/${uniqueId} $MAIN_CLASS
 }
 
 module.exports = async function runBatchCode(code, lang = 'python', batch = [], options = {}) {
-  const CONCURRENCY_LIMIT = 1; // Serial execution inside container for better timing consistency
+  const CONCURRENCY_LIMIT = 1;
   const { earlyExit = true } = options;
   const uniqueId = uuidv4();
-  const containerName = `batch-${uniqueId}`;
+
+  let containerId = null;
+  const poolLang = (lang === 'cpp' || lang === 'c++') ? 'cpp' : (lang === 'c' ? 'c' : (lang === 'python' ? 'python' : 'java'));
 
   try {
-    logger.info(`Starting batch container ${containerName} for ${lang}...`);
-    await startBatchContainer(containerName, lang);
+    logger.info(`Acquiring container from pool for ${lang}...`);
+    containerId = await poolManager.acquire(poolLang);
+    logger.info(`Acquired container ${containerId}`);
 
-    logger.info(`Compiling code in container ${containerName}...`);
-    const compileResult = await compileInContainer(containerName, code, lang, uniqueId);
+    logger.info(`Compiling code in container ${containerId}...`);
+    const compileResult = await compileInContainer(containerId, code, lang, uniqueId);
 
     if (compileResult.exitCode !== 0) {
-      logger.warn(`Compilation failed for ${containerName}`);
+      logger.warn(`Compilation failed for ${containerId}`);
       return batch.map(tc => ({
         test_case_id: tc.id,
         input: tc.stdinInput,
@@ -172,7 +146,6 @@ module.exports = async function runBatchCode(code, lang = 'python', batch = [], 
     const results = [];
     let hasFailed = false;
 
-    // Helper for concurrency with early exit support
     const runWithEarlyExit = async () => {
       const queue = [...batch];
 
@@ -182,7 +155,7 @@ module.exports = async function runBatchCode(code, lang = 'python', batch = [], 
           const tc = queue.shift();
           if (!tc) break;
 
-          const result = await execTestCase(containerName, tc, lang, uniqueId);
+          const result = await execTestCase(containerId, tc, lang, uniqueId);
           results.push(result);
 
           if (result.exitCode !== 0) {
@@ -201,7 +174,7 @@ module.exports = async function runBatchCode(code, lang = 'python', batch = [], 
       return results;
     };
 
-    logger.info(`Executing ${batch.length} test cases in ${containerName} (earlyExit: ${earlyExit})...`);
+    logger.info(`Executing ${batch.length} test cases in ${containerId}...`);
     const batchResults = await runWithEarlyExit();
 
     logger.info(`📦 Final batch results: ${batchResults.length}`);
@@ -210,7 +183,11 @@ module.exports = async function runBatchCode(code, lang = 'python', batch = [], 
     logger.error(`Batch execution failed: ${e.message}`);
     throw e;
   } finally {
-    // Always cleanup
-    spawn('docker', ['rm', '-f', containerName]);
+    if (containerId) {
+      logger.info(`Releasing container ${containerId} back to pool...`);
+      // Use fire-and-forget release or await it? 
+      // PoolManager.release handles its own internal cleanup.
+      poolManager.release(poolLang, containerId);
+    }
   }
 };
