@@ -1,5 +1,4 @@
 const { spawn } = require('child_process');
-const pty = require('@lydell/node-pty');
 const config = require('../config');
 const logger = require('../utils/logger');
 

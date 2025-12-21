@@ -46,12 +46,9 @@ const handleConnection = (ws) => {
   let lang = 'python';
   let suppressNextOutput = false;
   let fileBuffer = []; // Buffer to collect multiple files
-  let isReady = false; // Track if the session is ready for code execution
-  let isSwitching = false; // Track if currently switching languages
   let pooledContainer = null;
 
   const cleanup = async () => {
-    isReady = false;
     dockerService.killIfExists(cProcess);
     dockerService.killIfExists(cppProcess);
     dockerService.killIfExists(pythonProcess);
@@ -72,14 +69,11 @@ const handleConnection = (ws) => {
   activeSessions.set(sessionId, { cleanup });
 
   const sendReady = (language) => {
-    isReady = true;
-    isSwitching = false;
     safeSend(ws, JSON.stringify({ type: 'ready', lang: language }));
     logger.info(`Session ready for language: ${language}`);
   };
 
   const startSession = async (newLang) => {
-    isSwitching = true;
     await cleanup();
 
     lang = newLang; // Sync lang for release
@@ -94,7 +88,9 @@ const handleConnection = (ws) => {
           (data) => safeSend(ws, data.toString()),
           (code) => {
             logger.info(`Python wrapper exited with code ${code}`);
-            if (code !== 0) isReady = false;
+            if (code !== 0) {
+              // error state handling could go here
+            }
           }
         );
         // Send ready after process is attached
@@ -121,7 +117,9 @@ const handleConnection = (ws) => {
           ({ exitCode }) => {
             logger.info(`C wrapper exited with code ${exitCode}`);
             suppressNextOutput = false;
-            if (exitCode !== 0) isReady = false;
+            if (exitCode !== 0) {
+              // error state handling could go here
+            }
           }
         );
         // Check if process was created and send ready after it has time to initialize
@@ -129,7 +127,13 @@ const handleConnection = (ws) => {
           setTimeout(() => sendReady(newLang), 100);
         } else {
           logger.error('Failed to create C process');
-          safeSend(ws, JSON.stringify({ type: 'error', message: 'Failed to start C container' }));
+          safeSend(
+            ws,
+            JSON.stringify({
+              type: 'error',
+              message: 'Failed to start C container',
+            })
+          );
         }
       }, 300);
     } else if (newLang === 'cpp') {
@@ -153,7 +157,9 @@ const handleConnection = (ws) => {
           ({ exitCode }) => {
             logger.info(`C++ wrapper exited with code ${exitCode}`);
             suppressNextOutput = false;
-            if (exitCode !== 0) isReady = false;
+            if (exitCode !== 0) {
+              // error state handling could go here
+            }
           }
         );
         // Check if process was created and send ready
@@ -161,7 +167,13 @@ const handleConnection = (ws) => {
           setTimeout(() => sendReady(newLang), 100);
         } else {
           logger.error('Failed to create C++ process');
-          safeSend(ws, JSON.stringify({ type: 'error', message: 'Failed to start C++ container' }));
+          safeSend(
+            ws,
+            JSON.stringify({
+              type: 'error',
+              message: 'Failed to start C++ container',
+            })
+          );
         }
       }, 300);
     } else if (newLang === 'java') {
@@ -171,7 +183,9 @@ const handleConnection = (ws) => {
           (data) => safeSend(ws, data.toString()),
           (code) => {
             logger.info(`Java wrapper exited with code ${code}`);
-            if (code !== 0) isReady = false;
+            if (code !== 0) {
+              // error state handling could go here
+            }
           }
         );
         // Send ready after process is attached (Java needs more time)
@@ -202,15 +216,12 @@ const handleConnection = (ws) => {
         name:
           parsed.filename ||
           'main' +
-          (lang === 'python' ? '.py' : lang === 'java' ? '.java' : '.c'),
+            (lang === 'python' ? '.py' : lang === 'java' ? '.java' : '.c'),
         content: parsed.data || '',
         isActive: parsed.activeFile || false,
       });
 
-      // When we get the last file, execute
       if (parsed.isLast) {
-        const activeFile = fileBuffer.find((f) => f.isActive) || fileBuffer[0];
-
         if (lang === 'python' && pythonProcess) {
           safeSend(ws, '\x1b[2J\x1b[H');
           fileBuffer.forEach((file) => {
