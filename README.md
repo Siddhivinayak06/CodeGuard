@@ -1,19 +1,22 @@
 # 🧠 CodeGuard – Online Code Evaluation Platform
 
-CodeGuard is a full-stack web application designed for **secure, real-time code execution and evaluation**. It provides a robust environment for coding practice, assessments, and classroom management, powered by isolated Docker containers.
+CodeGuard is a full-stack web application designed for **secure, real-time code execution and evaluation**. It provides a robust environment for coding practice, assessments, and classroom management, powered by isolated Docker containers and an optimized pooling system.
 
 ---
 
 ## 🚀 Features
 
-- 📝 **Advanced Code Editor** – Rich text editor with syntax highlighting for C, Python, and Java.
-- ⚙️ **Multi-Language Support** – Securely execute C, Python, and Java code.
-- 🔒 **Sandboxed Execution** – Code runs in isolated Docker containers to ensure security and prevent system access.
-- ⚡ **Interactive Mode** – Real-time code execution with immediate feedback for interactive learning.
+- 📝 **Advanced Code Editor** – Rich text editor with syntax highlighting for C, C++, Python, and Java.
+- ⚙️ **Multi-Language Support** – Securely execute multiple languages in isolated environments.
+- 🔒 **Sandboxed Execution** – Code runs in resource-limited Docker containers to ensure security and prevent system access.
+- ⚡ **Interactive Mode** – Real-time code execution via WebSockets with an integrated terminal.
+- 🏭 **Container Pooling** – Optimized "pre-warmed" container system to eliminate cold start latency.
 - 👩‍🏫 **Faculty Dashboard** – Comprehensive tools for faculty to manage classes, create assignments, and view student analytics.
-- 📁 **File Integrations** – Support for uploading CSV and Excel files for data-driven assignments.
-- ✅ **Automated Evaluation** – Automatic grading against test cases.
-- 📊 **Submission History** – detailed logs of past submissions and performance.
+- 🍱 **Bento Admin Dashboard** – A modern, dense, and visually rich layout for system-wide overview and management.
+- ✅ **Automated Evaluation** – Automatic grading against test cases with detailed feedback.
+- 📶 **Interactive Terminal** – Full terminal experience inside the browser with support for interactive I/O.
+- 🛠️ **Error Diagnostics** – Enhanced Python traceback parsing for cleaner, more readable error messages.
+- 📊 **Submission History** – Detailed logs of past submissions and performance metrics.
 - 🛡️ **Role-Based Access** – Secure authentication via Supabase with distinct roles (Student, Faculty, Admin).
 
 ---
@@ -22,11 +25,11 @@ CodeGuard is a full-stack web application designed for **secure, real-time code 
 
 | Category | Technologies |
 |-----------|---------------|
-| **Frontend** | Next.js 16, TypeScript, Tailwind CSS, ShadCN UI |
-| **Backend** | Node.js, Express.js, WebSocket, Zod |
-| **Database & Auth** | Supabase |
-| **Runtime** | Docker (Alpine Linux), C, Python, Java |
-| **Validation** | Zod (Schema Validation) |
+| **Frontend** | Next.js 16, React 19, TypeScript, Tailwind CSS, Framer Motion, ShadCN UI |
+| **Backend** | Node.js, Express.js (v5), WebSocket, BullMQ, Redis, Zod |
+| **Database & Auth** | Supabase (PostgreSQL) |
+| **Runtime** | Docker (Alpine Linux), C/C++, Python 3.12, Java 21 |
+| **AI Integration** | Google Gemini (for insights and error parsing) |
 
 ---
 
@@ -54,7 +57,7 @@ npm start
 # OR for development
 npm run dev
 ```
-*The backend runs on http://localhost:5000*
+*The backend runs on http://localhost:5002*
 
 ### 3. Frontend Setup
 The frontend provides the user interface.
@@ -71,17 +74,25 @@ npm run dev
 *The frontend runs on http://localhost:3000*
 
 ### 4. Environment Variables
-Create a `.env` file in the `frontend` root:
+Create a `.env` file in the root directory (refer to `.env` in the root for a full list):
+
 ```bash
+# Core Configuration
+NEXT_PUBLIC_API_URL=http://localhost:5002
 NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
-```
 
-And a `.env` file in the `backend` root:
-```bash
-PORT=5000
-SUPABASE_URL=your_supabase_url
-SUPABASE_KEY=your_supabase_service_role_key
+# Docker Execution Limits
+DOCKER_MEMORY_LIMIT=128m
+DOCKER_CPU_LIMIT=0.5
+DOCKER_PIDS_LIMIT=128
+DOCKER_JAVA_MEMORY_LIMIT=256m
+
+# Container Pool (Pre-initialized hot containers)
+DOCKER_POOL_SIZE_CPP=2
+DOCKER_POOL_SIZE_PYTHON=2
+DOCKER_POOL_SIZE_JAVA=1
+DOCKER_POOL_SIZE_C=2
 ```
 
 ---
@@ -91,22 +102,24 @@ SUPABASE_KEY=your_supabase_service_role_key
 ```bash
 CodeGuard/
 ├── README.md
-├── docker-compose.yml
+├── docker-compose.yml        # Multi-container orchestration
 ├── backend/                  # Node.js/Express Backend
 │   ├── src/
-│   │   ├── server.js         # Entry point
-│   │   ├── routes/           # API Routes
-│   │   ├── runners/          # Docker Execution Logic
-│   │   └── interactive_wrapper.c # Interactive execution wrapper
+│   │   ├── services/         # Core logic (Docker, Pool, AI, Sockets)
+│   │   ├── routes/           # API Endpoints
+│   │   ├── controllers/      # Request handlers
+│   │   └── server.js         # Entry point
+│   ├── runners/              # Language-specific wrappers
 │   ├── Dockerfile.*          # Language-specific Dockerfiles
 │   └── package.json
 │
 └── frontend/                 # Next.js 16 Frontend
-    ├── app/                  # App Router Pages
-    │   ├── faculty/          # Dashboard Routes
-    │   ├── compiler/         # Code Editor Page
-    │   └── page.tsx          # Landing Page
-    ├── components/           # Reusable UI Components
-    ├── lib/                  # Utilities & Supabase Client
+    ├── app/                  # App Router
+    │   ├── admin/            # Admin Bento Dashboard
+    │   ├── faculty/          # Faculty Management UI
+    │   ├── compiler/         # Interactive Editor
+    │   └── auth/             # Supabase Auth logic
+    ├── components/           # Reusable UI & Layouts
+    ├── lib/                  # Hooks, Utils, & Supabase Client
     └── package.json
 ```
