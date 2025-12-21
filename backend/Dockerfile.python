@@ -1,35 +1,32 @@
-# Optimized Python runtime for code execution
-FROM python:3.11-alpine
+FROM python:3.11-slim
 
-# Install minimal dependencies
-RUN apk add --no-cache \
-    coreutils \
-    gcc \
-    musl-dev \
-    python3-dev \
-    linux-headers
+# Install timeout command
+RUN apt-get update && apt-get install -y coreutils time && rm -rf /var/lib/apt/lists/*
 
-# Install essential libraries
+# Install safe/common libraries
 RUN pip install --no-cache-dir \
     numpy \
-    pandas
+    pandas \
+    matplotlib \
+    seaborn \
+    scipy \
+    scikit-learn
 
-# Set Matplotlib config dir to writable location
-ENV MPLCONFIGDIR=/tmp \
-    PYTHONUNBUFFERED=1 \
-    PYTHONDONTWRITEBYTECODE=1
+# Prevent excessive thread creation and enable bytecode caching
+ENV OPENBLAS_NUM_THREADS=1 \
+    MKL_NUM_THREADS=1 \
+    PYTHONDONTWRITEBYTECODE=0 \
+    PYTHONPYCACHEPREFIX=/app/workspace/__pycache__ \
+    MPLCONFIGDIR=/tmp
 
 # Set working directory
 WORKDIR /app
 
-# Copy wrapper script
+# Copy wrapper script into the container
 COPY interactive_wrapper.py /app/
 
-# Create non-root user
-RUN adduser -D -u 1000 runner && \
+# Create a non-root user and setup workspace
+RUN useradd -m runner && \
+    mkdir -p /app/workspace && \
     chown -R runner:runner /app
-
 USER runner
-
-# Keep container alive
-CMD ["tail", "-f", "/dev/null"]

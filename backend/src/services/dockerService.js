@@ -39,9 +39,12 @@ const launchContainer = (lang, containerName) => {
       '--cpus=' + config.docker.cpus,
       '--pids-limit',
       config.docker.pidsLimit,
+      '--security-opt=no-new-privileges',
       '--read-only',
       '--tmpfs',
-      `/tmp:exec,rw,size=${config.docker.memory}`,
+      '/tmp:exec,rw,size=128m',
+      '--tmpfs',
+      '/app/workspace:exec,rw,size=256m,uid=1000,gid=1000,mode=1777',
       'codeguard-python',
       'tail',
       '-f',
@@ -62,8 +65,9 @@ const launchContainer = (lang, containerName) => {
       '--cpus=' + config.docker.cpus,
       '--pids-limit',
       config.docker.pidsLimit,
+      '--security-opt=no-new-privileges',
       '--tmpfs',
-      '/app/workspace:exec,rw,size=64m,uid=1000,gid=1000,mode=1777',
+      '/app/workspace:exec,rw,size=256m,uid=1000,gid=1000,mode=1777',
       '-e',
       `LANG_MODE=${lang}`, // Pass language mode to container
       'codeguard-c',
@@ -85,8 +89,11 @@ const launchContainer = (lang, containerName) => {
       '--cpus=' + config.docker.cpus,
       '--pids-limit',
       config.docker.javaPidsLimit,
+      '--security-opt=no-new-privileges',
       '--tmpfs',
-      `/tmp:exec,rw,size=${config.docker.javaMemory}`,
+      '/tmp:exec,rw,size=128m',
+      '--tmpfs',
+      '/workspace:exec,rw,size=256m,uid=1000,gid=1000,mode=1777',
       'codeguard-java',
       'tail',
       '-f',
@@ -165,13 +172,14 @@ const execJava = (containerName, onData, onExit) => {
 };
 
 const execC = (containerName, onData, onExit) => {
-  logger.info('Starting C wrapper process inside container with node-pty');
+  logger.info('Starting C wrapper process inside container');
 
-  const cProcess = pty.spawn(
+  // Use child_process.spawn instead of pty to avoid TTY issues in Docker
+  const cProcess = spawn(
     'docker',
     [
       'exec',
-      '-it',
+      '-i',
       '-u',
       'runner',
       '-e',
@@ -179,32 +187,40 @@ const execC = (containerName, onData, onExit) => {
       containerName,
       '/app/interactive_wrapper.out',
     ],
-    {
-      name: 'xterm-color',
-      cols: 80,
-      rows: 24,
-      cwd: process.cwd(),
-      env: process.env,
-    }
+    { stdio: ['pipe', 'pipe', 'pipe'] }
   );
 
-  cProcess.onData(onData);
+  cProcess.stdout.on('data', (data) => onData(data.toString()));
+  cProcess.stderr.on('data', (data) => onData(data.toString()));
 
   if (onExit) {
-    cProcess.onExit(onExit);
+    cProcess.on('exit', (code) => onExit({ exitCode: code }));
   }
+
+  cProcess.on('error', (err) => {
+    logger.error('C process error:', err.message);
+    if (onExit) onExit({ exitCode: 1 });
+  });
+
+  // Add a write method to match the interface used in socketService
+  cProcess.write = (data) => {
+    if (cProcess.stdin && cProcess.stdin.writable) {
+      cProcess.stdin.write(data);
+    }
+  };
 
   return cProcess;
 };
 
 const execCpp = (containerName, onData, onExit) => {
-  logger.info('Starting C++ wrapper process inside container with node-pty');
+  logger.info('Starting C++ wrapper process inside container');
 
-  const cppProcess = pty.spawn(
+  // Use child_process.spawn instead of pty to avoid TTY issues in Docker
+  const cppProcess = spawn(
     'docker',
     [
       'exec',
-      '-it',
+      '-i',
       '-u',
       'runner',
       '-e',
@@ -212,20 +228,27 @@ const execCpp = (containerName, onData, onExit) => {
       containerName,
       '/app/interactive_wrapper.out',
     ],
-    {
-      name: 'xterm-color',
-      cols: 80,
-      rows: 24,
-      cwd: process.cwd(),
-      env: process.env,
-    }
+    { stdio: ['pipe', 'pipe', 'pipe'] }
   );
 
-  cppProcess.onData(onData);
+  cppProcess.stdout.on('data', (data) => onData(data.toString()));
+  cppProcess.stderr.on('data', (data) => onData(data.toString()));
 
   if (onExit) {
-    cppProcess.onExit(onExit);
+    cppProcess.on('exit', (code) => onExit({ exitCode: code }));
   }
+
+  cppProcess.on('error', (err) => {
+    logger.error('C++ process error:', err.message);
+    if (onExit) onExit({ exitCode: 1 });
+  });
+
+  // Add a write method to match the interface used in socketService
+  cppProcess.write = (data) => {
+    if (cppProcess.stdin && cppProcess.stdin.writable) {
+      cppProcess.stdin.write(data);
+    }
+  };
 
   return cppProcess;
 };

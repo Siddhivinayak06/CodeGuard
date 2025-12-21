@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { createClient as createServerClient } from "@/lib/supabase/server";
 import { supabaseAdmin } from "@/lib/supabase/service";
 
+export const dynamic = 'force-dynamic';
+
 /** GET: get assigned practicals for the current student */
 export async function GET() {
   try {

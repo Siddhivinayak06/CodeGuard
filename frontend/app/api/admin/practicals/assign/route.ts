@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { createClient as createServerClient } from "@/lib/supabase/server";
 import { supabaseAdmin } from "@/lib/supabase/service";
 
+export const dynamic = 'force-dynamic';
+
 /** Check if current user is faculty or admin */
 async function isFacultyOrAdmin(supabaseServerClient: any) {
   try {

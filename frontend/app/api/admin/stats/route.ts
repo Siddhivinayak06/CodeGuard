@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/service";
 
+export const dynamic = 'force-dynamic';
+
 export async function GET() {
   try {
     const [studentsRes, facultyRes, subjectsRes, practicalsRes] = await Promise.all([

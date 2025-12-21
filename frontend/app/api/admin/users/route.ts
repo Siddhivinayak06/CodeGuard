@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient as createServerClient } from "@/lib/supabase/server";
 import { supabaseAdmin } from "@/lib/supabase/service";
 
+export const dynamic = 'force-dynamic';
+
 // Helper: check if current user is admin
 async function isAdminUsingCookieClient(): Promise<boolean> {
   try {

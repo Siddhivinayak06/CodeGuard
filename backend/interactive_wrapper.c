@@ -1,3 +1,4 @@
+#include <dirent.h>
 #include <errno.h>
 #include <signal.h>
 #include <stdio.h>
@@ -11,43 +12,55 @@
 #include <unistd.h>
 
 #define MAX_LINE 4096
-#define CODE_FILE_C "/app/workspace/user_code.c"
-#define CODE_FILE_CPP "/app/workspace/user_code.cpp"
+#define WORKSPACE "/app/workspace"
 #define EXEC_FILE "/app/workspace/user_program"
 #define ERROR_FILE "/app/workspace/compile_errors.txt"
-#define MAX_CPU_TIME 3
+#define MAX_CPU_TIME 15
 
-char *get_code_file() {
-  char *compiler = getenv("COMPILER");
-  if (compiler && strcmp(compiler, "g++") == 0) {
-    return CODE_FILE_CPP;
+// ANSI Colors
+#define RED "\033[91m"
+#define GREEN "\033[92m"
+#define YELLOW "\033[93m"
+#define CYAN "\033[96m"
+#define BOLD "\033[1m"
+#define RESET "\033[0m"
+
+void cleanup_workspace() {
+  DIR *d = opendir(WORKSPACE);
+  if (!d)
+    return;
+  struct dirent *dir;
+  while ((dir = readdir(d)) != NULL) {
+    if (dir->d_type == DT_REG) {
+      char path[512];
+      snprintf(path, sizeof(path), "%s/%s", WORKSPACE, dir->d_name);
+      unlink(path);
+    }
   }
-  return CODE_FILE_C;
-}
-
-void cleanup_files() {
-  unlink(CODE_FILE_C);
-  unlink(CODE_FILE_CPP);
-  unlink(EXEC_FILE);
-  unlink(ERROR_FILE);
+  closedir(d);
 }
 
 int compile_code() {
-  char compile_cmd[512];
+  char compile_cmd[1024];
   char *compiler = getenv("COMPILER");
   if (!compiler)
     compiler = "gcc";
 
-  char *code_file = get_code_file();
-
-  snprintf(compile_cmd, sizeof(compile_cmd), "%s -o %s %s 2> %s", compiler,
-           EXEC_FILE, code_file, ERROR_FILE);
+  // Build compilation command with ccache and -O0 for speed
+  if (strcmp(compiler, "g++") == 0) {
+    snprintf(compile_cmd, sizeof(compile_cmd),
+             "ccache g++ -O0 -o %s %s/*.cpp 2> %s", EXEC_FILE, WORKSPACE,
+             ERROR_FILE);
+  } else {
+    snprintf(compile_cmd, sizeof(compile_cmd),
+             "ccache gcc -O0 -o %s %s/*.c 2> %s", EXEC_FILE, WORKSPACE,
+             ERROR_FILE);
+  }
 
   int ret = system(compile_cmd);
 
   if (ret != 0) {
-    printf("❌ Compilation failed\n");
-
+    printf("%s❌ Compilation failed%s\n", RED, RESET);
     FILE *err_file = fopen(ERROR_FILE, "r");
     if (err_file) {
       char line[MAX_LINE];
@@ -57,138 +70,100 @@ int compile_code() {
       fclose(err_file);
     }
     printf("\n");
-    fflush(stdout);
     return -1;
   }
 
   chmod(EXEC_FILE, 0755);
-  printf("✅ Compilation successful\n");
-  fflush(stdout);
+  printf("%s✅ Compilation successful%s\n", GREEN, RESET);
   return 0;
 }
 
 void run_code() {
   printf("\n");
-  fflush(stdout);
-
   pid_t pid = fork();
   if (pid == 0) {
-    // Child process: Disable echo
-    struct termios tty;
-    if (tcgetattr(STDIN_FILENO, &tty) == 0) {
-      tty.c_lflag &= ~ECHO;
-      tcsetattr(STDIN_FILENO, TCSANOW, &tty);
-    }
-
-    // Set CPU time limit
+    // Child
     struct rlimit cpu_limit;
     cpu_limit.rlim_cur = (rlim_t)MAX_CPU_TIME;
     cpu_limit.rlim_max = (rlim_t)MAX_CPU_TIME;
+    setrlimit(RLIMIT_CPU, &cpu_limit);
 
-    if (setrlimit(RLIMIT_CPU, &cpu_limit) != 0) {
-      fprintf(stderr, "Warning: Could not set CPU limit\n");
-    }
+    // Wall-clock timeout (30s)
+    alarm(30);
 
-    // Execute the program
     execl(EXEC_FILE, EXEC_FILE, NULL);
-    printf("❌ Failed to execute program\n");
-    fflush(stdout);
+    perror(RED "❌ Execution failed" RESET);
     exit(1);
   } else if (pid > 0) {
-    // Parent process: simply wait
     int status;
     waitpid(pid, &status, 0);
-
     if (WIFEXITED(status)) {
-      int exit_code = WEXITSTATUS(status);
-      printf("\n...Program finished with exit code %d\n", exit_code);
+      printf("\n...Program finished with exit code %d\n", WEXITSTATUS(status));
     } else if (WIFSIGNALED(status)) {
-      int sig = WTERMSIG(status);
-      if (sig == SIGXCPU) {
-        printf("\n⏱️ Program killed - CPU time limit exceeded (infinite loop "
-               "detected)\n");
+      if (WTERMSIG(status) == SIGXCPU) {
+        printf("\n⏱️ Program killed - CPU time limit exceeded\n");
+      } else if (WTERMSIG(status) == SIGALRM) {
+        printf("\n⏱️ Program killed - Wall-clock timeout exceeded\n");
       } else {
-        printf("\n...Program killed due to timeout");
+        printf("\n%s...Program killed by signal %d%s\n", YELLOW,
+               WTERMSIG(status), RESET);
       }
     }
-    fflush(stdout);
   } else {
-    printf("❌ Failed to fork process\n");
-    fflush(stdout);
+    perror("❌ Fork failed");
   }
 }
 
 int main() {
   char line[MAX_LINE];
-  FILE *code_file = NULL;
-  int collecting_code = 0;
+  FILE *current_file = NULL;
+  char current_path[512] = "";
 
-  setbuf(stdin, NULL);
-  setbuf(stdout, NULL);
-  setbuf(stderr, NULL);
+  setvbuf(stdin, NULL, _IONBF, 0);
+  setvbuf(stdout, NULL, _IONBF, 0);
+  setvbuf(stderr, NULL, _IONBF, 0);
 
-  if (access("/app/workspace", W_OK) != 0) {
-    printf("❌ Error: /app/workspace is not writable\n");
-    fflush(stdout);
-    return 1;
-  }
+  cleanup_workspace();
 
   while (fgets(line, sizeof(line), stdin)) {
     line[strcspn(line, "\r\n")] = 0;
 
-    if (strlen(line) == 0) {
+    if (strncmp(line, "__FILE_START__", 14) == 0) {
+      if (current_file)
+        fclose(current_file);
+      char *filename = line + 14;
+      while (*filename == ' ')
+        filename++;
+      snprintf(current_path, sizeof(current_path), "%s/%s", WORKSPACE,
+               filename);
+      current_file = fopen(current_path, "w");
       continue;
     }
 
     if (strcmp(line, "__CODE_START__") == 0) {
-      collecting_code = 1;
-      cleanup_files();
-
-      code_file = fopen(get_code_file(), "w");
-      if (!code_file) {
-        printf("❌ Error: Could not create code file\n");
-        fflush(stdout);
-        collecting_code = 0;
-      }
-
+      // Legacy support or sentinel for starting code block
       continue;
     }
 
     if (strcmp(line, "__RUN_CODE__") == 0) {
-      if (code_file) {
-        fclose(code_file);
-        code_file = NULL;
+      if (current_file) {
+        fclose(current_file);
+        current_file = NULL;
       }
-
-      collecting_code = 0;
-
-      struct stat st;
-      char *path = get_code_file();
-      if (stat(path, &st) != 0 || st.st_size == 0) {
-        printf("❌ Error: No code to compile\n");
-        fflush(stdout);
-        continue;
-      }
-
       if (compile_code() == 0) {
         run_code();
       }
-
-      cleanup_files();
-      fflush(stdout);
+      printf("\n%s--- Execution Finished ---%s\n", CYAN, RESET);
       continue;
     }
 
-    if (collecting_code && code_file) {
-      fprintf(code_file, "%s\n", line);
-      fflush(code_file);
+    if (current_file) {
+      fprintf(current_file, "%s\n", line);
+      fflush(current_file);
     }
   }
 
-  if (code_file) {
-    fclose(code_file);
-  }
-
-  cleanup_files();
+  if (current_file)
+    fclose(current_file);
   return 0;
 }

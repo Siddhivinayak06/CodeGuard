@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/service";
 
+export const dynamic = 'force-dynamic';
+
 // Allowed status values (must match DB check constraint)
 const VALID_STATUSES = ["pending", "passed", "failed"];
 

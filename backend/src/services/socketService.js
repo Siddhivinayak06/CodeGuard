@@ -1,5 +1,6 @@
 const { v4: uuidv4 } = require('uuid');
 const dockerService = require('./dockerService');
+const poolManager = require('./poolManager');
 const config = require('../config');
 const logger = require('../utils/logger');
 
@@ -38,7 +39,6 @@ const handleConnection = (ws) => {
   logger.info('New client connected');
 
   const sessionId = uuidv4();
-  let containerName = `interactive-${sessionId}`;
   let cProcess = null;
   let cppProcess = null;
   let pythonProcess = null;
@@ -46,38 +46,64 @@ const handleConnection = (ws) => {
   let lang = 'python';
   let suppressNextOutput = false;
   let fileBuffer = []; // Buffer to collect multiple files
+  let isReady = false; // Track if the session is ready for code execution
+  let isSwitching = false; // Track if currently switching languages
+  let pooledContainer = null;
 
-  const cleanup = () => {
+  const cleanup = async () => {
+    isReady = false;
     dockerService.killIfExists(cProcess);
     dockerService.killIfExists(cppProcess);
     dockerService.killIfExists(pythonProcess);
     dockerService.killIfExists(javaProcess);
-    dockerService.removeContainer(containerName);
+    cProcess = null;
+    cppProcess = null;
+    pythonProcess = null;
+    javaProcess = null;
+
+    if (pooledContainer) {
+      const containerId = pooledContainer;
+      pooledContainer = null;
+      await poolManager.release(lang, containerId);
+    }
   };
 
   // Register session
   activeSessions.set(sessionId, { cleanup });
 
-  const startSession = (newLang) => {
-    cleanup();
+  const sendReady = (language) => {
+    isReady = true;
+    isSwitching = false;
+    safeSend(ws, JSON.stringify({ type: 'ready', lang: language }));
+    logger.info(`Session ready for language: ${language}`);
+  };
 
-    containerName = `interactive-${sessionId}-${newLang}`;
+  const startSession = async (newLang) => {
+    isSwitching = true;
+    await cleanup();
+
+    lang = newLang; // Sync lang for release
+    const containerId = await poolManager.acquire(newLang);
+    pooledContainer = containerId;
     suppressNextOutput = false;
-
-    dockerService.launchContainer(newLang, containerName);
 
     if (newLang === 'python') {
       setTimeout(() => {
         pythonProcess = dockerService.execPython(
-          containerName,
+          pooledContainer,
           (data) => safeSend(ws, data.toString()),
-          (code) => logger.info(`Python wrapper exited with code ${code}`)
+          (code) => {
+            logger.info(`Python wrapper exited with code ${code}`);
+            if (code !== 0) isReady = false;
+          }
         );
-      }, 1000);
+        // Send ready after process is attached
+        setTimeout(() => sendReady(newLang), 100);
+      }, 200);
     } else if (newLang === 'c') {
       setTimeout(() => {
         cProcess = dockerService.execC(
-          containerName,
+          pooledContainer,
           (data) => {
             if (suppressNextOutput) {
               if (
@@ -95,13 +121,21 @@ const handleConnection = (ws) => {
           ({ exitCode }) => {
             logger.info(`C wrapper exited with code ${exitCode}`);
             suppressNextOutput = false;
+            if (exitCode !== 0) isReady = false;
           }
         );
-      }, 1500);
+        // Check if process was created and send ready after it has time to initialize
+        if (cProcess) {
+          setTimeout(() => sendReady(newLang), 100);
+        } else {
+          logger.error('Failed to create C process');
+          safeSend(ws, JSON.stringify({ type: 'error', message: 'Failed to start C container' }));
+        }
+      }, 300);
     } else if (newLang === 'cpp') {
       setTimeout(() => {
         cppProcess = dockerService.execCpp(
-          containerName,
+          pooledContainer,
           (data) => {
             if (suppressNextOutput) {
               if (
@@ -119,17 +153,30 @@ const handleConnection = (ws) => {
           ({ exitCode }) => {
             logger.info(`C++ wrapper exited with code ${exitCode}`);
             suppressNextOutput = false;
+            if (exitCode !== 0) isReady = false;
           }
         );
-      }, 1500);
+        // Check if process was created and send ready
+        if (cppProcess) {
+          setTimeout(() => sendReady(newLang), 100);
+        } else {
+          logger.error('Failed to create C++ process');
+          safeSend(ws, JSON.stringify({ type: 'error', message: 'Failed to start C++ container' }));
+        }
+      }, 300);
     } else if (newLang === 'java') {
       setTimeout(() => {
         javaProcess = dockerService.execJava(
-          containerName,
+          pooledContainer,
           (data) => safeSend(ws, data.toString()),
-          (code) => logger.info(`Java wrapper exited with code ${code}`)
+          (code) => {
+            logger.info(`Java wrapper exited with code ${code}`);
+            if (code !== 0) isReady = false;
+          }
         );
-      }, 1200);
+        // Send ready after process is attached (Java needs more time)
+        setTimeout(() => sendReady(newLang), 200);
+      }, 600);
     }
   };
 
@@ -147,13 +194,15 @@ const handleConnection = (ws) => {
     if (parsed.type === 'lang') {
       lang = parsed.lang;
       startSession(lang);
+      // Send confirmation back to frontend
+      safeSend(ws, JSON.stringify({ type: 'lang', lang: lang }));
     } else if (parsed.type === 'code') {
       // Multi-file support
       fileBuffer.push({
         name:
           parsed.filename ||
           'main' +
-            (lang === 'python' ? '.py' : lang === 'java' ? '.java' : '.c'),
+          (lang === 'python' ? '.py' : lang === 'java' ? '.java' : '.c'),
         content: parsed.data || '',
         isActive: parsed.activeFile || false,
       });
@@ -164,8 +213,8 @@ const handleConnection = (ws) => {
 
         if (lang === 'python' && pythonProcess) {
           safeSend(ws, '\x1b[2J\x1b[H');
-          // Send all files first, then execute the active file
           fileBuffer.forEach((file) => {
+            pythonProcess.stdin.write(`__FILE_START__ ${file.name}\n`);
             file.content
               .split('\n')
               .forEach((line) => pythonProcess.stdin.write(line + '\n'));
@@ -174,14 +223,27 @@ const handleConnection = (ws) => {
         } else if (lang === 'c' && cProcess) {
           safeSend(ws, '\x1b[2J\x1b[H');
           suppressNextOutput = true;
-          cProcess.write('__CODE_START__\r');
-          activeFile.content
-            .split('\n')
-            .forEach((line) => cProcess.write(line + '\n'));
-          cProcess.write('__RUN_CODE__\r');
+          fileBuffer.forEach((file) => {
+            cProcess.write(`__FILE_START__ ${file.name}\n`);
+            file.content
+              .split('\n')
+              .forEach((line) => cProcess.write(line + '\n'));
+          });
+          cProcess.write('__RUN_CODE__\n');
+        } else if (lang === 'cpp' && cppProcess) {
+          safeSend(ws, '\x1b[2J\x1b[H');
+          suppressNextOutput = true;
+          fileBuffer.forEach((file) => {
+            cppProcess.write(`__FILE_START__ ${file.name}\n`);
+            file.content
+              .split('\n')
+              .forEach((line) => cppProcess.write(line + '\n'));
+          });
+          cppProcess.write('__RUN_CODE__\n');
         } else if (lang === 'java' && javaProcess) {
           safeSend(ws, '\x1b[2J\x1b[H');
           fileBuffer.forEach((file) => {
+            javaProcess.stdin.write(`__FILE_START__ ${file.name}\n`);
             file.content
               .split('\n')
               .forEach((line) => javaProcess.stdin.write(line + '\n'));

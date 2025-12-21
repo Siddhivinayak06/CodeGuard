@@ -30,13 +30,14 @@ RUN set -eux; \
        ca-certificates \
        curl \
        procps \
+       coreutils \
+       time \
        git \
        make \
        build-essential \
        unzip \
        zip \
        netcat-openbsd \
-       time \
        locales; \
     rm -rf /var/lib/apt/lists/*
 

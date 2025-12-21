@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/service";
 
+export const dynamic = 'force-dynamic';
+
 export async function POST(req: Request) {
   try {
     const { student_id, practical_id, code, language, status = "pending", marks_obtained = 0 } = await req.json();

@@ -11,6 +11,8 @@ import useProctoring from "@/hooks/useProctoring";
 import { ModeToggle } from "@/components/ModeToggle";
 import { generatePdfClient } from "@/lib/ClientPdf";
 import { usePathname, useRouter } from "next/navigation";
+import { motion, AnimatePresence } from "framer-motion";
+import { RotateCcw, Play, Download, Send, Eye, EyeOff, Sparkles, Loader2 } from "lucide-react";
 import {
   ResizableHandle,
   ResizablePanel,
@@ -161,6 +163,12 @@ int main() {
     }
   };
 
+  const resetCode = () => {
+    if (confirm("Are you sure you want to reset the code to the default template? This will erase your current code.")) {
+      setCode(LANGUAGE_TEMPLATES[lang]);
+    }
+  };
+
   if (!user)
     return (
       <div className="flex items-center justify-center min-h-screen bg-gray-50 dark:bg-gray-900">
@@ -169,12 +177,13 @@ int main() {
     );
 
   return (
-    <div className="flex flex-col h-screen overflow-hidden bg-gradient-to-br from-gray-50 via-white to-gray-100 dark:from-gray-900 dark:via-gray-950 dark:to-black">
-      {/* Glass Navbar */}
-
-      {/* Editor Section: fills remaining space, full width and height minus navbar */}
-      <div className="flex-1 pt-16">
-        <div className="h-full w-full rounded-2xl bg-white/40 dark:bg-gray-800/40 backdrop-blur-md shadow-lg overflow-hidden border border-gray-200/50 dark:border-gray-700/50">
+    <div className="flex flex-col h-screen overflow-hidden bg-gradient-to-br from-slate-50 via-indigo-50/30 to-purple-50/30 dark:from-gray-950 dark:via-indigo-950/10 dark:to-purple-950/10">
+      <div className="flex-1 mt-16 p-4 h-[calc(100vh-4rem)] w-full">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="h-full w-full glass-card-premium rounded-3xl shadow-2xl overflow-hidden border border-white/20 dark:border-gray-800/50"
+        >
           <ResizablePanelGroup direction="horizontal" className="h-full">
             <ResizablePanel defaultSize={showAssistant ? 75 : 100} minSize={50}>
               <ResizablePanelGroup direction="vertical" className="h-full">
@@ -185,7 +194,7 @@ int main() {
                     disabled={locked}
                     onRun={runCode}
                     onDownload={downloadPdf}
-                    onSubmit={runCode} // submit still calls runCode (change if needed)
+                    onSubmit={runCode}
                     loading={loading}
                     locked={locked}
                     lang={lang}
@@ -194,32 +203,63 @@ int main() {
                     setShowInput={setShowInput}
                     showInputToggle={showInputToggle}
                     terminalRef={terminalRef}
-                    violations={violations}     // new prop to show violation count
-                    isFullscreen={true}         // optional: set false if you want readOnly behavior
+                    violations={violations}
+                    isFullscreen={true}
                     externalShowAssistant={showAssistant}
                     externalSetShowAssistant={setShowAssistant}
                     renderAssistantExternally={true}
+                    onReset={resetCode}
                   />
-
                 </ResizablePanel>
 
-                <ResizableHandle className="bg-gray-200 dark:bg-gray-700 hover:bg-blue-500 dark:hover:bg-blue-600 transition-colors duration-200" />
+                <ResizableHandle className="h-2 bg-gray-100/50 dark:bg-gray-800/50 hover:bg-indigo-500/50 transition-colors duration-300 flex items-center justify-center group outline-none">
+                  <div className="w-16 h-1 rounded-full bg-gray-300 dark:bg-gray-700 group-hover:bg-white/80 transition-colors" />
+                </ResizableHandle>
 
-                <ResizablePanel defaultSize={40} minSize={20}>
+                <ResizablePanel defaultSize={40} minSize={20} className="bg-gray-50/50 dark:bg-gray-950/50 backdrop-blur-md">
                   {showInput ? (
                     <ResizablePanelGroup direction="horizontal">
                       <ResizablePanel defaultSize={20} minSize={10}>
-                        <InputPane onChange={setInput} />
+                        <div className="h-full flex flex-col">
+                          <div className="px-4 py-2 bg-gray-100/50 dark:bg-gray-900/50 border-b border-gray-200/50 dark:border-gray-800/50 flex items-center gap-2">
+                            <span className="text-xs font-mono text-gray-500 dark:text-gray-400 uppercase tracking-wider">Input</span>
+                          </div>
+                          <div className="flex-1">
+                            <InputPane onChange={setInput} />
+                          </div>
+                        </div>
                       </ResizablePanel>
 
-                      <ResizableHandle className="bg-gray-200 dark:bg-gray-700 hover:bg-blue-500 dark:hover:bg-blue-600 transition-colors duration-200" />
+                      <ResizableHandle className="w-2 bg-gray-100/50 dark:bg-gray-800/50 hover:bg-indigo-500/50 transition-colors duration-300 flex items-center justify-center group outline-none">
+                        <div className="h-16 w-1 rounded-full bg-gray-300 dark:bg-gray-700 group-hover:bg-white/80 transition-colors" />
+                      </ResizableHandle>
 
                       <ResizablePanel defaultSize={50} minSize={20}>
-                        <OutputPane output={output} error={errorOutput} language={lang} />
+                        <div className="h-full flex flex-col">
+                          <div className="px-4 py-2 bg-gray-100/50 dark:bg-gray-900/50 border-b border-gray-200/50 dark:border-gray-800/50 flex items-center gap-2">
+                            <div className="w-3 h-3 rounded-full bg-red-400/80" />
+                            <div className="w-3 h-3 rounded-full bg-amber-400/80" />
+                            <div className="w-3 h-3 rounded-full bg-emerald-400/80" />
+                            <span className="ml-2 text-xs font-mono text-gray-500 dark:text-gray-400 uppercase tracking-wider">Console Output</span>
+                          </div>
+                          <div className="flex-1">
+                            <OutputPane output={output} error={errorOutput} language={lang} />
+                          </div>
+                        </div>
                       </ResizablePanel>
                     </ResizablePanelGroup>
                   ) : (
-                    <OutputPane output={output} error={errorOutput} language={lang} />
+                    <div className="h-full flex flex-col">
+                      <div className="px-4 py-2 bg-gray-100/50 dark:bg-gray-900/50 border-b border-gray-200/50 dark:border-gray-800/50 flex items-center gap-2">
+                        <div className="w-3 h-3 rounded-full bg-red-400/80" />
+                        <div className="w-3 h-3 rounded-full bg-amber-400/80" />
+                        <div className="w-3 h-3 rounded-full bg-emerald-400/80" />
+                        <span className="ml-2 text-xs font-mono text-gray-500 dark:text-gray-400 uppercase tracking-wider">Console Output</span>
+                      </div>
+                      <div className="flex-1">
+                        <OutputPane output={output} error={errorOutput} language={lang} />
+                      </div>
+                    </div>
                   )}
                 </ResizablePanel>
               </ResizablePanelGroup>
@@ -227,13 +267,15 @@ int main() {
 
             {showAssistant && (
               <>
-                <ResizableHandle className="bg-gray-200 dark:bg-gray-700 hover:bg-blue-500 dark:hover:bg-blue-600 transition-colors duration-200" />
-                <ResizablePanel defaultSize={25} minSize={20} maxSize={40}>
+                <ResizableHandle className="w-2 bg-gray-100/50 dark:bg-gray-800/50 hover:bg-indigo-500/50 transition-colors duration-300 flex items-center justify-center group outline-none">
+                  <div className="h-16 w-1 rounded-full bg-gray-300 dark:bg-gray-700 group-hover:bg-white/80 transition-colors" />
+                </ResizableHandle>
+                <ResizablePanel defaultSize={25} minSize={20} maxSize={40} className="bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl border-l border-white/20 dark:border-gray-800/50">
                   <AssistantPanel
                     codeContext={{
                       code: code,
                       activeFile: "main." + (lang === "python" ? "py" : lang === "java" ? "java" : "c"),
-                      files: [], // Static editor doesn't support multi-file yet
+                      files: [],
                       cursorPosition: { lineNumber: 1, column: 1 }
                     }}
                     onClose={() => setShowAssistant(false)}
@@ -242,7 +284,7 @@ int main() {
               </>
             )}
           </ResizablePanelGroup>
-        </div>
+        </motion.div>
       </div>
     </div>
   );

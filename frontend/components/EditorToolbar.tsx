@@ -11,7 +11,7 @@ import {
     SelectTrigger, SelectValue
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { Sparkles, Play, Download, Send, Eye, EyeOff, MoreVertical, Loader2 } from "lucide-react";
+import { Sparkles, Play, Download, Send, Eye, EyeOff, MoreVertical, Loader2, RotateCcw } from "lucide-react";
 
 interface EditorToolbarProps {
     lang: string;
@@ -32,6 +32,7 @@ interface EditorToolbarProps {
     showAssistant: boolean;
     setShowAssistant: (show: boolean) => void;
     isAiFeatureUnlocked: boolean;
+    onReset?: () => void;
 }
 
 export function EditorToolbar({
@@ -53,6 +54,7 @@ export function EditorToolbar({
     showAssistant,
     setShowAssistant,
     isAiFeatureUnlocked,
+    onReset,
 }: EditorToolbarProps) {
     return (
         <div className="flex items-center justify-between bg-white/80 dark:bg-gray-900/80 backdrop-blur-md border-b border-gray-200/50 dark:border-gray-800/50 px-4 h-14 shrink-0 gap-4">
@@ -128,6 +130,12 @@ export function EditorToolbar({
                                     Submit
                                 </DropdownMenuItem>
                             )}
+                            {onReset && (
+                                <DropdownMenuItem onClick={onReset} disabled={locked || loading} className="text-red-600 focus:text-red-600">
+                                    <RotateCcw className="w-4 h-4 mr-2" />
+                                    Reset Code
+                                </DropdownMenuItem>
+                            )}
                         </DropdownMenuContent>
                     </DropdownMenu>
 
@@ -178,6 +186,19 @@ export function EditorToolbar({
                         <Download className="w-4 h-4 mr-2" />
                         Export
                     </Button>
+
+                    {onReset && (
+                        <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={onReset}
+                            disabled={locked || loading}
+                            className="h-8 text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/10 border-red-200 dark:border-red-900/30"
+                        >
+                            <RotateCcw className="w-4 h-4 mr-2" />
+                            Reset
+                        </Button>
+                    )}
 
                     {showSubmitButton && onSubmit && (
                         <Button

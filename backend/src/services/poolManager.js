@@ -57,19 +57,33 @@ class PoolManager {
       '-d',
       '--network',
       'none',
-      '--read-only',
-      '--tmpfs',
-      `/tmp:exec,rw,size=${memoryLimit}`,
+      '--security-opt=no-new-privileges',
       '-m',
       memoryLimit,
       '--cpus=' + config.docker.cpus,
       '--pids-limit',
       pidsLimit,
-      image,
-      'tail',
-      '-f',
-      '/dev/null',
     ];
+
+    if (lang === 'python') {
+      runArgs.push(
+        '--read-only',
+        '--tmpfs', '/tmp:exec,rw,size=128m',
+        '--tmpfs', '/app/workspace:exec,rw,size=256m,uid=1000,gid=1000,mode=1777'
+      );
+    } else if (lang === 'java') {
+      runArgs.push(
+        '--tmpfs', '/tmp:exec,rw,size=128m',
+        '--tmpfs', '/workspace:exec,rw,size=256m,uid=1000,gid=1000,mode=1777'
+      );
+    } else {
+      // C / CPP
+      runArgs.push(
+        '--tmpfs', '/app/workspace:exec,rw,size=256m,uid=1000,gid=1000,mode=1777'
+      );
+    }
+
+    runArgs.push(image, 'tail', '-f', '/dev/null');
 
     return new Promise((resolve, reject) => {
       const proc = spawn('docker', runArgs);

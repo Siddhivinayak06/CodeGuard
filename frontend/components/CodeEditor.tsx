@@ -40,6 +40,7 @@ interface CodeEditorProps {
     externalShowAssistant?: boolean;
     externalSetShowAssistant?: (show: boolean) => void;
     renderAssistantExternally?: boolean;
+    onReset?: () => void;
 }
 
 export default function CodeEditor({
@@ -70,6 +71,7 @@ export default function CodeEditor({
     externalShowAssistant,
     externalSetShowAssistant,
     renderAssistantExternally = false,
+    onReset,
 }: CodeEditorProps) {
     const { theme } = useTheme();
     const router = useRouter();
@@ -263,6 +265,7 @@ export default function CodeEditor({
                     setShowAssistant(show);
                 }}
                 isAiFeatureUnlocked={isAiFeatureUnlocked}
+                onReset={onReset}
             />
 
             {/* Main Content Area */}

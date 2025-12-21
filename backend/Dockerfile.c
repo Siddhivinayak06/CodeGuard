@@ -1,33 +1,40 @@
-# Optimized C/C++ runtime using Alpine
-FROM alpine:3.19
+# Stage 1: Build the optimized wrapper
+FROM gcc:12.2 AS builder
+WORKDIR /build
+COPY interactive_wrapper.c .
+RUN gcc -O3 -pipe -static-libgcc interactive_wrapper.c -o interactive_wrapper.out
 
-# Install minimal GCC/G++ toolchain
-RUN apk add --no-cache \
+# Stage 2: Final runtime image
+FROM debian:bookworm-slim
+
+# Install runtime dependencies, compiler, and ccache
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+    coreutils \
+    procps \
+    time \
     gcc \
     g++ \
-    musl-dev \
-    coreutils \
-    bash
+    ccache \
+    && rm -rf /var/lib/apt/lists/*
 
-# Set working directory
+# Create runner user
+RUN useradd -m -u 1000 -s /bin/bash runner
+
+# Configure ccache
+ENV CCACHE_DIR=/app/workspace/.ccache
+RUN mkdir -p /app/workspace/.ccache && chown -R runner:runner /app/workspace
+
 WORKDIR /app
+COPY --from=builder /build/interactive_wrapper.out .
+RUN chown runner:runner /app/interactive_wrapper.out && \
+    chmod 755 /app/interactive_wrapper.out
 
-# Copy the interactive C wrapper
-COPY interactive_wrapper.c /app/
+# Create workspace
+RUN mkdir -p /app/workspace && chown runner:runner /app/workspace
 
-# Compile the wrapper with optimizations
-RUN gcc -O2 -static /app/interactive_wrapper.c -o /app/interactive_wrapper.out && \
-    chmod 755 /app/interactive_wrapper.out && \
-    rm /app/interactive_wrapper.c
-
-# Create non-root user
-RUN adduser -D -u 1000 runner && \
-    mkdir -p /app/workspace && \
-    chown -R runner:runner /app
-
-# Switch to non-root user
 USER runner
 WORKDIR /app
 
-# Keep container alive
+# Keep container alive for hot-pooling and docker exec
 CMD ["tail", "-f", "/dev/null"]

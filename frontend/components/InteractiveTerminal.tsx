@@ -52,9 +52,28 @@ const InteractiveTerminal = forwardRef<
   const fitAddon = useRef<FitAddon | null>(null);
   const socket = useRef<WebSocket | null>(null);
   const inputBuffer = useRef<string>("");
+  const isSessionReady = useRef<boolean>(false); // Track if backend session is ready
+  const isSwitching = useRef<boolean>(false); // Track if currently switching languages
 
   const currentLang = useRef<string>("python"); // default
   const wsEndpoint = wsUrl || "ws://localhost:5002";
+
+  const safeFit = () => {
+    try {
+      if (
+        term.current &&
+        term.current.element &&
+        fitAddon.current &&
+        terminalRef.current &&
+        terminalRef.current.offsetWidth > 0 &&
+        terminalRef.current.offsetHeight > 0
+      ) {
+        fitAddon.current.fit();
+      }
+    } catch (error) {
+      console.warn("Terminal fit suppressed:", error);
+    }
+  };
 
   // Initialize terminal
   useEffect(() => {
@@ -72,18 +91,12 @@ const InteractiveTerminal = forwardRef<
     term.current.loadAddon(fitAddon.current);
     term.current.open(terminalRef.current);
 
-    const observer = new ResizeObserver(() => fitAddon.current?.fit());
+    const observer = new ResizeObserver(() => safeFit());
     observer.observe(terminalRef.current);
 
     // Delay initial fit
     const fitTimeout = setTimeout(() => {
-      try {
-        if (terminalRef.current && terminalRef.current.offsetWidth > 0 && terminalRef.current.offsetHeight > 0) {
-          fitAddon.current?.fit();
-        }
-      } catch (error) {
-        console.error("Initial terminal fit failed:", error);
-      }
+      safeFit();
     }, 200);
 
     // WebSocket setup
@@ -105,7 +118,15 @@ const InteractiveTerminal = forwardRef<
         msg = { type: "raw", data: event.data };
       }
 
-      if (msg.type === "lang") {
+      if (msg.type === "ready") {
+        // Backend session is now ready for this language
+        isSessionReady.current = true;
+        isSwitching.current = false;
+        currentLang.current = msg.lang;
+        term.current.write(`\r\n✅ Ready for ${msg.lang}\r\n`);
+        console.log("Session ready for language:", msg.lang);
+      } else if (msg.type === "lang") {
+        // Legacy support - still handle lang messages
         term.current.write(`\r\n✅ Language set to ${msg.lang}\r\n`);
         currentLang.current = msg.lang;
       } else {
@@ -159,7 +180,7 @@ const InteractiveTerminal = forwardRef<
     });
 
     const handleResizeWindow = () => {
-      fitAddon.current?.fit();
+      safeFit();
     };
     window.addEventListener("resize", handleResizeWindow);
 
@@ -184,7 +205,7 @@ const InteractiveTerminal = forwardRef<
     if (terminalRef.current) {
       terminalRef.current.style.backgroundColor = currentTheme.background || "#ffffff";
     }
-    fitAddon.current?.fit();
+    safeFit();
   }, [fontSize, fontFamily, currentTheme]);
 
 
@@ -195,44 +216,88 @@ const InteractiveTerminal = forwardRef<
         return;
       }
 
-      // Determine if this is multi-file or single-file mode
-      const isMultiFile = Array.isArray(filesOrCode);
-
-      if (isMultiFile) {
-        const files = filesOrCode as FileData[];
-        const activeFileName = activeFileOrLang!;
-        // const language = lang!;
-
-        // Send all files to the backend
-        files.forEach((file, index) => {
-          const msg = JSON.stringify({
-            type: "code",
-            data: file.content,
-            filename: file.name,
-            isLast: index === files.length - 1,
-            activeFile: file.name === activeFileName
-          });
-          socket.current?.send(msg);
-        });
-
-        term.current?.write(`\r\n🚀 Running ${activeFileName}...\r\n`);
-      } else {
-        // Single-file mode (backward compatibility)
-        const code = filesOrCode as string;
-        // const language = activeFileOrLang!;
-        const msg = JSON.stringify({ type: "code", data: code });
-        socket.current?.send(msg);
-        term.current?.write(`\r\n🚀 Running code...\r\n`);
+      // Check if session is ready (not still switching languages)
+      if (isSwitching.current || !isSessionReady.current) {
+        term.current?.write("\r\n⏳ Waiting for session to be ready...\r\n");
+        // Retry after a delay
+        const retryExecution = () => {
+          if (isSessionReady.current && !isSwitching.current) {
+            performExecution(filesOrCode, activeFileOrLang);
+          } else {
+            term.current?.write("\r\n❌ Session not ready, please try again.\r\n");
+          }
+        };
+        setTimeout(retryExecution, 2000);
+        return;
       }
+
+      performExecution(filesOrCode, activeFileOrLang);
     },
     switchLanguage: (newLang: string) => {
       currentLang.current = newLang;
+      isSwitching.current = true;
+      isSessionReady.current = false;
+
+      // Check if WebSocket is connected before sending
+      if (!socket.current || socket.current.readyState !== WebSocket.OPEN) {
+        term.current?.write(`\r\n⚠️ Waiting for connection to switch to ${newLang}...\r\n`);
+        // Retry after a short delay when connection is ready
+        const checkConnection = setInterval(() => {
+          if (socket.current && socket.current.readyState === WebSocket.OPEN) {
+            clearInterval(checkConnection);
+            const msg = JSON.stringify({ type: "lang", lang: newLang });
+            socket.current.send(msg);
+            term.current?.clear();
+            term.current?.write(`\r\n📝 Switching to ${newLang}...\r\n`);
+          }
+        }, 100);
+        // Clear interval after 5 seconds to prevent memory leak
+        setTimeout(() => clearInterval(checkConnection), 5000);
+        return;
+      }
+
       const msg = JSON.stringify({ type: "lang", lang: newLang });
-      socket.current?.send(msg);
+      socket.current.send(msg);
       term.current?.clear();
       term.current?.write(`\r\n📝 Switching to ${newLang}...\r\n`);
     },
   }));
+
+  // Helper function to perform actual execution
+  const performExecution = (filesOrCode: FileData[] | string, activeFileOrLang?: string) => {
+    if (!socket.current || socket.current.readyState !== WebSocket.OPEN) {
+      term.current?.write("\r\n❌ WebSocket not connected!\r\n");
+      return;
+    }
+
+    // Determine if this is multi-file or single-file mode
+    const isMultiFile = Array.isArray(filesOrCode);
+
+    if (isMultiFile) {
+      const files = filesOrCode as FileData[];
+      const activeFileName = activeFileOrLang!;
+
+      // Send all files to the backend
+      files.forEach((file, index) => {
+        const msg = JSON.stringify({
+          type: "code",
+          data: file.content,
+          filename: file.name,
+          isLast: index === files.length - 1,
+          activeFile: file.name === activeFileName
+        });
+        socket.current?.send(msg);
+      });
+
+      term.current?.write(`\r\n🚀 Running ${activeFileName}...\r\n`);
+    } else {
+      // Single-file mode (backward compatibility)
+      const code = filesOrCode as string;
+      const msg = JSON.stringify({ type: "code", data: code });
+      socket.current?.send(msg);
+      term.current?.write(`\r\n🚀 Running code...\r\n`);
+    }
+  };
 
   return (
     <div className="h-full flex flex-col rounded border border-gray-200 dark:border-gray-700 overflow-hidden">
