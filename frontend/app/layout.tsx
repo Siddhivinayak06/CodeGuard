@@ -7,6 +7,8 @@ import { ThemeProvider } from "@/components/theme-provider";
 import { SpeedInsights } from "@vercel/speed-insights/next"
 import NavbarLayout from "@/components/NavbarLayout";
 import PageTransition from "@/components/PageTransition";
+import { LogoutProvider } from "@/context/LogoutContext";
+import LogoutOverlay from "@/components/LogoutOverlay";
 
 export const metadata: Metadata = {
   title: "CodeGuard – Secure Python Editor",
@@ -30,14 +32,17 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          {/* ✅ Navbar in layout - persists across page navigations */}
-          <NavbarLayout />
-          <PageTransition>
-            <div className="h-full flex flex-col">
-              {children}
-              <SpeedInsights />
-            </div>
-          </PageTransition>
+          <LogoutProvider>
+            <LogoutOverlay />
+            {/* ✅ Navbar in layout - persists across page navigations */}
+            <NavbarLayout />
+            <PageTransition>
+              <div className="h-full flex flex-col">
+                {children}
+                <SpeedInsights />
+              </div>
+            </PageTransition>
+          </LogoutProvider>
         </ThemeProvider>
         {process.env.VERCEL && <Analytics />}
       </body>

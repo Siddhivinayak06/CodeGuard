@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
+import { motion } from "framer-motion";
 import {
   Users,
   BookOpen,
@@ -22,6 +23,32 @@ import {
   ChevronRight,
 } from "lucide-react";
 
+// Motion variants for consistent animations
+const containerVariants = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: {
+      staggerChildren: 0.1,
+      delayChildren: 0.2
+    }
+  }
+} as const;
+
+const itemVariants = {
+  hidden: { y: 10, opacity: 0 },
+  visible: {
+    y: 0,
+    opacity: 1,
+    transition: {
+      type: "spring" as const,
+      stiffness: 260,
+      damping: 30
+    }
+  }
+} as const;
+
+
 type Subject = {
   id: string;
   subject_code?: string;
@@ -36,33 +63,29 @@ function StatCard({
   value,
   icon,
   gradient,
-  delay = 0,
 }: {
   label: string;
   value: number;
   icon: React.ReactNode;
   gradient: string;
-  delay?: number;
 }) {
   return (
-    <div
-      className="glass-card-premium rounded-3xl p-6 hover-lift animate-slideUp"
-      style={{ animationDelay: `${delay}ms` }}
+    <motion.div
+      variants={itemVariants}
+      className="glass-card rounded-2xl p-5 hover-lift flex items-center gap-4"
     >
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-            {label}
-          </p>
-          <p className="text-4xl font-bold text-gray-900 dark:text-white mt-2">
-            {value}
-          </p>
-        </div>
-        <div className={`w-14 h-14 rounded-2xl ${gradient} flex items-center justify-center shadow-lg`}>
-          {icon}
-        </div>
+      <div className={`w-12 h-12 rounded-xl ${gradient} flex items-center justify-center shadow-lg`}>
+        {icon}
       </div>
-    </div>
+      <div>
+        <p className="text-2xl font-bold text-gray-900 dark:text-white">
+          {value}
+        </p>
+        <p className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+          {label}
+        </p>
+      </div>
+    </motion.div>
   );
 }
 
@@ -73,30 +96,29 @@ function QuickActionCard({
   icon,
   href,
   gradient,
-  delay = 0,
 }: {
   title: string;
   description: string;
   icon: React.ReactNode;
   href: string;
   gradient: string;
-  delay?: number;
 }) {
   return (
-    <Link
-      href={href}
-      className={`glass-card rounded-3xl p-6 hover-lift group animate-slideUp ${gradient} border-0`}
-      style={{ animationDelay: `${delay}ms` }}
-    >
-      <div className="flex items-start justify-between mb-4">
-        <div className="p-3 rounded-xl bg-white/20 backdrop-blur-sm">
-          {icon}
+    <motion.div variants={itemVariants}>
+      <Link
+        href={href}
+        className={`glass-card rounded-3xl p-6 hover-lift group block ${gradient} border-0`}
+      >
+        <div className="flex items-start justify-between mb-4">
+          <div className="p-3 rounded-xl bg-white/20 backdrop-blur-sm">
+            {icon}
+          </div>
+          <ArrowUpRight className="w-5 h-5 text-white/60 group-hover:text-white group-hover:-translate-y-0.5 group-hover:translate-x-0.5 transition-all" />
         </div>
-        <ArrowUpRight className="w-5 h-5 text-white/60 group-hover:text-white group-hover:-translate-y-0.5 group-hover:translate-x-0.5 transition-all" />
-      </div>
-      <h3 className="text-lg font-bold text-white">{title}</h3>
-      <p className="text-white/70 text-sm mt-1">{description}</p>
-    </Link>
+        <h3 className="text-lg font-bold text-white">{title}</h3>
+        <p className="text-white/70 text-sm mt-1">{description}</p>
+      </Link>
+    </motion.div>
   );
 }
 
@@ -364,19 +386,24 @@ export default function AdminDashboard() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50/30 to-purple-50/30 dark:from-gray-950 dark:via-indigo-950/10 dark:to-purple-950/10">
 
-      <main className="pt-24 pb-12 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
+      <main className="pt-24 pb-12 px-4 sm:px-6 lg:px-8 xl:px-12 w-full mx-auto">
         {/* Header */}
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 mb-8 animate-slideUp">
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5 }}
+          className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 mb-12"
+        >
           <div className="flex items-center gap-4">
-            <div className="p-3 rounded-2xl bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 shadow-lg shadow-purple-500/25">
+            <div className="p-3 rounded-2xl bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 shadow-lg shadow-purple-500/25 animate-pulse-glow">
               <Shield className="w-8 h-8 text-white" />
             </div>
-            <div>
+            <div className="space-y-1">
               <p className="text-gray-500 dark:text-gray-400 text-sm">{getGreeting()},</p>
-              <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-                {userName || "Admin"} 👋
+              <h1 className="text-3xl font-black text-gray-900 dark:text-white tracking-tight">
+                <span className="text-gradient">{userName || "Admin"}</span> 👋
               </h1>
-              <p className="text-sm text-gray-600 dark:text-gray-400 mt-0.5">
+              <p className="text-sm text-gray-500 dark:text-gray-400 font-medium">
                 Manage your platform from here
               </p>
             </div>
@@ -386,7 +413,7 @@ export default function AdminDashboard() {
             <button
               onClick={openAddForm}
               disabled={busy}
-              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 text-white font-medium shadow-lg shadow-purple-500/25 hover:shadow-purple-500/40 hover:-translate-y-0.5 transition-all disabled:opacity-60"
+              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 text-white font-semibold shadow-lg shadow-purple-500/25 hover:shadow-purple-500/40 hover:-translate-y-0.5 transition-all disabled:opacity-60"
             >
               <Plus className="w-4 h-4" />
               Add Subject
@@ -400,49 +427,54 @@ export default function AdminDashboard() {
               Refresh
             </button>
           </div>
-        </div>
+        </motion.div>
 
         {/* Stats Grid */}
-        <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 mb-8">
+        <motion.section
+          variants={containerVariants}
+          initial="hidden"
+          animate="visible"
+          className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 mb-8"
+        >
           <StatCard
             label="Students"
             value={stats.students ?? 0}
             icon={<GraduationCap className="w-7 h-7 text-white" />}
             gradient="bg-gradient-to-br from-blue-500 to-cyan-500 shadow-blue-500/25"
-            delay={100}
           />
           <StatCard
             label="Faculty"
             value={stats.faculty ?? 0}
             icon={<Users className="w-7 h-7 text-white" />}
             gradient="bg-gradient-to-br from-purple-500 to-pink-500 shadow-purple-500/25"
-            delay={150}
           />
           <StatCard
             label="Subjects"
             value={stats.subjects ?? 0}
             icon={<BookOpen className="w-7 h-7 text-white" />}
             gradient="bg-gradient-to-br from-indigo-500 to-purple-500 shadow-indigo-500/25"
-            delay={200}
           />
           <StatCard
             label="Practicals"
             value={stats.practicals ?? 0}
             icon={<FileCode className="w-7 h-7 text-white" />}
             gradient="bg-gradient-to-br from-emerald-500 to-teal-500 shadow-emerald-500/25"
-            delay={250}
           />
-        </section>
+        </motion.section>
 
         {/* Quick Actions */}
-        <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 mb-8">
+        <motion.section
+          variants={containerVariants}
+          initial="hidden"
+          animate="visible"
+          className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 mb-8"
+        >
           <QuickActionCard
             title="Manage Users"
             description="Add, edit, or remove users"
             icon={<UserCog className="w-6 h-6 text-white" />}
             href="/admin/users"
             gradient="bg-gradient-to-br from-indigo-600 to-purple-600"
-            delay={300}
           />
           <QuickActionCard
             title="Manage Subjects"
@@ -450,7 +482,6 @@ export default function AdminDashboard() {
             icon={<BookOpen className="w-6 h-6 text-white" />}
             href="/admin/subjects"
             gradient="bg-gradient-to-br from-purple-600 to-pink-600"
-            delay={350}
           />
           <QuickActionCard
             title="System Analytics"
@@ -458,12 +489,16 @@ export default function AdminDashboard() {
             icon={<BarChart3 className="w-6 h-6 text-white" />}
             href="/admin/analytics"
             gradient="bg-gradient-to-br from-pink-600 to-rose-600"
-            delay={400}
           />
-        </section>
+        </motion.section>
 
         {/* Subjects Table */}
-        <section className="glass-card-premium rounded-3xl overflow-hidden animate-slideUp" style={{ animationDelay: "450ms" }}>
+        <motion.section
+          variants={itemVariants}
+          initial="hidden"
+          animate="visible"
+          className="glass-card-premium rounded-3xl overflow-hidden"
+        >
           <div className="px-6 py-5 border-b border-gray-200/50 dark:border-gray-700/50 bg-gradient-to-r from-indigo-50/50 to-purple-50/50 dark:from-indigo-900/20 dark:to-purple-900/20">
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
@@ -570,7 +605,7 @@ export default function AdminDashboard() {
               </tbody>
             </table>
           </div>
-        </section>
+        </motion.section>
 
         {/* Form Modal */}
         {formOpen && (

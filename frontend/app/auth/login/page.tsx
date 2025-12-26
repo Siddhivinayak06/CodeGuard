@@ -6,7 +6,7 @@ import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import { createClient } from "@/lib/supabase/client";
 import { Mail, Lock, ArrowRight, Shield, Code, Zap, CheckCircle } from "lucide-react";
-import FullPageLoader from "@/components/loaders/FullPageLoader";
+
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -84,9 +84,7 @@ export default function LoginPage() {
 
   return (
     <div className="flex min-h-screen selection:bg-purple-500/30">
-      <AnimatePresence>
-        {isLoading && <FullPageLoader key="loader" />}
-      </AnimatePresence>
+
       {/* Left Panel - Animated Background */}
       <motion.div
         initial={{ x: "-100%" }}
@@ -252,6 +250,7 @@ export default function LoginPage() {
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
                         required
+                        disabled={isLoading}
                       />
                     </motion.div>
                   </div>
@@ -269,6 +268,7 @@ export default function LoginPage() {
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
                         required
+                        disabled={isLoading}
                       />
                     </motion.div>
                   </div>

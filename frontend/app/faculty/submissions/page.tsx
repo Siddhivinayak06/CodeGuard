@@ -357,7 +357,7 @@ function FacultySubmissionsContent() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50/30 to-purple-50/30 dark:from-gray-950 dark:via-indigo-950/10 dark:to-purple-950/10">
 
-      <main className="pt-24 pb-12 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto space-y-8">
+      <main className="pt-24 pb-12 px-4 sm:px-6 lg:px-8 xl:px-12 w-full mx-auto space-y-8">
 
         {/* Header Section */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 animate-slideUp">

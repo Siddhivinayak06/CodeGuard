@@ -274,7 +274,7 @@ export default function FacultySchedulePage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-blue-50/30 to-purple-50/20 dark:from-gray-900 dark:via-gray-900 dark:to-gray-800">
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-24 pb-12">
+      <main className="w-full mx-auto px-4 sm:px-6 lg:px-8 xl:px-12 pt-24 pb-12">
         {/* Header Section */}
         <div className="mb-8">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">

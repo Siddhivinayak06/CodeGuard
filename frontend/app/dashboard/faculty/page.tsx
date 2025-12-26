@@ -367,20 +367,20 @@ export default function FacultyDashboardPage() {
   }, [practicals]);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50 dark:from-gray-950 dark:via-gray-900 dark:to-gray-800">
-      <main className="pt-24 pb-12 px-4 sm:px-6 lg:px-8 max-w-[1600px] mx-auto">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50/30 to-purple-50/30 dark:from-gray-950 dark:via-indigo-950/10 dark:to-purple-950/10">
+      <main className="pt-24 pb-12 px-4 sm:px-6 lg:px-8 xl:px-12 w-full mx-auto">
         {/* Header Section */}
         <motion.div
           variants={shellVariants}
           initial="hidden"
           animate="visible"
-          className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8"
+          className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-12"
         >
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-              Welcome back, {userName || (loading ? "..." : "Faculty")} 👋
+          <div className="space-y-1">
+            <h1 className="text-3xl font-black text-gray-900 dark:text-white tracking-tight">
+              Welcome back, <span className="text-gradient">{userName || (loading ? "..." : "Faculty")}</span> 👋
             </h1>
-            <p className="text-gray-600 dark:text-gray-400 mt-1">
+            <p className="text-gray-500 dark:text-gray-400 font-medium">
               Manage your practicals and track student performance.
             </p>
           </div>
@@ -405,55 +405,57 @@ export default function FacultyDashboardPage() {
           >
 
             {/* 1. Quick Stats (Row 1) */}
-            <motion.div variants={itemVariants} className="glass-card-premium rounded-3xl p-6 flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-500 dark:text-gray-400 font-medium">Active Practicals</p>
-                <h3 className="text-3xl font-bold text-gray-900 dark:text-white mt-1">{activePracticalsCount}</h3>
+            {/* 1. Quick Stats (Row 1) */}
+            <motion.div variants={itemVariants} className="glass-card rounded-2xl p-5 flex items-center gap-4 hover-lift">
+              <div className="w-12 h-12 rounded-xl bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center">
+                <FileCheck className="w-6 h-6 text-indigo-600 dark:text-indigo-400" />
               </div>
-              <div className="w-12 h-12 rounded-2xl bg-indigo-100 dark:bg-indigo-900/40 flex items-center justify-center text-indigo-600 dark:text-indigo-400">
-                <FileCheck size={24} />
+              <div>
+                <p className="text-2xl font-bold text-gray-900 dark:text-white">{activePracticalsCount}</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">Active Practicals</p>
               </div>
             </motion.div>
 
-            <motion.div variants={itemVariants} className="glass-card-premium rounded-3xl p-6 flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-500 dark:text-gray-400 font-medium">Total Submissions</p>
-                <h3 className="text-3xl font-bold text-gray-900 dark:text-white mt-1">{submissions.length}</h3>
+            <motion.div variants={itemVariants} className="glass-card rounded-2xl p-5 flex items-center gap-4 hover-lift">
+              <div className="w-12 h-12 rounded-xl bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center">
+                <TrendingUp className="w-6 h-6 text-purple-600 dark:text-purple-400" />
               </div>
-              <div className="w-12 h-12 rounded-2xl bg-purple-100 dark:bg-purple-900/40 flex items-center justify-center text-purple-600 dark:text-purple-400">
-                <TrendingUp size={24} />
+              <div>
+                <p className="text-2xl font-bold text-gray-900 dark:text-white">{submissions.length}</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">Total Submissions</p>
               </div>
             </motion.div>
 
-            <motion.div variants={itemVariants} className="glass-card-premium rounded-3xl p-6 flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-500 dark:text-gray-400 font-medium">Students Assigned</p>
-                <h3 className="text-3xl font-bold text-gray-900 dark:text-white mt-1">--</h3>
+            <motion.div variants={itemVariants} className="glass-card rounded-2xl p-5 flex items-center gap-4 hover-lift">
+              <div className="w-12 h-12 rounded-xl bg-pink-100 dark:bg-pink-900/30 flex items-center justify-center">
+                <Users className="w-6 h-6 text-pink-600 dark:text-pink-400" />
               </div>
-              <div className="w-12 h-12 rounded-2xl bg-pink-100 dark:bg-pink-900/40 flex items-center justify-center text-pink-600 dark:text-pink-400">
-                <Users size={24} />
+              <div>
+                <p className="text-2xl font-bold text-gray-900 dark:text-white">--</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">Students Assigned</p>
               </div>
             </motion.div>
 
-            {/* Quick Action Tile */}
             <motion.div
               variants={itemVariants}
               onClick={() => router.push("/faculty/submissions")}
-              className="glass-card-premium rounded-3xl p-6 flex flex-col justify-center cursor-pointer hover:scale-[1.02] transition-transform bg-gradient-to-br from-indigo-600 to-purple-600 text-white"
+              className="glass-card rounded-2xl p-5 flex items-center gap-4 hover-lift group bg-gradient-to-br from-indigo-50 to-purple-50 dark:from-indigo-950/20 dark:to-purple-950/20 cursor-pointer"
             >
-              <div className="flex items-center justify-between mb-2">
-                <FileCheck size={28} className="text-white/80" />
-                <ArrowUpRight size={24} className="text-white/60" />
+              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-lg">
+                <FileCheck className="w-6 h-6 text-white" />
               </div>
-              <h3 className="text-lg font-bold">Review Submissions</h3>
-              <p className="text-white/70 text-sm">Grading pending for 5 students</p>
+              <div className="flex-1">
+                <h3 className="font-semibold text-gray-900 dark:text-white">Review Work</h3>
+                <p className="text-xs text-gray-500 dark:text-gray-400">5 Pending Grinds</p>
+              </div>
+              <ArrowUpRight className="w-5 h-5 text-gray-400 group-hover:text-indigo-500 group-hover:-translate-y-0.5 group-hover:translate-x-0.5 transition-all" />
             </motion.div>
 
 
             {/* 2. Charts Row (Row 2, split 2:2 or 3:1) */}
 
             {/* Activity Chart (Wide) */}
-            <motion.div variants={itemVariants} className="md:col-span-2 lg:col-span-3 glass-card rounded-3xl p-6 min-h-[350px]">
+            <motion.div variants={itemVariants} className="md:col-span-2 lg:col-span-3 glass-card-premium rounded-3xl p-6 min-h-[350px]">
               <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-6">Submission Activity</h3>
               <div className="h-[250px] w-full">
                 <ResponsiveContainer width="100%" height="100%">
@@ -487,7 +489,7 @@ export default function FacultyDashboardPage() {
             </motion.div>
 
             {/* Status Donut Chart */}
-            <motion.div variants={itemVariants} className="md:col-span-1 glass-card rounded-3xl p-6 flex flex-col">
+            <motion.div variants={itemVariants} className="md:col-span-1 glass-card-premium rounded-3xl p-6 flex flex-col">
               <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">Submission Status</h3>
               <div className="flex-1 min-h-[200px] relative">
                 <ResponsiveContainer width="100%" height="100%">
@@ -524,7 +526,7 @@ export default function FacultyDashboardPage() {
             {/* 3. Main Content: List & Calendar */}
 
             {/* Practicals List (Wide) */}
-            <motion.div variants={itemVariants} className="md:col-span-2 lg:col-span-3 glass-card rounded-3xl p-6 min-h-[400px]">
+            <motion.div variants={itemVariants} className="md:col-span-2 lg:col-span-3 glass-card-premium rounded-3xl p-6 min-h-[400px]">
               <div className="flex items-center justify-between mb-6">
                 <h3 className="text-lg font-bold text-gray-900 dark:text-white">All Practicals</h3>
               </div>
@@ -548,46 +550,120 @@ export default function FacultyDashboardPage() {
             </motion.div>
 
             {/* Calendar (Narrow) */}
-            <motion.div variants={itemVariants} className="md:col-span-1 glass-card rounded-3xl p-6">
-              <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">Schedule</h3>
-              <Calendar
-                mode="single"
-                selected={selected}
-                onSelect={(d) => d && setSelected(d)}
-                className="rounded-xl border border-gray-100 dark:border-gray-800"
-                components={{
-                  DayButton: ({ day, ...props }) => {
-                    const date = day.date;
-                    if (!(date instanceof Date) || isNaN(date.getTime())) return <></>;
-                    const iso = date.toISOString().slice(0, 10);
-                    const hasEvent = eventsByDate.has(iso);
-                    return (
-                      <div className="relative w-full h-full flex items-center justify-center" onClick={() => openCreate(date)}>
-                        <CalendarDayButton day={day} {...props} className={cn(
-                          props.className,
-                          hasEvent && "font-bold text-indigo-600 bg-indigo-50 dark:bg-indigo-900/30 dark:text-indigo-400"
-                        )} />
-                        {hasEvent && <div className="absolute bottom-1 w-1 h-1 bg-indigo-500 rounded-full" />}
-                      </div>
-                    )
-                  }
-                }}
-              />
+            <motion.div variants={itemVariants} className="md:col-span-1 glass-card-premium rounded-3xl p-6 relative overflow-hidden">
+              {/* Gradient overlay */}
+              <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-bl from-indigo-500/10 via-purple-500/5 to-transparent rounded-full blur-2xl" />
 
-              {/* Upcoming Events List */}
-              <div className="mt-6 space-y-3">
-                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Upcoming Deadlines</p>
-                {practicals.filter(p => new Date(p.deadline) >= new Date()).slice(0, 3).map(p => (
-                  <div key={p.id} className="flex items-center gap-3 p-3 rounded-xl bg-gray-50 dark:bg-gray-800/50">
-                    <div className="p-2 bg-white dark:bg-gray-700 rounded-lg shadow-sm">
-                      <Clock size={16} className="text-indigo-500" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-gray-900 dark:text-white truncate">{p.title}</p>
-                      <p className="text-xs text-gray-500">{new Date(p.deadline).toLocaleDateString()}</p>
-                    </div>
+              <div className="relative z-10">
+                {/* Header with icon */}
+                <div className="flex items-center gap-3 mb-5">
+                  <div className="p-2.5 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 shadow-lg shadow-indigo-500/25">
+                    <Clock size={18} className="text-white" />
                   </div>
-                ))}
+                  <div>
+                    <h3 className="text-lg font-bold text-gray-900 dark:text-white">Schedule</h3>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Click a date to create practical</p>
+                  </div>
+                </div>
+
+                {/* Calendar */}
+                <div className="bg-white/50 dark:bg-gray-800/50 rounded-2xl p-3 backdrop-blur-sm border border-gray-100 dark:border-gray-700/50">
+                  <Calendar
+                    mode="single"
+                    selected={selected}
+                    onSelect={(d) => d && setSelected(d)}
+                    className="rounded-xl"
+                    components={{
+                      DayButton: ({ day, ...props }) => {
+                        const date = day.date;
+                        if (!(date instanceof Date) || isNaN(date.getTime())) return <></>;
+                        const iso = date.toISOString().slice(0, 10);
+                        const hasEvent = eventsByDate.has(iso);
+                        const eventCount = eventsByDate.get(iso)?.length || 0;
+                        return (
+                          <div className="relative w-full h-full flex items-center justify-center" onClick={() => openCreate(date)}>
+                            <CalendarDayButton day={day} {...props} className={cn(
+                              props.className,
+                              hasEvent && "font-bold text-indigo-600 bg-gradient-to-br from-indigo-50 to-purple-50 dark:from-indigo-900/40 dark:to-purple-900/40 dark:text-indigo-300 ring-1 ring-indigo-200 dark:ring-indigo-700/50"
+                            )} />
+                            {hasEvent && (
+                              <div className="absolute -bottom-0.5 flex gap-0.5 justify-center">
+                                {[...Array(Math.min(eventCount, 3))].map((_, i) => (
+                                  <div key={i} className="w-1 h-1 bg-indigo-500 rounded-full" />
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )
+                      }
+                    }}
+                  />
+                </div>
+
+                {/* Upcoming Deadlines */}
+                <div className="mt-6 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Upcoming Deadlines</p>
+                    <span className="text-xs font-medium text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/30 px-2 py-0.5 rounded-full">
+                      {practicals.filter(p => new Date(p.deadline) >= new Date()).length} active
+                    </span>
+                  </div>
+
+                  {practicals.filter(p => new Date(p.deadline) >= new Date()).length === 0 ? (
+                    <div className="text-center py-6">
+                      <div className="w-12 h-12 mx-auto mb-3 rounded-xl bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
+                        <Clock size={20} className="text-gray-400" />
+                      </div>
+                      <p className="text-sm text-gray-500 dark:text-gray-400">No upcoming deadlines</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {practicals.filter(p => new Date(p.deadline) >= new Date()).slice(0, 4).map((p, index) => {
+                        const deadline = new Date(p.deadline);
+                        const daysLeft = Math.ceil((deadline.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+                        const isUrgent = daysLeft <= 2;
+
+                        return (
+                          <motion.div
+                            key={p.id}
+                            initial={{ opacity: 0, x: -10 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            transition={{ delay: index * 0.1 }}
+                            className={cn(
+                              "flex items-center gap-3 p-3 rounded-xl transition-all cursor-pointer hover:scale-[1.02]",
+                              isUrgent
+                                ? "bg-gradient-to-r from-orange-50 to-red-50 dark:from-orange-900/20 dark:to-red-900/20 border border-orange-200 dark:border-orange-800/50"
+                                : "bg-gray-50 dark:bg-gray-800/50 hover:bg-gray-100 dark:hover:bg-gray-800"
+                            )}
+                          >
+                            <div className={cn(
+                              "p-2 rounded-lg shadow-sm",
+                              isUrgent
+                                ? "bg-gradient-to-br from-orange-500 to-red-500"
+                                : "bg-white dark:bg-gray-700"
+                            )}>
+                              <Clock size={14} className={isUrgent ? "text-white" : "text-indigo-500"} />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium text-gray-900 dark:text-white truncate">{p.title}</p>
+                              <p className="text-xs text-gray-500 dark:text-gray-400">
+                                {deadline.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                              </p>
+                            </div>
+                            <span className={cn(
+                              "text-xs font-semibold px-2 py-1 rounded-lg",
+                              isUrgent
+                                ? "text-orange-600 dark:text-orange-400 bg-orange-100 dark:bg-orange-900/30"
+                                : "text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-700"
+                            )}>
+                              {daysLeft === 0 ? 'Today' : daysLeft === 1 ? '1 day' : `${daysLeft}d`}
+                            </span>
+                          </motion.div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
               </div>
             </motion.div>
 

@@ -252,7 +252,7 @@ export default function AdminUsers() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50/30 to-purple-50/30 dark:from-gray-950 dark:via-indigo-950/10 dark:to-purple-950/10">
-      <div className="pt-24 pb-12 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
+      <div className="pt-24 pb-12 px-4 sm:px-6 lg:px-8 xl:px-12 w-full mx-auto">
         {/* Header */}
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 mb-8 animate-slideUp">
           <div className="flex items-center gap-4">
@@ -314,8 +314,8 @@ export default function AdminUsers() {
                   key={role}
                   onClick={() => setSelectedRole(role)}
                   className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-all ${selectedRole === role
-                      ? "bg-white dark:bg-gray-900 text-gray-900 dark:text-white shadow-sm"
-                      : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
+                    ? "bg-white dark:bg-gray-900 text-gray-900 dark:text-white shadow-sm"
+                    : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
                     }`}
                 >
                   {role === "student" && <GraduationCap className="w-4 h-4" />}
@@ -323,8 +323,8 @@ export default function AdminUsers() {
                   {role === "admin" && <Shield className="w-4 h-4" />}
                   {role.charAt(0).toUpperCase() + role.slice(1)}
                   <span className={`ml-1 px-2 py-0.5 text-xs rounded-full ${selectedRole === role
-                      ? "bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400"
-                      : "bg-gray-200 dark:bg-gray-700 text-gray-500"
+                    ? "bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400"
+                    : "bg-gray-200 dark:bg-gray-700 text-gray-500"
                     }`}>
                     {usersByRole[role].length}
                   </span>

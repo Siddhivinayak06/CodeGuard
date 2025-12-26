@@ -545,7 +545,7 @@ export default function PracticalForm({
           >
             {/* Sticky top bar */}
             <div className="sticky top-0 z-40 backdrop-blur-sm bg-white/80 dark:bg-gray-900/80 border-b border-gray-200 dark:border-gray-700">
-              <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
+              <div className="w-full mx-auto px-4 xl:px-12 py-3 flex items-center justify-between gap-3">
                 <div className="flex items-center gap-3">
                   <div className={cx(
                     "w-9 h-9 rounded-full flex items-center justify-center font-bold transition-all",
@@ -601,7 +601,7 @@ export default function PracticalForm({
             </div>
 
             {/* Main content container */}
-            <div className="max-w-6xl mx-auto px-4 py-6">
+            <div className="w-full mx-auto px-4 xl:px-12 py-6">
               {/* Progress indicator (redundant but helpful) */}
               <div className="mb-6">
                 <div className="flex items-center justify-center gap-4">

@@ -59,20 +59,26 @@ const InteractiveTerminal = forwardRef<
   const wsEndpoint = wsUrl || "ws://localhost:5002";
 
   const safeFit = () => {
-    try {
-      if (
-        term.current &&
-        term.current.element &&
-        fitAddon.current &&
-        terminalRef.current &&
-        terminalRef.current.offsetWidth > 0 &&
-        terminalRef.current.offsetHeight > 0
-      ) {
-        fitAddon.current.fit();
+    if (!fitAddon.current || !term.current) return;
+
+    // Use requestAnimationFrame to ensure DOM is ready and prevent race conditions
+    requestAnimationFrame(() => {
+      try {
+        if (
+          term.current &&
+          term.current.element &&
+          terminalRef.current &&
+          terminalRef.current.offsetWidth > 0 &&
+          terminalRef.current.offsetHeight > 0 &&
+          // Check if element is actually attached to DOM
+          document.body.contains(terminalRef.current)
+        ) {
+          fitAddon.current?.fit();
+        }
+      } catch (error) {
+        console.warn("Terminal fit suppressed:", error);
       }
-    } catch (error) {
-      console.warn("Terminal fit suppressed:", error);
-    }
+    });
   };
 
   // Initialize terminal
@@ -187,7 +193,14 @@ const InteractiveTerminal = forwardRef<
     return () => {
       observer.disconnect();
       window.removeEventListener("resize", handleResizeWindow);
-      term.current?.dispose();
+
+      // Cleanup cleanup
+      if (term.current) {
+        term.current.dispose();
+        term.current = null;
+      }
+      fitAddon.current = null;
+
       ws.close();
       clearTimeout(fitTimeout);
     };

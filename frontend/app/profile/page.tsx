@@ -160,7 +160,7 @@ export default function ProfilePage() {
     return (
         <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950">
 
-            <main className="pt-24 pb-12 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
+            <main className="pt-24 pb-12 px-4 sm:px-6 lg:px-8 xl:px-12 w-full mx-auto">
                 {/* Header */}
                 <div className="mb-8 animate-slideUp">
                     <h1 className="text-3xl font-extrabold text-gray-900 dark:text-white">Profile Settings</h1>

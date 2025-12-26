@@ -284,7 +284,7 @@ export default function FacultySubjects() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50 dark:from-gray-950 dark:via-purple-950/20 dark:to-blue-950/20">
 
-      <main className="pt-24 px-6 md:px-12 max-w-7xl mx-auto pb-12">
+      <main className="pt-24 px-4 sm:px-6 lg:px-8 xl:px-12 w-full mx-auto pb-12">
         {/* Header */}
         <div className="mb-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div className="flex items-center gap-3">

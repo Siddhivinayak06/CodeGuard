@@ -27,7 +27,7 @@ export default async function SuccessPage() {
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
       {/* Header */}
       <header className="bg-white/80 backdrop-blur-sm shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="w-full mx-auto px-4 sm:px-6 lg:px-8 xl:px-12">
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center gap-3">
               <GraduationCap className="h-8 w-8 text-blue-600" />
@@ -43,7 +43,7 @@ export default async function SuccessPage() {
       </header>
 
       {/* Main Content */}
-      <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
+      <main className="w-full mx-auto px-4 sm:px-6 lg:px-8 xl:px-12 py-16">
         <div className="text-center mb-8">
           <div className="flex justify-center mb-4">
             <CheckCircle className="h-16 w-16 text-green-600" />
