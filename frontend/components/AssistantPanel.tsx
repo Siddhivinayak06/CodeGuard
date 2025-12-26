@@ -13,7 +13,13 @@ function extractText(children: React.ReactNode): string {
     if (children == null) return "";
     if (typeof children === "string" || typeof children === "number") return String(children);
     if (Array.isArray(children)) return children.map(extractText).join("");
-    if (children?.props?.children) return extractText(children.props.children);
+    // Safe check for React elements and their children
+    if (children && typeof children === "object" && "props" in children) {
+        const props = (children as any).props;
+        if (props && props.children) {
+            return extractText(props.children);
+        }
+    }
     return "";
 }
 function normalizeMarkdown(text: string) {
