@@ -64,6 +64,7 @@ export default function StudentAssignmentForm({ practicalId, close, refresh }: P
   const [deadline, setDeadline] = useState(new Date().toISOString().slice(0, 16));
   const [notes, setNotes] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
+  const [selectedSemester, setSelectedSemester] = useState<string>("");
   const [loading, setLoading] = useState(false);
   const [fetchingStudents, setFetchingStudents] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -113,15 +114,36 @@ export default function StudentAssignmentForm({ practicalId, close, refresh }: P
     setSelectedStudents(filteredStudents);
   };
 
-  const clearAll = () => {
-    setSelectedStudents([]);
+  const selectSemester = (semester: string) => {
+    if (!semester) {
+      setSelectedSemester("");
+      return;
+    }
+    setSelectedSemester(semester);
+    // Optional: Auto-select students when filtering by semester?
+    // Let's just filter for now, user can click "Select All"
   };
 
+  const clearAll = () => {
+    setSelectedStudents([]);
+    setSelectedSemester("");
+  };
+
+  const semesters = useMemo(() => {
+    const sems = new Set(students.map(s => s.semester).filter(Boolean));
+    return Array.from(sems).sort();
+  }, [students]);
+
   const filteredStudents = students.filter(
-    (s) =>
-      s.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (s.roll?.toLowerCase() || "").includes(searchQuery.toLowerCase()) ||
-      (s.email?.toLowerCase() || "").includes(searchQuery.toLowerCase())
+    (s) => {
+      const matchQuery = s.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (s.roll?.toLowerCase() || "").includes(searchQuery.toLowerCase()) ||
+        (s.email?.toLowerCase() || "").includes(searchQuery.toLowerCase());
+
+      const matchSemester = selectedSemester ? s.semester === selectedSemester : true;
+
+      return matchQuery && matchSemester;
+    }
   );
 
   const assign = async () => {
@@ -231,18 +253,34 @@ export default function StudentAssignmentForm({ practicalId, close, refresh }: P
           </div>
         </div>
 
-        {/* Search Bar */}
-        <div className="relative">
-          <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-            <SearchIcon />
+        {/* Search & Filter Bar */}
+        <div className="flex flex-col sm:flex-row gap-4">
+          <div className="relative flex-1">
+            <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+              <SearchIcon />
+            </div>
+            <input
+              type="text"
+              placeholder="Search by name, roll number, or email..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-12 pr-4 py-3 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all text-gray-900 dark:text-white placeholder-gray-400"
+            />
           </div>
-          <input
-            type="text"
-            placeholder="Search by name, roll number, or email..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-12 pr-4 py-3 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all text-gray-900 dark:text-white placeholder-gray-400"
-          />
+
+          {/* Semester Filter */}
+          <div className="min-w-[150px]">
+            <select
+              value={selectedSemester}
+              onChange={(e) => setSelectedSemester(e.target.value)}
+              className="w-full h-full px-4 py-3 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all text-gray-900 dark:text-white appearance-none cursor-pointer"
+            >
+              <option value="">All Semesters</option>
+              {semesters.map(sem => (
+                <option key={sem} value={sem}>{sem}</option>
+              ))}
+            </select>
+          </div>
         </div>
 
         {/* Bulk Actions */}

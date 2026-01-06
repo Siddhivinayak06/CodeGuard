@@ -5,6 +5,8 @@ import { createClient } from "@/lib/supabase/client";
 import PracticalForm from "../components/PracticalForm";
 import PracticalList from "../components/PracticalList";
 import StudentAssignmentForm from "../components/StudentAssignmentForm";
+import { Calendar } from "@/components/ui/calendar";
+import { format, isSameDay, parseISO } from "date-fns";
 
 import { Practical, Subject, Student } from "../types";
 
@@ -37,6 +39,12 @@ const AlertIcon = () => (
 const CalendarIcon = () => (
   <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+  </svg>
+);
+
+const ListIcon = () => (
+  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
   </svg>
 );
 
@@ -95,6 +103,24 @@ export default function FacultySchedulePage() {
 
   const [assignmentModalOpen, setAssignmentModalOpen] = useState(false);
   const [selectedPracticalId, setSelectedPracticalId] = useState<number | null>(null);
+
+  const [viewMode, setViewMode] = useState<"list" | "calendar">("list");
+  const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
+
+  // Derived state for calendar
+  const practicalsOnSelectedDate = useMemo(() => {
+    if (!selectedDate) return [];
+    return practicals.filter(p => {
+      if (!p.deadline) return false;
+      return isSameDay(parseISO(p.deadline), selectedDate);
+    });
+  }, [practicals, selectedDate]);
+
+  const daysWithPracticals = useMemo(() => {
+    return practicals
+      .filter(p => p.deadline)
+      .map(p => parseISO(p.deadline!));
+  }, [practicals]);
 
   // ------------------- Fetch Data -------------------
   const fetchPracticals = async () => {
@@ -301,6 +327,36 @@ export default function FacultySchedulePage() {
             </button>
           </div>
 
+          <div className="mt-6 flex items-center justify-between">
+            {/* View Toggle */}
+            <div className="flex bg-gray-100 dark:bg-gray-800 p-1 rounded-xl">
+              <button
+                onClick={() => setViewMode("list")}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${viewMode === "list"
+                    ? "bg-white dark:bg-gray-700 text-blue-600 dark:text-blue-400 shadow-sm"
+                    : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
+                  }`}
+              >
+                <ListIcon />
+                List
+              </button>
+              <button
+                onClick={() => setViewMode("calendar")}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${viewMode === "calendar"
+                    ? "bg-white dark:bg-gray-700 text-blue-600 dark:text-blue-400 shadow-sm"
+                    : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
+                  }`}
+              >
+                <CalendarIcon />
+                Calendar
+              </button>
+            </div>
+
+            <div className="text-sm text-gray-500 dark:text-gray-400">
+              {practicals.length} assignments found
+            </div>
+          </div>
+
           {/* Stats Bar */}
           {!loading && !error && (
             <div className="mt-6 grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -356,7 +412,7 @@ export default function FacultySchedulePage() {
             <LoadingState />
           ) : error ? (
             <ErrorState message={error} />
-          ) : (
+          ) : viewMode === "list" ? (
             <PracticalList
               practicals={practicals}
               subjects={subjects}
@@ -364,6 +420,68 @@ export default function FacultySchedulePage() {
               onAssign={openAssign}
               onDelete={deletePractical}
             />
+          ) : (
+            <div className="flex flex-col md:flex-row gap-8">
+              <div className="md:w-[400px] flex-shrink-0">
+                <div className="p-4 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
+                  <Calendar
+                    mode="single"
+                    selected={selectedDate}
+                    onSelect={setSelectedDate}
+                    className="rounded-md"
+                    modifiers={{
+                      hasPractical: daysWithPracticals
+                    }}
+                    modifiersStyles={{
+                      hasPractical: {
+                        fontWeight: "bold",
+                        textDecoration: "underline",
+                        textDecorationColor: "#3b82f6",
+                        textDecorationThickness: "3px"
+                      }
+                    }}
+                  />
+                </div>
+                <div className="mt-4 p-4 bg-blue-50 dark:bg-blue-900/10 rounded-xl border border-blue-100 dark:border-blue-900/30">
+                  <h4 className="flex items-center gap-2 font-medium text-blue-800 dark:text-blue-200">
+                    <div className="w-2 h-2 rounded-full bg-blue-500" />
+                    Pending Deadlines
+                  </h4>
+                  <p className="mt-1 text-xs text-blue-600 dark:text-blue-300">
+                    Dates with underlines indicate assignment deadlines.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex-1">
+                <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                  {selectedDate ? (
+                    <>
+                      Deadlines for <span className="text-blue-600 dark:text-blue-400">{format(selectedDate, "MMMM do, yyyy")}</span>
+                    </>
+                  ) : (
+                    "Select a date to view deadlines"
+                  )}
+                </h3>
+
+                {practicalsOnSelectedDate.length > 0 ? (
+                  <PracticalList
+                    practicals={practicalsOnSelectedDate}
+                    subjects={subjects}
+                    onEdit={openEdit}
+                    onAssign={openAssign}
+                    onDelete={deletePractical}
+                  />
+                ) : (
+                  <div className="flex flex-col items-center justify-center py-12 border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-xl">
+                    <div className="p-4 bg-gray-50 dark:bg-gray-800/50 rounded-full mb-3">
+                      <CalendarIcon />
+                    </div>
+                    <p className="text-gray-500 dark:text-gray-400 font-medium">No deadlines on this date</p>
+                  </div>
+                )}
+              </div>
+            </div>
           )}
         </div>
 
