@@ -272,7 +272,7 @@ export default function FacultySchedulePage() {
 
   // ------------------- Render -------------------
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-blue-50/30 to-purple-50/20 dark:from-gray-900 dark:via-gray-900 dark:to-gray-800">
+    <div className="min-h-screen bg-gradient-to-br from-indigo-50/40 via-purple-50/40 to-pink-50/40 dark:from-gray-950 dark:via-indigo-950/20 dark:to-purple-950/20">
 
       <main className="w-full mx-auto px-4 sm:px-6 lg:px-8 xl:px-12 pt-24 pb-12">
         {/* Header Section */}
@@ -294,7 +294,7 @@ export default function FacultySchedulePage() {
 
             <button
               onClick={openCreate}
-              className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 transition-all duration-200"
+              className="btn-primary flex items-center gap-2 px-6 py-3 rounded-xl hover-lift"
             >
               <PlusIcon />
               <span>Add Practical</span>
@@ -304,44 +304,44 @@ export default function FacultySchedulePage() {
           {/* Stats Bar */}
           {!loading && !error && (
             <div className="mt-6 grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <div className="bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm rounded-xl p-4 border border-gray-200 dark:border-gray-700 shadow-sm">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
-                    <svg className="w-5 h-5 text-blue-600 dark:text-blue-400" fill="currentColor" viewBox="0 0 20 20">
+              <div className="glass-card-premium rounded-2xl p-5 hover-lift animate-slideUp" style={{ animationDelay: "100ms" }}>
+                <div className="flex items-center gap-4">
+                  <div className="p-3 bg-blue-100 dark:bg-blue-900/30 rounded-xl">
+                    <svg className="w-6 h-6 text-blue-600 dark:text-blue-400" fill="currentColor" viewBox="0 0 20 20">
                       <path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z" />
                       <path fillRule="evenodd" d="M4 5a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v11a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm3 4a1 1 0 000 2h.01a1 1 0 100-2H7zm3 0a1 1 0 000 2h3a1 1 0 100-2h-3zm-3 4a1 1 0 100 2h.01a1 1 0 100-2H7zm3 0a1 1 0 100 2h3a1 1 0 100-2h-3z" clipRule="evenodd" />
                     </svg>
                   </div>
                   <div>
-                    <p className="text-sm text-gray-600 dark:text-gray-400">Total Practicals</p>
+                    <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Total Practicals</p>
                     <p className="text-2xl font-bold text-gray-900 dark:text-white">{practicals.length}</p>
                   </div>
                 </div>
               </div>
 
-              <div className="bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm rounded-xl p-4 border border-gray-200 dark:border-gray-700 shadow-sm">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-emerald-100 dark:bg-emerald-900/30 rounded-lg">
-                    <svg className="w-5 h-5 text-emerald-600 dark:text-emerald-400" fill="currentColor" viewBox="0 0 20 20">
+              <div className="glass-card-premium rounded-2xl p-5 hover-lift animate-slideUp" style={{ animationDelay: "200ms" }}>
+                <div className="flex items-center gap-4">
+                  <div className="p-3 bg-emerald-100 dark:bg-emerald-900/30 rounded-xl">
+                    <svg className="w-6 h-6 text-emerald-600 dark:text-emerald-400" fill="currentColor" viewBox="0 0 20 20">
                       <path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zM17 6a3 3 0 11-6 0 3 3 0 016 0zM12.93 17c.046-.327.07-.66.07-1a6.97 6.97 0 00-1.5-4.33A5 5 0 0119 16v1h-6.07zM6 11a5 5 0 015 5v1H1v-1a5 5 0 015-5z" />
                     </svg>
                   </div>
                   <div>
-                    <p className="text-sm text-gray-600 dark:text-gray-400">Total Students</p>
+                    <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Total Students</p>
                     <p className="text-2xl font-bold text-gray-900 dark:text-white">{students.length}</p>
                   </div>
                 </div>
               </div>
 
-              <div className="bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm rounded-xl p-4 border border-gray-200 dark:border-gray-700 shadow-sm">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-purple-100 dark:bg-purple-900/30 rounded-lg">
-                    <svg className="w-5 h-5 text-purple-600 dark:text-purple-400" fill="currentColor" viewBox="0 0 20 20">
+              <div className="glass-card-premium rounded-2xl p-5 hover-lift animate-slideUp" style={{ animationDelay: "300ms" }}>
+                <div className="flex items-center gap-4">
+                  <div className="p-3 bg-purple-100 dark:bg-purple-900/30 rounded-xl">
+                    <svg className="w-6 h-6 text-purple-600 dark:text-purple-400" fill="currentColor" viewBox="0 0 20 20">
                       <path d="M10.394 2.08a1 1 0 00-.788 0l-7 3a1 1 0 000 1.84L5.25 8.051a.999.999 0 01.356-.257l4-1.714a1 1 0 11.788 1.838L7.667 9.088l1.94.831a1 1 0 00.787 0l7-3a1 1 0 000-1.838l-7-3zM3.31 9.397L5 10.12v4.102a8.969 8.969 0 00-1.05-.174 1 1 0 01-.89-.89 11.115 11.115 0 01.25-3.762zM9.3 16.573A9.026 9.026 0 007 14.935v-3.957l1.818.78a3 3 0 002.364 0l5.508-2.361a11.026 11.026 0 01.25 3.762 1 1 0 01-.89.89 8.968 8.968 0 00-5.35 2.524 1 1 0 01-1.4 0zM6 18a1 1 0 001-1v-2.065a8.935 8.935 0 00-2-.712V17a1 1 0 001 1z" />
                     </svg>
                   </div>
                   <div>
-                    <p className="text-sm text-gray-600 dark:text-gray-400">Subjects</p>
+                    <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Subjects</p>
                     <p className="text-2xl font-bold text-gray-900 dark:text-white">{subjects.length}</p>
                   </div>
                 </div>
@@ -351,7 +351,7 @@ export default function FacultySchedulePage() {
         </div>
 
         {/* Content Section */}
-        <div className="bg-white/60 dark:bg-gray-900/40 backdrop-blur-sm rounded-2xl border border-gray-200 dark:border-gray-700 shadow-lg p-6">
+        <div className="glass-panel rounded-2xl p-6 hover-lift animate-slideUp" style={{ animationDelay: "400ms" }}>
           {loading ? (
             <LoadingState />
           ) : error ? (
@@ -371,10 +371,6 @@ export default function FacultySchedulePage() {
         <PracticalForm
           practical={editingPractical}
           subjects={subjects}
-          // students={students} // Note: PracticalForm definition viewed earlier didn't seem to take students prop, it fetches them internally? Wait, let me check the PracticalForm definition I viewed earlier. Step 29 shows interface PracticalFormProps DOES NOT have students. But earlier usage in this file PASSED students. 
-          // Re-checking Step 29: interface PracticalFormProps { practical: Practical | null; subjects: Subject[]; supabase: any; sampleCode... }
-          // The component does NOT accept `students` prop in the definition I saw.
-          // It fetches students internally. So I should remove `students={students}`.
           supabase={supabase}
           sampleCode={sampleCode}
           setSampleCode={setSampleCode}

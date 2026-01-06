@@ -15,6 +15,7 @@
 - **📝 Advanced Editor** – Monaco-based rich text editor with syntax highlighting, auto-completion, and multi-language support (C, C++, Python, Java).
 - **📶 Interactive Terminal** – Full WebSocket-based terminal experience supporting real-time `stdin`/`stdout` interaction.
 - **🤖 Clinical AI Intelligence** – Integrated Gemini AI for smart error diagnostics, code explanation, and automated hints.
+- **✨ Premium UI** – Modern glassmorphism design with fluid animations and responsive layouts.
 - **👩‍🏫 Faculty & Admin Dashboards** – specialized interfaces for managing classes, students, and system resources.
 - **📊 Detailed Analytics** – Track submission history, performance metrics, and automated grading results.
 
@@ -91,6 +92,10 @@ If you prefer running services individually for development:
    ```bash
    npm run dev
    ```
+
+### 🧪 Testing & Linting
+- **Run Tests**: `npm test`
+- **Lint Code**: `npm run lint`
 
 ---
 

@@ -22,20 +22,39 @@ export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
 
   // Public routes (no restriction)
-  const publicRoutes = ["/", "/lauth/ogin", "/auth/register", "/api"];
-  if (publicRoutes.some((r) => pathname.startsWith(r))) return response;
+  // Check for public routes or if the path starts with /auth, /api, or /unauthorized
+  const isPublicRoute =
+    pathname === "/" ||
+    pathname.startsWith("/auth/") ||
+    pathname.startsWith("/api/") ||
+    pathname.startsWith("/unauthorized");
+
+  if (isPublicRoute) return response;
 
   // Require login for anything else
-  if (!user) return NextResponse.redirect(new URL("/login", request.url));
+  if (!user) return NextResponse.redirect(new URL("/auth/login", request.url));
 
-  // Step 4: Get user role from Supabase DB (if stored in 'profiles' table)
-  const { data: profile } = await supabase
-    .from("profiles")
+  // Step 4: Get user role from Supabase DB (stored in 'users' table, not 'profiles')
+  const { data: dbUser } = await supabase
+    .from("users")
     .select("role")
-    .eq("id", user.id)
+    .eq("uid", user.id)
     .single();
 
-  const role = profile?.role;
+  // Fallback to user_metadata if db role is missing
+  const role = dbUser?.role || user?.user_metadata?.role;
+
+  console.log("Middleware Debug:", {
+    path: pathname,
+    userId: user?.id,
+    role: role,
+    source: dbUser?.role ? 'db_users_table' : 'user_metadata_fallback',
+    redirectingToUnauthorized: (
+      (pathname.startsWith("/dashboard/admin") && role !== "admin") ||
+      (pathname.startsWith("/dashboard/faculty") && role !== "faculty") ||
+      (pathname.startsWith("/dashboard/student") && role !== "student")
+    )
+  });
 
   // Step 5: Role-based access control
   if (pathname.startsWith("/dashboard/admin") && role !== "admin")

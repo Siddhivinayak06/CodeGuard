@@ -230,7 +230,7 @@ export default function AnalyticsPage() {
     }
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50/30 to-purple-50/30 dark:from-gray-950 dark:via-indigo-950/10 dark:to-purple-950/10">
+        <div className="min-h-screen bg-gradient-to-br from-indigo-50/40 via-purple-50/40 to-pink-50/40 dark:from-gray-950 dark:via-indigo-950/20 dark:to-purple-950/20">
             <div className="pt-24 pb-12 px-4 sm:px-6 lg:px-8 xl:px-12 w-full mx-auto">
                 {/* Header */}
                 <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 mb-8 animate-slideUp">
@@ -259,13 +259,64 @@ export default function AnalyticsPage() {
                 </div>
 
                 {loading ? (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 mb-8">
-                        {[1, 2, 3, 4].map((i) => (
-                            <div key={i} className="glass-card rounded-3xl p-6 animate-pulse">
-                                <div className="h-4 w-20 bg-gray-200 dark:bg-gray-700 rounded mb-4" />
-                                <div className="h-8 w-16 bg-gray-200 dark:bg-gray-700 rounded" />
-                            </div>
-                        ))}
+                    <div className="space-y-8">
+                        {/* Overview Loading */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+                            {[1, 2, 3, 4].map((i) => (
+                                <div key={i} className="glass-card-premium rounded-3xl p-6 animate-pulse">
+                                    <div className="flex justify-between items-start">
+                                        <div className="space-y-3">
+                                            <div className="h-3 w-20 bg-gray-200 dark:bg-gray-700 rounded-full" />
+                                            <div className="h-8 w-16 bg-gray-200 dark:bg-gray-700 rounded-lg" />
+                                        </div>
+                                        <div className="w-12 h-12 rounded-2xl bg-gray-200 dark:bg-gray-700" />
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+
+                        {/* Submission Stats Loading */}
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
+                            {[1, 2, 3].map((i) => (
+                                <div key={i} className="glass-card-premium rounded-2xl p-5 flex items-center gap-4 animate-pulse">
+                                    <div className="w-12 h-12 rounded-xl bg-gray-200 dark:bg-gray-700" />
+                                    <div className="space-y-2">
+                                        <div className="h-6 w-12 bg-gray-200 dark:bg-gray-700 rounded" />
+                                        <div className="h-3 w-16 bg-gray-200 dark:bg-gray-700 rounded" />
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+
+                        {/* Charts Loading */}
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                            {[1, 2].map((i) => (
+                                <div key={i} className="glass-card-premium rounded-3xl p-6 animate-pulse">
+                                    <div className="h-6 w-48 bg-gray-200 dark:bg-gray-700 rounded-lg mb-6" />
+                                    <div className="h-64 bg-gray-100 dark:bg-gray-800/50 rounded-2xl" />
+                                </div>
+                            ))}
+                        </div>
+
+                        {/* Bottom Row Loading */}
+                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                            {[1, 2, 3].map((i) => (
+                                <div key={i} className="glass-card-premium rounded-3xl p-6 animate-pulse">
+                                    <div className="h-5 w-40 bg-gray-200 dark:bg-gray-700 rounded-lg mb-6" />
+                                    <div className="space-y-4">
+                                        {[1, 2, 3].map((j) => (
+                                            <div key={j} className="flex items-center gap-3">
+                                                <div className="h-10 w-10 rounded-lg bg-gray-200 dark:bg-gray-700" />
+                                                <div className="flex-1 space-y-2">
+                                                    <div className="h-4 w-full bg-gray-200 dark:bg-gray-700 rounded" />
+                                                    <div className="h-3 w-2/3 bg-gray-200 dark:bg-gray-700 rounded" />
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
                     </div>
                 ) : data ? (
                     <>
@@ -305,31 +356,31 @@ export default function AnalyticsPage() {
 
                         {/* Submission Stats Cards */}
                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-5 mb-8">
-                            <div className="glass-card rounded-2xl p-5 flex items-center gap-4 animate-slideUp" style={{ animationDelay: "300ms" }}>
+                            <div className="glass-card-premium rounded-2xl p-5 flex items-center gap-4 hover-lift animate-slideUp" style={{ animationDelay: "300ms" }}>
                                 <div className="w-12 h-12 rounded-xl bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center">
                                     <CheckCircle2 className="w-6 h-6 text-emerald-600 dark:text-emerald-400" />
                                 </div>
                                 <div>
                                     <p className="text-2xl font-bold text-gray-900 dark:text-white">{data.submissions.accepted}</p>
-                                    <p className="text-sm text-gray-500 dark:text-gray-400">Passed</p>
+                                    <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Passed</p>
                                 </div>
                             </div>
-                            <div className="glass-card rounded-2xl p-5 flex items-center gap-4 animate-slideUp" style={{ animationDelay: "350ms" }}>
+                            <div className="glass-card-premium rounded-2xl p-5 flex items-center gap-4 hover-lift animate-slideUp" style={{ animationDelay: "350ms" }}>
                                 <div className="w-12 h-12 rounded-xl bg-red-100 dark:bg-red-900/30 flex items-center justify-center">
                                     <XCircle className="w-6 h-6 text-red-600 dark:text-red-400" />
                                 </div>
                                 <div>
                                     <p className="text-2xl font-bold text-gray-900 dark:text-white">{data.submissions.failed}</p>
-                                    <p className="text-sm text-gray-500 dark:text-gray-400">Failed</p>
+                                    <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Failed</p>
                                 </div>
                             </div>
-                            <div className="glass-card rounded-2xl p-5 flex items-center gap-4 animate-slideUp" style={{ animationDelay: "400ms" }}>
+                            <div className="glass-card-premium rounded-2xl p-5 flex items-center gap-4 hover-lift animate-slideUp" style={{ animationDelay: "400ms" }}>
                                 <div className="w-12 h-12 rounded-xl bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
                                     <FileCode className="w-6 h-6 text-blue-600 dark:text-blue-400" />
                                 </div>
                                 <div>
                                     <p className="text-2xl font-bold text-gray-900 dark:text-white">{data.submissions.evaluated}</p>
-                                    <p className="text-sm text-gray-500 dark:text-gray-400">Evaluated</p>
+                                    <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Evaluated</p>
                                 </div>
                             </div>
                         </div>

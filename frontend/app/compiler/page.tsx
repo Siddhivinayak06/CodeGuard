@@ -4,11 +4,11 @@ import { useCallback, useEffect, useRef, useState, useMemo } from "react";
 import axios from "axios";
 import { ChevronDown } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
-import CodeEditor from "@/components/CodeEditor";
-import OutputPane from "@/components/OutputPane";
-import InputPane from "@/components/InputPane";
+import CodeEditor from "@/components/editor/CodeEditor";
+import OutputPane from "@/components/editor/OutputPane";
+import InputPane from "@/components/editor/InputPane";
 import useProctoring from "@/hooks/useProctoring";
-import { ModeToggle } from "@/components/ModeToggle";
+import { ModeToggle } from "@/components/layout/ModeToggle";
 import { generatePdfClient } from "@/lib/ClientPdf";
 import { usePathname, useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
@@ -28,7 +28,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { AssistantPanel } from "@/components/AssistantPanel";
+import { AssistantPanel } from "@/components/editor/AssistantPanel";
 
 export default function EditorPage() {
   const router = useRouter();

@@ -2,8 +2,8 @@
 
 import { useState, useRef, useEffect, useMemo } from "react";
 import dynamic from "next/dynamic";
-import CodeEditor from "@/components/CodeEditor";
-import { ModeToggle } from "@/components/ModeToggle";
+import CodeEditor from "@/components/editor/CodeEditor";
+import { ModeToggle } from "@/components/layout/ModeToggle";
 import { ChevronDown, Loader2 } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
@@ -13,17 +13,17 @@ import {
   ResizablePanel,
   ResizablePanelGroup,
 } from "@/components/ui/resizable";
-import { PlotViewer } from "@/components/PlotViewer";
-import { FileData } from "@/components/FileExplorer";
+import { PlotViewer } from "@/components/editor/PlotViewer";
+import { FileData } from "@/components/editor/FileExplorer";
 import { Button } from "@/components/ui/button";
 import type { User } from "@supabase/supabase-js";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { AssistantPanel } from "@/components/AssistantPanel";
+import { AssistantPanel } from "@/components/editor/AssistantPanel";
 import { motion, AnimatePresence } from "framer-motion";
 
 // Dynamically import InteractiveTerminal
 const InteractiveTerminal = dynamic(
-  () => import("@/components/InteractiveTerminal"),
+  () => import("@/components/editor/InteractiveTerminal"),
   { ssr: false }
 );
 

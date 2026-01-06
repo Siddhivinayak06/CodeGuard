@@ -5,10 +5,10 @@ import { Analytics } from '@vercel/analytics/next'
 import './globals.css'
 import { ThemeProvider } from "@/components/theme-provider";
 import { SpeedInsights } from "@vercel/speed-insights/next"
-import NavbarLayout from "@/components/NavbarLayout";
-import PageTransition from "@/components/PageTransition";
+import NavbarLayout from "@/components/layout/NavbarLayout";
+import PageTransition from "@/components/layout/PageTransition";
 import { LogoutProvider } from "@/context/LogoutContext";
-import LogoutOverlay from "@/components/LogoutOverlay";
+import LogoutOverlay from "@/components/layout/LogoutOverlay";
 
 export const metadata: Metadata = {
   title: "CodeGuard – Secure Python Editor",

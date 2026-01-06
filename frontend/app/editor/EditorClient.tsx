@@ -4,9 +4,9 @@ import React, { useEffect, useRef, useState, useMemo } from "react";
 import axios from "axios";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import CodeEditor from "@/components/CodeEditor";
+import CodeEditor from "@/components/editor/CodeEditor";
 import useProctoring from "@/hooks/useProctoring";
-import { ModeToggle } from "@/components/ModeToggle";
+import { ModeToggle } from "@/components/layout/ModeToggle";
 import { generatePdfClient } from "@/lib/ClientPdf";
 import {
   ResizableHandle,

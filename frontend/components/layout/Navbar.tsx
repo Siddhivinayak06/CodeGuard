@@ -6,8 +6,8 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, useMemo } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type { User } from "@supabase/supabase-js";
-import { ModeToggle } from "@/components/ModeToggle";
-import NotificationPanel from "@/components/NotificationPanel";
+import { ModeToggle } from "@/components/layout/ModeToggle";
+import NotificationPanel from "@/components/layout/NotificationPanel";
 import { useLogout } from "@/hooks/useLogout";
 import {
     ChevronDown,

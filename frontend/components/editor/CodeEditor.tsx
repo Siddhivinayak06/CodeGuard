@@ -5,6 +5,7 @@ import { useTheme } from "next-themes";
 import { useRouter, usePathname } from "next/navigation";
 import Editor, { OnMount } from "@monaco-editor/react";
 import { EditorToolbar } from "./EditorToolbar";
+import { InteractiveTerminalHandle } from "./InteractiveTerminal";
 import { AssistantPanel } from "./AssistantPanel";
 import { FileExplorer, FileData } from "./FileExplorer";
 import { StatusBar } from "./StatusBar";
@@ -25,7 +26,7 @@ interface CodeEditorProps {
     showInput: boolean;
     setShowInput: (show: boolean) => void;
     isFullscreen?: boolean;
-    terminalRef?: React.MutableRefObject<any>;
+    terminalRef?: React.MutableRefObject<InteractiveTerminalHandle | null>;
     violations?: number;
     // Multi-file props
     files?: FileData[];
