@@ -232,34 +232,90 @@ export default function StudentDashboard() {
 
                 const { data: subjects, error: subjErr } = await supabase
                     .from("subjects")
-                    .select(`id, subject_name, semester, practicals(id, title)`)
+                    .select(`id, subject_name, semester`)
                     .eq("semester", sd.semester);
 
                 if (subjErr) throw subjErr;
 
-                interface Subject {
-                    id: string;
-                    subject_name: string;
-                    practicals: { id: string; title: string }[] | null;
-                }
+                // --- NEW PROGRESS LOGIC ---
+                // 1. Fetch Manual Assignments
+                const { data: manualData } = await supabase
+                    .from("student_practicals")
+                    .select(`practicals(id, subject_id)`)
+                    .eq("student_id", user.id);
 
-                const progressData = await Promise.all(
-                    (subjects ?? []).map(async (subject: Subject) => {
-                        const total_count = subject.practicals?.length || 0;
-                        const { count: completed_count } = await supabase
-                            .from("submissions")
-                            .select("*", { count: "exact", head: true })
-                            .eq("student_id", user.id)
-                            .in("practical_id", subject.practicals?.map((p) => p.id) || []);
+                // 2. Fetch Batch Assignments
+                const { data: batchData } = await supabase
+                    .from("schedule_allocations")
+                    .select(`schedule:schedules(practicals(id, subject_id))`)
+                    .eq("student_id", user.id);
 
-                        return {
-                            subject_id: subject.id,
-                            subject_name: subject.subject_name,
-                            total_count,
-                            completed_count: completed_count || 0,
-                        };
-                    })
-                );
+                // 3. Merge Unique Assigned Practicals
+                const assignedPracticalIds = new Set<number>();
+                const practicalsBySubject: Record<string, number> = {}; // subject_id -> count
+
+                // Process Manual
+                (manualData || []).forEach((item: any) => {
+                    if (item.practicals) {
+                        const pid = item.practicals.id;
+                        if (!assignedPracticalIds.has(pid)) {
+                            assignedPracticalIds.add(pid);
+                            const sid = item.practicals.subject_id;
+                            practicalsBySubject[sid] = (practicalsBySubject[sid] || 0) + 1;
+                        }
+                    }
+                });
+
+                // Process Batch
+                (batchData || []).forEach((item: any) => {
+                    if (item.schedule?.practicals) {
+                        const pid = item.schedule.practicals.id;
+                        if (!assignedPracticalIds.has(pid)) {
+                            assignedPracticalIds.add(pid);
+                            const sid = item.schedule.practicals.subject_id;
+                            practicalsBySubject[sid] = (practicalsBySubject[sid] || 0) + 1;
+                        }
+                    }
+                });
+
+                // 4. Fetch Completed Submissions (only for assigned practicals)
+                const { data: submissions } = await supabase
+                    .from("submissions")
+                    .select("practical_id, practicals(subject_id)")
+                    .eq("student_id", user.id)
+                    .eq("status", "completed");
+
+                const completedBySubject: Record<string, number> = {};
+                const seenCompletedIds = new Set<number>();
+
+                (submissions || []).forEach((s: any) => {
+                    if (s.practical_id && assignedPracticalIds.has(s.practical_id) && !seenCompletedIds.has(s.practical_id)) {
+                        seenCompletedIds.add(s.practical_id);
+                        const sid = s.practicals?.subject_id;
+                        if (sid) {
+                            completedBySubject[sid] = (completedBySubject[sid] || 0) + 1;
+                        }
+                    }
+                });
+
+                // 5. Build Progress Array
+                const progressData = (subjects || []).map((subject: any) => {
+                    const total = practicalsBySubject[subject.id] || 0;
+                    const completed = completedBySubject[subject.id] || 0;
+
+                    // Only show subjects that have at least one practical assigned? 
+                    // Or show all current semester subjects even if empty?
+                    // Let's show all, but with 0/0 if empty.
+                    return {
+                        subject_id: subject.id,
+                        subject_name: subject.subject_name,
+                        total_count: total,
+                        completed_count: completed
+                    };
+                });
+
+                // Optimization: Filter out subjects with 0 assigned practicals?
+                // For now, let's keep them so the student sees their subjects.
                 setProgress(progressData);
 
                 interface SubmissionRow {

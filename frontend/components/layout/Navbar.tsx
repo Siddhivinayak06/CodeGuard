@@ -105,12 +105,14 @@ export default function Navbar() {
         role === "faculty"
             ? [
                 { name: "Dashboard", href: "/dashboard/faculty", icon: <LayoutDashboard size={18} /> },
+                { name: "My Schedule", href: "/faculty/schedule", icon: <CalendarDays size={18} /> },
                 { name: "Subjects", href: "/faculty/subjects", icon: <BookOpen size={18} /> },
                 { name: "Submissions", href: "/faculty/submissions", icon: <FileCheck size={18} /> },
             ]
             : role === "admin"
                 ? [
                     { name: "Dashboard", href: "/dashboard/admin", icon: <LayoutDashboard size={18} /> },
+                    { name: "Yearly Schedule", href: "/admin/schedule", icon: <CalendarDays size={18} /> },
                     { name: "Subjects", href: "/admin/subjects", icon: <BookOpen size={18} /> },
                     { name: "Users", href: "/admin/users", icon: <Users size={18} /> },
                     { name: "Analytics", href: "/admin/analytics", icon: <BarChart3 size={18} /> },

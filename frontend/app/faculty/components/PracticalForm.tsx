@@ -26,6 +26,7 @@ interface PracticalFormProps {
   onSaved: () => void;
   isOpen?: boolean;
   defaultSubjectId?: number | string | null;
+  onSaveStep1?: (id: number) => void;
 }
 
 // ---------------------- Small icons / helpers ----------------------
@@ -49,6 +50,7 @@ export default function PracticalForm({
   onSaved,
   isOpen = false,
   defaultSubjectId,
+  onSaveStep1,
 }: PracticalFormProps) {
 
   // Level type for multi-level practicals - now using shared type
@@ -442,6 +444,11 @@ export default function PracticalForm({
 
       // update local form id
       setForm(prev => ({ ...prev, id: practicalId }));
+
+      if (onSaveStep1) {
+        onSaveStep1(practicalId);
+      }
+
       return true; // Return success - let caller decide what to do next
     } catch (err: any) {
       console.error("Error saving practical:", err);

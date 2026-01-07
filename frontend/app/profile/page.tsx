@@ -14,7 +14,8 @@ import {
     Loader2,
     Camera,
     CheckCircle2,
-    AlertCircle
+    AlertCircle,
+    Users
 } from "lucide-react";
 
 export default function ProfilePage() {
@@ -32,6 +33,7 @@ export default function ProfilePage() {
         email: "",
         role: "student",
         semester: "", // Only for students
+        batch: "", // Only for students
     });
 
     const [passwordData, setPasswordData] = useState({
@@ -60,13 +62,18 @@ export default function ProfilePage() {
                     .single();
 
                 let studentSemester = "";
+                let studentBatch = "";
+
                 if (profile?.role === "student") {
                     const { data: student } = await supabase
                         .from("student_details")
-                        .select("semester")
+                        .select("semester, batch")
                         .eq("student_id", user.id)
                         .single();
-                    if (student) studentSemester = student.semester.toString();
+                    if (student) {
+                        studentSemester = student.semester?.toString() || "";
+                        studentBatch = student.batch || "";
+                    }
                 }
 
                 setFormData({
@@ -74,6 +81,7 @@ export default function ProfilePage() {
                     email: user.email || "",
                     role: profile?.role || user.user_metadata?.role || "student",
                     semester: studentSemester,
+                    batch: studentBatch,
                 });
 
             } catch (error) {
@@ -102,14 +110,20 @@ export default function ProfilePage() {
 
             if (userError) throw userError;
 
-            // If student, update semester
-            if (formData.role === "student" && formData.semester) {
-                const { error: studentError } = await supabase
-                    .from("student_details")
-                    .update({ semester: parseInt(formData.semester) })
-                    .eq("student_id", user.id);
+            // If student, update semester and batch
+            if (formData.role === "student") {
+                const updatePayload: any = {};
+                if (formData.semester) updatePayload.semester = parseInt(formData.semester);
+                if (formData.batch) updatePayload.batch = formData.batch;
 
-                if (studentError) throw studentError;
+                if (Object.keys(updatePayload).length > 0) {
+                    const { error: studentError } = await supabase
+                        .from("student_details")
+                        .update(updatePayload)
+                        .eq("student_id", user.id);
+
+                    if (studentError) throw studentError;
+                }
             }
 
             setMessage({ type: "success", text: "Profile updated successfully!" });
@@ -195,6 +209,11 @@ export default function ProfilePage() {
                                         Sem {formData.semester}
                                     </span>
                                 )}
+                                {formData.role === "student" && formData.batch && (
+                                    <span className="px-3 py-1 rounded-full text-xs font-semibold bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 border border-blue-200 dark:border-blue-800">
+                                        Batch {formData.batch}
+                                    </span>
+                                )}
                             </div>
                         </div>
 
@@ -277,6 +296,22 @@ export default function ProfilePage() {
                                                     onChange={(e) => setFormData({ ...formData, semester: e.target.value })}
                                                     className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-white/50 dark:bg-gray-800/50 focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-600 outline-none transition-all"
                                                     placeholder="e.g. 5"
+                                                />
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {formData.role === "student" && (
+                                        <div className="space-y-2">
+                                            <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Batch</label>
+                                            <div className="relative">
+                                                <Users className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                                                <input
+                                                    type="text"
+                                                    value={formData.batch}
+                                                    onChange={(e) => setFormData({ ...formData, batch: e.target.value })}
+                                                    className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-white/50 dark:bg-gray-800/50 focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-600 outline-none transition-all"
+                                                    placeholder="e.g. A1"
                                                 />
                                             </div>
                                         </div>
