@@ -16,6 +16,7 @@ import { Sparkles, Play, Download, Send, Eye, EyeOff, MoreVertical, Loader2, Rot
 interface EditorToolbarProps {
     lang: string;
     onLangChange: (lang: string) => void;
+    showLangSelector?: boolean;
     currentMode: string;
     handleModeChange: (mode: string) => void;
     showModeSection: boolean;
@@ -38,6 +39,7 @@ interface EditorToolbarProps {
 export function EditorToolbar({
     lang,
     onLangChange,
+    showLangSelector = false,
     currentMode,
     handleModeChange,
     showModeSection,
@@ -61,19 +63,27 @@ export function EditorToolbar({
             {/* Left: Language & Mode */}
             <div className="flex items-center gap-4">
                 <div className="flex items-center gap-2">
-                    <span className="text-sm font-medium text-gray-500 dark:text-gray-400 hidden sm:inline">Language:</span>
-                    <Select value={lang} onValueChange={onLangChange} disabled={locked || loading}>
-                        <SelectTrigger className="w-[110px] sm:w-[130px] h-8">
-                            <SelectValue placeholder="Language" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="python">Python</SelectItem>
-                            <SelectItem value="java">Java</SelectItem>
-                            <SelectItem value="c">C</SelectItem>
-                            <SelectItem value="cpp">C++</SelectItem>
-
-                        </SelectContent>
-                    </Select>
+                    {showLangSelector ? (
+                        <>
+                            <span className="text-sm font-medium text-gray-500 dark:text-gray-400 hidden sm:inline">Language:</span>
+                            <Select value={lang} onValueChange={onLangChange} disabled={locked || loading}>
+                                <SelectTrigger className="w-[110px] sm:w-[130px] h-8">
+                                    <SelectValue placeholder="Language" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="python">Python</SelectItem>
+                                    <SelectItem value="java">Java</SelectItem>
+                                    <SelectItem value="c">C</SelectItem>
+                                    <SelectItem value="cpp">C++</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </>
+                    ) : (
+                        <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-md bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-400 border border-indigo-200/50 dark:border-indigo-700/30">
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" /></svg>
+                            {lang?.toUpperCase() || 'JAVA'}
+                        </span>
+                    )}
                 </div>
 
                 {/* Mode Selection */}

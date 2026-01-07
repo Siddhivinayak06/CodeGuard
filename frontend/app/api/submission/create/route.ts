@@ -20,8 +20,25 @@ export async function POST(req: Request) {
       .single();
 
     if (existingSubmission) {
-      // Return existing submission without modifying it (preserves marks)
-      return NextResponse.json({ submission: existingSubmission });
+      // Update existing submission with new code (UPSERT behavior)
+      const { data: updatedSubmission, error: updateError } = await supabaseAdmin
+        .from("submissions")
+        .update({
+          code,
+          language,
+          status, // e.g. "pending"
+          marks_obtained: marks_obtained || existingSubmission.marks_obtained,
+        })
+        .eq("id", existingSubmission.id)
+        .select("*")
+        .single();
+
+      if (updateError) {
+        console.error("Supabase update error during create/upsert:", updateError);
+        return NextResponse.json({ error: updateError }, { status: 500 });
+      }
+
+      return NextResponse.json({ submission: updatedSubmission });
     }
 
     // Insert new submission if none exists

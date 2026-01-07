@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { createClient } from "@/lib/supabase/client";
 import { ConflictAlert } from "./ConflictAlert";
-import { Loader2 } from "lucide-react";
+import { Loader2, CalendarPlus, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 
 interface ScheduleDialogProps {
@@ -124,26 +124,35 @@ export function ScheduleDialog({ onScheduleCreated, selectedDate }: ScheduleDial
     return (
         <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
-                <Button className="bg-blue-600 hover:bg-blue-700 text-white shadow-lg shadow-blue-500/20">
-                    Schedule Practical
+                <Button className="gap-2 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 hover:from-indigo-600 hover:via-purple-600 hover:to-pink-600 text-white shadow-lg shadow-purple-500/30 hover:shadow-xl hover:shadow-purple-500/40 transition-all duration-300 hover:-translate-y-0.5">
+                    <CalendarPlus className="w-4 h-4" />
+                    Schedule
                 </Button>
             </DialogTrigger>
-            <DialogContent className="bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 sm:max-w-[425px]">
+            <DialogContent className="bg-white/95 dark:bg-gray-900/95 backdrop-blur-xl border-white/20 dark:border-gray-700/50 sm:max-w-[480px] shadow-2xl">
                 <DialogHeader>
-                    <DialogTitle>Schedule Practical Session</DialogTitle>
+                    <div className="flex items-center gap-3">
+                        <div className="p-2 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl shadow-lg shadow-indigo-500/30">
+                            <CalendarPlus className="w-5 h-5 text-white" />
+                        </div>
+                        <div>
+                            <DialogTitle className="text-lg font-bold">Schedule Practical</DialogTitle>
+                            <p className="text-sm text-muted-foreground">Create a new practical session</p>
+                        </div>
+                    </div>
                 </DialogHeader>
                 <form onSubmit={handleSubmit} className="space-y-4 pt-4">
 
                     <div className="space-y-2">
-                        <Label>Practical (Optional)</Label>
+                        <Label className="text-sm font-medium">Practical (Optional)</Label>
                         <Select
                             value={formData.practical_id}
                             onValueChange={(val) => setFormData({ ...formData, practical_id: val })}
                         >
-                            <SelectTrigger>
+                            <SelectTrigger className="bg-white/80 dark:bg-gray-800/80 border-gray-200 dark:border-gray-700 focus:ring-2 focus:ring-indigo-500/30">
                                 <SelectValue placeholder="Select practical or leave empty" />
                             </SelectTrigger>
-                            <SelectContent>
+                            <SelectContent className="bg-white/95 dark:bg-gray-900/95 backdrop-blur-xl border-gray-200 dark:border-gray-700">
                                 <SelectItem value="_none">No Practical (Lecture/Placeholder)</SelectItem>
                                 {practicals.map(p => (
                                     <SelectItem key={p.id} value={p.id}>{p.title}</SelectItem>
@@ -154,26 +163,27 @@ export function ScheduleDialog({ onScheduleCreated, selectedDate }: ScheduleDial
 
                     {!formData.practical_id || formData.practical_id === "_none" ? (
                         <div className="space-y-2">
-                            <Label>Session Title</Label>
+                            <Label className="text-sm font-medium">Session Title</Label>
                             <Input
                                 placeholder="e.g. Intro to Python"
                                 value={formData.title_placeholder || ""}
                                 onChange={(e) => setFormData({ ...formData, title_placeholder: e.target.value })}
                                 required
+                                className="bg-white/80 dark:bg-gray-800/80 border-gray-200 dark:border-gray-700 focus:ring-2 focus:ring-indigo-500/30"
                             />
                         </div>
                     ) : null}
 
                     <div className="space-y-2">
-                        <Label>Faculty</Label>
+                        <Label className="text-sm font-medium">Faculty</Label>
                         <Select
                             value={formData.faculty_id}
                             onValueChange={(val) => setFormData({ ...formData, faculty_id: val })}
                         >
-                            <SelectTrigger>
+                            <SelectTrigger className="bg-white/80 dark:bg-gray-800/80 border-gray-200 dark:border-gray-700 focus:ring-2 focus:ring-indigo-500/30">
                                 <SelectValue placeholder="Select faculty" />
                             </SelectTrigger>
-                            <SelectContent>
+                            <SelectContent className="bg-white/95 dark:bg-gray-900/95 backdrop-blur-xl border-gray-200 dark:border-gray-700">
                                 {faculty.map(f => (
                                     <SelectItem key={f.id} value={f.id}>{f.email}</SelectItem>
                                 ))}
@@ -183,24 +193,25 @@ export function ScheduleDialog({ onScheduleCreated, selectedDate }: ScheduleDial
 
                     <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
-                            <Label>Date</Label>
+                            <Label className="text-sm font-medium">Date</Label>
                             <Input
                                 type="date"
                                 value={formData.date}
                                 onChange={(e) => setFormData({ ...formData, date: e.target.value })}
                                 required
+                                className="bg-white/80 dark:bg-gray-800/80 border-gray-200 dark:border-gray-700 focus:ring-2 focus:ring-indigo-500/30"
                             />
                         </div>
                         <div className="space-y-2">
-                            <Label>Batch Name</Label>
+                            <Label className="text-sm font-medium">Batch</Label>
                             <Select
                                 value={formData.batch_name}
                                 onValueChange={(val) => setFormData({ ...formData, batch_name: val })}
                             >
-                                <SelectTrigger>
+                                <SelectTrigger className="bg-white/80 dark:bg-gray-800/80 border-gray-200 dark:border-gray-700 focus:ring-2 focus:ring-indigo-500/30">
                                     <SelectValue placeholder="Select batch" />
                                 </SelectTrigger>
-                                <SelectContent>
+                                <SelectContent className="bg-white/95 dark:bg-gray-900/95 backdrop-blur-xl border-gray-200 dark:border-gray-700">
                                     {batches.map(b => (
                                         <SelectItem key={b} value={b}>{b}</SelectItem>
                                     ))}
@@ -211,31 +222,45 @@ export function ScheduleDialog({ onScheduleCreated, selectedDate }: ScheduleDial
 
                     <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
-                            <Label>Start Time</Label>
+                            <Label className="text-sm font-medium">Start Time</Label>
                             <Input
                                 type="time"
                                 value={formData.start_time}
                                 onChange={(e) => setFormData({ ...formData, start_time: e.target.value })}
                                 required
+                                className="bg-white/80 dark:bg-gray-800/80 border-gray-200 dark:border-gray-700 focus:ring-2 focus:ring-indigo-500/30"
                             />
                         </div>
                         <div className="space-y-2">
-                            <Label>End Time</Label>
+                            <Label className="text-sm font-medium">End Time</Label>
                             <Input
                                 type="time"
                                 value={formData.end_time}
                                 onChange={(e) => setFormData({ ...formData, end_time: e.target.value })}
                                 required
+                                className="bg-white/80 dark:bg-gray-800/80 border-gray-200 dark:border-gray-700 focus:ring-2 focus:ring-indigo-500/30"
                             />
                         </div>
                     </div>
 
                     <ConflictAlert conflict={conflict} />
 
-                    <div className="flex justify-end pt-4">
-                        <Button type="submit" disabled={loading || conflict?.conflict}>
+                    <div className="flex justify-end gap-3 pt-4 border-t border-gray-100 dark:border-gray-800">
+                        <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => setOpen(false)}
+                            className="bg-white/80 dark:bg-gray-800/80"
+                        >
+                            Cancel
+                        </Button>
+                        <Button
+                            type="submit"
+                            disabled={loading || conflict?.conflict}
+                            className="bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white shadow-lg shadow-indigo-500/25"
+                        >
                             {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                            Confirm Schedule
+                            Confirm
                         </Button>
                     </div>
 

@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import CodeEditor from "@/components/editor/CodeEditor";
 import useProctoring from "@/hooks/useProctoring";
+import { useSessionValidator } from "@/hooks/useSessionValidator";
 import { ModeToggle } from "@/components/layout/ModeToggle";
 import { generatePdfClient } from "@/lib/ClientPdf";
 import {
@@ -200,7 +201,7 @@ int main() {
   const [lang, setLang] = useState(languageFromUrl);
   const [code, setCode] = useState(getStarterCode(languageFromUrl));
   const [loading, setLoading] = useState(false);
-  const { violations, locked } = useProctoring(3);
+
   const [practical, setPractical] = useState<any>(null);
   const [showUserTestCases, setShowUserTestCases] = useState(false);
 
@@ -226,6 +227,81 @@ int main() {
   const [expandedCases, setExpandedCases] = useState<Record<number, boolean>>({});
 
   // ========================
+  // Session Validation (Single Active Session)
+  // ========================
+  const autoSubmitOnInvalidation = async () => {
+    // Auto-submit current code when session is invalidated
+    if (code && practicalId && user) {
+      try {
+        await axios.post("/api/submission/create", {
+          student_id: user.id,
+          practical_id: Number(practicalId),
+          code,
+          language: lang,
+          status: "pending",
+          marks_obtained: 0,
+          test_cases_passed: "0/0"
+        });
+        console.log("Code auto-submitted due to session invalidation");
+      } catch (err) {
+        console.error("Auto-submit failed:", err);
+      }
+    }
+  };
+
+  const { showInvalidModal, registerSession, dismissModal } = useSessionValidator({
+    onSessionInvalidated: autoSubmitOnInvalidation,
+    enabled: !!user,
+    userId: user?.id || null,
+  });
+
+  // ========================
+  // Mandatory Fullscreen Logic
+  // ========================
+  const [isFullscreenMode, setIsFullscreenMode] = useState(false);
+  const [hasExamStarted, setHasExamStarted] = useState(false);
+
+  // Proctoring Hook (Only active after exam starts)
+  const { violations, locked } = useProctoring({ active: hasExamStarted, maxViolations: 3 });
+
+  // Auto-submit on Proctoring Lock
+  const hasLockSubmittedRef = useRef(false);
+  useEffect(() => {
+    if (locked && !hasLockSubmittedRef.current && hasExamStarted) {
+      console.warn("Proctoring Limit Reached: Auto-submitting code...");
+      hasLockSubmittedRef.current = true;
+      // Auto-submit and then redirect to dashboard
+      autoSubmitOnInvalidation().finally(() => {
+        router.push("/student/submissions");
+      });
+    }
+  }, [locked, hasExamStarted, autoSubmitOnInvalidation, router]);
+
+  // Toggle fullscreen
+  const enterFullscreen = async () => {
+    if (!document.fullscreenElement) {
+      await document.documentElement.requestFullscreen();
+      setHasExamStarted(true);
+    }
+  };
+
+  // Monitor fullscreen changes
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreenMode(!!document.fullscreenElement);
+      // If we are getting into fullscreen, mark exam as started
+      if (document.fullscreenElement) {
+        setHasExamStarted(true);
+      }
+    };
+
+    document.addEventListener("fullscreenchange", handleFullscreenChange);
+    return () => {
+      document.removeEventListener("fullscreenchange", handleFullscreenChange);
+    };
+  }, []);
+
+  // ========================
   // Auth
   // ========================
   useEffect(() => {
@@ -238,6 +314,8 @@ int main() {
       }
       if (mountedRef.current) {
         setUser(data.user);
+        // Register session for single active session enforcement
+        registerSession(data.user.id);
         // Fetch roll number if student
         const { data: studentData } = await supabase
           .from("student_details")
@@ -251,7 +329,7 @@ int main() {
     };
     fetchUser();
     return () => { mountedRef.current = false; };
-  }, [router, supabase]);
+  }, [router, supabase, registerSession]);
 
   // ========================
   // Fetch practical
@@ -496,35 +574,213 @@ int main() {
   const passPercent = totalCount ? Math.round((passedCount / totalCount) * 100) : 0;
 
   return (
-    <div className="h-screen flex flex-col bg-gradient-to-br from-gray-100 via-white/30 to-gray-200 dark:from-gray-900 dark:via-gray-800/40 dark:to-gray-900 backdrop-blur-sm">
-      {/* Header */}
-      <div className="h-14 flex items-center justify-between px-6 border-b border-gray-300 dark:border-gray-700 backdrop-blur-md bg-white/30 dark:bg-gray-900/30 shadow-sm">
-        <h1
-          role="heading"
-          aria-level={1}
-          className="select-none text-1xl md:text-2xl lg:text-3xl font-extrabold tracking-tight
-             bg-clip-text text-transparent bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500
-             animate-gradient-x drop-shadow-sm"
-          style={{ WebkitFontSmoothing: 'antialiased' }}
-        >
-          CodeGuard
-        </h1>
+    <div className="h-screen flex flex-col bg-gray-50 dark:bg-gray-950">
+      {/* Session Invalidation Modal */}
+      {showInvalidModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <motion.div
+            initial={{ scale: 0.9, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            className="bg-white dark:bg-gray-900 rounded-2xl p-6 max-w-md mx-4 shadow-2xl border border-red-200 dark:border-red-900/50"
+          >
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-12 h-12 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center">
+                <svg className="w-6 h-6 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+              </div>
+              <div>
+                <h2 className="text-lg font-bold text-gray-900 dark:text-white">Session Invalidated</h2>
+                <p className="text-sm text-gray-500 dark:text-gray-400">Another login detected</p>
+              </div>
+            </div>
+            <p className="text-gray-700 dark:text-gray-300 mb-4">
+              Your session has been invalidated because you logged in from another device or browser.
+              Your current code has been auto-submitted for safety.
+            </p>
+            <div className="flex items-center gap-2 p-3 bg-amber-50 dark:bg-amber-900/20 rounded-lg border border-amber-200 dark:border-amber-800/30 mb-4">
+              <svg className="w-5 h-5 text-amber-600 dark:text-amber-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <span className="text-sm text-amber-700 dark:text-amber-300">You will be logged out in a few seconds...</span>
+            </div>
+            <Button
+              onClick={dismissModal}
+              className="w-full bg-gray-900 hover:bg-gray-800 dark:bg-gray-100 dark:hover:bg-gray-200 dark:text-gray-900"
+            >
+              I Understand
+            </Button>
+          </motion.div>
+        </div>
+      )}
 
+      {/* Mandatory Fullscreen Overlays */}
+
+      {/* 1. Consent & Start Modal (Replaces previous simplified start) */}
+      {!hasExamStarted && !loading && (
+        <div className="fixed inset-0 z-[60] bg-gray-50 dark:bg-gray-950 flex flex-col items-center justify-center p-4">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="max-w-md w-full bg-white dark:bg-gray-900 rounded-2xl p-8 shadow-2xl border border-gray-200 dark:border-gray-800 text-center"
+          >
+            <div className="w-16 h-16 bg-indigo-100 dark:bg-indigo-900/30 rounded-full flex items-center justify-center mx-auto mb-6">
+              <svg className="w-8 h-8 text-indigo-600 dark:text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
+
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">Exam Rules & Consent</h1>
+            <p className="text-gray-500 dark:text-gray-400 text-sm mb-6">
+              Please review the following rules before starting.
+            </p>
+
+            <div className="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-4 mb-6 text-left space-y-3">
+              <div className="flex items-start gap-3">
+                <div className="w-1.5 h-1.5 rounded-full bg-indigo-500 mt-2 flex-shrink-0" />
+                <p className="text-sm text-gray-700 dark:text-gray-300">
+                  <span className="font-semibold">Full Screen Required:</span> You must stay in full screen mode required for the entire duration.
+                </p>
+              </div>
+              <div className="flex items-start gap-3">
+                <div className="w-1.5 h-1.5 rounded-full bg-indigo-500 mt-2 flex-shrink-0" />
+                <p className="text-sm text-gray-700 dark:text-gray-300">
+                  <span className="font-semibold">Focus Tracking:</span> Tab switching and window blurring are monitored.
+                </p>
+              </div>
+              <div className="flex items-start gap-3">
+                <div className="w-1.5 h-1.5 rounded-full bg-indigo-500 mt-2 flex-shrink-0" />
+                <p className="text-sm text-gray-700 dark:text-gray-300">
+                  <span className="font-semibold">Fair Play:</span> By starting, you agree to have your session activity recorded.
+                </p>
+              </div>
+            </div>
+
+            <Button
+              onClick={enterFullscreen}
+              size="lg"
+              className="w-full h-12 text-lg bg-indigo-600 hover:bg-indigo-700 text-white shadow-lg shadow-indigo-500/20 rounded-xl transition-all hover:scale-[1.02]"
+            >
+              I Agree & Start Exam
+            </Button>
+
+            <p className="mt-4 text-xs text-gray-400 dark:text-gray-500">
+              Legal: Your IP and browser fingerprint ID are logged.
+            </p>
+          </motion.div>
+        </div>
+      )}
+
+      {/* 2. Returning to Fullscreen Overlay */}
+      {hasExamStarted && !isFullscreenMode && (
+        <div className="fixed inset-0 z-[60] bg-gray-900/95 backdrop-blur-md flex flex-col items-center justify-center p-4">
+          <motion.div
+            initial={{ scale: 0.9 }}
+            animate={{ scale: 1 }}
+            className="max-w-md w-full bg-white dark:bg-gray-900 rounded-2xl p-8 shadow-2xl border border-red-500/30 text-center"
+          >
+            <div className="w-16 h-16 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center mx-auto mb-6">
+              <svg className="w-8 h-8 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+            </div>
+            <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">Exam Paused</h2>
+            <p className="text-gray-600 dark:text-gray-300 mb-6">
+              You have exited full screen mode. You must return to full screen to continue the exam.
+            </p>
+            <Button
+              onClick={enterFullscreen}
+              className="w-full h-12 bg-white text-gray-900 hover:bg-gray-100 border border-gray-200"
+            >
+              Return to Full Screen
+            </Button>
+          </motion.div>
+        </div>
+      )}
+
+      {/* Header */}
+      <div className="h-16 flex items-center justify-between px-6 border-b border-white/20 dark:border-gray-700/50 backdrop-blur-xl bg-white/60 dark:bg-gray-900/60 shadow-lg shadow-black/5 dark:shadow-black/20">
+        {/* Left: Logo & Title */}
         <div className="flex items-center gap-4">
-          {locked && (
-            <div className="px-3 py-1 text-sm bg-red-200/30 text-red-600 rounded-full backdrop-blur-sm">
-              Session Locked
+          <div className="flex items-center gap-3">
+            <div className="relative">
+              <div className="absolute inset-0 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 rounded-xl blur-md opacity-60" />
+              <div className="relative w-10 h-10 bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 rounded-xl flex items-center justify-center shadow-lg">
+                <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                </svg>
+              </div>
+            </div>
+            <div>
+              <h1
+                role="heading"
+                aria-level={1}
+                className="select-none text-xl font-bold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 dark:from-indigo-400 dark:via-purple-400 dark:to-pink-400"
+              >
+                CodeGuard
+              </h1>
+              <p className="text-[10px] text-gray-500 dark:text-gray-400 font-medium tracking-wide">Secure Code Editor</p>
+            </div>
+          </div>
+
+          {/* Practical Title */}
+          {practical?.title && (
+            <div className="hidden md:flex items-center gap-2 pl-4 border-l border-gray-200/50 dark:border-gray-700/50">
+              <span className="text-sm font-medium text-gray-600 dark:text-gray-300 max-w-[200px] truncate">
+                {practical.title}
+              </span>
             </div>
           )}
-          <div className="text-sm text-gray-600 dark:text-gray-400">
-            Violations: {" "}
-            <span className="font-semibold text-red-600 dark:text-red-400">
-              {violations}/3
-            </span>
+        </div>
+
+        {/* Right: Status & Actions */}
+        <div className="flex items-center gap-3">
+          {/* Proctoring Status */}
+          <div className="flex items-center gap-3 px-4 py-2 rounded-xl bg-gray-100/60 dark:bg-gray-800/50 border border-gray-200/50 dark:border-gray-700/50">
+            {locked ? (
+              <div className="flex items-center gap-2 text-red-600 dark:text-red-400">
+                <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+                <span className="text-xs font-semibold">Session Locked</span>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2">
+                <div className={`w-2 h-2 rounded-full ${violations > 0 ? 'bg-amber-500' : 'bg-emerald-500'}`} />
+                <span className="text-xs font-medium text-gray-600 dark:text-gray-400">
+                  Violations:
+                  <span className={`ml-1 font-bold ${violations > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
+                    {violations}/3
+                  </span>
+                </span>
+              </div>
+            )}
           </div>
-          <Button variant="outline" onClick={handleSignOut}>
+
+          {/* User Info */}
+          {user && (
+            <div className="hidden lg:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-indigo-50/50 dark:bg-indigo-900/20 border border-indigo-100/50 dark:border-indigo-800/30">
+              <div className="w-6 h-6 rounded-full bg-gradient-to-br from-indigo-500 to-purple-500 flex items-center justify-center text-white text-xs font-bold">
+                {user.email?.charAt(0).toUpperCase() || 'U'}
+              </div>
+              <span className="text-xs font-medium text-indigo-700 dark:text-indigo-300 max-w-[120px] truncate">
+                {rollNo || user.email?.split('@')[0]}
+              </span>
+            </div>
+          )}
+
+          {/* Sign Out Button */}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleSignOut}
+            className="h-9 px-4 text-xs font-medium border-gray-200 dark:border-gray-700 hover:bg-red-50 hover:text-red-600 hover:border-red-200 dark:hover:bg-red-900/20 dark:hover:text-red-400 dark:hover:border-red-800/50 transition-all"
+          >
+            <svg className="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+            </svg>
             Sign Out
           </Button>
+
+          {/* Theme Toggle */}
           <ModeToggle />
         </div>
       </div>
@@ -532,119 +788,187 @@ int main() {
       {/* Main Content */}
       <div className="flex-1 p-4 h-full">
         <ResizablePanelGroup direction="horizontal" className="h-full gap-4">
-          {/* LEFT: LeetCode-style Problem Panel */}
+          {/* LEFT: Problem Panel - Clean & Focused */}
           <ResizablePanel defaultSize={40} minSize={20}>
-            <div className="h-full p-6 overflow-auto bg-white/60 dark:bg-gray-900/60 backdrop-blur-md rounded-2xl shadow-inner border border-white/20 dark:border-gray-800/50">
-              {/* Title large */}
-              <h1 className="text-2xl font-extrabold text-gray-900 dark:text-gray-50 mb-3 bg-clip-text text-transparent bg-gradient-to-r from-gray-900 via-gray-700 to-gray-900 dark:from-white dark:via-gray-200 dark:to-white">
-                {practical?.title || "Problem Title"}
-              </h1>
+            <div className="h-full overflow-auto bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800">
 
-              {/* Level Selector Tabs (for multi-level practicals) */}
-              {hasLevelsParam && practicalLevels.length > 0 && (
-                <div className="flex gap-2 mb-4">
-                  {practicalLevels.map((level) => {
-                    const colors: Record<string, { active: string; inactive: string }> = {
-                      easy: { active: 'bg-emerald-500/90 text-white shadow-lg shadow-emerald-500/20', inactive: 'bg-emerald-100/50 text-emerald-700 hover:bg-emerald-200/50' },
-                      medium: { active: 'bg-amber-500/90 text-white shadow-lg shadow-amber-500/20', inactive: 'bg-amber-100/50 text-amber-700 hover:bg-amber-200/50' },
-                      hard: { active: 'bg-red-500/90 text-white shadow-lg shadow-red-500/20', inactive: 'bg-red-100/50 text-red-700 hover:bg-red-200/50' },
-                    };
-                    const color = colors[level.level] || colors.easy;
-                    const isActive = activeLevel === level.level;
-                    return (
-                      <button
-                        key={level.id}
-                        onClick={() => setActiveLevel(level.level)}
-                        className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${isActive ? color.active : color.inactive}`}
-                      >
-                        {level.level.charAt(0).toUpperCase() + level.level.slice(1)}
-                        <span className="ml-1 opacity-75">({level.max_marks}pts)</span>
-                      </button>
-                    );
-                  })}
+              {/* Header Section - Sticky */}
+              <div className="sticky top-0 z-10 px-6 pt-6 pb-4 bg-white dark:bg-gray-900 border-b border-gray-100 dark:border-gray-800">
+                {/* Title - Dominant */}
+                <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-4 leading-tight tracking-tight">
+                  {practical?.title || "Problem Title"}
+                </h1>
+
+                {/* Meta Row - Compact */}
+                <div className="flex items-center gap-3 flex-wrap">
+                  {/* Difficulty Badge */}
+                  <span className={`inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1 rounded-md ${activeLevel === 'easy' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400' :
+                    activeLevel === 'hard' ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400' :
+                      'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400'
+                    }`}>
+                    {hasLevelsParam ? activeLevel.charAt(0).toUpperCase() + activeLevel.slice(1) : 'Medium'}
+                  </span>
+
+                  {/* Language Badge */}
+                  <span className="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1 rounded-md bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-400">
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" /></svg>
+                    {lang?.toUpperCase() || 'JAVA'}
+                  </span>
+
+                  {/* Subject */}
+                  {practical?.subject_name && (
+                    <span className="text-xs text-gray-500 dark:text-gray-400">
+                      {practical.subject_name}
+                    </span>
+                  )}
                 </div>
-              )}
 
-              {/* Badges / meta row */}
-              <div className="flex items-center gap-2 mb-4">
-                <div className="text-xs font-semibold px-2 py-1 rounded-md bg-yellow-100 text-yellow-800">
-                  {hasLevelsParam ? activeLevel.charAt(0).toUpperCase() + activeLevel.slice(1) : 'Medium'}
-                </div>
-                <div className="text-xs px-2 py-1 rounded-md bg-gray-100 text-gray-700">{lang || 'Java'}</div>
-              </div>
-
-              {/* Problem statement paragraph */}
-              <div className="text-gray-700 dark:text-gray-300 leading-relaxed mb-6 whitespace-pre-wrap">
-                {hasLevelsParam && practicalLevels.length > 0
-                  ? practicalLevels.find(l => l.level === activeLevel)?.description || problemStmt
-                  : problemStmt}
-              </div>
-
-              {/* Examples */}
-              <div className="space-y-6">
-                {examplesFromDB && examplesFromDB.length > 0 ? (
-                  examplesFromDB.map((ex, idx) => (
-                    <div key={idx}>
-                      <div className="font-semibold text-gray-800 dark:text-gray-200 mb-2">Example {idx + 1}</div>
-                      <div className="flex gap-4">
-                        <div className="flex-1">
-                          <div className="text-xs text-gray-500 mb-1">Input:</div>
-                          <pre className="bg-gray-100 dark:bg-gray-800 text-sm font-mono p-3 rounded whitespace-pre-wrap">{ex.input}</pre>
-                        </div>
-                        <div className="flex-1">
-                          <div className="text-xs text-gray-500 mb-1">Output:</div>
-                          <pre className="bg-gray-100 dark:bg-gray-800 text-sm font-mono p-3 rounded whitespace-pre-wrap">{ex.output}</pre>
-                        </div>
-                      </div>
-                    </div>
-                  ))
-                ) : extractedExamples && extractedExamples.length > 0 ? (
-                  extractedExamples.map((ex, idx) => (
-                    <div key={idx}>
-                      <div className="font-semibold text-gray-800 dark:text-gray-200 mb-2">Example {idx + 1}</div>
-                      <div className="flex gap-4">
-                        <div className="flex-1">
-                          <div className="text-xs text-gray-500 mb-1">Input:</div>
-                          <pre className="bg-gray-100 dark:bg-gray-800 text-sm font-mono p-3 rounded whitespace-pre-wrap">{ex.input ?? ex.raw ?? "—"}</pre>
-                        </div>
-                        <div className="flex-1">
-                          <div className="text-xs text-gray-500 mb-1">Output:</div>
-                          <pre className="bg-gray-100 dark:bg-gray-800 text-sm font-mono p-3 rounded whitespace-pre-wrap">{ex.output ?? "—"}</pre>
-                        </div>
-                      </div>
-                      {ex.explanation && (
-                        <div className="mt-2 text-sm text-gray-600 dark:text-gray-400">
-                          <strong>Explanation:</strong> {ex.explanation}
-                        </div>
-                      )}
-                    </div>
-                  ))
-                ) : (
-                  <div className="text-sm text-gray-500 dark:text-gray-400">No examples available.</div>
+                {/* Level Selector - Segmented Control */}
+                {hasLevelsParam && practicalLevels.length > 0 && (
+                  <div className="mt-4 inline-flex p-1 rounded-lg bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
+                    {practicalLevels.map((level) => {
+                      const isActive = activeLevel === level.level;
+                      return (
+                        <button
+                          key={level.id}
+                          onClick={() => setActiveLevel(level.level)}
+                          className={`px-4 py-1.5 rounded-md text-xs font-semibold transition-all duration-200 ${isActive
+                            ? level.level === 'easy' ? 'bg-emerald-500 text-white shadow-sm' :
+                              level.level === 'hard' ? 'bg-red-500 text-white shadow-sm' :
+                                'bg-amber-500 text-white shadow-sm'
+                            : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
+                            }`}
+                          title={`${level.level.charAt(0).toUpperCase() + level.level.slice(1)} – ${level.max_marks} points`}
+                        >
+                          {level.level.charAt(0).toUpperCase() + level.level.slice(1)}
+                        </button>
+                      );
+                    })}
+                  </div>
                 )}
               </div>
 
-              {/* Constraints */}
-              <div className="mt-6">
-                <div className="font-semibold text-gray-800 dark:text-gray-200 mb-2">Constraints:</div>
-                {constraintSection ? (
-                  <div className="text-sm text-gray-600 dark:text-gray-400 whitespace-pre-wrap">{constraintSection.body}</div>
-                ) : (
-                  <ul className="list-disc list-inside text-sm text-gray-600 dark:text-gray-400">
-                    <li><pre className="inline">/\b(public|private|protected|class|static|void|int|double|float|string|if|else|for|while|return|new)\b/</pre></li>
-                    <li><pre className="inline">/\b(include|int|float|double|char|void|if|else|for|while|return|struct|class|public|private|protected)\b/</pre></li>
-                    <li>Mind stack/heap usage — large recursion may cause StackOverflowError in Java.</li>
-                  </ul>
-                )}
+              {/* Content */}
+              <div className="px-6 py-5 space-y-6">
+
+                {/* Problem Statement */}
+                <div>
+                  <h2 className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3 flex items-center gap-2">
+                    <svg className="w-4 h-4 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                    Description
+                  </h2>
+                  <div className="text-gray-700 dark:text-gray-300 leading-relaxed text-[15px] whitespace-pre-wrap">
+                    {hasLevelsParam && practicalLevels.length > 0
+                      ? practicalLevels.find(l => l.level === activeLevel)?.description || problemStmt
+                      : problemStmt}
+                  </div>
+                </div>
+
+                {/* Examples Section */}
+                <div>
+                  <h2 className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3 flex items-center gap-2">
+                    <svg className="w-4 h-4 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+                    Examples
+                  </h2>
+                  <div className="space-y-3">
+                    {examplesFromDB && examplesFromDB.length > 0 ? (
+                      examplesFromDB.map((ex, idx) => (
+                        <motion.div
+                          key={idx}
+                          initial={{ opacity: 0, y: 8 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ delay: idx * 0.08 }}
+                          className="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-4 border border-gray-200 dark:border-gray-700"
+                        >
+                          <div className="flex items-center gap-2 mb-3">
+                            <span className="inline-flex items-center justify-center w-5 h-5 rounded bg-emerald-500 text-white text-[10px] font-bold">
+                              {idx + 1}
+                            </span>
+                            <span className="text-sm font-semibold text-gray-800 dark:text-gray-200">Example {idx + 1}</span>
+                          </div>
+                          <div className="grid grid-cols-2 gap-3">
+                            <div>
+                              <div className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">Input</div>
+                              <pre className="bg-white dark:bg-gray-900 text-sm font-mono p-3 rounded border border-gray-200 dark:border-gray-700 whitespace-pre-wrap text-gray-800 dark:text-gray-200">{ex.input}</pre>
+                            </div>
+                            <div>
+                              <div className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">Output</div>
+                              <pre className="bg-white dark:bg-gray-900 text-sm font-mono p-3 rounded border border-gray-200 dark:border-gray-700 whitespace-pre-wrap text-gray-800 dark:text-gray-200">{ex.output}</pre>
+                            </div>
+                          </div>
+                        </motion.div>
+                      ))
+                    ) : extractedExamples && extractedExamples.length > 0 ? (
+                      extractedExamples.map((ex, idx) => (
+                        <motion.div
+                          key={idx}
+                          initial={{ opacity: 0, y: 8 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ delay: idx * 0.08 }}
+                          className="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-4 border border-gray-200 dark:border-gray-700"
+                        >
+                          <div className="flex items-center gap-2 mb-3">
+                            <span className="inline-flex items-center justify-center w-5 h-5 rounded bg-emerald-500 text-white text-[10px] font-bold">
+                              {idx + 1}
+                            </span>
+                            <span className="text-sm font-semibold text-gray-800 dark:text-gray-200">Example {idx + 1}</span>
+                          </div>
+                          <div className="grid grid-cols-2 gap-3">
+                            <div>
+                              <div className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">Input</div>
+                              <pre className="bg-white dark:bg-gray-900 text-sm font-mono p-3 rounded border border-gray-200 dark:border-gray-700 whitespace-pre-wrap">{ex.input ?? ex.raw ?? "—"}</pre>
+                            </div>
+                            <div>
+                              <div className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">Output</div>
+                              <pre className="bg-white dark:bg-gray-900 text-sm font-mono p-3 rounded border border-gray-200 dark:border-gray-700 whitespace-pre-wrap">{ex.output ?? "—"}</pre>
+                            </div>
+                          </div>
+                          {ex.explanation && (
+                            <div className="mt-3 p-3 bg-blue-50 dark:bg-blue-900/20 rounded border border-blue-200 dark:border-blue-800">
+                              <div className="text-xs font-bold text-blue-600 dark:text-blue-400 mb-1">💡 Explanation</div>
+                              <div className="text-sm text-gray-700 dark:text-gray-300">{ex.explanation}</div>
+                            </div>
+                          )}
+                        </motion.div>
+                      ))
+                    ) : (
+                      <div className="text-sm text-gray-400 italic p-4 text-center bg-gray-50 dark:bg-gray-800/30 rounded-lg">
+                        No examples available
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Constraints */}
+                <div className="bg-amber-50 dark:bg-amber-900/10 rounded-lg p-4 border border-amber-200 dark:border-amber-800/30">
+                  <h2 className="text-xs font-bold text-amber-700 dark:text-amber-400 uppercase tracking-wider mb-2 flex items-center gap-2">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+                    Constraints
+                  </h2>
+                  {constraintSection ? (
+                    <div className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap">{constraintSection.body}</div>
+                  ) : (
+                    <ul className="space-y-1 text-sm text-gray-700 dark:text-gray-300">
+                      <li className="flex items-center gap-2">
+                        <span className="text-amber-500">⏱</span>
+                        <span>Time limit: <code className="px-1.5 py-0.5 bg-white dark:bg-gray-800 rounded text-xs font-mono">2000ms</code></span>
+                      </li>
+                      <li className="flex items-center gap-2">
+                        <span className="text-amber-500">💾</span>
+                        <span>Memory limit: <code className="px-1.5 py-0.5 bg-white dark:bg-gray-800 rounded text-xs font-mono">64MB</code></span>
+                      </li>
+                    </ul>
+                  )}
+                </div>
               </div>
             </div>
           </ResizablePanel>
 
-          <ResizableHandle className="w-1 bg-gray-200 dark:bg-gray-700 hover:bg-blue-400 dark:hover:bg-blue-600 transition-colors duration-200 rounded" />
+          <ResizableHandle className="w-1 bg-gray-200 dark:bg-gray-700 hover:bg-indigo-500 dark:hover:bg-indigo-500 transition-colors duration-200 rounded" />
 
           {/* RIGHT: Code Editor + Bottom Section */}
           <ResizablePanel defaultSize={60} minSize={40}>
-            <ResizablePanelGroup direction="vertical" className="h-full gap-3 rounded-2xl overflow-hidden backdrop-blur-sm bg-white/20 dark:bg-gray-900/20 border border-white/20 dark:border-gray-800/20">
+            <ResizablePanelGroup direction="vertical" className="h-full gap-3 rounded-2xl overflow-hidden bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800">
               {/* Code Editor */}
               <ResizablePanel defaultSize={65} minSize={30}>
                 <div className="h-full">
@@ -658,7 +982,7 @@ int main() {
                     loading={loading}
                     locked={locked}
                     lang={lang}
-                    onLangChange={setLang}
+                    onLangChange={() => { }}
                     showInputToggle={false}
                     showInput={false}
                     setShowInput={() => { }}
@@ -671,28 +995,37 @@ int main() {
 
               {/* Bottom Section - Tabs like LeetCode */}
               <ResizablePanel defaultSize={35} minSize={20}>
-                <div className="h-full flex flex-col bg-white/60 dark:bg-gray-900/60 backdrop-blur-md rounded-xl border border-white/20 dark:border-gray-800/50 overflow-hidden">
+                <div className="h-full flex flex-col bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 overflow-hidden">
 
                   {/* Tab Headers */}
-                  <div className="flex-shrink-0 flex border-b border-gray-200/50 dark:border-gray-800/50 bg-white/40 dark:bg-gray-900/40">
+                  <div className="flex-shrink-0 flex border-b border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900">
                     <button
                       onClick={() => setShowUserTestCases(false)}
-                      className={`px-4 py-3 text-sm font-medium transition-all relative overflow-hidden ${!showUserTestCases
-                        ? 'text-blue-600 dark:text-blue-400 bg-blue-50/50 dark:bg-blue-900/20 after:absolute after:bottom-0 after:left-0 after:right-0 after:h-0.5 after:bg-blue-500'
-                        : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-gray-50/30'
+                      className={`px-4 py-2.5 text-sm font-medium transition-all relative ${!showUserTestCases
+                        ? 'text-indigo-600 dark:text-indigo-400 bg-white dark:bg-gray-800 border-b-2 border-indigo-500'
+                        : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
                         }`}
                     >
-                      Testcase Result
+                      Results
                     </button>
                     <button
                       onClick={() => setShowUserTestCases(true)}
-                      className={`px-4 py-3 text-sm font-medium transition-all relative overflow-hidden ${showUserTestCases
-                        ? 'text-blue-600 dark:text-blue-400 bg-blue-50/50 dark:bg-blue-900/20 after:absolute after:bottom-0 after:left-0 after:right-0 after:h-0.5 after:bg-blue-500'
-                        : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-gray-50/30'
+                      className={`px-4 py-2.5 text-sm font-medium transition-all relative ${showUserTestCases
+                        ? 'text-indigo-600 dark:text-indigo-400 bg-white dark:bg-gray-800 border-b-2 border-indigo-500'
+                        : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
                         }`}
                     >
-                      Test Cases
+                      Custom Tests
                     </button>
+                    {/* Keyboard Hint */}
+                    <div className="ml-auto flex items-center pr-4">
+                      <span className="text-[10px] text-gray-400 dark:text-gray-500 hidden sm:block">
+                        <kbd className="px-1.5 py-0.5 bg-gray-100 dark:bg-gray-800 rounded text-[10px] border border-gray-200 dark:border-gray-700">Ctrl</kbd>
+                        <span className="mx-0.5">+</span>
+                        <kbd className="px-1.5 py-0.5 bg-gray-100 dark:bg-gray-800 rounded text-[10px] border border-gray-200 dark:border-gray-700">Enter</kbd>
+                        <span className="ml-1">Run</span>
+                      </span>
+                    </div>
                   </div>
 
                   {/* Tab Content */}
@@ -701,22 +1034,33 @@ int main() {
                     {/* Test Case Results Tab */}
                     {!showUserTestCases && (
                       <div className="h-full p-4">
-                        <div className="flex justify-between items-center mb-4">
-                          <div>
-                            <div className="text-sm text-gray-500 dark:text-gray-400">{passedCount} passed • {totalCount} total</div>
-                          </div>
-
-                          {/* Progress bar */}
-                          <div className="w-56">
-                            <div className="bg-gray-200 dark:bg-gray-700 rounded-full h-2 overflow-hidden">
-                              <div className="h-2 rounded-full transition-all" style={{ width: `${passPercent}%`, backgroundColor: passPercent === 100 ? '#16a34a' : '#6366f1' }} />
+                        {testCaseResults.length > 0 && (
+                          <div className="flex justify-between items-center mb-4">
+                            <div className="flex items-center gap-3">
+                              <span className={`text-sm font-semibold ${passedCount === totalCount ? 'text-emerald-600' : 'text-gray-700 dark:text-gray-300'}`}>
+                                {passedCount === totalCount ? '✓ All Passed' : `${passedCount}/${totalCount} Passed`}
+                              </span>
                             </div>
-                            <div className="text-xs text-right text-gray-500 mt-1">{passPercent}%</div>
+                            {/* Progress bar */}
+                            <div className="w-40">
+                              <div className="bg-gray-200 dark:bg-gray-700 rounded-full h-1.5 overflow-hidden">
+                                <div className="h-1.5 rounded-full transition-all duration-500" style={{ width: `${passPercent}%`, backgroundColor: passPercent === 100 ? '#10b981' : '#6366f1' }} />
+                              </div>
+                            </div>
                           </div>
-                        </div>
+                        )}
 
                         {testCaseResults.length === 0 && (
-                          <div className="text-sm text-gray-500 dark:text-gray-400">Run your code to see results here.</div>
+                          <div className="h-full flex flex-col items-center justify-center text-center py-8">
+                            <div className="w-16 h-16 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center mb-4">
+                              <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                              </svg>
+                            </div>
+                            <p className="text-sm text-gray-500 dark:text-gray-400 font-medium">Run your code to evaluate</p>
+                            <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">Results will appear here after execution</p>
+                          </div>
                         )}
 
                         {testCaseResults.map((r, idx) => {
@@ -846,8 +1190,8 @@ int main() {
 
             </ResizablePanelGroup>
           </ResizablePanel>
-        </ResizablePanelGroup>
-      </div>
-    </div>
+        </ResizablePanelGroup >
+      </div >
+    </div >
   );
 }

@@ -22,6 +22,7 @@ interface CodeEditorProps {
     locked?: boolean;
     lang: string;
     onLangChange: (lang: string) => void;
+    showLangSelector?: boolean;
     showInputToggle?: boolean;
     showInput: boolean;
     setShowInput: (show: boolean) => void;
@@ -55,6 +56,7 @@ export default function CodeEditor({
     locked = false,
     lang,
     onLangChange,
+    showLangSelector = false,
     showInputToggle = false,
     showInput,
     setShowInput,
@@ -247,6 +249,7 @@ export default function CodeEditor({
             <EditorToolbar
                 lang={lang}
                 onLangChange={onLangChange}
+                showLangSelector={showLangSelector}
                 currentMode={currentMode}
                 handleModeChange={handleModeChange}
                 showModeSection={showModeSection}

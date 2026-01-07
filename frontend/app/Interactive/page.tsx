@@ -114,6 +114,13 @@ export default function Home() {
 
   const handleFileSelect = (fileName: string) => {
     setActiveFileName(fileName);
+    const file = files.find(f => f.name === fileName);
+    if (file) {
+      const language = file.language;
+      if (language === "java" || language === "python" || language === "c" || language === "cpp") {
+        setLang(language);
+      }
+    }
   };
 
   const handleFileCreate = (fileName: string) => {
@@ -126,6 +133,7 @@ export default function Home() {
 
     setFiles(prev => [...prev, { name: fileName, content: '', language }]);
     setActiveFileName(fileName);
+    setLang(language);
   };
 
   const handleFileDelete = (fileName: string) => {
@@ -173,6 +181,10 @@ export default function Home() {
 
     setFiles(prev => [...prev, { name: fileName, content, language }]);
     setActiveFileName(fileName);
+
+    if (language === "java" || language === "python" || language === "c" || language === "cpp") {
+      setLang(language as "java" | "python" | "c" | "cpp");
+    }
   };
 
 
@@ -213,43 +225,56 @@ export default function Home() {
   };
 
   if (!user) return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-gray-950">
-      <Loader2 className="w-10 h-10 text-indigo-600 animate-spin" />
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 via-indigo-50/50 to-purple-50/50 dark:from-gray-950 dark:via-indigo-950/20 dark:to-purple-950/20">
+      <div className="relative">
+        <div className="absolute inset-0 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 rounded-full blur-xl opacity-30 animate-pulse" />
+        <div className="relative glass-card-premium p-8 rounded-2xl">
+          <Loader2 className="w-10 h-10 text-indigo-600 dark:text-indigo-400 animate-spin" />
+        </div>
+      </div>
     </div>
   );
 
   return (
-    <div className="flex flex-col h-screen overflow-hidden bg-gradient-to-br from-slate-50 via-indigo-50/30 to-purple-50/30 dark:from-gray-950 dark:via-indigo-950/10 dark:to-purple-950/10">
+    <div className="flex flex-col h-screen overflow-hidden bg-gradient-to-br from-slate-50 via-indigo-50/40 to-purple-50/40 dark:from-gray-950 dark:via-indigo-950/20 dark:to-purple-950/20 relative">
+
+      {/* Animated Mesh Background */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute -top-40 -right-40 w-80 h-80 bg-purple-400/20 dark:bg-purple-600/10 rounded-full blur-3xl animate-float-slow" />
+        <div className="absolute -bottom-40 -left-40 w-96 h-96 bg-indigo-400/20 dark:bg-indigo-600/10 rounded-full blur-3xl animate-float-reverse" />
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-gradient-to-r from-cyan-400/10 via-purple-400/10 to-pink-400/10 dark:from-cyan-600/5 dark:via-purple-600/5 dark:to-pink-600/5 rounded-full blur-3xl" />
+      </div>
 
       {/* Main Editor + Terminal */}
-      <div className="flex-1 mt-16 p-4 h-[calc(100vh-4rem)] w-full">
-        <div className="h-full w-full glass-card-premium rounded-3xl overflow-hidden shadow-2xl border border-white/20 dark:border-gray-800/50">
+      <div className="flex-1 mt-16 p-5 h-[calc(100vh-4rem)] w-full relative z-10">
+        <div className="h-full w-full glass-card-premium rounded-3xl overflow-hidden shadow-2xl">
           <ResizablePanelGroup direction="horizontal" className="h-full">
 
             {/* Left Main Panel: Editor & Terminal */}
-            <ResizablePanel defaultSize={showAssistant ? 75 : 100} minSize={50} className="bg-white/30 dark:bg-gray-900/30 backdrop-blur-sm">
+            <ResizablePanel defaultSize={showAssistant ? 75 : 100} minSize={50} className="bg-white/40 dark:bg-gray-900/40 backdrop-blur-xl">
               <ResizablePanelGroup direction="vertical" className="h-full">
 
                 {/* Code Editor */}
                 <ResizablePanel defaultSize={60} minSize={30} className="relative transition-all duration-300">
-                  <div className="absolute inset-0 bg-white/40 dark:bg-gray-900/50 backdrop-blur-sm -z-10" />
+                  <div className="absolute inset-0 bg-gradient-to-b from-white/60 to-white/40 dark:from-gray-900/60 dark:to-gray-900/40 backdrop-blur-sm -z-10" />
                   <AnimatePresence mode="wait">
                     <motion.div
                       key={lang}
-                      initial={{ opacity: 0, x: 20 }}
+                      initial={{ opacity: 0, y: 10 }}
                       animate={{
                         opacity: 1,
-                        x: 0,
-                        boxShadow: isExecuting ? "0 0 20px rgba(79, 70, 229, 0.4)" : "none",
-                        scale: isExecuting ? 1.002 : 1
+                        y: 0,
+                        boxShadow: isExecuting
+                          ? "inset 0 0 60px rgba(99, 102, 241, 0.15), 0 0 30px rgba(139, 92, 246, 0.2)"
+                          : "none",
                       }}
-                      exit={{ opacity: 0, x: -20 }}
+                      exit={{ opacity: 0, y: -10 }}
                       transition={{
-                        opacity: { duration: 0.3 },
-                        x: { duration: 0.3 },
-                        boxShadow: { duration: 0.5, repeat: Infinity, repeatType: "reverse" }
+                        opacity: { duration: 0.25 },
+                        y: { duration: 0.25, ease: "easeOut" },
+                        boxShadow: { duration: 0.4, repeat: isExecuting ? Infinity : 0, repeatType: "reverse" }
                       }}
-                      className="h-full w-full rounded-2xl overflow-hidden"
+                      className="h-full w-full rounded-xl overflow-hidden"
                     >
                       <CodeEditor
                         code={files.find(f => f.name === activeFileName)?.content || ""}
@@ -262,7 +287,6 @@ export default function Home() {
                           if (terminalMounted && interactiveTerminalRef.current) {
                             interactiveTerminalRef.current.startExecution(files, activeFileName, lang);
                           }
-                          // Mock reset for now or integrate with terminal events
                           setTimeout(() => setIsExecuting(false), 2000);
                         }}
                         onDownload={downloadPdf}
@@ -271,6 +295,7 @@ export default function Home() {
                         locked={false}
                         lang={lang}
                         onLangChange={handleLangChange}
+                        showLangSelector={true}
                         showInputToggle={false}
                         showInput={false}
                         setShowInput={() => { }}
@@ -294,26 +319,35 @@ export default function Home() {
                   </AnimatePresence>
                 </ResizablePanel>
 
-                <ResizableHandle className="h-2 bg-gray-100/50 dark:bg-gray-800/50 hover:bg-indigo-500/50 dark:hover:bg-indigo-500/50 transition-colors duration-300 flex items-center justify-center group outline-none focus-visible:ring-2 focus-visible:ring-indigo-500">
-                  <div className="w-16 h-1 rounded-full bg-gray-300 dark:bg-gray-700 group-hover:bg-white/80 transition-colors" />
+                <ResizableHandle className="h-3 bg-gradient-to-r from-transparent via-gray-200/60 to-transparent dark:via-gray-700/40 hover:via-indigo-400/60 dark:hover:via-indigo-500/50 transition-all duration-300 flex items-center justify-center group outline-none focus-visible:ring-2 focus-visible:ring-indigo-500">
+                  <div className="w-12 h-1 rounded-full bg-gray-300/80 dark:bg-gray-600/80 group-hover:bg-indigo-500 group-hover:w-20 transition-all duration-300" />
                 </ResizableHandle>
 
                 {/* Terminal */}
-                <ResizablePanel defaultSize={40} minSize={20} className="bg-gray-50/50 dark:bg-gray-950/50 backdrop-blur-md relative">
+                <ResizablePanel defaultSize={40} minSize={20} className="bg-gradient-to-b from-gray-50/60 to-gray-100/40 dark:from-gray-900/60 dark:to-gray-950/80 backdrop-blur-xl relative">
                   <div className="h-full flex flex-col">
-                    <div className="px-4 py-2 bg-gray-100/50 dark:bg-gray-900/50 border-b border-gray-200/50 dark:border-gray-800/50 flex items-center gap-2">
-                      <div className="w-3 h-3 rounded-full bg-red-400/80" />
-                      <div className="w-3 h-3 rounded-full bg-amber-400/80" />
-                      <div className="w-3 h-3 rounded-full bg-emerald-400/80" />
-                      <span className="ml-2 text-xs font-mono text-gray-500 dark:text-gray-400">Terminal</span>
+                    {/* Terminal Header */}
+                    <div className="px-4 py-2.5 bg-gradient-to-r from-gray-100/80 via-gray-50/60 to-gray-100/80 dark:from-gray-800/80 dark:via-gray-900/60 dark:to-gray-800/80 border-b border-gray-200/50 dark:border-gray-700/50 flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-1.5">
+                          <div className="w-3 h-3 rounded-full bg-red-400 hover:bg-red-500 transition-colors shadow-sm" />
+                          <div className="w-3 h-3 rounded-full bg-amber-400 hover:bg-amber-500 transition-colors shadow-sm" />
+                          <div className="w-3 h-3 rounded-full bg-emerald-400 hover:bg-emerald-500 transition-colors shadow-sm" />
+                        </div>
+                        <span className="text-xs font-medium text-gray-600 dark:text-gray-300 tracking-wide">Terminal</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider rounded-full bg-gradient-to-r from-indigo-500/20 to-purple-500/20 text-indigo-600 dark:text-indigo-400 border border-indigo-200/50 dark:border-indigo-700/50">
+                          {lang}
+                        </span>
+                      </div>
                     </div>
                     <div className="flex-1 overflow-hidden relative">
-                      <div className="absolute inset-0 bg-black/5 dark:bg-black/20 pointer-events-none" />
                       <InteractiveTerminal
                         ref={interactiveTerminalRef}
                         wsUrl="ws://localhost:5002"
-                        fontSize={16}
-                        fontFamily="Fira Code, monospace"
+                        fontSize={15}
+                        fontFamily="'Fira Code', 'JetBrains Mono', monospace"
                         onOutput={(data: string) => setInteractiveOutput((prev) => prev + data)}
                         onMount={() => setTerminalMounted(true)}
                         onImage={handleImage}
@@ -333,10 +367,10 @@ export default function Home() {
 
             {showAssistant && (
               <>
-                <ResizableHandle className="w-2 bg-gray-100/50 dark:bg-gray-800/50 hover:bg-indigo-500/50 dark:hover:bg-indigo-500/50 transition-colors duration-300 flex items-center justify-center group outline-none">
-                  <div className="h-16 w-1 rounded-full bg-gray-300 dark:bg-gray-700 group-hover:bg-white/80 transition-colors" />
+                <ResizableHandle className="w-3 bg-gradient-to-b from-transparent via-gray-200/60 to-transparent dark:via-gray-700/40 hover:via-indigo-400/60 dark:hover:via-indigo-500/50 transition-all duration-300 flex items-center justify-center group outline-none">
+                  <div className="h-12 w-1 rounded-full bg-gray-300/80 dark:bg-gray-600/80 group-hover:bg-indigo-500 group-hover:h-20 transition-all duration-300" />
                 </ResizableHandle>
-                <ResizablePanel defaultSize={25} minSize={20} maxSize={40} className="bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl border-l border-white/20 dark:border-gray-800/50">
+                <ResizablePanel defaultSize={25} minSize={20} maxSize={40} className="bg-white/70 dark:bg-gray-900/70 backdrop-blur-2xl border-l border-white/30 dark:border-gray-700/50">
                   <AssistantPanel
                     codeContext={{
                       code: files.find(f => f.name === activeFileName)?.content || "",
@@ -355,3 +389,4 @@ export default function Home() {
     </div>
   );
 }
+

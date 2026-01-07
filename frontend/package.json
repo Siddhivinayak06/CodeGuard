@@ -92,6 +92,7 @@
     "@types/node": "^24",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@types/uuid": "^10.0.0",
     "eslint": "^9.39.1",
     "eslint-config-next": "16.0.7",
     "globals": "^16.5.0",

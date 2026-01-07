@@ -129,11 +129,11 @@ const InteractiveTerminal = forwardRef<
         isSessionReady.current = true;
         isSwitching.current = false;
         currentLang.current = msg.lang;
-        term.current.write(`\r\n✅ Ready for ${msg.lang}\r\n`);
+        term.current.write(`\r\n\x1b[1;32m✅ Ready for ${msg.lang}\x1b[0m\r\n`);
         console.log("Session ready for language:", msg.lang);
       } else if (msg.type === "lang") {
         // Legacy support - still handle lang messages
-        term.current.write(`\r\n✅ Language set to ${msg.lang}\r\n`);
+        term.current.write(`\r\n\x1b[1;32m✅ Language set to ${msg.lang}\x1b[0m\r\n`);
         currentLang.current = msg.lang;
       } else {
         const data = msg.data ?? msg;
@@ -225,19 +225,19 @@ const InteractiveTerminal = forwardRef<
   useImperativeHandle(ref, () => ({
     startExecution: (filesOrCode: FileData[] | string, activeFileOrLang?: string) => {
       if (!socket.current || socket.current.readyState !== WebSocket.OPEN) {
-        term.current?.write("\r\n❌ WebSocket not connected!\r\n");
+        term.current?.write("\r\n\x1b[1;31m❌ WebSocket not connected!\x1b[0m\r\n");
         return;
       }
 
       // Check if session is ready (not still switching languages)
       if (isSwitching.current || !isSessionReady.current) {
-        term.current?.write("\r\n⏳ Waiting for session to be ready...\r\n");
+        term.current?.write("\r\n\x1b[1;33m⏳ Waiting for session to be ready...\x1b[0m\r\n");
         // Retry after a delay
         const retryExecution = () => {
           if (isSessionReady.current && !isSwitching.current) {
             performExecution(filesOrCode, activeFileOrLang);
           } else {
-            term.current?.write("\r\n❌ Session not ready, please try again.\r\n");
+            term.current?.write("\r\n\x1b[1;31m❌ Session not ready, please try again.\x1b[0m\r\n");
           }
         };
         setTimeout(retryExecution, 2000);
@@ -253,7 +253,7 @@ const InteractiveTerminal = forwardRef<
 
       // Check if WebSocket is connected before sending
       if (!socket.current || socket.current.readyState !== WebSocket.OPEN) {
-        term.current?.write(`\r\n⚠️ Waiting for connection to switch to ${newLang}...\r\n`);
+        term.current?.write(`\r\n\x1b[1;33m⚠️ Waiting for connection to switch to ${newLang}...\x1b[0m\r\n`);
         // Retry after a short delay when connection is ready
         const checkConnection = setInterval(() => {
           if (socket.current && socket.current.readyState === WebSocket.OPEN) {
@@ -261,7 +261,7 @@ const InteractiveTerminal = forwardRef<
             const msg = JSON.stringify({ type: "lang", lang: newLang });
             socket.current.send(msg);
             term.current?.clear();
-            term.current?.write(`\r\n📝 Switching to ${newLang}...\r\n`);
+            term.current?.write(`\r\n\x1b[1;33m📝 Switching to ${newLang}...\x1b[0m\r\n`);
           }
         }, 100);
         // Clear interval after 5 seconds to prevent memory leak
@@ -272,14 +272,17 @@ const InteractiveTerminal = forwardRef<
       const msg = JSON.stringify({ type: "lang", lang: newLang });
       socket.current.send(msg);
       term.current?.clear();
-      term.current?.write(`\r\n📝 Switching to ${newLang}...\r\n`);
+      term.current?.write(`\r\n\x1b[1;33m📝 Switching to ${newLang}...\x1b[0m\r\n`);
     },
   }));
 
   // Helper function to perform actual execution
   const performExecution = (filesOrCode: FileData[] | string, activeFileOrLang?: string) => {
+    // Clear terminal before running
+    term.current?.clear();
+
     if (!socket.current || socket.current.readyState !== WebSocket.OPEN) {
-      term.current?.write("\r\n❌ WebSocket not connected!\r\n");
+      term.current?.write("\r\n\x1b[1;31m❌ WebSocket not connected!\x1b[0m\r\n");
       return;
     }
 
@@ -302,13 +305,13 @@ const InteractiveTerminal = forwardRef<
         socket.current?.send(msg);
       });
 
-      term.current?.write(`\r\n🚀 Running ${activeFileName}...\r\n`);
+      term.current?.write(`\r\n\x1b[1;36m🚀 Running ${activeFileName}...\x1b[0m\r\n\n`);
     } else {
       // Single-file mode (backward compatibility)
       const code = filesOrCode as string;
       const msg = JSON.stringify({ type: "code", data: code });
       socket.current?.send(msg);
-      term.current?.write(`\r\n🚀 Running code...\r\n`);
+      term.current?.write(`\r\n\x1b[1;36m🚀 Running code...\x1b[0m\r\n\n`);
     }
   };
 
