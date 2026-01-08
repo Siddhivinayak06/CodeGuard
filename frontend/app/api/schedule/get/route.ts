@@ -34,7 +34,7 @@ export async function GET(request: Request) {
 
         // 2. Fetch Faculty Details manual join
         // Collect all faculty IDs
-        const facultyIds = Array.from(new Set(schedules.map((s) => s.faculty_id).filter(Boolean)));
+        const facultyIds = Array.from(new Set(schedules.map((s) => s.faculty_id).filter((id): id is string => !!id)));
 
         let facultyMap: Record<string, any> = {};
 
@@ -56,7 +56,7 @@ export async function GET(request: Request) {
         // 3. Merge faculty data into schedules
         const schedulesWithFaculty = schedules.map((s) => ({
             ...s,
-            faculty: facultyMap[s.faculty_id] || { email: "Unknown", name: "Unknown" },
+            faculty: (s.faculty_id ? facultyMap[s.faculty_id] : null) || { email: "Unknown", name: "Unknown" },
         }));
 
         // 4. Also fetch holidays in this range

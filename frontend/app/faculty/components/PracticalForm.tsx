@@ -56,9 +56,9 @@ export default function PracticalForm({
   // Level type for multi-level practicals - now using shared type
 
   const defaultLevels: Level[] = [
-    { level: 'easy', title: 'Easy', description: '', max_marks: 5, testCases: [{ input: '', expected_output: '', is_hidden: false, time_limit_ms: 2000, memory_limit_kb: 65536 }] },
-    { level: 'medium', title: 'Medium', description: '', max_marks: 10, testCases: [{ input: '', expected_output: '', is_hidden: false, time_limit_ms: 2000, memory_limit_kb: 65536 }] },
-    { level: 'hard', title: 'Hard', description: '', max_marks: 15, testCases: [{ input: '', expected_output: '', is_hidden: false, time_limit_ms: 2000, memory_limit_kb: 65536 }] },
+    { id: 0, practical_id: 0, created_at: "", updated_at: "", level: 'easy', title: 'Easy', description: '', max_marks: 5, testCases: [{ id: 0, practical_id: null, level_id: null, created_at: "", input: '', expected_output: '', is_hidden: false, time_limit_ms: 2000, memory_limit_kb: 65536 }] },
+    { id: 0, practical_id: 0, created_at: "", updated_at: "", level: 'medium', title: 'Medium', description: '', max_marks: 10, testCases: [{ id: 0, practical_id: null, level_id: null, created_at: "", input: '', expected_output: '', is_hidden: false, time_limit_ms: 2000, memory_limit_kb: 65536 }] },
+    { id: 0, practical_id: 0, created_at: "", updated_at: "", level: 'hard', title: 'Hard', description: '', max_marks: 15, testCases: [{ id: 0, practical_id: null, level_id: null, created_at: "", input: '', expected_output: '', is_hidden: false, time_limit_ms: 2000, memory_limit_kb: 65536 }] },
   ];
 
   const [form, setForm] = useState<Practical>({
@@ -69,10 +69,13 @@ export default function PracticalForm({
     language: "",
     deadline: new Date().toISOString().slice(0, 16),
     max_marks: 100,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+    submitted: false,
   });
 
   const [testCases, setTestCases] = useState<TestCase[]>([
-    { input: "", expected_output: "", is_hidden: false, time_limit_ms: 2000, memory_limit_kb: 65536 },
+    { id: 0, practical_id: null, level_id: null, created_at: "", input: "", expected_output: "", is_hidden: false, time_limit_ms: 2000, memory_limit_kb: 65536 },
   ]);
 
   // Multi-level support
@@ -146,9 +149,9 @@ export default function PracticalForm({
         language: "",
         deadline: new Date().toISOString().slice(0, 16),
         max_marks: 100,
-        subject_id: defaultSubjectId ?? (subjects[0]?.id ?? prev.subject_id), // Use defaultSubjectId if provided
+        subject_id: defaultSubjectId ? Number(defaultSubjectId) : (subjects[0]?.id ?? prev.subject_id),
       }));
-      setTestCases([{ input: "", expected_output: "", is_hidden: false, time_limit_ms: 2000, memory_limit_kb: 65536 }]);
+      setTestCases([{ id: 0, practical_id: null, level_id: null, created_at: "", input: "", expected_output: "", is_hidden: false, time_limit_ms: 2000, memory_limit_kb: 65536 }]);
       setAssignmentDeadline(new Date().toISOString().slice(0, 16));
       setSelectedStudents([]); // Clear selected students for new practical
     }
@@ -188,9 +191,16 @@ export default function PracticalForm({
           uid: s.uid,
           name: s.name,
           email: s.email,
-          roll: s.roll_no || "",
+          roll_no: s.roll_no || "",
           semester: s.semester || "",
           batch: s.batch || "",
+          role: "student" as "student",
+          profile_pic: null,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          active_session_id: null,
+          session_updated_at: null,
+          department: s.department || null,
         }));
         setStudents(mapped);
 
@@ -228,7 +238,7 @@ export default function PracticalForm({
     });
   };
 
-  const addTestCase = () => setTestCases(prev => [...prev, { input: "", expected_output: "", is_hidden: false, time_limit_ms: 2000, memory_limit_kb: 65536 }]);
+  const addTestCase = () => setTestCases(prev => [...prev, { id: 0, practical_id: null, level_id: null, created_at: "", input: "", expected_output: "", is_hidden: false, time_limit_ms: 2000, memory_limit_kb: 65536 }]);
   const removeTestCase = (index: number) => setTestCases(prev => prev.filter((_, i) => i !== index));
 
   // Level management helpers
@@ -239,7 +249,7 @@ export default function PracticalForm({
   const addLevelTestCase = (level: 'easy' | 'medium' | 'hard') => {
     setLevels(prev => prev.map(l =>
       l.level === level
-        ? { ...l, testCases: [...l.testCases, { input: '', expected_output: '', is_hidden: false, time_limit_ms: 2000, memory_limit_kb: 65536 }] }
+        ? { ...l, testCases: [...l.testCases, { id: 0, practical_id: null, level_id: null, created_at: "", input: '', expected_output: '', is_hidden: false, time_limit_ms: 2000, memory_limit_kb: 65536 }] }
         : l
     ));
   };
@@ -339,7 +349,11 @@ export default function PracticalForm({
           expected_output: String(t.expected_output),
           is_hidden: false,
           time_limit_ms: 2000,
-          memory_limit_kb: 65536
+          memory_limit_kb: 65536,
+          id: 0,
+          practical_id: null,
+          level_id: null,
+          created_at: "",
         }));
 
         if (enableLevels) {

@@ -68,26 +68,9 @@ const revealVariants = {
 
 const itemVariants = revealVariants; // Aliasing for compatibility with existing code
 
-// ---------------------- Types ----------------------
-type Subject = { id: number; subject_name: string; faculty_id?: string };
-type Practical = {
-  id: number;
-  subject_id: number;
-  title: string;
-  description?: string;
-  language?: string;
-  deadline: string;
-  max_marks: number;
-};
-type TestCase = {
-  id?: number;
-  input: string;
-  expected_output: string;
-  is_hidden?: boolean;
-  time_limit_ms?: number;
-  memory_limit_kb?: number;
-};
+import { Practical, Subject, TestCase } from "../../faculty/types";
 
+// ---------------------- Types ----------------------
 interface Submission {
   id: number;
   status: string;
@@ -101,16 +84,23 @@ const initialPracticalForm: Practical = {
   title: "",
   subject_id: 0,
   description: "",
-  language: "",
+  language: null,
   deadline: new Date().toISOString().slice(0, 16),
   max_marks: 100,
+  created_at: new Date().toISOString(),
+  updated_at: new Date().toISOString(),
+  submitted: false,
 };
 const initialTestCase: TestCase = {
+  id: 0,
+  practical_id: null,
   input: "",
   expected_output: "",
   is_hidden: false,
   time_limit_ms: 2000,
   memory_limit_kb: 65536,
+  created_at: new Date().toISOString(),
+  level_id: null
 };
 
 // ---------------------- Components ----------------------
@@ -126,8 +116,8 @@ function PracticalCard({
   onEdit: (p: Practical) => void;
   onDelete: (id: number) => void;
 }) {
-  const isPast = new Date(practical.deadline) < new Date();
-  const deadline = new Date(practical.deadline);
+  const isPast = new Date(practical.deadline || new Date()).getTime() < Date.now();
+  const deadline = new Date(practical.deadline || new Date());
   const timeUntil = Math.ceil((deadline.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
 
   return (
@@ -266,7 +256,15 @@ export default function FacultyDashboardPage() {
               .select("id, status, created_at, practical_id")
               .in("practical_id", pIds);
 
-            if (subData) setSubmissions(subData);
+            if (subData) {
+              const mappedSubmissions = subData.map(s => ({
+                id: s.id,
+                status: s.status || "pending",
+                created_at: s.created_at,
+                practical_id: s.practical_id
+              }));
+              setSubmissions(mappedSubmissions as Submission[]);
+            }
           }
         }
       }
@@ -354,11 +352,11 @@ export default function FacultyDashboardPage() {
     return data;
   }, [submissions]);
 
-  const activePracticalsCount = practicals.filter(p => new Date(p.deadline) >= new Date()).length;
+  const activePracticalsCount = practicals.filter(p => new Date(p.deadline || new Date()).getTime() >= Date.now()).length;
   const eventsByDate = useMemo(() => {
     const map = new Map<string, Practical[]>();
     practicals.forEach((p) => {
-      const iso = new Date(p.deadline).toISOString().slice(0, 10);
+      const iso = new Date(p.deadline || new Date()).toISOString().slice(0, 10);
       const arr = map.get(iso) ?? [];
       arr.push(p);
       map.set(iso, arr);
@@ -605,11 +603,11 @@ export default function FacultyDashboardPage() {
                   <div className="flex items-center justify-between">
                     <p className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Upcoming Deadlines</p>
                     <span className="text-xs font-medium text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/30 px-2 py-0.5 rounded-full">
-                      {practicals.filter(p => new Date(p.deadline) >= new Date()).length} active
+                      {practicals.filter(p => new Date(p.deadline || new Date()) >= new Date()).length} active
                     </span>
                   </div>
 
-                  {practicals.filter(p => new Date(p.deadline) >= new Date()).length === 0 ? (
+                  {practicals.filter(p => new Date(p.deadline || new Date()) >= new Date()).length === 0 ? (
                     <div className="text-center py-6">
                       <div className="w-12 h-12 mx-auto mb-3 rounded-xl bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
                         <Clock size={20} className="text-gray-400" />
@@ -618,8 +616,8 @@ export default function FacultyDashboardPage() {
                     </div>
                   ) : (
                     <div className="space-y-2">
-                      {practicals.filter(p => new Date(p.deadline) >= new Date()).slice(0, 4).map((p, index) => {
-                        const deadline = new Date(p.deadline);
+                      {practicals.filter(p => new Date(p.deadline || new Date()) >= new Date()).slice(0, 4).map((p, index) => {
+                        const deadline = new Date(p.deadline || new Date());
                         const daysLeft = Math.ceil((deadline.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
                         const isUrgent = daysLeft <= 2;
 

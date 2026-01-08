@@ -28,11 +28,7 @@ import { Practical, Subject, TestCase } from "../types";
 // dynamic import of PracticalForm to avoid SSR issues
 const PracticalForm = dynamic(() => import("../components/PracticalForm"), { ssr: false });
 
-interface ViewingPractical extends Practical {
-  description?: string;
-  language?: string;
-  testCases?: TestCase[];
-}
+// interface removed
 
 export default function FacultySubjects() {
   const router = useRouter();
@@ -53,7 +49,7 @@ export default function FacultySubjects() {
   const [sampleLanguage, setSampleLanguage] = useState<string>("c");
 
   // View Modal state
-  const [viewingPractical, setViewingPractical] = useState<ViewingPractical | null>(null);
+  const [viewingPractical, setViewingPractical] = useState<Practical | null>(null);
 
   // helpers
   const formatDate = (d?: string | null) => {
@@ -135,8 +131,10 @@ export default function FacultySubjects() {
           id: s.id,
           subject_name: s.subject_name,
           subject_code: s.subject_code,
-          practical_count: Array.isArray(s.practicals) ? s.practicals.length : 0,
+          faculty_id: user.id, // We filtered by user.id so this is safe
+          created_at: new Date().toISOString(), // Mocking if not selected, or should select it.
           semester: s.semester || "",
+          practical_count: Array.isArray(s.practicals) ? s.practicals.length : 0,
         }));
 
         if (isMounted) {
@@ -173,7 +171,7 @@ export default function FacultySubjects() {
       const { data, error } = await supabase
         .from("practicals")
         .select(`id, title, deadline, submissions(id)`)
-        .eq("subject_id", subjectId)
+        .eq("subject_id", Number(subjectId))
         .order("deadline", { ascending: true });
 
       if (error) throw error;
@@ -182,8 +180,14 @@ export default function FacultySubjects() {
         id: p.id,
         title: p.title,
         deadline: p.deadline as string | null,
+        description: null,
+        language: null,
+        max_marks: 0,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        submitted: false,
+        subject_id: Number(subjectId),
         submission_count: p.submissions?.length || 0,
-        subject_id: subjectId, // Added subject_id
       }));
 
       setPracticals(formatted);
@@ -253,7 +257,7 @@ export default function FacultySubjects() {
   const openEditPractical = async (practicalId: number | string) => {
     // fetch practical to edit (optional, if not already loaded)
     try {
-      const { data, error } = await supabase.from("practicals").select("*").eq("id", practicalId).single();
+      const { data, error } = await supabase.from("practicals").select("*").eq("id", Number(practicalId)).single();
       if (error) throw error;
       setEditingPractical(data as Practical);
 
@@ -353,7 +357,7 @@ export default function FacultySubjects() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-500">Active Subject</p>
-                <p className="text-2xl font-bold">{selectedSubject ? (selectedSubject.subject_name || selectedSubject.name) : "—"}</p>
+                <p className="text-2xl font-bold">{selectedSubject ? selectedSubject.subject_name : "—"}</p>
               </div>
               <div className="p-3 bg-pink-500/10 rounded-xl">
                 <Sparkles className="w-6 h-6 text-pink-600" />

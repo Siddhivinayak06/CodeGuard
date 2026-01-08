@@ -88,7 +88,7 @@ export default function NotificationsPage() {
                 return;
             }
 
-            setNotifications(data || []);
+            setNotifications((data as unknown as Notification[]) || []);
         } catch (err) {
             console.error("Notification fetch error:", err);
         } finally {

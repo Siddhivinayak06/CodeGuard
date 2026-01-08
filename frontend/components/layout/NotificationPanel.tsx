@@ -81,7 +81,7 @@ export default function NotificationPanel() {
                 return;
             }
 
-            setNotifications(data || []);
+            setNotifications((data as unknown as Notification[]) || []);
         } catch (err) {
             console.error("Notification fetch error:", err);
         } finally {
@@ -110,7 +110,7 @@ export default function NotificationPanel() {
                     filter: `user_id=eq.${userId}`,
                 },
                 (payload) => {
-                    setNotifications((prev) => [payload.new as Notification, ...prev]);
+                    setNotifications((prev) => [payload.new as unknown as Notification, ...prev]);
                 }
             )
             .subscribe();

@@ -111,7 +111,7 @@ export default function LevelManager({
                             </label>
                             <input
                                 type="text"
-                                value={getCurrentLevel().title}
+                                value={getCurrentLevel().title || ""}
                                 onChange={(e) => updateLevelField(activeLevel, 'title', e.target.value)}
                                 className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                                 placeholder={`${activeLevel.charAt(0).toUpperCase() + activeLevel.slice(1)} Task Title`}
@@ -135,7 +135,7 @@ export default function LevelManager({
                             Problem Description
                         </label>
                         <textarea
-                            value={getCurrentLevel().description}
+                            value={getCurrentLevel().description || ""}
                             onChange={(e) => updateLevelField(activeLevel, 'description', e.target.value)}
                             className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent min-h-[120px]"
                             placeholder={`Describe the ${activeLevel} level problem...`}
@@ -154,7 +154,7 @@ export default function LevelManager({
                         removeTestCase={(idx) => removeLevelTestCase(activeLevel, idx)}
                         generateTestCases={generateTestCases}
                         generatingTests={generatingTests}
-                        description={getCurrentLevel().description}
+                        description={getCurrentLevel().description || ""}
                     />
 
                 </motion.div>

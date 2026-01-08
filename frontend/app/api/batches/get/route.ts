@@ -17,7 +17,11 @@ export async function GET() {
         }
 
         // Extract unique batches and sort them
-        const uniqueBatches = Array.from(new Set(data.map((item: { batch: string }) => item.batch))).sort();
+        const uniqueBatches = Array.from(new Set(
+            (data || [])
+                .map((item) => item.batch)
+                .filter((batch): batch is string => batch !== null && batch !== "")
+        )).sort();
 
         return NextResponse.json({ batches: uniqueBatches });
     } catch (error: any) {

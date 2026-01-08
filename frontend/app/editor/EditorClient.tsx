@@ -290,7 +290,7 @@ int main() {
         .from('student_practicals')
         .select('attempt_count, max_attempts, is_locked, lock_reason')
         .eq('student_id', user.id)
-        .eq('practical_id', practicalId)
+        .eq('practical_id', Number(practicalId))
         .single();
 
       if (data) {
@@ -402,7 +402,7 @@ int main() {
       const { data, error } = await supabase
         .from("practicals")
         .select("*, subjects(subject_name)")
-        .eq("id", practicalId)
+        .eq("id", Number(practicalId))
         .single();
 
       if (!error && mountedRef.current) {
@@ -425,7 +425,14 @@ int main() {
             const order: Record<string, number> = { easy: 0, medium: 1, hard: 2 };
             return (order[a.level] || 0) - (order[b.level] || 0);
           });
-          setPracticalLevels(sorted);
+
+          const safeLevels = sorted.map(level => ({
+            ...level,
+            title: level.title || "",
+            description: level.description || ""
+          }));
+          setPracticalLevels(safeLevels);
+
           if (sorted.length > 0) {
             setActiveLevel(sorted[0].level);
           }

@@ -60,7 +60,7 @@ export default function SingleLevelTestCases({
                 </div>
                 <textarea
                     name="description"
-                    value={form.description}
+                    value={form.description || ""}
                     onChange={handleInput}
                     className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent min-h-[150px] text-sm"
                     placeholder="Describe the problem, requirements, and constraints..."

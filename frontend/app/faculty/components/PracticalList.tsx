@@ -328,7 +328,7 @@ export default function PracticalList({
     const query = searchQuery.toLowerCase();
     return practicals.filter((p) => {
       const subjObj = subjects?.find((s) => String(s.id) === String(p.subject_id));
-      const subj = subjObj?.subject_name ?? subjObj?.name ?? "";
+      const subj = subjObj?.subject_name ?? "";
       return (
         p.title.toLowerCase().includes(query) ||
         (p.description || "").toLowerCase().includes(query) ||
@@ -438,7 +438,7 @@ export default function PracticalList({
       <div className={mode === "grid" ? "grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3 gap-4" : "space-y-4"}>
         {filteredPracticals.map((p) => {
           const subjObj = subjects?.find((s) => String(s.id) === String(p.subject_id));
-          const subj = subjObj?.subject_name ?? subjObj?.name ?? "Unknown";
+          const subj = subjObj?.subject_name ?? "Unknown";
           return (
             <PracticalCard
               key={p.id}

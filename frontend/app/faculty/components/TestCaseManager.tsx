@@ -114,7 +114,7 @@ export default function TestCaseManager({
                                         <div className="flex items-center gap-2">
                                             <input
                                                 type="checkbox"
-                                                checked={tc.is_hidden}
+                                                checked={tc.is_hidden || false}
                                                 onChange={(e) => handleTestCaseChange(idx, "is_hidden", e.target.checked)}
                                                 id={`hidden-${idx}`}
                                                 className="rounded border-gray-300 text-teal-600 focus:ring-teal-500"

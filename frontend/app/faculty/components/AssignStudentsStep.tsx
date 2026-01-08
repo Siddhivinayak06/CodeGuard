@@ -27,11 +27,11 @@ export default function AssignStudentsStep({
 }: AssignStudentsStepProps) {
 
     // Extract unique batches and sort them
-    const batches = Array.from(new Set(students.map(s => s.batch).filter(Boolean))).sort();
+    const batches = Array.from(new Set(students.map(s => s.batch).filter((b): b is string => !!b))).sort();
 
     const filteredStudents = students.filter((s) => {
         const q = (filters.query || "").toLowerCase();
-        const matchesQuery = !q || (s.name || "").toLowerCase().includes(q) || (s.roll || "").toLowerCase().includes(q);
+        const matchesQuery = !q || (s.name || "").toLowerCase().includes(q) || (s.roll_no || "").toLowerCase().includes(q);
         const matchesBatch = !filters.batch || s.batch === filters.batch;
         return matchesQuery && matchesBatch;
     });
@@ -160,7 +160,7 @@ export default function AssignStudentsStep({
                                             <h4 className={cx("font-semibold text-sm transition-colors", isSelected ? "text-blue-700 dark:text-blue-300" : "text-gray-900 dark:text-white")}>
                                                 {student.name}
                                             </h4>
-                                            <p className="text-xs text-gray-500 dark:text-gray-400">{student.roll}</p>
+                                            <p className="text-xs text-gray-500 dark:text-gray-400">{student.roll_no}</p>
                                         </div>
                                     </div>
 

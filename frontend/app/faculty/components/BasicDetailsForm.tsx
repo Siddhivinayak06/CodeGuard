@@ -68,7 +68,7 @@ export default function BasicDetailsForm({
                     </label>
                     <select
                         name="subject_id"
-                        value={(form.subject_id as string) || ""}
+                        value={String(form.subject_id ?? "")}
                         onChange={handleInput}
                         disabled={Boolean(defaultSubjectId)}
                         className={cx(
