@@ -57,7 +57,7 @@ export default function ProfilePage() {
                 // Fetch user metadata/profile from DB
                 const { data: profile } = await supabase
                     .from("users")
-                    .select("name, role")
+                    .select("name, role, semester, batch")
                     .eq("uid", user.id)
                     .single();
 
@@ -65,15 +65,8 @@ export default function ProfilePage() {
                 let studentBatch = "";
 
                 if (profile?.role === "student") {
-                    const { data: student } = await supabase
-                        .from("student_details")
-                        .select("semester, batch")
-                        .eq("student_id", user.id)
-                        .single();
-                    if (student) {
-                        studentSemester = student.semester?.toString() || "";
-                        studentBatch = student.batch || "";
-                    }
+                    studentSemester = profile.semester || "";
+                    studentBatch = profile.batch || "";
                 }
 
                 setFormData({
@@ -102,29 +95,24 @@ export default function ProfilePage() {
         try {
             if (!user) return;
 
+            // Dictionary to update
+            const updates: any = {
+                name: formData.name,
+            };
+
+            // If student, refresh semester and batch
+            if (formData.role === "student") {
+                if (formData.semester) updates.semester = formData.semester;
+                if (formData.batch) updates.batch = formData.batch;
+            }
+
             // Update public.users
             const { error: userError } = await supabase
                 .from("users")
-                .update({ name: formData.name })
+                .update(updates)
                 .eq("uid", user.id);
 
             if (userError) throw userError;
-
-            // If student, update semester and batch
-            if (formData.role === "student") {
-                const updatePayload: any = {};
-                if (formData.semester) updatePayload.semester = parseInt(formData.semester);
-                if (formData.batch) updatePayload.batch = formData.batch;
-
-                if (Object.keys(updatePayload).length > 0) {
-                    const { error: studentError } = await supabase
-                        .from("student_details")
-                        .update(updatePayload)
-                        .eq("student_id", user.id);
-
-                    if (studentError) throw studentError;
-                }
-            }
 
             setMessage({ type: "success", text: "Profile updated successfully!" });
         } catch (error: any) {

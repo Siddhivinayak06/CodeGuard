@@ -41,24 +41,13 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     // Update users table
     const { data: updatedUser, error: updateErr } = await supabaseAdmin
       .from("users")
-      .update({ name, role })
+      .update({ name, role, roll_no, semester })
       .eq("uid", id)
       .select()
       .single();
     if (updateErr) throw updateErr;
 
-    let studentDetails = null;
-    if (role === "student") {
-      const { data: sd, error: sdErr } = await supabaseAdmin
-        .from("student_details")
-        .upsert({ student_id: id, roll_no, semester }, { onConflict: "student_id" })
-        .select()
-        .single();
-      if (sdErr) console.error("student_details upsert failed:", sdErr);
-      studentDetails = sd ?? null;
-    }
-
-    return NextResponse.json({ success: true, data: { ...updatedUser, student_details: studentDetails } });
+    return NextResponse.json({ success: true, data: updatedUser });
   } catch (err: any) {
     console.error("PUT /api/admin/users/[id] error:", err);
     return NextResponse.json({ success: false, error: err.message ?? "Server error" }, { status: 500 });
@@ -76,11 +65,9 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     const { id } = await params;
     if (!id) return NextResponse.json({ success: false, error: "User ID is required" }, { status: 400 });
 
-    // Delete user and student_details
+    // Delete user
     const { error: delErr } = await supabaseAdmin.from("users").delete().eq("uid", id);
     if (delErr) throw delErr;
-
-    await supabaseAdmin.from("student_details").delete().eq("student_id", id);
 
     return NextResponse.json({ success: true, message: "User deleted" });
   } catch (err: any) {

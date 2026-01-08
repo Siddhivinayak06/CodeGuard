@@ -90,7 +90,7 @@ export default function PracticalForm({
   const [generatingTests, setGeneratingTests] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const [filters, setFilters] = useState({ query: "", semester: "" });
+  const [filters, setFilters] = useState({ query: "", semester: "", batch: "" });
 
   // Reset step when modal opens
   useEffect(() => {
@@ -166,10 +166,9 @@ export default function PracticalForm({
             name,
             email,
             role,
-            student_details (
-              roll_no,
-              semester
-            )
+            roll_no,
+            semester,
+            batch
           `)
           .eq("role", "student");
 
@@ -189,8 +188,9 @@ export default function PracticalForm({
           uid: s.uid,
           name: s.name,
           email: s.email,
-          roll: s.student_details?.roll_no || "",
-          semester: s.student_details?.semester || "",
+          roll: s.roll_no || "",
+          semester: s.semester || "",
+          batch: s.batch || "",
         }));
         setStudents(mapped);
 

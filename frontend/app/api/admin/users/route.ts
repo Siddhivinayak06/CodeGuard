@@ -26,7 +26,7 @@ async function isAdminUsingCookieClient(): Promise<boolean> {
 }
 
 // ---------------------------
-// GET: list all users with student_details
+// GET: list all users
 // ---------------------------
 export async function GET() {
   const isAdmin = await isAdminUsingCookieClient();
@@ -37,20 +37,13 @@ export async function GET() {
       .from("users")
       .select(`
         uid, name, email, role, created_at, updated_at,
-        student_details(roll_no, semester)
+        roll_no, semester, department, batch
       `)
       .order("created_at", { ascending: false });
 
     if (error) throw error;
 
-    // Flatten student_details to top level for frontend convenience
-    const formatted = data.map((u: any) => ({
-      ...u,
-      roll_no: u.student_details?.roll_no ?? "",
-      semester: u.student_details?.semester ?? "",
-    }));
-
-    return NextResponse.json({ success: true, data: formatted });
+    return NextResponse.json({ success: true, data });
   } catch (err: any) {
     console.error("GET /api/admin/users error:", err);
     return NextResponse.json({ success: false, error: err.message ?? "Server error" }, { status: 500 });
@@ -87,7 +80,7 @@ export async function POST(req: NextRequest) {
     if (!uid) return NextResponse.json({ success: false, error: "Failed to get UID" }, { status: 500 });
 
     // Insert into users table
-    const profile = { uid, name: name ?? email.split("@")[0], email, role };
+    const profile = { uid, name: name ?? email.split("@")[0], email, role, roll_no, semester };
     const { data: inserted, error: insertErr } = await supabaseAdmin
       .from("users")
       .insert([profile])
@@ -95,24 +88,9 @@ export async function POST(req: NextRequest) {
       .single();
     if (insertErr) throw insertErr;
 
-    // Insert student_details if student
-    let studentDetails = null;
-    if (role === "student") {
-      const { data: sd, error: sdErr } = await supabaseAdmin
-        .from("student_details")
-        .upsert(
-          { student_id: uid, roll_no: roll_no ?? null, semester: semester ?? null },
-          { onConflict: "student_id" }
-        )
-        .select()
-        .single();
-      if (sdErr) console.error("student_details insert failed:", sdErr);
-      studentDetails = sd ?? null;
-    }
-
     return NextResponse.json({
       success: true,
-      data: { ...inserted, roll_no: studentDetails?.roll_no ?? "", semester: studentDetails?.semester ?? "" },
+      data: inserted,
     }, { status: 201 });
 
   } catch (err: any) {

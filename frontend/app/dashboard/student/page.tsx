@@ -143,7 +143,7 @@ export default function StudentDashboard() {
     const [user, setUser] = useState<User | null>(null);
     const [userName, setUserName] = useState("");
     const [studentDetails, setStudentDetails] = useState<{
-        semester: number;
+        semester: string | number;
         name?: string;
     } | null>(null);
     const [progress, setProgress] = useState<
@@ -222,18 +222,21 @@ export default function StudentDashboard() {
             setLoading(true);
             try {
                 const { data: sd, error: sdErr } = await supabase
-                    .from("student_details")
-                    .select("*")
-                    .eq("student_id", user.id)
-                    .maybeSingle();
+                    .from("users")
+                    .select("semester, name")
+                    .eq("uid", user.id)
+                    .single();
 
                 if (sdErr || !sd) throw new Error("Failed to fetch student details");
-                setStudentDetails(sd);
+
+                const currentSemester = sd.semester || "1";
+                // @ts-ignore - explicitly handling legacy number type if needed, but schema says string
+                setStudentDetails({ semester: currentSemester, name: sd.name });
 
                 const { data: subjects, error: subjErr } = await supabase
                     .from("subjects")
                     .select(`id, subject_name, semester`)
-                    .eq("semester", sd.semester);
+                    .eq("semester", currentSemester);
 
                 if (subjErr) throw subjErr;
 
@@ -283,7 +286,7 @@ export default function StudentDashboard() {
                     .from("submissions")
                     .select("practical_id, practicals(subject_id)")
                     .eq("student_id", user.id)
-                    .eq("status", "completed");
+                    .eq("status", "passed");
 
                 const completedBySubject: Record<string, number> = {};
                 const seenCompletedIds = new Set<number>();

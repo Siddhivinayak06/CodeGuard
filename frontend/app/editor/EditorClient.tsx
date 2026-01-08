@@ -379,13 +379,13 @@ int main() {
         // Register session for single active session enforcement
         registerSession(data.user.id);
         // Fetch roll number if student
-        const { data: studentData } = await supabase
-          .from("student_details")
+        const { data: userData } = await supabase
+          .from("users")
           .select("roll_no")
-          .eq("student_id", data.user.id)
+          .eq("uid", data.user.id)
           .single();
-        if (studentData?.roll_no) {
-          setRollNo(studentData.roll_no);
+        if (userData?.roll_no) {
+          setRollNo(userData.roll_no);
         }
       }
     };

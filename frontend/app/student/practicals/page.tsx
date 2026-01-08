@@ -29,50 +29,47 @@ import {
 // TYPES
 // ============================================================================
 
-interface PracticalLevel {
-  id: number;
-  level: string;
-  title: string;
-  description: string;
-  max_marks: number;
+import { Tables } from "@/lib/supabase/database.types";
+
+// ============================================================================
+// TYPES
+// ============================================================================
+
+type PracticalLevel = Tables<"practical_levels">;
+type Subject = Tables<"subjects">;
+
+interface PracticalWithRelations extends Tables<"practicals"> {
+  subjects: Pick<Subject, "subject_name"> | null;
+  practical_levels: PracticalLevel[];
 }
 
-interface StudentPracticalJoined {
-  id: number;
-  assigned_deadline: string;
-  status: string;
-  notes: string;
-  is_locked?: boolean;
-  attempt_count?: number;
-  max_attempts?: number;
-  practicals: {
-    id: number;
-    title: string;
-    description: string;
-    language: string;
-    subject_id: number;
-    subjects: { subject_name: string } | null;
-    practical_levels: PracticalLevel[];
-  };
+interface StudentPracticalJoined extends Tables<"student_practicals"> {
+  practicals: PracticalWithRelations | null;
+}
+
+interface ScheduleAllocationJoined extends Tables<"schedule_allocations"> {
+  schedule: (Tables<"schedules"> & {
+    practicals: PracticalWithRelations | null;
+  }) | null;
 }
 
 interface FormattedPractical {
   id: number;
-  subject_id: number;
+  subject_id: number | null;
   practical_id: number;
   title: string;
-  description: string;
+  description: string | null;
   deadline: string | null;
-  status: 'assigned' | 'in_progress' | 'completed' | 'overdue' | 'passed' | 'failed';
+  status: 'assigned' | 'in_progress' | 'completed' | 'overdue' | 'passed' | 'failed' | 'submitted' | 'pending';
   subject_name: string;
-  language: string;
+  language: string | null;
   hasLevels: boolean;
   attempt_count?: number;
   max_attempts?: number;
   is_locked?: boolean;
   marks_obtained?: number;
   max_marks?: number;
-  notes?: string;
+  notes?: string | null;
   levels?: PracticalLevel[];
 }
 
@@ -314,50 +311,101 @@ export default function StudentPracticals() {
     return () => { mountedRef.current = false; };
   }, [router, supabase]);
 
-  // Fetch practicals (same as before)
+  // Fetch practicals with Realtime subscription
   useEffect(() => {
     if (!user?.id) return;
     const controller = new AbortController();
     const signal = controller.signal;
 
-    const fetchPracticals = async () => {
-      setLoading(true);
+    const fetchPracticals = async (isBackground = false) => {
+      if (!isBackground) setLoading(true);
       try {
-        const { data: manualData } = await supabase
+        // 1. Fetch Assignments (Manual & Batch)
+        const { data: manualData, error: manualErr } = await supabase
           .from("student_practicals")
-          .select(`id, assigned_deadline, status, notes, is_locked, attempt_count, max_attempts, practicals (id, title, description, language, subject_id, subjects ( subject_name ), practical_levels ( id, level, title, description, max_marks ))`)
+          .select("practical_id, assigned_deadline, status, notes, is_locked, attempt_count, max_attempts")
           .eq("student_id", user.id);
 
-        const { data: batchData } = await supabase
+        if (manualErr) throw manualErr;
+
+        const { data: batchData, error: batchErr } = await supabase
           .from("schedule_allocations")
-          .select(`schedule:schedules (date, practicals (id, title, description, language, subject_id, subjects ( subject_name ), practical_levels ( id, level, title, description, max_marks )))`)
+          .select("schedule:schedules (date, practical_id)")
           .eq("student_id", user.id);
 
-        const { data: submissions } = await supabase.from("submissions").select("practical_id, status, marks_obtained").eq("student_id", user.id);
+        if (batchErr) throw batchErr;
 
-        // Map practical_id -> { status, marks }
-        const submissionMap = new Map<number, { status: string; marks: number }>();
-        if (submissions) {
-          submissions.forEach((s: any) => {
-            if (s.practical_id) submissionMap.set(s.practical_id, { status: s.status, marks: s.marks_obtained || 0 });
-          });
+        // 2. Collect all Practical IDs
+        const practicalIds = new Set<number>();
+        (manualData || []).forEach(item => {
+          if (item.practical_id) practicalIds.add(item.practical_id);
+        });
+
+        // Fix: correctly type the batch data explicitly or handle safely
+        (batchData || []).forEach((item: any) => {
+          if (item.schedule?.practical_id) {
+            practicalIds.add(item.schedule.practical_id);
+          }
+        });
+
+        if (practicalIds.size === 0) {
+          if (mountedRef.current) setPracticals([]);
+          return;
         }
 
-        const combinedPracticals: FormattedPractical[] = [];
-        const seenIds = new Set<number>();
+        // 3. Fetch Practical Details
+        const { data: practicalsDetails, error: detailsErr } = await supabase
+          .from("practicals")
+          .select(`
+            id, title, description, language, subject_id, max_marks,
+            subjects ( subject_name ),
+            practical_levels ( id, level, title, description, max_marks )
+          `)
+          .in("id", Array.from(practicalIds));
 
-        (manualData as unknown as StudentPracticalJoined[] || []).forEach((sp) => {
-          const p = sp.practicals;
+        if (detailsErr) throw detailsErr;
+
+        // 4. Fetch Submissions
+        const { data: submissions, error: subsErr } = await supabase
+          .from("submissions")
+          .select("practical_id, status, marks_obtained")
+          .eq("student_id", user.id)
+          .in("practical_id", Array.from(practicalIds));
+
+        if (subsErr) throw subsErr;
+
+        // 5. Merge Data
+        const detailsMap = new Map(practicalsDetails?.map(p => [p.id, p]));
+        const submissionMap = new Map(submissions?.map(s => [s.practical_id, s]));
+
+        const combinedPracticals: FormattedPractical[] = [];
+        const processedIds = new Set<number>();
+
+        // Process Manual Assignments
+        (manualData || []).forEach(sp => {
+          if (!sp.practical_id) return;
+          const p = detailsMap.get(sp.practical_id);
           if (!p) return;
-          seenIds.add(p.id);
+
+          processedIds.add(p.id);
+          const sub = submissionMap.get(p.id);
+          // @ts-ignore - Supabase types handling
           const levels = p.practical_levels || [];
-          const subData = submissionMap.get(p.id);
+
           combinedPracticals.push({
-            id: p.id, practical_id: p.id, title: p.title, description: p.description, language: p.language,
-            deadline: sp.assigned_deadline, subject_id: p.subject_id, subject_name: p.subjects?.subject_name || "Unknown",
-            status: (subData?.status || sp.status || 'pending') as any,
+            id: p.id,
+            practical_id: p.id,
+            title: p.title,
+            description: p.description,
+            language: p.language,
+            deadline: sp.assigned_deadline,
+            subject_id: p.subject_id,
+            // @ts-ignore
+            subject_name: p.subjects?.subject_name || "Unknown",
+            status: (sub?.status || sp.status || 'assigned') as any,
             notes: sp.notes,
             hasLevels: levels.length > 0,
+            // @ts-ignore
             levels: levels.sort((a, b) => {
               const order: Record<string, number> = { easy: 0, medium: 1, hard: 2 };
               return (order[a.level] || 0) - (order[b.level] || 0);
@@ -365,33 +413,48 @@ export default function StudentPracticals() {
             is_locked: sp.is_locked || (sp.attempt_count || 0) >= (sp.max_attempts || 1),
             attempt_count: sp.attempt_count || 0,
             max_attempts: sp.max_attempts || 1,
-            marks_obtained: subData?.marks,
-            max_marks: levels.reduce((acc, l) => acc + (l.max_marks || 0), 0) || 100 // fallback logic?
+            marks_obtained: sub?.marks_obtained ?? undefined,
+            max_marks: p.max_marks || levels.reduce((acc: number, l: any) => acc + (l.max_marks || 0), 0) || 100
           });
         });
 
+        // Process Batch Assignments
         (batchData || []).forEach((item: any) => {
-          const schedule = item.schedule;
-          if (!schedule || !schedule.practicals) return;
-          const p = schedule.practicals;
-          if (seenIds.has(p.id)) return;
-          seenIds.add(p.id);
+          const sched = item.schedule;
+          if (!sched?.practical_id) return;
+          if (processedIds.has(sched.practical_id)) return; // Don't duplicate if already added via manual
+
+          const p = detailsMap.get(sched.practical_id);
+          if (!p) return;
+
+          processedIds.add(p.id);
+          const sub = submissionMap.get(p.id);
+          // @ts-ignore
           const levels = p.practical_levels || [];
-          const subData = submissionMap.get(p.id);
+
           combinedPracticals.push({
-            id: p.id, practical_id: p.id, title: p.title, description: p.description, language: p.language,
-            deadline: schedule.date, subject_id: p.subject_id, subject_name: p.subjects?.subject_name || "Unknown",
-            status: (subData?.status || 'pending') as any,
+            id: p.id,
+            practical_id: p.id,
+            title: p.title,
+            description: p.description,
+            language: p.language,
+            deadline: sched.date,
+            subject_id: p.subject_id,
+            // @ts-ignore
+            subject_name: p.subjects?.subject_name || "Unknown",
+            status: (sub?.status || 'assigned') as any, // Batch assignments don't have separate status in allocation
             notes: "",
             hasLevels: levels.length > 0,
-            levels: levels.sort((a: PracticalLevel, b: PracticalLevel) => {
+            // @ts-ignore
+            levels: levels.sort((a, b) => {
               const order: Record<string, number> = { easy: 0, medium: 1, hard: 2 };
               return (order[a.level] || 0) - (order[b.level] || 0);
             }),
             is_locked: false,
             attempt_count: 0,
             max_attempts: 1,
-            marks_obtained: subData?.marks
+            marks_obtained: sub?.marks_obtained ?? undefined,
+            max_marks: p.max_marks || levels.reduce((acc: number, l: any) => acc + (l.max_marks || 0), 0) || 100
           });
         });
 
@@ -402,15 +465,40 @@ export default function StudentPracticals() {
         });
 
         if (!signal.aborted && mountedRef.current) setPracticals(combinedPracticals);
+
       } catch (err) {
-        if (err instanceof Error && err.name !== "AbortError") console.error(err);
+        if (err instanceof Error && err.name !== "AbortError") console.error("Fetch Error:", err);
       } finally {
-        if (!signal.aborted && mountedRef.current) setLoading(false);
+        if (!signal.aborted && mountedRef.current && !isBackground) setLoading(false);
       }
     };
 
     fetchPracticals();
-    return () => { controller.abort(); };
+
+    // subscriptions
+    const channel = supabase
+      .channel(`student-practicals-${user.id}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'student_practicals', filter: `student_id=eq.${user.id}` },
+        () => fetchPracticals(true)
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'schedule_allocations', filter: `student_id=eq.${user.id}` },
+        () => fetchPracticals(true)
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'submissions', filter: `student_id=eq.${user.id}` },
+        () => fetchPracticals(true)
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+      controller.abort();
+    };
   }, [user?.id, supabase]);
 
   // Stats
@@ -456,7 +544,9 @@ export default function StudentPracticals() {
   const completedPracticals = filteredPracticals.filter(p => doneStatuses.includes(p.status));
   const urgentPracticals = pendingPracticals.filter(p => p.deadline && typeof p.deadline === 'string' && Math.ceil((new Date(p.deadline).getTime() - Date.now()) / (1000 * 60 * 60 * 24)) <= 3)
     .sort((a, b) => (a.deadline && typeof a.deadline === 'string' && b.deadline && typeof b.deadline === 'string') ? new Date(a.deadline).getTime() - new Date(b.deadline).getTime() : 0);
-  const regularPending = pendingPracticals.filter(p => !urgentPracticals.includes(p));
+
+  const urgentIds = new Set(urgentPracticals.map(p => p.id));
+  const regularPending = pendingPracticals.filter(p => !urgentIds.has(p.id));
 
   // Loading
   if (!user) {
@@ -484,17 +574,17 @@ export default function StudentPracticals() {
     return (
       <div
         key={p.id}
-        className={`group relative rounded - 2xl p - 5 transition - all duration - 300 hover: -translate - y - 1 hover: shadow - xl animate - slideUp overflow - hidden
+        className={`group relative rounded-2xl p-5 transition-all duration-300 hover:-translate-y-1 hover:shadow-xl overflow-hidden
           ${isUrgent
             ? "bg-gradient-to-br from-red-50 via-orange-50 to-amber-50 dark:from-red-950/40 dark:via-orange-950/30 dark:to-amber-950/20 border border-red-200/50 dark:border-red-800/30 shadow-lg shadow-red-500/10"
             : isCompleted
               ? "bg-white/40 dark:bg-gray-900/40 backdrop-blur-sm border border-gray-200/50 dark:border-gray-800/50 opacity-75 hover:opacity-100"
               : "bg-white/70 dark:bg-gray-900/70 backdrop-blur-sm border border-white/50 dark:border-gray-700/50 shadow-lg shadow-indigo-500/5 hover:shadow-indigo-500/10"
           }`}
-        style={{ animationDelay: `${index * 50}ms` }}
+      // Removed animationDelay to prevent visibility issues
       >
         {/* Decorative gradient orb */}
-        <div className={`absolute - top - 10 - right - 10 w - 24 h - 24 rounded - full blur - 2xl opacity - 30 transition - opacity group - hover: opacity - 50 ${isUrgent ? "bg-gradient-to-r from-red-400 to-orange-400" :
+        <div className={`absolute -top-10 -right-10 w-24 h-24 rounded-full blur-2xl opacity-30 transition-opacity group-hover:opacity-50 ${isUrgent ? "bg-gradient-to-r from-red-400 to-orange-400" :
           isCompleted ? "bg-gradient-to-r from-emerald-400 to-teal-400" :
             "bg-gradient-to-r from-indigo-400 to-purple-400"
           }`} />
@@ -508,7 +598,7 @@ export default function StudentPracticals() {
         <div className="relative z-10">
           {/* Header */}
           <div className="flex items-start gap-4 mb-4">
-            <div className={`w - 12 h - 12 rounded - xl bg - gradient - to - br ${getLanguageGradient(p.language)
+            <div className={`w - 12 h - 12 rounded - xl bg - gradient - to - br ${getLanguageGradient(p.language || 'unknown')
               } flex items - center justify - center shadow - lg ${isUrgent ? "shadow-red-500/20" : "shadow-indigo-500/20"
               }`}>
               <Code className="w-6 h-6 text-white drop-shadow-sm" />
@@ -576,7 +666,7 @@ export default function StudentPracticals() {
                       <AlertCircle className="w-3.5 h-3.5" /> Retry Available ({attempts}/{max})
                     </span>
                     <Button
-                      onClick={() => router.push(`/ editor ? practicalId = ${encodeURIComponent(p.id)}& subject=${encodeURIComponent(p.subject_id)}& language=${encodeURIComponent(p.language || 'java')}${p.hasLevels ? '&hasLevels=true' : ''} `)}
+                      onClick={() => router.push(`/editor?practicalId=${encodeURIComponent(p.id)}&subject=${encodeURIComponent(p.subject_id || 0)}&language=${encodeURIComponent(p.language || 'java')}${p.hasLevels ? '&hasLevels=true' : ''}`)}
                       size="sm"
                       className="bg-blue-600 hover:bg-blue-700 text-white font-bold shadow-lg shadow-blue-500/25"
                     >
@@ -611,7 +701,7 @@ export default function StudentPracticals() {
                       In Progress ({attempts}/{max})
                     </span>
                     <Button
-                      onClick={() => router.push(`/ editor ? practicalId = ${encodeURIComponent(p.id)}& subject=${encodeURIComponent(p.subject_id)}& language=${encodeURIComponent(p.language || 'java')}${p.hasLevels ? '&hasLevels=true' : ''} `)}
+                      onClick={() => router.push(`/editor?practicalId=${encodeURIComponent(p.id)}&subject=${encodeURIComponent(p.subject_id || 0)}&language=${encodeURIComponent(p.language || 'java')}${p.hasLevels ? '&hasLevels=true' : ''}`)}
                       size="sm"
                       className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold shadow-lg shadow-indigo-500/25"
                     >
@@ -631,7 +721,7 @@ export default function StudentPracticals() {
                     </div>
                   )}
                   <Button
-                    onClick={() => router.push(`/ editor ? practicalId = ${encodeURIComponent(p.id)}& subject=${encodeURIComponent(p.subject_id)}& language=${encodeURIComponent(p.language || 'java')}${p.hasLevels ? '&hasLevels=true' : ''} `)}
+                    onClick={() => router.push(`/editor?practicalId=${encodeURIComponent(p.id)}&subject=${encodeURIComponent(p.subject_id || 0)}&language=${encodeURIComponent(p.language || 'java')}${p.hasLevels ? '&hasLevels=true' : ''}`)}
                     size="sm"
                     className={isUrgentLocal
                       ? "bg-gradient-to-r from-red-500 to-orange-500 hover:from-red-600 hover:to-orange-600 text-white shadow-lg shadow-red-500/25 font-bold"

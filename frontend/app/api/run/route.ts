@@ -352,35 +352,20 @@ export async function POST(req: Request) {
       }
 
       if (shouldUpdate) {
-        // Update test case results
-        for (const tcr of predefinedResults) {
-          try {
-            await supabaseAdmin.from("test_case_results").upsert(
-              {
-                submission_id: submissionId,
-                test_case_id: tcr.test_case_id,
-                status: tcr.status,
-                stdout: tcr.stdout,
-                stderr: tcr.error ?? "",
-                execution_time_ms: tcr.time_ms,
-                memory_used_kb: tcr.memory_kb,
-              },
-              { onConflict: "submission_id,test_case_id" }
-            );
-          } catch (e) {
-            console.error("Failed to upsert test_case_result:", e);
-          }
-        }
-
-        // Update submission with new marks, status, AND latest code/language
         try {
+          // Update submission with new marks, status, latest code, and detailed execution results JSON
           await supabaseAdmin
             .from("submissions")
             .update({
               status: newStatus,
               marks_obtained: marksObtained,
               code,
-              language: reqLangNorm || lang
+              language: reqLangNorm || lang,
+              execution_details: {
+                verdict: newStatus,
+                results: predefinedResults, // Array of test case results
+                judged_at: new Date().toISOString()
+              }
             })
             .eq("id", submissionId);
         } catch (e) {

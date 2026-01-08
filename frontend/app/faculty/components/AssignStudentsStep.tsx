@@ -14,8 +14,8 @@ interface AssignStudentsStepProps {
     students: Student[];
     selectedStudents: Student[];
     setSelectedStudents: React.Dispatch<React.SetStateAction<Student[]>>;
-    filters: { query: string; semester: string };
-    setFilters: React.Dispatch<React.SetStateAction<{ query: string; semester: string }>>;
+    filters: { query: string; semester: string; batch: string };
+    setFilters: React.Dispatch<React.SetStateAction<{ query: string; semester: string; batch: string }>>;
 }
 
 export default function AssignStudentsStep({
@@ -26,9 +26,14 @@ export default function AssignStudentsStep({
     setFilters,
 }: AssignStudentsStepProps) {
 
+    // Extract unique batches and sort them
+    const batches = Array.from(new Set(students.map(s => s.batch).filter(Boolean))).sort();
+
     const filteredStudents = students.filter((s) => {
         const q = (filters.query || "").toLowerCase();
-        return !q || (s.name || "").toLowerCase().includes(q) || (s.roll || "").toLowerCase().includes(q);
+        const matchesQuery = !q || (s.name || "").toLowerCase().includes(q) || (s.roll || "").toLowerCase().includes(q);
+        const matchesBatch = !filters.batch || s.batch === filters.batch;
+        return matchesQuery && matchesBatch;
     });
 
     const toggleStudent = (student: Student) => {
@@ -67,17 +72,32 @@ export default function AssignStudentsStep({
                 </div>
             </div>
 
-            <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                    <SearchIcon />
+            <div className="flex flex-col md:flex-row gap-4">
+                <div className="relative flex-1">
+                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                        <SearchIcon className="text-gray-400" size={18} />
+                    </div>
+                    <input
+                        type="text"
+                        placeholder="Search by name or roll number..."
+                        value={filters.query}
+                        onChange={(e) => setFilters((prev) => ({ ...prev, query: e.target.value }))}
+                        className="w-full pl-11 pr-4 py-3 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all text-gray-900 dark:text-white placeholder-gray-400"
+                    />
                 </div>
-                <input
-                    type="text"
-                    placeholder="Search by name or roll number..."
-                    value={filters.query}
-                    onChange={(e) => setFilters((prev) => ({ ...prev, query: e.target.value }))}
-                    className="w-full pl-12 pr-4 py-3 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all text-gray-900 dark:text-white placeholder-gray-400"
-                />
+
+                <div className="md:w-48">
+                    <select
+                        value={filters.batch}
+                        onChange={(e) => setFilters(prev => ({ ...prev, batch: e.target.value }))}
+                        className="w-full px-4 py-3 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all text-gray-900 dark:text-white appearance-none cursor-pointer"
+                    >
+                        <option value="">All Batches</option>
+                        {batches.map(batch => (
+                            <option key={batch} value={batch}>Batch {batch}</option>
+                        ))}
+                    </select>
+                </div>
             </div>
 
             {filteredStudents.length > 0 && (
@@ -157,7 +177,7 @@ export default function AssignStudentsStep({
                                 <div className="mt-3 pt-3 border-t border-gray-100 dark:border-gray-700/50 flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
                                     <span>{student.email}</span>
                                     <span className="bg-gray-100 dark:bg-gray-700/50 px-2 py-0.5 rounded text-xs font-medium">
-                                        {student.semester}
+                                        {student.batch ? `Batch ${student.batch}` : student.semester}
                                     </span>
                                 </div>
                             </motion.div>

@@ -59,8 +59,8 @@ interface Props {
 
 export default function StudentAssignmentForm({ practicalId, close, refresh }: Props) {
   const supabase = useMemo(() => createClient(), []);
-  const [students, setStudents] = useState<Student[]>([]);
-  const [selectedStudents, setSelectedStudents] = useState<Student[]>([]);
+  const [students, setStudents] = useState<any[]>([]);
+  const [selectedStudents, setSelectedStudents] = useState<any[]>([]);
   const [deadline, setDeadline] = useState(new Date().toISOString().slice(0, 16));
   const [notes, setNotes] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
@@ -76,20 +76,13 @@ export default function StudentAssignmentForm({ practicalId, close, refresh }: P
       try {
         const { data, error } = await supabase
           .from("users")
-          .select("uid, name, email, role, student_details(roll_no, semester)")
+          .select("uid, name, email, role, roll_no, semester")
           .eq("role", "student");
 
         if (error) throw error;
 
         if (data) {
-          const mappedStudents = data.map((s) => ({
-            uid: s.uid,
-            name: s.name,
-            email: s.email,
-            roll: Array.isArray(s.student_details) && s.student_details[0] ? s.student_details[0].roll_no : "",
-            semester: Array.isArray(s.student_details) && s.student_details[0] ? s.student_details[0].semester : "",
-          }));
-          setStudents(mappedStudents);
+          setStudents(data);
         }
       } catch (err) {
         console.error("Error fetching students:", err);
@@ -102,7 +95,7 @@ export default function StudentAssignmentForm({ practicalId, close, refresh }: P
     fetchStudents();
   }, [supabase]);
 
-  const toggleStudent = (student: Student) => {
+  const toggleStudent = (student: any) => {
     setSelectedStudents((prev) =>
       prev.find((s) => s.uid === student.uid)
         ? prev.filter((s) => s.uid !== student.uid)
@@ -137,7 +130,7 @@ export default function StudentAssignmentForm({ practicalId, close, refresh }: P
   const filteredStudents = students.filter(
     (s) => {
       const matchQuery = s.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (s.roll?.toLowerCase() || "").includes(searchQuery.toLowerCase()) ||
+        (s.roll_no?.toLowerCase() || "").includes(searchQuery.toLowerCase()) ||
         (s.email?.toLowerCase() || "").includes(searchQuery.toLowerCase());
 
       const matchSemester = selectedSemester ? s.semester === selectedSemester : true;
@@ -277,7 +270,7 @@ export default function StudentAssignmentForm({ practicalId, close, refresh }: P
             >
               <option value="">All Semesters</option>
               {semesters.map(sem => (
-                <option key={sem} value={sem}>{sem}</option>
+                <option key={sem} value={sem || ""}>{sem}</option>
               ))}
             </select>
           </div>
@@ -378,7 +371,7 @@ export default function StudentAssignmentForm({ practicalId, close, refresh }: P
                             <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
                               <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
                             </svg>
-                            {student.roll || "N/A"}
+                            {student.roll_no || "N/A"}
                           </span>
                           <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-gray-100 dark:bg-gray-700 rounded-full">
                             <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">

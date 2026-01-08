@@ -413,7 +413,6 @@ export default function AdminUsers() {
                 </thead>
                 <tbody className="divide-y divide-gray-200/50 dark:divide-gray-700/50">
                   {filteredUsers.map((u) => {
-                    const student = u.student_details ?? {};
                     const initials = (u.name || u.email || "U").split(" ").map((n: string) => n[0]).slice(0, 2).join("").toUpperCase();
 
                     return (
@@ -441,20 +440,20 @@ export default function AdminUsers() {
                         {selectedRole === "student" && (
                           <>
                             <td className="px-5 py-4">
-                              {student.roll_no ? (
+                              {u.roll_no ? (
                                 <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400 rounded-lg">
                                   <Hash className="w-3 h-3" />
-                                  {student.roll_no}
+                                  {u.roll_no}
                                 </span>
                               ) : (
                                 <span className="text-gray-400">—</span>
                               )}
                             </td>
                             <td className="px-5 py-4">
-                              {student.semester ? (
+                              {u.semester ? (
                                 <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400 rounded-lg">
                                   <Calendar className="w-3 h-3" />
-                                  Sem {student.semester}
+                                  Sem {u.semester}
                                 </span>
                               ) : (
                                 <span className="text-gray-400">—</span>
@@ -471,8 +470,8 @@ export default function AdminUsers() {
                                   name: u.name ?? "",
                                   email: u.email ?? "",
                                   role: u.role ?? "student",
-                                  roll_no: student.roll_no ?? "",
-                                  semester: student.semester ?? "",
+                                  roll_no: u.roll_no ?? "",
+                                  semester: u.semester ?? "",
                                 });
                                 setIsEditing(true);
                                 setOpen(true);

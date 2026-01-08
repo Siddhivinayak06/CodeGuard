@@ -89,9 +89,9 @@ export default function Home() {
           setUser(data.user);
           // Fetch roll no
           const { data: studentData } = await supabase
-            .from("student_details")
+            .from("users")
             .select("roll_no")
-            .eq("student_id", data.user.id)
+            .eq("uid", data.user.id)
             .single();
           if (studentData?.roll_no) {
             setRollNo(studentData.roll_no);

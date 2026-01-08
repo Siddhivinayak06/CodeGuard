@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useState, Suspense } from "react";
+import React, { useEffect, useMemo, useState, Suspense, useCallback, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useSearchParams, useRouter } from "next/navigation";
 import { generatePdfClient } from "@/lib/ClientPdf";
@@ -20,6 +20,18 @@ import {
   Filter
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+} from "@/components/ui/command";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 
 // TypeScript interfaces
 interface Submission {
@@ -40,6 +52,7 @@ interface Submission {
   is_locked?: boolean;
   attempt_count?: number;
   max_attempts?: number;
+  testCaseResults?: TestCaseResult[];
 }
 
 interface TestCase {
@@ -158,163 +171,163 @@ function FacultySubmissionsContent() {
   const [testCases, setTestCases] = useState<TestCase[]>([]);
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [query, setQuery] = useState<string>(searchParams.get("q") || "");
+  const isMounted = useRef(true);
+
+  useEffect(() => {
+    isMounted.current = true;
+    return () => {
+      isMounted.current = false;
+    };
+  }, []);
 
   const fetchTestCaseResults = async (submissionId: number | string): Promise<TestCaseResult[]> => {
     const { data, error } = await supabase
       .from("test_case_results")
       .select("*")
-      .eq("submission_id", submissionId)
+      .eq("submission_id", Number(submissionId))
       .order("test_case_id", { ascending: true });
     if (error) console.error("Failed to fetch test case results:", error?.message ?? error);
-    return data ?? [];
+    return (data as unknown as TestCaseResult[]) ?? [];
   };
 
   const fetchTestCases = async (practicalId: number | string): Promise<TestCase[]> => {
     const { data, error } = await supabase
       .from("test_cases")
       .select("*")
-      .eq("practical_id", practicalId)
+      .eq("practical_id", Number(practicalId))
       .order("id", { ascending: true });
     if (error) console.error("Failed to fetch test cases:", error?.message ?? error);
-    return data ?? [];
+    return (data as unknown as TestCase[]) ?? [];
   };
 
-  useEffect(() => {
-    let isMounted = true;
-    const fetchSubmissions = async () => {
-      setLoading(true);
-      try {
-        const { data: userData } = await supabase.auth.getUser();
-        if (!userData.user) {
-          if (isMounted) setLoading(false);
-          return;
-        }
-
-        // 1. Get subjects for this faculty
-        const { data: subjects } = await supabase
-          .from("subjects")
-          .select("id")
-          .eq("faculty_id", userData.user.id);
-
-        if (!subjects || subjects.length === 0) {
-          if (isMounted) {
-            setSubmissions([]);
-            setLoading(false);
-          }
-          return;
-        }
-
-        const subjectIds = subjects.map(s => s.id);
-
-        // 2. Get practicals
-        const { data: practicals } = await supabase
-          .from("practicals")
-          .select("id, title")
-          .in("subject_id", subjectIds);
-
-        if (!practicals || practicals.length === 0) {
-          if (isMounted) {
-            setSubmissions([]);
-            setLoading(false);
-          }
-          return;
-        }
-
-        const practicalIds = practicals.map(p => p.id);
-        const practicalMap = new Map(practicals.map(p => [p.id, p.title]));
-
-        if (isMounted) {
-          setAllPracticals(practicals);
-        }
-
-        // 3. Get submissions
-        const { data: subs, error } = await supabase
-          .from("submissions")
-          .select(`
-            id,
-            student_id,
-            practical_id,
-            code,
-            language,
-            status,
-            marks_obtained,
-            created_at,
-            output,
-            test_cases_passed
-          `)
-          .in("practical_id", practicalIds)
-          .order("created_at", { ascending: false });
-
-        if (error) throw error;
-
-        // 4. Fetch user details
-        const studentIds = Array.from(new Set(subs?.map(s => s.student_id) || []));
-        const { data: usersData } = await supabase
-          .from("users")
-          .select("uid, name, email")
-          .in("uid", studentIds);
-
-        const userMap = new Map(usersData?.map(u => [u.uid, u]) || []);
-
-        // 5. Fetch student details (roll numbers)
-        const { data: studentDetails } = await supabase
-          .from("student_details")
-          .select("student_id, roll_no")
-          .in("student_id", studentIds);
-
-        const rollNoMap = new Map(studentDetails?.map(sd => [sd.student_id, sd.roll_no]) || []);
-
-        // 6. Fetch Student Practicals (Lock status)
-        // We fetch for all loaded students and practicals to check lock state
-        const { data: spData } = await supabase
-          .from('student_practicals')
-          .select('student_id, practical_id, is_locked, attempt_count, max_attempts')
-          .in('student_id', studentIds)
-          .in('practical_id', practicalIds);
-
-        const lockMap = new Map();
-        if (spData) {
-          spData.forEach(sp => {
-            lockMap.set(`${sp.student_id}_${sp.practical_id}`, sp);
-          });
-        }
-
-        const formatted: Submission[] = (subs || []).map((s: any) => ({
-          id: s.id,
-          submission_id: s.id,
-          student_id: s.student_id,
-          student_name: userMap.get(s.student_id)?.name || "Unknown Student",
-          practical_id: s.practical_id,
-          practical_title: practicalMap.get(s.practical_id) || "Unknown Practical",
-          code: s.code || "",
-          output: s.output || "",
-          language: s.language || "unknown",
-          status: s.status || "pending",
-          marks_obtained: s.marks_obtained,
-          created_at: s.created_at,
-          updated_at: s.created_at,
-          roll_no: rollNoMap.get(s.student_id) || "N/A",
-          is_locked: lockMap.get(`${s.student_id}_${s.practical_id}`)?.is_locked ?? false,
-          attempt_count: lockMap.get(`${s.student_id}_${s.practical_id}`)?.attempt_count ?? 0,
-          max_attempts: lockMap.get(`${s.student_id}_${s.practical_id}`)?.max_attempts ?? 1
-        }));
-
-        if (isMounted) {
-          setSubmissions(formatted);
-        }
-      } catch (err) {
-        console.error("Error fetching submissions:", err);
-      } finally {
-        if (isMounted) setLoading(false);
+  const fetchSubmissions = useCallback(async (isSilent = false) => {
+    if (!isSilent) setLoading(true);
+    try {
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) {
+        if (isMounted.current && !isSilent) setLoading(false);
+        return;
       }
-    };
 
-    fetchSubmissions();
+      // 1. Get subjects for this faculty
+      const { data: subjects } = await supabase
+        .from("subjects")
+        .select("id")
+        .eq("faculty_id", userData.user.id);
 
-    return () => {
-      isMounted = false;
-    };
+      if (!subjects || subjects.length === 0) {
+        if (isMounted.current) {
+          setSubmissions([]);
+          if (!isSilent) setLoading(false);
+        }
+        return;
+      }
+
+      const subjectIds = subjects.map(s => s.id);
+
+      // 2. Get practicals
+      const { data: practicals } = await supabase
+        .from("practicals")
+        .select("id, title")
+        .in("subject_id", subjectIds);
+
+      if (!practicals || practicals.length === 0) {
+        if (isMounted.current) {
+          setSubmissions([]);
+          if (!isSilent) setLoading(false);
+        }
+        return;
+      }
+
+      const practicalIds = practicals.map(p => p.id);
+      const practicalMap = new Map(practicals.map(p => [p.id, p.title]));
+
+      if (isMounted.current) {
+        setAllPracticals(practicals);
+      }
+
+      // 3. Get submissions
+      const { data: subs, error } = await supabase
+        .from("submissions")
+        .select(`
+          id,
+          student_id,
+          practical_id,
+          code,
+          language,
+          status,
+          marks_obtained,
+          created_at,
+          output,
+          test_cases_passed,
+          execution_details
+        `)
+        .in("practical_id", practicalIds)
+        .order("created_at", { ascending: false });
+
+      if (error) throw error;
+
+      // 4. Fetch user details (including roll numbers)
+      const studentIds = Array.from(new Set(subs?.map(s => s.student_id).filter((id): id is string => id !== null) || []));
+      const { data: usersData } = await supabase
+        .from("users")
+        .select("uid, name, email, roll_no")
+        .in("uid", studentIds);
+
+      const userMap = new Map(usersData?.map(u => [u.uid, u]) || []);
+      const rollNoMap = new Map(usersData?.map(u => [u.uid, u.roll_no]) || []);
+
+      // 6. Fetch Student Practicals (Lock status)
+
+      // 6. Fetch Student Practicals (Lock status)
+      // We fetch for all loaded students and practicals to check lock state
+      const { data: spData } = await supabase
+        .from('student_practicals')
+        .select('student_id, practical_id, is_locked, attempt_count, max_attempts')
+        .in('student_id', studentIds)
+        .in('practical_id', practicalIds);
+
+      const lockMap = new Map();
+      if (spData) {
+        spData.forEach(sp => {
+          lockMap.set(`${sp.student_id}_${sp.practical_id}`, sp);
+        });
+      }
+
+      const formatted: Submission[] = (subs || []).map((s: any) => ({
+        id: s.id,
+        submission_id: s.id,
+        student_id: s.student_id,
+        student_name: userMap.get(s.student_id)?.name || "Unknown Student",
+        practical_id: s.practical_id,
+        practical_title: practicalMap.get(s.practical_id) || "Unknown Practical",
+        code: s.code || "",
+        output: s.output || "",
+        language: s.language || "unknown",
+        status: s.status || "pending",
+        marks_obtained: s.marks_obtained,
+        created_at: s.created_at,
+        updated_at: s.created_at,
+        roll_no: rollNoMap.get(s.student_id) || "N/A",
+        is_locked: lockMap.get(`${s.student_id}_${s.practical_id}`)?.is_locked ?? false,
+        attempt_count: lockMap.get(`${s.student_id}_${s.practical_id}`)?.attempt_count ?? 0,
+        max_attempts: lockMap.get(`${s.student_id}_${s.practical_id}`)?.max_attempts ?? 1,
+        testCaseResults: (s.execution_details?.results || []) as unknown as TestCaseResult[]
+      }));
+
+      if (isMounted.current) {
+        setSubmissions(formatted);
+      }
+    } catch (err) {
+      console.error("Error fetching submissions:", err);
+    } finally {
+      if (isMounted.current && !isSilent) setLoading(false);
+    }
   }, [supabase]);
+
+  useEffect(() => {
+    fetchSubmissions();
+  }, [fetchSubmissions]);
 
   // Handle PDF Download
   const handleDownloadPdf = async (sub: Submission) => {
@@ -346,13 +359,20 @@ function FacultySubmissionsContent() {
     const tcs = await fetchTestCases(sub.practical_id);
     setTestCases(tcs);
 
-    // then fetch results
-    const results = await fetchTestCaseResults(sub.submission_id);
-
-    setViewingSubmission({
-      ...sub,
-      testCaseResults: results
-    });
+    // If we have results from JSON, use them
+    if (sub.testCaseResults && sub.testCaseResults.length > 0) {
+      setViewingSubmission({
+        ...sub,
+        testCaseResults: sub.testCaseResults
+      });
+    } else {
+      // Legacy fallback: fetch from table
+      const results = await fetchTestCaseResults(sub.submission_id);
+      setViewingSubmission({
+        ...sub,
+        testCaseResults: results
+      });
+    }
   };
 
   const filteredSubmissions = submissions.filter(s => {
@@ -465,40 +485,58 @@ function FacultySubmissionsContent() {
             </div>
 
             {/* Practical Filter Controls */}
-            <div className="flex items-center gap-2">
-              {searchParams.get("practical") ? (
-                <div className="flex items-center gap-2 px-3 py-1.5 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 rounded-lg text-sm font-medium border border-indigo-200 dark:border-indigo-800 animate-fadeIn">
-                  <Filter className="w-3.5 h-3.5" />
-                  <span className="max-w-[150px] truncate">
-                    {allPracticals.find(p => p.id.toString() === searchParams.get("practical"))?.title || "Practical"}
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  role="combobox"
+                  className={`w-[200px] justify-between border-gray-200 dark:border-gray-700 bg-white/50 dark:bg-gray-800/50 backdrop-blur-sm hover:bg-white dark:hover:bg-gray-800 ${searchParams.get("practical") ? "text-indigo-600 dark:text-indigo-400 border-indigo-200 dark:border-indigo-800 bg-indigo-50/50 dark:bg-indigo-900/20" : "text-gray-500"}`}
+                >
+                  <span className="truncate">
+                    {searchParams.get("practical")
+                      ? allPracticals.find((p) => p.id.toString() === searchParams.get("practical"))?.title
+                      : "Filter by Practical..."}
                   </span>
-                  <button
-                    onClick={() => router.push("/faculty/submissions")}
-                    className="ml-1 hover:bg-indigo-200 dark:hover:bg-indigo-800 rounded-full p-0.5 transition-colors"
-                  >
-                    <X className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              ) : (
-                <div className="relative group">
-                  <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 group-focus-within:text-indigo-500 transition-colors" />
-                  <select
-                    onChange={(e) => {
-                      if (e.target.value) {
-                        router.push(`/faculty/submissions?practical=${e.target.value}`);
-                      }
-                    }}
-                    className="pl-9 pr-8 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white/50 dark:bg-gray-800/50 text-sm font-medium focus:ring-2 focus:ring-indigo-500 outline-none appearance-none cursor-pointer hover:bg-white dark:hover:bg-gray-800 transition-all w-[180px]"
-                    defaultValue=""
-                  >
-                    <option value="" disabled>Filter by Practical</option>
-                    {allPracticals.map(p => (
-                      <option key={p.id} value={p.id}>{p.title}</option>
+                  <Filter className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-[200px] p-0 bg-white/95 dark:bg-gray-900/95 backdrop-blur-xl border-gray-200 dark:border-gray-700">
+                <Command>
+                  <CommandInput placeholder="Search practical..." />
+                  <CommandEmpty>No practical found.</CommandEmpty>
+                  <CommandGroup className="max-h-[300px] overflow-auto custom-scrollbar">
+                    <CommandItem
+                      value="all"
+                      onSelect={() => router.push("/faculty/submissions")}
+                      className="cursor-pointer"
+                    >
+                      <CheckCircle2
+                        className={`mr-2 h-4 w-4 ${!searchParams.get("practical") ? "opacity-100 text-indigo-500" : "opacity-0"}`}
+                      />
+                      All Practicals
+                    </CommandItem>
+                    {allPracticals.map((practical) => (
+                      <CommandItem
+                        key={practical.id}
+                        value={practical.title}
+                        onSelect={() => {
+                          router.push(`/faculty/submissions?practical=${practical.id}`);
+                        }}
+                        className="cursor-pointer"
+                      >
+                        <CheckCircle2
+                          className={`mr-2 h-4 w-4 ${searchParams.get("practical") === practical.id.toString()
+                            ? "opacity-100 text-indigo-500"
+                            : "opacity-0"
+                            }`}
+                        />
+                        <span className="truncate">{practical.title}</span>
+                      </CommandItem>
                     ))}
-                  </select>
-                </div>
-              )}
-            </div>
+                  </CommandGroup>
+                </Command>
+              </PopoverContent>
+            </Popover>
           </div>
 
           <div className="overflow-x-auto">
@@ -611,7 +649,7 @@ function FacultySubmissionsContent() {
                                         const res = await fetch('/api/faculty/allow-reattempt', {
                                           method: 'POST', body: JSON.stringify({ studentId: s.student_id, practicalId: s.practical_id })
                                         });
-                                        if (res.ok) window.location.reload();
+                                        if (res.ok) await fetchSubmissions(true);
                                       } catch (e) { console.error(e); }
                                     }}
                                   >
@@ -640,7 +678,7 @@ function FacultySubmissionsContent() {
                                     onClick={async () => {
                                       if (!confirm(`Unlock ${s.student_name}?`)) return;
                                       await fetch('/api/faculty/allow-reattempt', { method: 'POST', body: JSON.stringify({ studentId: s.student_id, practicalId: s.practical_id }) });
-                                      window.location.reload();
+                                      await fetchSubmissions(true);
                                     }}
                                   >
                                     <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>

@@ -72,12 +72,13 @@ export async function POST(request: Request) {
         // If batch_name is provided, fetch students from that batch
         if (batch_name) {
             const { data: batchStudents, error: batchError } = await supabase
-                .from("student_details")
-                .select("student_id")
-                .eq("batch", batch_name);
+                .from("users")
+                .select("uid")
+                .eq("batch", batch_name)
+                .eq("role", "student");
 
             if (!batchError && batchStudents) {
-                const batchIds = batchStudents.map((s: any) => s.student_id);
+                const batchIds = batchStudents.map((s: any) => s.uid);
                 // Merge and deduplicate
                 studentIdsToAllocate = Array.from(new Set([...studentIdsToAllocate, ...batchIds]));
             } else {

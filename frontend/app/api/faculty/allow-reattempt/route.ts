@@ -50,8 +50,14 @@ export async function POST(req: Request) {
 
         if (updateError) throw updateError;
 
-        // Log action (Optional: create system_logs table if exists)
-        // await supabaseAdmin.from('system_logs').insert({...})
+        // Log action
+        await supabaseAdmin.from('audit_logs').insert({
+            user_id: user.id,
+            type: 'system',
+            action: 'allow_reattempt',
+            details: { studentId, practicalId, newMaxAttempts: newMax, reason },
+            created_at: new Date().toISOString()
+        });
 
         return NextResponse.json({ success: true, message: "Re-attempt allowed", newMaxAttempts: newMax });
 

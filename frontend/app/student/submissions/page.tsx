@@ -42,7 +42,7 @@ interface TestCase {
   id: number;
   input: string;
   expected_output: string;
-  is_hidden: boolean;
+  is_hidden: boolean | null;
 }
 
 interface TestCaseResult {
@@ -198,20 +198,14 @@ export default function StudentSubmissions() {
         // Fetch additional details
         const { data: userProfile } = await supabase
           .from("users")
-          .select("name")
+          .select("name, roll_no")
           .eq("uid", user.id)
           .single();
-
-        const { data: sDetails } = await supabase
-          .from("student_details")
-          .select("roll_number")
-          .eq("student_id", user.id)
-          .maybeSingle();
 
         if (mountedRef.current) {
           setStudentDetails({
             name: userProfile?.name || user.email || "Student",
-            roll_number: sDetails?.roll_number || "N/A"
+            roll_number: userProfile?.roll_no || "N/A"
           });
         }
       } catch (err) {
@@ -242,14 +236,14 @@ export default function StudentSubmissions() {
             practical_id,
             marks_obtained,
             practicals ( title ),
-            test_case_results ( test_case_id, status, stdout, stderr, execution_time_ms, memory_used_kb )
+            execution_details
           `)
           .eq("student_id", user.id)
           .order("created_at", { ascending: false });
 
         if (error) throw error;
 
-        const formatted: Submission[] = (data as unknown as SubmissionFetched[]).map((s) => ({
+        const formatted: Submission[] = (data as unknown as any[]).map((s) => ({
           id: s.id,
           practical_id: s.practical_id,
           practical_title: s.practicals?.title || "Unknown",
@@ -259,7 +253,7 @@ export default function StudentSubmissions() {
           status: s.status,
           created_at: s.created_at,
           marks_obtained: s.marks_obtained,
-          testCaseResults: s.test_case_results || [],
+          testCaseResults: s.execution_details?.results || [],
         }));
 
         if (mountedRef.current) setSubmissions(formatted);

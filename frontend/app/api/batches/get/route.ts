@@ -6,8 +6,9 @@ export async function GET() {
 
     try {
         const { data, error } = await supabase
-            .from("student_details")
+            .from("users")
             .select("batch")
+            .eq("role", "student")
             .not("batch", "is", null);
 
         if (error) {
