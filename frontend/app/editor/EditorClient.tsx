@@ -256,8 +256,12 @@ int main() {
   });
 
   // ========================
-  // Mandatory Fullscreen Logic
+  // Session Lock & One-Time Entry Logic
   // ========================
+  const [isSessionLocked, setIsSessionLocked] = useState(false);
+  const [lockReason, setLockReason] = useState<string | null>(null);
+
+  // Restored State & Proctoring Logic
   const [isFullscreenMode, setIsFullscreenMode] = useState(false);
   const [hasExamStarted, setHasExamStarted] = useState(false);
 
@@ -276,6 +280,64 @@ int main() {
       });
     }
   }, [locked, hasExamStarted, autoSubmitOnInvalidation, router]);
+
+  // Check lock status on mount (Prevents Refresh/Re-entry)
+  useEffect(() => {
+    const checkLockStatus = async () => {
+      if (!user || !practicalId) return;
+
+      const { data, error } = await supabase
+        .from('student_practicals')
+        .select('attempt_count, max_attempts, is_locked, lock_reason')
+        .eq('student_id', user.id)
+        .eq('practical_id', practicalId)
+        .single();
+
+      if (data) {
+        // Check strict lock
+        if (data.is_locked) {
+          setIsSessionLocked(true);
+          setLockReason(data.lock_reason || "Session locked by faculty.");
+          return;
+        }
+
+        // Check attempt limit (Refresh Protection)
+        const attempts = data.attempt_count || 0;
+        const max = data.max_attempts || 1;
+
+        if (attempts >= max) {
+          setIsSessionLocked(true);
+          setLockReason("You have already used your attempt. Refreshing is not allowed.");
+        }
+      }
+    };
+
+    checkLockStatus();
+  }, [user, practicalId, supabase]);
+
+  // Handle Start Exam (One-Time Action)
+  const handleStartExam = async () => {
+    try {
+      setLoading(true);
+      const res = await axios.post('/api/practical/start', { practicalId });
+
+      if (res.data.success) {
+        await enterFullscreen();
+      } else {
+        setIsSessionLocked(true);
+        setLockReason(res.data.error || "Failed to start exam.");
+      }
+    } catch (err: any) {
+      console.error("Start exam error:", err);
+      // If error status is 403, it means locked
+      if (err.response && err.response.status === 403) {
+        setIsSessionLocked(true);
+        setLockReason(err.response.data.error);
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // Toggle fullscreen
   const enterFullscreen = async () => {
@@ -575,6 +637,34 @@ int main() {
 
   return (
     <div className="h-screen flex flex-col bg-gray-50 dark:bg-gray-950">
+      {/* Session Locked Overlay */}
+      {isSessionLocked && (
+        <div className="fixed inset-0 z-[100] bg-gray-900 flex flex-col items-center justify-center p-4 text-center">
+          <div className="bg-white dark:bg-gray-800 p-8 rounded-2xl shadow-2xl max-w-lg w-full border border-red-500/30">
+            <div className="w-16 h-16 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center mx-auto mb-6">
+              <svg className="w-8 h-8 text-red-600 dark:text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+              </svg>
+            </div>
+            <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">Access Denied</h2>
+            <p className="text-gray-600 dark:text-gray-300 mb-6 text-lg">
+              {lockReason || "Your session is locked."}
+            </p>
+            <div className="p-4 bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800/30 rounded-lg">
+              <p className="text-sm text-amber-800 dark:text-amber-200 font-medium">
+                Please contact the faculty to request a re-attempt.
+              </p>
+            </div>
+            <Button
+              onClick={() => router.push("/student")}
+              className="mt-6 w-full"
+              variant="outline"
+            >
+              Return to Dashboard
+            </Button>
+          </div>
+        </div>
+      )}
       {/* Session Invalidation Modal */}
       {showInvalidModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm">
@@ -617,7 +707,8 @@ int main() {
       {/* Mandatory Fullscreen Overlays */}
 
       {/* 1. Consent & Start Modal (Replaces previous simplified start) */}
-      {!hasExamStarted && !loading && (
+      {/* 1. Consent & Start Modal (Replaces previous simplified start) */}
+      {!hasExamStarted && !loading && !isSessionLocked && (
         <div className="fixed inset-0 z-[60] bg-gray-50 dark:bg-gray-950 flex flex-col items-center justify-center p-4">
           <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
@@ -657,11 +748,12 @@ int main() {
             </div>
 
             <Button
-              onClick={enterFullscreen}
+              onClick={handleStartExam}
               size="lg"
+              disabled={loading}
               className="w-full h-12 text-lg bg-indigo-600 hover:bg-indigo-700 text-white shadow-lg shadow-indigo-500/20 rounded-xl transition-all hover:scale-[1.02]"
             >
-              I Agree & Start Exam
+              {loading ? "Starting..." : "I Agree & Start Exam"}
             </Button>
 
             <p className="mt-4 text-xs text-gray-400 dark:text-gray-500">

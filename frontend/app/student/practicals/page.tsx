@@ -42,6 +42,9 @@ interface StudentPracticalJoined {
   assigned_deadline: string;
   status: string;
   notes: string;
+  is_locked?: boolean;
+  attempt_count?: number;
+  max_attempts?: number;
   practicals: {
     id: number;
     title: string;
@@ -55,16 +58,22 @@ interface StudentPracticalJoined {
 
 interface FormattedPractical {
   id: number;
+  subject_id: number;
+  practical_id: number;
   title: string;
   description: string;
-  language: string;
-  deadline: string;
-  subject_id: number;
+  deadline: string | null;
+  status: 'assigned' | 'in_progress' | 'completed' | 'overdue' | 'passed' | 'failed';
   subject_name: string;
-  status: string;
-  notes: string;
+  language: string;
   hasLevels: boolean;
-  levels: PracticalLevel[];
+  attempt_count?: number;
+  max_attempts?: number;
+  is_locked?: boolean;
+  marks_obtained?: number;
+  max_marks?: number;
+  notes?: string;
+  levels?: PracticalLevel[];
 }
 
 type FilterType = 'all' | 'pending' | 'overdue' | 'completed';
@@ -246,8 +255,8 @@ function PillFilters({ activeFilter, onFilterChange, counts }: {
             key={f.key}
             onClick={() => onFilterChange(f.key)}
             className={`px-4 py-2 text-xs font-semibold rounded-full transition-all duration-300 ${isActive
-                ? "bg-gradient-to-r from-indigo-500 to-purple-600 text-white shadow-md shadow-indigo-500/30"
-                : "text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800"
+              ? "bg-gradient-to-r from-indigo-500 to-purple-600 text-white shadow-md shadow-indigo-500/30"
+              : "text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800"
               }`}
           >
             {f.label} <span className={isActive ? "text-white/80" : "text-gray-400"}>{f.count}</span>
@@ -316,7 +325,7 @@ export default function StudentPracticals() {
       try {
         const { data: manualData } = await supabase
           .from("student_practicals")
-          .select(`id, assigned_deadline, status, notes, practicals (id, title, description, language, subject_id, subjects ( subject_name ), practical_levels ( id, level, title, description, max_marks ))`)
+          .select(`id, assigned_deadline, status, notes, is_locked, attempt_count, max_attempts, practicals (id, title, description, language, subject_id, subjects ( subject_name ), practical_levels ( id, level, title, description, max_marks ))`)
           .eq("student_id", user.id);
 
         const { data: batchData } = await supabase
@@ -324,12 +333,15 @@ export default function StudentPracticals() {
           .select(`schedule:schedules (date, practicals (id, title, description, language, subject_id, subjects ( subject_name ), practical_levels ( id, level, title, description, max_marks )))`)
           .eq("student_id", user.id);
 
-        const { data: submissions } = await supabase.from("submissions").select("practical_id, status").eq("student_id", user.id);
+        const { data: submissions } = await supabase.from("submissions").select("practical_id, status, marks_obtained").eq("student_id", user.id);
 
-        const submissionMap = new Map();
-        if (submissions) submissions.forEach((s: { practical_id: number; status: string }) => {
-          if (s.practical_id) submissionMap.set(s.practical_id, s.status);
-        });
+        // Map practical_id -> { status, marks }
+        const submissionMap = new Map<number, { status: string; marks: number }>();
+        if (submissions) {
+          submissions.forEach((s: any) => {
+            if (s.practical_id) submissionMap.set(s.practical_id, { status: s.status, marks: s.marks_obtained || 0 });
+          });
+        }
 
         const combinedPracticals: FormattedPractical[] = [];
         const seenIds = new Set<number>();
@@ -339,14 +351,22 @@ export default function StudentPracticals() {
           if (!p) return;
           seenIds.add(p.id);
           const levels = p.practical_levels || [];
+          const subData = submissionMap.get(p.id);
           combinedPracticals.push({
-            id: p.id, title: p.title, description: p.description, language: p.language,
+            id: p.id, practical_id: p.id, title: p.title, description: p.description, language: p.language,
             deadline: sp.assigned_deadline, subject_id: p.subject_id, subject_name: p.subjects?.subject_name || "Unknown",
-            status: submissionMap.get(p.id) || sp.status || 'pending', notes: sp.notes, hasLevels: levels.length > 0,
-            levels: levels.sort((a: PracticalLevel, b: PracticalLevel) => {
+            status: (subData?.status || sp.status || 'pending') as any,
+            notes: sp.notes,
+            hasLevels: levels.length > 0,
+            levels: levels.sort((a, b) => {
               const order: Record<string, number> = { easy: 0, medium: 1, hard: 2 };
               return (order[a.level] || 0) - (order[b.level] || 0);
             }),
+            is_locked: sp.is_locked || (sp.attempt_count || 0) >= (sp.max_attempts || 1),
+            attempt_count: sp.attempt_count || 0,
+            max_attempts: sp.max_attempts || 1,
+            marks_obtained: subData?.marks,
+            max_marks: levels.reduce((acc, l) => acc + (l.max_marks || 0), 0) || 100 // fallback logic?
           });
         });
 
@@ -357,21 +377,28 @@ export default function StudentPracticals() {
           if (seenIds.has(p.id)) return;
           seenIds.add(p.id);
           const levels = p.practical_levels || [];
+          const subData = submissionMap.get(p.id);
           combinedPracticals.push({
-            id: p.id, title: p.title, description: p.description, language: p.language,
+            id: p.id, practical_id: p.id, title: p.title, description: p.description, language: p.language,
             deadline: schedule.date, subject_id: p.subject_id, subject_name: p.subjects?.subject_name || "Unknown",
-            status: submissionMap.get(p.id) || 'pending', notes: "", hasLevels: levels.length > 0,
+            status: (subData?.status || 'pending') as any,
+            notes: "",
+            hasLevels: levels.length > 0,
             levels: levels.sort((a: PracticalLevel, b: PracticalLevel) => {
               const order: Record<string, number> = { easy: 0, medium: 1, hard: 2 };
               return (order[a.level] || 0) - (order[b.level] || 0);
             }),
+            is_locked: false,
+            attempt_count: 0,
+            max_attempts: 1,
+            marks_obtained: subData?.marks
           });
         });
 
         combinedPracticals.sort((a, b) => {
-          const dateA = a.deadline ? new Date(a.deadline).getTime() : Infinity;
-          const dateB = b.deadline ? new Date(b.deadline).getTime() : Infinity;
-          return dateA - dateB;
+          const timeA = (a.deadline && typeof a.deadline === 'string') ? new Date(a.deadline).getTime() : Infinity;
+          const timeB = (b.deadline && typeof b.deadline === 'string') ? new Date(b.deadline).getTime() : Infinity;
+          return timeA - timeB;
         });
 
         if (!signal.aborted && mountedRef.current) setPracticals(combinedPracticals);
@@ -392,11 +419,18 @@ export default function StudentPracticals() {
     const total = practicals.length;
     const completed = practicals.filter(p => doneStatuses.includes(p.status)).length;
     const pending = total - completed;
-    const overdue = practicals.filter(p => !doneStatuses.includes(p.status) && p.deadline && new Date(p.deadline) < new Date()).length;
+    const overdue = practicals.filter(p => !doneStatuses.includes(p.status) && p.deadline && typeof p.deadline === 'string' && new Date(p.deadline).getTime() < Date.now()).length;
     const progress = total > 0 ? (completed / total) * 100 : 0;
-    const nextDeadline = practicals.filter(p => !doneStatuses.includes(p.status) && p.deadline && new Date(p.deadline) > new Date())
-      .sort((a, b) => new Date(a.deadline).getTime() - new Date(b.deadline).getTime())[0];
-    const nextDeadlineDays = nextDeadline ? Math.ceil((new Date(nextDeadline.deadline).getTime() - Date.now()) / (1000 * 60 * 60 * 24)) : null;
+
+    // Sort logic handled in formatting, but to get next deadline we need sorting
+    const nextDeadline = practicals
+      .filter(p => !doneStatuses.includes(p.status) && p.deadline && typeof p.deadline === 'string' && new Date(p.deadline).getTime() > Date.now())
+      .sort((a, b) => (new Date(a.deadline!).getTime()) - (new Date(b.deadline!).getTime()))[0];
+
+    const nextDeadlineDays = nextDeadline && nextDeadline.deadline
+      ? Math.ceil((new Date(nextDeadline.deadline).getTime() - Date.now()) / (1000 * 60 * 60 * 24))
+      : null;
+
     return { total, completed, pending, overdue, progress, nextDeadlineDays };
   }, [practicals]);
 
@@ -410,7 +444,7 @@ export default function StudentPracticals() {
     }
     switch (activeFilter) {
       case 'pending': return result.filter(p => !doneStatuses.includes(p.status));
-      case 'overdue': return result.filter(p => !doneStatuses.includes(p.status) && p.deadline && new Date(p.deadline) < new Date());
+      case 'overdue': return result.filter(p => !doneStatuses.includes(p.status) && p.deadline && typeof p.deadline === 'string' && new Date(p.deadline).getTime() < Date.now());
       case 'completed': return result.filter(p => doneStatuses.includes(p.status));
       default: return result;
     }
@@ -420,8 +454,8 @@ export default function StudentPracticals() {
   const doneStatuses = ['passed', 'failed', 'completed'];
   const pendingPracticals = filteredPracticals.filter(p => !doneStatuses.includes(p.status));
   const completedPracticals = filteredPracticals.filter(p => doneStatuses.includes(p.status));
-  const urgentPracticals = pendingPracticals.filter(p => p.deadline && Math.ceil((new Date(p.deadline).getTime() - Date.now()) / (1000 * 60 * 60 * 24)) <= 3)
-    .sort((a, b) => new Date(a.deadline).getTime() - new Date(b.deadline).getTime());
+  const urgentPracticals = pendingPracticals.filter(p => p.deadline && typeof p.deadline === 'string' && Math.ceil((new Date(p.deadline).getTime() - Date.now()) / (1000 * 60 * 60 * 24)) <= 3)
+    .sort((a, b) => (a.deadline && typeof a.deadline === 'string' && b.deadline && typeof b.deadline === 'string') ? new Date(a.deadline).getTime() - new Date(b.deadline).getTime() : 0);
   const regularPending = pendingPracticals.filter(p => !urgentPracticals.includes(p));
 
   // Loading
@@ -450,7 +484,7 @@ export default function StudentPracticals() {
     return (
       <div
         key={p.id}
-        className={`group relative rounded-2xl p-5 transition-all duration-300 hover:-translate-y-1 hover:shadow-xl animate-slideUp overflow-hidden
+        className={`group relative rounded - 2xl p - 5 transition - all duration - 300 hover: -translate - y - 1 hover: shadow - xl animate - slideUp overflow - hidden
           ${isUrgent
             ? "bg-gradient-to-br from-red-50 via-orange-50 to-amber-50 dark:from-red-950/40 dark:via-orange-950/30 dark:to-amber-950/20 border border-red-200/50 dark:border-red-800/30 shadow-lg shadow-red-500/10"
             : isCompleted
@@ -460,9 +494,9 @@ export default function StudentPracticals() {
         style={{ animationDelay: `${index * 50}ms` }}
       >
         {/* Decorative gradient orb */}
-        <div className={`absolute -top-10 -right-10 w-24 h-24 rounded-full blur-2xl opacity-30 transition-opacity group-hover:opacity-50 ${isUrgent ? "bg-gradient-to-r from-red-400 to-orange-400" :
-            isCompleted ? "bg-gradient-to-r from-emerald-400 to-teal-400" :
-              "bg-gradient-to-r from-indigo-400 to-purple-400"
+        <div className={`absolute - top - 10 - right - 10 w - 24 h - 24 rounded - full blur - 2xl opacity - 30 transition - opacity group - hover: opacity - 50 ${isUrgent ? "bg-gradient-to-r from-red-400 to-orange-400" :
+          isCompleted ? "bg-gradient-to-r from-emerald-400 to-teal-400" :
+            "bg-gradient-to-r from-indigo-400 to-purple-400"
           }`} />
 
         {/* Urgent indicator */}
@@ -474,12 +508,13 @@ export default function StudentPracticals() {
         <div className="relative z-10">
           {/* Header */}
           <div className="flex items-start gap-4 mb-4">
-            <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${getLanguageGradient(p.language)} flex items-center justify-center shadow-lg ${isUrgent ? "shadow-red-500/20" : "shadow-indigo-500/20"
+            <div className={`w - 12 h - 12 rounded - xl bg - gradient - to - br ${getLanguageGradient(p.language)
+              } flex items - center justify - center shadow - lg ${isUrgent ? "shadow-red-500/20" : "shadow-indigo-500/20"
               }`}>
               <Code className="w-6 h-6 text-white drop-shadow-sm" />
             </div>
             <div className="flex-1 min-w-0">
-              <h3 className={`font-bold text-base line-clamp-1 mb-1 ${isCompleted ? "text-gray-500" : "text-gray-900 dark:text-white"}`}>
+              <h3 className={`font - bold text - base line - clamp - 1 mb - 1 ${isCompleted ? "text-gray-500" : "text-gray-900 dark:text-white"}`}>
                 {p.title}
               </h3>
               <p className="text-xs text-gray-500 dark:text-gray-400 line-clamp-1">
@@ -495,7 +530,8 @@ export default function StudentPracticals() {
               {p.subject_name}
             </span>
             {p.language && (
-              <span className={`text-[11px] font-bold px-2.5 py-1 rounded-full text-white bg-gradient-to-r ${getLanguageGradient(p.language)} shadow-sm`}>
+              <span className={`text - [11px] font - bold px - 2.5 py - 1 rounded - full text - white bg - gradient - to - r ${getLanguageGradient(p.language)
+                } shadow - sm`}>
                 {p.language}
               </span>
             )}
@@ -507,37 +543,106 @@ export default function StudentPracticals() {
             )}
           </div>
 
-          {/* Footer */}
-          <div className="flex items-center justify-between gap-3 pt-4 border-t border-gray-200/50 dark:border-gray-700/50">
-            {!isOverdue && timeInfo && !isCompleted ? (
-              <div className={`flex items-center gap-1.5 text-xs font-medium ${timeInfo.urgency === 'urgent' ? 'text-orange-600 dark:text-orange-400' :
-                  timeInfo.urgency === 'soon' ? 'text-amber-600 dark:text-amber-400' :
-                    'text-gray-500'
-                }`}>
-                {timeInfo.urgency === 'urgent' ? <Flame className="w-3.5 h-3.5" /> : <Clock className="w-3.5 h-3.5" />}
-                {timeInfo.text}
-              </div>
-            ) : isCompleted ? (
-              <span className="flex items-center gap-1.5 text-xs font-medium text-emerald-600 dark:text-emerald-400">
-                <CheckCircle2 className="w-3.5 h-3.5" /> Completed
-              </span>
-            ) : !timeInfo ? (
-              <span className="text-xs text-gray-400">No deadline</span>
-            ) : null}
 
-            <Button
-              onClick={() => router.push(`/editor?practicalId=${encodeURIComponent(p.id)}&subject=${encodeURIComponent(p.subject_id)}&language=${encodeURIComponent(p.language || 'java')}${p.hasLevels ? '&hasLevels=true' : ''}`)}
-              size="sm"
-              className={`rounded-xl px-5 py-2.5 text-sm font-bold transition-all flex items-center gap-2 ${isCompleted
-                  ? "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200"
-                  : isUrgent
-                    ? "bg-gradient-to-r from-red-500 to-orange-500 hover:from-red-600 hover:to-orange-600 text-white shadow-lg shadow-red-500/25"
-                    : "bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white shadow-lg shadow-indigo-500/25"
-                }`}
-            >
-              {isCompleted ? "Review" : isUrgent ? "Start Now" : "Start"}
-              <ArrowRight className="w-4 h-4" />
-            </Button>
+          {/* Footer - Derived State Machine */}
+          <div className="flex items-center justify-between gap-3 pt-4 border-t border-gray-200/50 dark:border-gray-700/50">
+            {(() => {
+              const attempts = p.attempt_count || 0;
+              const max = p.max_attempts || 1;
+              // isCompleted variable from existing code might be based on schedule? 
+              // Let's rely on p.status and is_locked for source of truth.
+              const status = p.status || 'assigned';
+              const lockedState = p.is_locked || attempts >= max;
+
+              // Case 1: Completed / Passed
+              if (status === 'completed' || status === 'passed') {
+                return (
+                  <>
+                    <span className="flex items-center gap-1.5 text-xs font-semibold text-emerald-600 dark:text-emerald-400">
+                      <CheckCircle2 className="w-3.5 h-3.5" /> Completed
+                    </span>
+                    <Button size="sm" disabled className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400 font-bold border border-emerald-200 dark:border-emerald-800 cursor-not-allowed">
+                      Score: {p.marks_obtained || p.max_marks}
+                    </Button>
+                  </>
+                );
+              }
+
+              // Case 2: Failed + Attempts Left -> Retry
+              if (status === 'failed' && !lockedState) {
+                return (
+                  <>
+                    <span className="flex items-center gap-1.5 text-xs font-semibold text-blue-600 dark:text-blue-400">
+                      <AlertCircle className="w-3.5 h-3.5" /> Retry Available ({attempts}/{max})
+                    </span>
+                    <Button
+                      onClick={() => router.push(`/ editor ? practicalId = ${encodeURIComponent(p.id)}& subject=${encodeURIComponent(p.subject_id)}& language=${encodeURIComponent(p.language || 'java')}${p.hasLevels ? '&hasLevels=true' : ''} `)}
+                      size="sm"
+                      className="bg-blue-600 hover:bg-blue-700 text-white font-bold shadow-lg shadow-blue-500/25"
+                    >
+                      Retry Now <ArrowRight className="w-4 h-4 ml-1" />
+                    </Button>
+                  </>
+                );
+              }
+
+              // Case 3: Exhausted / Locked
+              if (lockedState) {
+                return (
+                  <>
+                    <span className="flex items-center gap-1.5 text-xs font-semibold text-red-600 dark:text-red-400">
+                      <span className="w-2 h-2 rounded-full bg-red-500" /> Attempts Exhausted ({attempts}/{max})
+                    </span>
+                    <Button size="sm" disabled className="bg-gray-100 text-gray-400 dark:bg-gray-800 dark:text-gray-600 border border-transparent font-bold cursor-not-allowed">
+                      Locked
+                    </Button>
+                  </>
+                );
+              }
+
+              // Case 4: Pending / Under Review (Submitted but not passed/failed yet?)
+              if (status === 'in_progress' && attempts > 0) {
+                // Could be 'in_progress' meaning they started but didn't finish?
+                // Or 'pending' submission?
+                // If in_progress and not locked, it's basically "Continue"
+                return (
+                  <>
+                    <span className="text-xs text-gray-500 dark:text-gray-400">
+                      In Progress ({attempts}/{max})
+                    </span>
+                    <Button
+                      onClick={() => router.push(`/ editor ? practicalId = ${encodeURIComponent(p.id)}& subject=${encodeURIComponent(p.subject_id)}& language=${encodeURIComponent(p.language || 'java')}${p.hasLevels ? '&hasLevels=true' : ''} `)}
+                      size="sm"
+                      className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold shadow-lg shadow-indigo-500/25"
+                    >
+                      Continue <ArrowRight className="w-4 h-4 ml-1" />
+                    </Button>
+                  </>
+                );
+              }
+
+              // Default: Start (Assigned)
+              const isUrgentLocal = timeInfo && timeInfo.urgency === 'urgent';
+              return (
+                <>
+                  {!timeInfo ? <span className="text-xs text-gray-400">No deadline</span> : (
+                    <div className={`flex items - center gap - 1.5 text - xs font - medium ${isUrgentLocal ? 'text-orange-600' : 'text-gray-500'} `}>
+                      <Clock className="w-3.5 h-3.5" /> {timeInfo.text}
+                    </div>
+                  )}
+                  <Button
+                    onClick={() => router.push(`/ editor ? practicalId = ${encodeURIComponent(p.id)}& subject=${encodeURIComponent(p.subject_id)}& language=${encodeURIComponent(p.language || 'java')}${p.hasLevels ? '&hasLevels=true' : ''} `)}
+                    size="sm"
+                    className={isUrgentLocal
+                      ? "bg-gradient-to-r from-red-500 to-orange-500 hover:from-red-600 hover:to-orange-600 text-white shadow-lg shadow-red-500/25 font-bold"
+                      : "bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white shadow-lg shadow-indigo-500/25 font-bold"
+                    }
+                  >
+                    {isUrgentLocal ? "Start Now" : "Start"} <ArrowRight className="w-4 h-4 ml-1" />
+                  </Button>
+                </>
+              );
+            })()}
           </div>
         </div>
       </div>

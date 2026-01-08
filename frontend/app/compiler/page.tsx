@@ -70,7 +70,7 @@ int main() {
   const [output, setOutput] = useState("");
   const [errorOutput, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const { violations, locked } = useProctoring(3);
+  const { violations, locked } = useProctoring({ maxViolations: 3 });
   const [showInput, setShowInput] = useState(true);
   const [showInputToggle, setShowInputToggle] = useState(true);
   const terminalRef = useRef(null);

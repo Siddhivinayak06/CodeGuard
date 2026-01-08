@@ -37,6 +37,9 @@ interface Submission {
   created_at: string;
   updated_at: string;
   roll_no?: string;
+  is_locked?: boolean;
+  attempt_count?: number;
+  max_attempts?: number;
 }
 
 interface TestCase {
@@ -261,6 +264,21 @@ function FacultySubmissionsContent() {
 
         const rollNoMap = new Map(studentDetails?.map(sd => [sd.student_id, sd.roll_no]) || []);
 
+        // 6. Fetch Student Practicals (Lock status)
+        // We fetch for all loaded students and practicals to check lock state
+        const { data: spData } = await supabase
+          .from('student_practicals')
+          .select('student_id, practical_id, is_locked, attempt_count, max_attempts')
+          .in('student_id', studentIds)
+          .in('practical_id', practicalIds);
+
+        const lockMap = new Map();
+        if (spData) {
+          spData.forEach(sp => {
+            lockMap.set(`${sp.student_id}_${sp.practical_id}`, sp);
+          });
+        }
+
         const formatted: Submission[] = (subs || []).map((s: any) => ({
           id: s.id,
           submission_id: s.id,
@@ -275,7 +293,10 @@ function FacultySubmissionsContent() {
           marks_obtained: s.marks_obtained,
           created_at: s.created_at,
           updated_at: s.created_at,
-          roll_no: rollNoMap.get(s.student_id) || "N/A"
+          roll_no: rollNoMap.get(s.student_id) || "N/A",
+          is_locked: lockMap.get(`${s.student_id}_${s.practical_id}`)?.is_locked ?? false,
+          attempt_count: lockMap.get(`${s.student_id}_${s.practical_id}`)?.attempt_count ?? 0,
+          max_attempts: lockMap.get(`${s.student_id}_${s.practical_id}`)?.max_attempts ?? 1
         }));
 
         if (isMounted) {
@@ -488,6 +509,7 @@ function FacultySubmissionsContent() {
                   <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Practical</th>
                   <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Language</th>
                   <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Access</th>
                   <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Marks</th>
                   <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Submitted</th>
                   <th className="px-6 py-4 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">Actions</th>
@@ -501,6 +523,7 @@ function FacultySubmissionsContent() {
                       <td className="px-6 py-4"><div className="h-6 w-32 bg-gray-200 dark:bg-gray-700 rounded"></div></td>
                       <td className="px-6 py-4"><div className="h-6 w-16 bg-gray-200 dark:bg-gray-700 rounded"></div></td>
                       <td className="px-6 py-4"><div className="h-6 w-20 bg-gray-200 dark:bg-gray-700 rounded"></div></td>
+                      <td className="px-6 py-4"><div className="h-6 w-20 bg-gray-200 dark:bg-gray-700 rounded"></div></td>
                       <td className="px-6 py-4"><div className="h-6 w-12 bg-gray-200 dark:bg-gray-700 rounded"></div></td>
                       <td className="px-6 py-4"><div className="h-6 w-24 bg-gray-200 dark:bg-gray-700 rounded"></div></td>
                       <td className="px-6 py-4"></td>
@@ -508,7 +531,7 @@ function FacultySubmissionsContent() {
                   ))
                 ) : filteredSubmissions.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="px-6 py-12 text-center">
+                    <td colSpan={8} className="px-6 py-12 text-center">
                       <div className="flex flex-col items-center justify-center text-gray-400 dark:text-gray-500">
                         <ListFilter className="w-12 h-12 mb-3 opacity-20" />
                         <p className="text-lg font-medium">No submissions found</p>
@@ -543,6 +566,96 @@ function FacultySubmissionsContent() {
                       </td>
                       <td className="px-6 py-4">
                         <StatusBadge status={s.status} />
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-2">
+                          {/* Derived State Machine Logic */}
+                          {(() => {
+                            const attempts = s.attempt_count || 0;
+                            const max = s.max_attempts || 1;
+                            const isLocked = s.is_locked || attempts >= max;
+
+                            // Case 1: Passed -> Completed
+                            if (s.status === 'passed') {
+                              return (
+                                <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-2 py-0.5 rounded text-green-700 bg-green-50 dark:text-green-300 dark:bg-green-900/30 border border-green-200 dark:border-green-800">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></span>
+                                  Completed
+                                </span>
+                              );
+                            }
+
+                            // Case 2: Failed + Attempts Left -> Retry Available
+                            if (s.status === 'failed' && !isLocked) {
+                              return (
+                                <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-2 py-0.5 rounded text-blue-700 bg-blue-50 dark:text-blue-300 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800">
+                                  Retry Available ({attempts}/{max})
+                                </span>
+                              );
+                            }
+
+                            // Case 3: Failed + No Attempts -> Exhausted (Actionable)
+                            if (s.status === 'failed' && isLocked) {
+                              return (
+                                <div className="flex items-center gap-2">
+                                  <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-2 py-0.5 rounded text-red-700 bg-red-50 dark:text-red-300 dark:bg-red-900/30 border border-red-200 dark:border-red-800">
+                                    Attempts Exhausted
+                                  </span>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="h-6 text-[10px] px-2 border-red-200 bg-white hover:bg-red-50 text-red-700 dark:bg-transparent dark:border-red-800 dark:text-red-400"
+                                    onClick={async () => {
+                                      if (!confirm(`Grant extra attempt for ${s.student_name}?`)) return;
+                                      try {
+                                        const res = await fetch('/api/faculty/allow-reattempt', {
+                                          method: 'POST', body: JSON.stringify({ studentId: s.student_id, practicalId: s.practical_id })
+                                        });
+                                        if (res.ok) window.location.reload();
+                                      } catch (e) { console.error(e); }
+                                    }}
+                                  >
+                                    Grant Attempt
+                                  </Button>
+                                </div>
+                              );
+                            }
+
+                            // Case 4: Pending -> Under Review
+                            if (s.status === 'pending' || s.status === 'submitted') {
+                              return (
+                                <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-2 py-0.5 rounded text-amber-700 bg-amber-50 dark:text-amber-300 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-800">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+                                  Under Review
+                                </span>
+                              );
+                            }
+
+                            // Default / Fallback
+                            if (isLocked) {
+                              return (
+                                <div className="flex items-center gap-2">
+                                  <span className="text-xs font-semibold text-gray-500">Locked</span>
+                                  <Button size="sm" variant="ghost" className="h-6 w-6 p-0" title="Unlock"
+                                    onClick={async () => {
+                                      if (!confirm(`Unlock ${s.student_name}?`)) return;
+                                      await fetch('/api/faculty/allow-reattempt', { method: 'POST', body: JSON.stringify({ studentId: s.student_id, practicalId: s.practical_id }) });
+                                      window.location.reload();
+                                    }}
+                                  >
+                                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
+                                  </Button>
+                                </div>
+                              );
+                            }
+
+                            return (
+                              <span className="text-xs text-gray-500 dark:text-gray-400">
+                                Active ({attempts}/{max})
+                              </span>
+                            );
+                          })()}
+                        </div>
                       </td>
                       <td className="px-6 py-4">
                         <div className="font-bold text-gray-900 dark:text-white">
