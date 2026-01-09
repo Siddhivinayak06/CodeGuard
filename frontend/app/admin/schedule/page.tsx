@@ -74,11 +74,12 @@ export default function YearlySchedulePage() {
 
                     {/* Stats Row */}
                     {!loading && (
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6 pt-6 border-t border-white/20 dark:border-white/5 animate-fadeIn animation-delay-200">
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-6 pt-6 border-t border-gray-200 dark:border-gray-800 animate-fadeIn animation-delay-200">
                             <StatCard
                                 label="Total Sessions"
                                 value={schedules.length}
                                 color="blue"
+                                icon={<CalendarDays className="w-5 h-5" />}
                             />
 
                             <StatCard
@@ -89,11 +90,13 @@ export default function YearlySchedulePage() {
                                     return date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear();
                                 }).length}
                                 color="purple"
+                                icon={<Sparkles className="w-5 h-5" />}
                             />
                             <StatCard
                                 label="Upcoming"
                                 value={schedules.filter((s: any) => new Date(s.date) > new Date()).length}
                                 color="green"
+                                icon={<Loader2 className="w-5 h-5" />}
                             />
                         </div>
                     )}
@@ -123,18 +126,25 @@ export default function YearlySchedulePage() {
 }
 
 // Stat Card Component
-function StatCard({ label, value, color }: { label: string; value: number; color: string }) {
+function StatCard({ label, value, color, icon }: { label: string; value: number; color: string; icon: React.ReactNode }) {
     const colorClasses = {
-        blue: "from-blue-500/10 to-cyan-500/10 border-blue-200/50 dark:border-blue-800/50 text-blue-700 dark:text-blue-300",
-        red: "from-red-500/10 to-pink-500/10 border-red-200/50 dark:border-red-800/50 text-red-700 dark:text-red-300",
-        purple: "from-purple-500/10 to-indigo-500/10 border-purple-200/50 dark:border-purple-800/50 text-purple-700 dark:text-purple-300",
-        green: "from-green-500/10 to-emerald-500/10 border-green-200/50 dark:border-green-800/50 text-green-700 dark:text-green-300",
+        blue: "bg-blue-50/50 dark:bg-blue-900/10 border-blue-100 dark:border-blue-800 text-blue-700 dark:text-blue-300",
+        red: "bg-red-50/50 dark:bg-red-900/10 border-red-100 dark:border-red-800 text-red-700 dark:text-red-300",
+        purple: "bg-purple-50/50 dark:bg-purple-900/10 border-purple-100 dark:border-purple-800 text-purple-700 dark:text-purple-300",
+        green: "bg-emerald-50/50 dark:bg-emerald-900/10 border-emerald-100 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300",
     };
 
     return (
-        <div className={`rounded-xl bg-gradient-to-br ${colorClasses[color as keyof typeof colorClasses]} border p-4 transition-all hover:scale-105 hover:shadow-lg cursor-default`}>
-            <p className="text-2xl md:text-3xl font-bold">{value}</p>
-            <p className="text-xs md:text-sm opacity-80 font-medium">{label}</p>
+        <div className={`relative rounded-xl border p-5 transition-all hover:scale-[1.02] hover:shadow-md cursor-default ${colorClasses[color as keyof typeof colorClasses]}`}>
+            <div className="flex justify-between items-start">
+                <div>
+                    <p className="text-3xl font-bold tracking-tight">{value}</p>
+                    <p className="text-xs uppercase tracking-wider font-semibold opacity-70 mt-1">{label}</p>
+                </div>
+                <div className="p-2 rounded-lg bg-white/50 dark:bg-black/20 backdrop-blur-sm">
+                    {icon}
+                </div>
+            </div>
         </div>
     );
 }

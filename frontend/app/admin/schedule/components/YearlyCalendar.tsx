@@ -37,15 +37,15 @@ export function YearlyCalendar({ schedules, onSelectDate, selectedDate }: Yearly
                             whileHover={{ scale: 1.1 }}
                             whileTap={{ scale: 0.9 }}
                             onClick={() => setYear(year - 1)}
-                            className="p-3 bg-white/20 hover:bg-white/30 rounded-xl transition-colors backdrop-blur-sm text-white"
+                            className="w-10 h-10 flex items-center justify-center bg-white/20 hover:bg-white/30 rounded-full transition-colors backdrop-blur-sm text-white"
                         >
                             <ChevronLeft className="w-5 h-5" />
                         </motion.button>
                         <motion.button
-                            whileHover={{ scale: 1.1 }}
-                            whileTap={{ scale: 0.9 }}
+                            whileHover={{ scale: 1.05 }}
+                            whileTap={{ scale: 0.95 }}
                             onClick={() => setYear(new Date().getFullYear())}
-                            className="px-4 py-2 bg-white/20 hover:bg-white/30 rounded-xl transition-colors backdrop-blur-sm text-white text-sm font-medium"
+                            className="px-4 h-10 bg-white/20 hover:bg-white/30 rounded-full transition-colors backdrop-blur-sm text-white text-sm font-medium"
                         >
                             Today
                         </motion.button>
@@ -53,7 +53,7 @@ export function YearlyCalendar({ schedules, onSelectDate, selectedDate }: Yearly
                             whileHover={{ scale: 1.1 }}
                             whileTap={{ scale: 0.9 }}
                             onClick={() => setYear(year + 1)}
-                            className="p-3 bg-white/20 hover:bg-white/30 rounded-xl transition-colors backdrop-blur-sm text-white"
+                            className="w-10 h-10 flex items-center justify-center bg-white/20 hover:bg-white/30 rounded-full transition-colors backdrop-blur-sm text-white"
                         >
                             <ChevronRight className="w-5 h-5" />
                         </motion.button>
@@ -74,8 +74,8 @@ export function YearlyCalendar({ schedules, onSelectDate, selectedDate }: Yearly
             </div>
 
             {/* Calendar Grid */}
-            <div className="p-4 md:p-6 bg-white/50 dark:bg-gray-900/50 backdrop-blur-sm">
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6">
+            <div className="p-4 md:p-8 bg-white/50 dark:bg-gray-900/50 backdrop-blur-sm">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 md:gap-8">
                     {months.map((month, monthIndex) => (
                         <motion.div
                             key={month}
@@ -114,16 +114,16 @@ function MonthGrid({ year, monthIndex, schedules, onSelectDate, selectedDate }: 
     }).length;
 
     return (
-        <div className={`rounded-xl border transition-all duration-300 hover:shadow-lg ${isCurrentMonth
-            ? "border-indigo-300 dark:border-indigo-700 bg-gradient-to-br from-indigo-50/80 to-purple-50/80 dark:from-indigo-950/30 dark:to-purple-950/30 shadow-md shadow-indigo-100 dark:shadow-indigo-900/20"
-            : "border-gray-200/70 dark:border-gray-700/50 bg-white/80 dark:bg-gray-800/80"
-            } p-4 backdrop-blur-sm`}>
-            <div className="flex items-center justify-between mb-3">
-                <h3 className={`font-semibold ${isCurrentMonth ? "text-indigo-700 dark:text-indigo-300" : "text-gray-700 dark:text-gray-300"}`}>
+        <div className={`rounded-xl border transition-all duration-300 hover:shadow-lg h-full flex flex-col ${isCurrentMonth
+            ? "border-indigo-300/50 dark:border-indigo-700/50 bg-gradient-to-br from-indigo-50/80 to-purple-50/80 dark:from-indigo-950/30 dark:to-purple-950/30 shadow-lg shadow-purple-500/20"
+            : "border-gray-200/70 dark:border-gray-700/50 bg-white/80 dark:bg-gray-800/80 hover:border-indigo-200 dark:hover:border-indigo-800"
+            } p-5 backdrop-blur-sm`}>
+            <div className="flex items-center justify-between mb-4 h-7">
+                <h3 className={`font-semibold text-sm ${isCurrentMonth ? "text-indigo-700 dark:text-indigo-300" : "text-gray-700 dark:text-gray-300"}`}>
                     {months[monthIndex]}
                 </h3>
                 {monthScheduleCount > 0 && (
-                    <span className="text-xs px-2 py-0.5 rounded-full bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 font-medium">
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 font-bold border border-indigo-200 dark:border-indigo-800/50">
                         {monthScheduleCount} sessions
                     </span>
                 )}
@@ -152,8 +152,8 @@ function MonthGrid({ year, monthIndex, schedules, onSelectDate, selectedDate }: 
                                 ${isSelected
                                     ? "bg-gradient-to-br from-indigo-500 to-purple-600 text-white ring-2 ring-indigo-300 dark:ring-indigo-700 shadow-lg shadow-indigo-500/40"
                                     : isToday
-                                        ? "ring-2 ring-indigo-400 dark:ring-indigo-500 text-indigo-700 dark:text-indigo-300 font-bold"
-                                        : "hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300"
+                                        ? "ring-2 ring-indigo-400 dark:ring-indigo-500 text-indigo-700 dark:text-indigo-300 font-bold bg-indigo-50 dark:bg-indigo-900/20"
+                                        : "hover:bg-indigo-50 dark:hover:bg-indigo-900/30 text-gray-700 dark:text-gray-300 hover:text-indigo-600 dark:hover:text-indigo-400"
                                 }
                                 ${hasSchedule && !isSelected
                                     ? "bg-gradient-to-br from-blue-100 to-cyan-100 dark:from-blue-900/30 dark:to-cyan-900/30 text-blue-700 dark:text-blue-300 font-bold"

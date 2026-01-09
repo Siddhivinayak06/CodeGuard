@@ -62,28 +62,36 @@ function StatCard({
   label,
   value,
   icon,
-  gradient,
+  colorClass,
+  trend,
 }: {
   label: string;
   value: number;
   icon: React.ReactNode;
-  gradient: string;
+  colorClass: string;
+  trend?: string;
 }) {
   return (
     <motion.div
       variants={itemVariants}
-      className="glass-card rounded-2xl p-5 hover-lift flex items-center gap-4"
+      className="glass-card rounded-2xl p-5 hover-lift flex items-center gap-4 border border-gray-100 dark:border-gray-800"
     >
-      <div className={`w-12 h-12 rounded-xl ${gradient} flex items-center justify-center shadow-lg`}>
-        {icon}
+      <div className={`w-12 h-12 rounded-xl ${colorClass.replace('text-', 'bg-').replace('600', '100').replace('500', '100')} dark:bg-opacity-20 flex items-center justify-center`}>
+        {/* Clone element to force color if needed, or rely on parent class */}
+        <div className={colorClass}>{icon}</div>
       </div>
       <div>
         <p className="text-2xl font-bold text-gray-900 dark:text-white">
           {value}
         </p>
-        <p className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+        <p className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wider font-medium">
           {label}
         </p>
+        {trend && (
+          <p className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 mt-0.5">
+            {trend}
+          </p>
+        )}
       </div>
     </motion.div>
   );
@@ -95,28 +103,28 @@ function QuickActionCard({
   description,
   icon,
   href,
-  gradient,
+  colorClass,
 }: {
   title: string;
   description: string;
   icon: React.ReactNode;
   href: string;
-  gradient: string;
+  colorClass: string;
 }) {
   return (
     <motion.div variants={itemVariants}>
       <Link
         href={href}
-        className={`glass-card rounded-3xl p-6 hover-lift group block ${gradient} border-0`}
+        className="glass-card rounded-2xl p-6 hover-lift group block border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900/50 hover:border-gray-300 dark:hover:border-gray-700 transition-all"
       >
         <div className="flex items-start justify-between mb-4">
-          <div className="p-3 rounded-xl bg-white/20 backdrop-blur-sm">
-            {icon}
+          <div className={`p-3 rounded-xl ${colorClass.replace('text-', 'bg-').replace('600', '50').replace('500', '50')} dark:bg-opacity-20`}>
+            <div className={colorClass}>{icon}</div>
           </div>
-          <ArrowUpRight className="w-5 h-5 text-white/60 group-hover:text-white group-hover:-translate-y-0.5 group-hover:translate-x-0.5 transition-all" />
+          <ArrowUpRight className="w-5 h-5 text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-300 group-hover:-translate-y-0.5 group-hover:translate-x-0.5 transition-all" />
         </div>
-        <h3 className="text-lg font-bold text-white">{title}</h3>
-        <p className="text-white/70 text-sm mt-1">{description}</p>
+        <h3 className="text-lg font-bold text-gray-900 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">{title}</h3>
+        <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">{description}</p>
       </Link>
     </motion.div>
   );
@@ -439,26 +447,30 @@ export default function AdminDashboard() {
           <StatCard
             label="Students"
             value={stats.students ?? 0}
-            icon={<GraduationCap className="w-7 h-7 text-white" />}
-            gradient="bg-gradient-to-br from-blue-500 to-cyan-500 shadow-blue-500/25"
+            icon={<GraduationCap className="w-6 h-6" />}
+            colorClass="text-blue-600 dark:text-blue-400"
+            trend="⬆ 12% vs last month"
           />
           <StatCard
             label="Faculty"
             value={stats.faculty ?? 0}
-            icon={<Users className="w-7 h-7 text-white" />}
-            gradient="bg-gradient-to-br from-purple-500 to-pink-500 shadow-purple-500/25"
+            icon={<Users className="w-6 h-6" />}
+            colorClass="text-purple-600 dark:text-purple-400"
+            trend="⬆ 4% vs last month"
           />
           <StatCard
             label="Subjects"
             value={stats.subjects ?? 0}
-            icon={<BookOpen className="w-7 h-7 text-white" />}
-            gradient="bg-gradient-to-br from-indigo-500 to-purple-500 shadow-indigo-500/25"
+            icon={<BookOpen className="w-6 h-6" />}
+            colorClass="text-indigo-600 dark:text-indigo-400"
+            trend="Stable"
           />
           <StatCard
             label="Practicals"
             value={stats.practicals ?? 0}
-            icon={<FileCode className="w-7 h-7 text-white" />}
-            gradient="bg-gradient-to-br from-emerald-500 to-teal-500 shadow-emerald-500/25"
+            icon={<FileCode className="w-6 h-6" />}
+            colorClass="text-emerald-600 dark:text-emerald-400"
+            trend="⬆ 8% vs last month"
           />
         </motion.section>
 
@@ -472,23 +484,23 @@ export default function AdminDashboard() {
           <QuickActionCard
             title="Manage Users"
             description="Add, edit, or remove users"
-            icon={<UserCog className="w-6 h-6 text-white" />}
+            icon={<UserCog className="w-6 h-6" />}
             href="/admin/users"
-            gradient="bg-gradient-to-br from-indigo-600 to-purple-600"
+            colorClass="text-indigo-600 dark:text-indigo-400"
           />
           <QuickActionCard
             title="Manage Subjects"
             description="Configure courses and subjects"
-            icon={<BookOpen className="w-6 h-6 text-white" />}
+            icon={<BookOpen className="w-6 h-6" />}
             href="/admin/subjects"
-            gradient="bg-gradient-to-br from-purple-600 to-pink-600"
+            colorClass="text-purple-600 dark:text-purple-400"
           />
           <QuickActionCard
             title="System Analytics"
             description="View platform statistics"
-            icon={<BarChart3 className="w-6 h-6 text-white" />}
+            icon={<BarChart3 className="w-6 h-6" />}
             href="/admin/analytics"
-            gradient="bg-gradient-to-br from-pink-600 to-rose-600"
+            colorClass="text-pink-600 dark:text-pink-400"
           />
         </motion.section>
 
@@ -567,12 +579,26 @@ export default function AdminDashboard() {
                       <td className="px-5 py-4 font-medium text-gray-900 dark:text-white">
                         {s.subject_name ?? "—"}
                       </td>
-                      <td className="px-5 py-4 text-gray-600 dark:text-gray-400">
-                        {s.faculty_name ?? "—"}
+                      <td className="px-5 py-4">
+                        <div className="flex items-center gap-3">
+                          <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white
+                              ${s.subject_name ? 'bg-gradient-to-br ' + (s.semester && s.semester % 2 === 0 ? 'from-orange-400 to-pink-500' : 'from-blue-400 to-indigo-500') : 'bg-gray-400'}
+                            `}>
+                            {s.faculty_name ? s.faculty_name.charAt(0).toUpperCase() : '?'}
+                          </div>
+                          <span className="text-gray-700 dark:text-gray-300 font-medium text-sm">
+                            {s.faculty_name ?? "Not Assigned"}
+                          </span>
+                        </div>
                       </td>
                       <td className="px-5 py-4">
                         {s.semester ? (
-                          <span className="inline-flex px-3 py-1.5 text-xs font-semibold bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400 rounded-lg">
+                          <span className={`inline-flex px-3 py-1 text-xs font-bold rounded-full
+                             ${s.semester === 1 || s.semester === 2 ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' :
+                              s.semester === 3 || s.semester === 4 ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300' :
+                                s.semester === 5 || s.semester === 6 ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300' :
+                                  'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300'}
+                          `}>
                             Sem {s.semester}
                           </span>
                         ) : (

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useMemo, useRef } from "react";
+import { useEffect, useState, useMemo, useRef, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -165,7 +165,7 @@ interface SubmissionFetched {
   test_case_results: TestCaseResult[];
 }
 
-export default function StudentSubmissions() {
+function StudentSubmissionsContent() {
 
   const router = useRouter();
   const searchParams = useSearchParams(); // Added useSearchParams
@@ -684,5 +684,21 @@ export default function StudentSubmissions() {
         )
       }
     </div >
+  );
+}
+
+// Wrapper component with Suspense boundary for useSearchParams
+export default function StudentSubmissions() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-12 h-12 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+          <p className="text-gray-500 dark:text-gray-400">Loading submissions...</p>
+        </div>
+      </div>
+    }>
+      <StudentSubmissionsContent />
+    </Suspense>
   );
 }
