@@ -151,7 +151,8 @@ export default function StudentDashboard() {
             subject_id: string;
             subject_name: string;
             total_count: number;
-            completed_count: number;
+            passed_count: number;
+            failed_count: number;
         }[]
     >([]);
     const [submissions, setSubmissions] = useState<
@@ -168,8 +169,9 @@ export default function StudentDashboard() {
 
     // Stats
     const totalPracticals = progress.reduce((acc, p) => acc + p.total_count, 0);
-    const completedPracticals = progress.reduce((acc, p) => acc + p.completed_count, 0);
-    const overallProgress = totalPracticals > 0 ? Math.round((completedPracticals / totalPracticals) * 100) : 0;
+    const passedPracticals = progress.reduce((acc, p) => acc + p.passed_count, 0);
+    const failedPracticals = progress.reduce((acc, p) => acc + p.failed_count, 0);
+    const overallProgress = totalPracticals > 0 ? Math.round((passedPracticals / totalPracticals) * 100) : 0;
 
     // Greeting based on time
     const getGreeting = () => {
@@ -272,47 +274,74 @@ export default function StudentDashboard() {
 
                 const pids = Array.from(assignedPracticalIds);
 
-                // 4. Fetch Practical Details (for Subjects)
+                // 4. Fetch Practical Details (for Subjects & Semester Check)
                 const { data: practicalsDetails } = await supabase
                     .from("practicals")
-                    .select(`id, subject_id, subjects(id, subject_name)`)
+                    .select(`id, subject_id, subjects(id, subject_name, semester)`)
                     .in("id", pids);
 
-                // 5. Fetch Passed Submissions
-                const { data: passedSubmissions } = await supabase
+                // Filter PIDs by Semester (Strict Match)
+                const semesterPids = new Set<number>();
+                const filteredPracticalsDetails = (practicalsDetails || []).filter((p: any) => {
+                    const subjectSemester = p.subjects?.semester;
+                    // @ts-ignore
+                    const studentSemester = sd.semester || "1";
+
+                    // Keep if semester matches (or if subject has no semester defined, assuming global)
+                    // Requirement is "check semester", so we likely want strict matching if data exists.
+                    if (subjectSemester && studentSemester && subjectSemester != studentSemester) {
+                        return false;
+                    }
+                    semesterPids.add(p.id);
+                    return true;
+                });
+
+                const filteredPidsList = Array.from(semesterPids);
+
+                if (filteredPidsList.length === 0) {
+                    setProgress([]);
+                    setSubmissions([]);
+                    setLoading(false);
+                    return;
+                }
+
+                // 5. Fetch Submissions for Status Counts
+                const { data: statusSubmissions } = await supabase
                     .from("submissions")
-                    .select("practical_id")
+                    .select("practical_id, status")
                     .eq("student_id", user.id)
-                    .eq("status", "passed")
-                    .in("practical_id", pids);
+                    .in("practical_id", filteredPidsList);
 
-                const passedSet = new Set(passedSubmissions?.map(s => s.practical_id));
+                const passedSet = new Set(statusSubmissions?.filter(s => s.status === 'passed').map(s => s.practical_id));
+                const failedSet = new Set(statusSubmissions?.filter(s => s.status === 'failed').map(s => s.practical_id));
 
-                // 6. Calculate Subject Progress
-                const subjectMap = new Map<number, { name: string; total: number; completed: number }>();
+                // 6. Calculate Subject Progress (Using filtered details)
+                const subjectMap = new Map<number, { name: string; total: number; passed: number; failed: number }>();
 
-                (practicalsDetails || []).forEach((p: any) => {
+                (filteredPracticalsDetails || []).forEach((p: any) => {
                     const sid = p.subjects?.id;
                     const sname = p.subjects?.subject_name || "Unknown Subject";
 
                     if (!sid) return;
 
                     if (!subjectMap.has(sid)) {
-                        subjectMap.set(sid, { name: sname, total: 0, completed: 0 });
+                        subjectMap.set(sid, { name: sname, total: 0, passed: 0, failed: 0 });
                     }
 
                     const entry = subjectMap.get(sid)!;
                     entry.total += 1;
 
-                    // Considered "Complete" if:
-                    // - Has a 'passed' submission, OR
-                    // - Manual status is 'completed' or 'passed'
+                    // Passed Logic
                     const manualStatus = manualStatusMap.get(p.id);
                     const isManualComplete = manualStatus === 'completed' || manualStatus === 'passed';
                     const isSubmissionPassed = passedSet.has(p.id);
-
                     if (isManualComplete || isSubmissionPassed) {
-                        entry.completed += 1;
+                        entry.passed += 1;
+                    }
+
+                    // Failed Logic (Strictly submission failure)
+                    if (failedSet.has(p.id) && !isSubmissionPassed && !isManualComplete) {
+                        entry.failed += 1;
                     }
                 });
 
@@ -320,29 +349,31 @@ export default function StudentDashboard() {
                     subject_id: String(sid),
                     subject_name: data.name,
                     total_count: data.total,
-                    completed_count: data.completed
+                    passed_count: data.passed,
+                    failed_count: data.failed
                 }));
 
                 setProgress(progressData);
 
-                // 7. Recent Submissions
-                const { data: submissionsData } = await supabase
+                // 7. Recent Submissions (Limit to filtered practicals)
+                const { data: recentSubs } = await supabase
                     .from("submissions")
-                    .select(`id, practicals(title), language, status, marks_obtained, created_at`)
+                    .select("id, practical_id, created_at, status, marks_obtained, language, practicals!inner(title)")
                     .eq("student_id", user.id)
+                    .in("practical_id", filteredPidsList)
                     .order("created_at", { ascending: false })
                     .limit(5);
 
-                const formattedSubmissions = ((submissionsData as any[] | null) ?? []).map((s) => ({
+                const formattedSubs = (recentSubs || []).map((s: any) => ({
                     id: s.id,
-                    practical_title: s.practicals?.title || "Unknown",
-                    language: s.language,
-                    status: s.status,
+                    practical_title: s.practicals?.title || "Untitled Practical",
+                    language: s.language || "Unknown",
+                    status: s.status, // type will be handled by UI
                     marks_obtained: s.marks_obtained,
                     created_at: s.created_at,
                 }));
 
-                setSubmissions(formattedSubmissions);
+                setSubmissions(formattedSubs);
 
             } catch (err) {
                 console.error("Dashboard fetch error:", err);
@@ -406,8 +437,8 @@ export default function StudentDashboard() {
                                     {userName || "Student"} 👋
                                 </h1>
                                 <p className="text-gray-600 dark:text-gray-400 mb-6">
-                                    {completedPracticals > 0
-                                        ? `You've completed ${completedPracticals} practicals. Keep going!`
+                                    {passedPracticals > 0
+                                        ? `You've passed ${passedPracticals} practicals. Keep going!`
                                         : "Ready to start coding? Let's get productive today!"}
                                 </p>
                                 <Link
@@ -428,7 +459,7 @@ export default function StudentDashboard() {
                             <ProgressRing progress={loading ? 0 : overallProgress} size={100} strokeWidth={10} />
                             <h3 className="text-lg font-semibold text-gray-900 dark:text-white mt-4">Overall Progress</h3>
                             <p className="text-sm text-gray-500 dark:text-gray-400">
-                                {loading ? "--" : `${completedPracticals}/${totalPracticals}`} completed
+                                {loading ? "--" : `${passedPracticals}/${totalPracticals}`} passed
                             </p>
                         </motion.div>
 
@@ -446,24 +477,23 @@ export default function StudentDashboard() {
                             <p className="text-sm text-gray-500 dark:text-gray-400">Current Semester</p>
                         </motion.div>
 
-                        {/* ===== QUICK STATS ROW (4 small cards) ===== */}
                         <motion.div variants={itemVariants} className="glass-card rounded-2xl p-5 flex items-center gap-4">
                             <div className="w-12 h-12 rounded-xl bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center">
                                 <CheckCircle2 className="w-6 h-6 text-emerald-600 dark:text-emerald-400" />
                             </div>
                             <div>
-                                <p className="text-2xl font-bold text-gray-900 dark:text-white">{loading ? "--" : completedPracticals}</p>
-                                <p className="text-xs text-gray-500 dark:text-gray-400">Completed</p>
+                                <p className="text-2xl font-bold text-gray-900 dark:text-white">{loading ? "--" : passedPracticals}</p>
+                                <p className="text-xs text-gray-500 dark:text-gray-400">Passed</p>
                             </div>
                         </motion.div>
 
                         <motion.div variants={itemVariants} className="glass-card rounded-2xl p-5 flex items-center gap-4">
-                            <div className="w-12 h-12 rounded-xl bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center">
-                                <Clock className="w-6 h-6 text-amber-600 dark:text-amber-400" />
+                            <div className="w-12 h-12 rounded-xl bg-red-100 dark:bg-red-900/30 flex items-center justify-center">
+                                <Clock className="w-6 h-6 text-red-600 dark:text-red-400" />
                             </div>
                             <div>
-                                <p className="text-2xl font-bold text-gray-900 dark:text-white">{loading ? "--" : totalPracticals - completedPracticals}</p>
-                                <p className="text-xs text-gray-500 dark:text-gray-400">Pending</p>
+                                <p className="text-2xl font-bold text-gray-900 dark:text-white">{loading ? "--" : failedPracticals}</p>
+                                <p className="text-xs text-gray-500 dark:text-gray-400">Failed</p>
                             </div>
                         </motion.div>
 
@@ -547,7 +577,7 @@ export default function StudentDashboard() {
                             ) : (
                                 <div className="space-y-4">
                                     {progress.map((p) => {
-                                        const percentage = Math.round((p.completed_count / (p.total_count || 1)) * 100);
+                                        const percentage = Math.round((p.passed_count / (p.total_count || 1)) * 100);
                                         return (
                                             <div key={p.subject_id} className="flex items-center gap-4">
                                                 <div className="w-10 h-10 rounded-xl bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center flex-shrink-0">
@@ -565,7 +595,7 @@ export default function StudentDashboard() {
                                                         />
                                                     </div>
                                                     <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                                                        {p.completed_count}/{p.total_count} completed
+                                                        {p.passed_count}/{p.total_count} passed
                                                     </p>
                                                 </div>
                                             </div>

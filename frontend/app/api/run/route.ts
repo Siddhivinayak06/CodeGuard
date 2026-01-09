@@ -361,6 +361,8 @@ export async function POST(req: Request) {
               marks_obtained: marksObtained,
               code,
               language: reqLangNorm || lang,
+              test_cases_passed: passed, // Save test cases passed count
+              output: predefinedResults.length > 0 ? predefinedResults[0].stdout : "", // Save first test case output as summary
               execution_details: {
                 verdict: newStatus,
                 results: predefinedResults, // Array of test case results
