@@ -21,7 +21,8 @@ import {
   ListFilter,
   X,
   Code2,
-  Sparkles
+  Sparkles,
+  RefreshCw
 } from "lucide-react";
 
 // Types
@@ -183,6 +184,7 @@ function StudentSubmissionsContent() {
   const [testCases, setTestCases] = useState<TestCase[]>([]);
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState<string>("");
+  const [requestingReattempt, setRequestingReattempt] = useState<number | null>(null);
 
   const [studentDetails, setStudentDetails] = useState<{ name: string; roll_number: string } | null>(null);
 
@@ -529,6 +531,45 @@ function StudentSubmissionsContent() {
 
                     {/* Actions */}
                     <div className="flex items-center gap-2 w-full md:w-auto mt-2 md:mt-0">
+                      {/* Request Re-attempt for Failed */}
+                      {s.status === 'failed' && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="flex-1 md:flex-none gap-2 text-purple-600 border-purple-200 hover:bg-purple-50 hover:text-purple-700 dark:text-purple-400 dark:border-purple-800 dark:hover:bg-purple-900/20"
+                          disabled={requestingReattempt === s.practical_id}
+                          onClick={async (e) => {
+                            e.stopPropagation();
+                            setRequestingReattempt(s.practical_id);
+                            try {
+                              const res = await fetch('/api/student/request-reattempt', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ practicalId: s.practical_id, reason: 'Request for another attempt' })
+                              });
+                              const data = await res.json();
+                              if (data.success) {
+                                alert('Request submitted! Your faculty will review it.');
+                              } else {
+                                alert(data.error || 'Failed to submit request');
+                              }
+                            } catch (err) {
+                              console.error(err);
+                              alert('Failed to submit request');
+                            } finally {
+                              setRequestingReattempt(null);
+                            }
+                          }}
+                        >
+                          {requestingReattempt === s.practical_id ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : (
+                            <RefreshCw className="w-4 h-4" />
+                          )}
+                          Request Re-attempt
+                        </Button>
+                      )}
+
                       {/* View Button */}
                       <Button
                         variant="secondary"

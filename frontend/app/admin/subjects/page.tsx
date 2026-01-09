@@ -45,6 +45,25 @@ function SkeletonRow() {
   );
 }
 
+// Hash string to pastel color
+function stringToColor(str: string): string {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    hash = str.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const colors = [
+    'from-blue-400 to-cyan-500',
+    'from-purple-400 to-pink-500',
+    'from-emerald-400 to-teal-500',
+    'from-orange-400 to-amber-500',
+    'from-rose-400 to-pink-500',
+    'from-indigo-400 to-violet-500',
+    'from-sky-400 to-blue-500',
+    'from-fuchsia-400 to-purple-500',
+  ];
+  return colors[Math.abs(hash) % colors.length];
+}
+
 export default function AdminSubjects() {
   const router = useRouter();
   const mountedRef = useRef<boolean>(false);
@@ -268,52 +287,51 @@ export default function AdminSubjects() {
           </button>
         </div>
 
-        {/* Search & Filter Bar */}
-        <div className="glass-card rounded-2xl p-4 mb-6 animate-slideUp" style={{ animationDelay: "100ms" }}>
-          <div className="flex flex-col sm:flex-row gap-4">
-            {/* Search */}
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-              <input
-                type="text"
-                placeholder="Search subjects, codes, or faculty..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500 transition-all"
-              />
-            </div>
-
-            {/* Filter by Semester */}
-            <div className="relative">
-              <select
-                value={filterSemester}
-                onChange={(e) => setFilterSemester(e.target.value)}
-                className="appearance-none pl-4 pr-10 py-2.5 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500 transition-all cursor-pointer"
-              >
-                <option value="all">All Semesters</option>
-                {semesters.map((sem) => (
-                  <option key={sem} value={sem}>
-                    Semester {sem}
-                  </option>
-                ))}
-              </select>
-              <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
-            </div>
-          </div>
-        </div>
-
         {/* Subjects Table */}
-        <div className="glass-card-premium rounded-3xl overflow-hidden animate-slideUp" style={{ animationDelay: "200ms" }}>
-          <div className="px-6 py-5 border-b border-gray-200/50 dark:border-gray-700/50 bg-gradient-to-r from-indigo-50/50 to-purple-50/50 dark:from-indigo-900/20 dark:to-purple-900/20">
-            <h2 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
-              <BookOpen className="w-5 h-5 text-indigo-500" />
-              All Subjects
-              {filteredSubjects.length !== subjects.length && (
-                <span className="text-sm font-normal text-gray-500">
-                  ({filteredSubjects.length} of {subjects.length})
+        <div className="glass-card-premium rounded-3xl overflow-hidden animate-slideUp" style={{ animationDelay: "100ms" }}>
+          {/* Consolidated Header with Search & Filter */}
+          <div className="px-6 py-4 border-b border-gray-200/50 dark:border-gray-700/50 bg-gradient-to-r from-indigo-50/50 to-purple-50/50 dark:from-indigo-900/20 dark:to-purple-900/20">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+              {/* Left: Count */}
+              <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+                <BookOpen className="w-4 h-4 text-indigo-500" />
+                <span className="font-medium">
+                  {filteredSubjects.length === subjects.length
+                    ? `${subjects.length} subjects`
+                    : `${filteredSubjects.length} of ${subjects.length} subjects`
+                  }
                 </span>
-              )}
-            </h2>
+              </div>
+
+              {/* Right: Search & Filter */}
+              <div className="flex flex-col sm:flex-row gap-3">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                  <input
+                    type="text"
+                    placeholder="Search..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="pl-9 pr-4 py-2 w-full sm:w-48 rounded-lg bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-sm text-gray-900 dark:text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500 transition-all"
+                  />
+                </div>
+                <div className="relative">
+                  <select
+                    value={filterSemester}
+                    onChange={(e) => setFilterSemester(e.target.value)}
+                    className="appearance-none pl-4 pr-8 py-2 rounded-lg bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500 transition-all cursor-pointer"
+                  >
+                    <option value="all">All Semesters</option>
+                    {semesters.map((sem) => (
+                      <option key={sem} value={sem}>
+                        Sem {sem}
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                </div>
+              </div>
+            </div>
           </div>
 
           {loading ? (
@@ -371,7 +389,7 @@ export default function AdminSubjects() {
                         {s.subject_name}
                       </td>
                       <td className="px-5 py-4">
-                        <span className="inline-flex px-3 py-1.5 text-xs font-semibold bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400 rounded-lg">
+                        <span className="inline-flex px-3 py-1.5 text-xs font-bold bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400 rounded-lg uppercase tracking-wide">
                           {s.subject_code}
                         </span>
                       </td>
@@ -386,18 +404,18 @@ export default function AdminSubjects() {
                       </td>
                       <td className="px-5 py-4">
                         {s.faculty_name ? (
-                          <div className="flex items-center gap-2">
-                            <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white text-xs font-bold">
+                          <div className="flex items-center gap-3">
+                            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white bg-gradient-to-br ${stringToColor(s.faculty_name)}`}>
                               {s.faculty_name.charAt(0).toUpperCase()}
                             </div>
-                            <span className="text-gray-700 dark:text-gray-300">{s.faculty_name}</span>
+                            <span className="text-gray-700 dark:text-gray-300 text-sm font-medium">{s.faculty_name}</span>
                           </div>
                         ) : (
-                          <span className="text-gray-400">—</span>
+                          <span className="text-gray-400 text-sm">Not assigned</span>
                         )}
                       </td>
                       <td className="px-5 py-4">
-                        <div className="flex items-center justify-end gap-2">
+                        <div className="flex items-center justify-end gap-3">
                           <button
                             onClick={() => {
                               setForm({
@@ -411,7 +429,7 @@ export default function AdminSubjects() {
                               setOpen(true);
                             }}
                             disabled={busy}
-                            className="p-2 rounded-lg text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors disabled:opacity-50"
+                            className="p-2.5 rounded-lg text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/30 transition-colors disabled:opacity-50"
                             title="Edit"
                           >
                             <Pencil className="w-4 h-4" />
@@ -419,7 +437,7 @@ export default function AdminSubjects() {
                           <button
                             onClick={() => handleDelete(s.id)}
                             disabled={busy}
-                            className="p-2 rounded-lg text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors disabled:opacity-50"
+                            className="p-2.5 rounded-lg text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors disabled:opacity-50"
                             title="Delete"
                           >
                             <Trash2 className="w-4 h-4" />

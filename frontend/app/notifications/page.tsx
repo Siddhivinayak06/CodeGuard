@@ -11,6 +11,8 @@ import {
     Megaphone,
     Clock,
     Trash2,
+    RefreshCw,
+    Loader2,
 } from "lucide-react";
 import { formatDistanceToNow, format } from "date-fns";
 import Link from "next/link";
@@ -51,6 +53,7 @@ export default function NotificationsPage() {
     const [loading, setLoading] = useState(true);
     const [filter, setFilter] = useState<"all" | "unread">("all");
     const [userId, setUserId] = useState<string | null>(null);
+    const [grantingId, setGrantingId] = useState<string | null>(null);
 
     // Check auth
     useEffect(() => {
@@ -140,18 +143,53 @@ export default function NotificationsPage() {
     };
 
     // Delete notification
-    const deleteNotification = async (id: string) => {
-        try {
-            const { error } = await supabase
-                .from("notifications")
-                .delete()
-                .eq("id", id);
+    const deleteNotification = async (id: string, e?: React.MouseEvent) => {
+        if (e) e.stopPropagation();
 
-            if (!error) {
+        try {
+            const res = await fetch(`/api/notifications?id=${id}`, {
+                method: "DELETE",
+            });
+
+            if (res.ok) {
                 setNotifications((prev) => prev.filter((n) => n.id !== id));
+            } else {
+                const data = await res.json();
+                console.error("Failed to delete notification:", data.error);
+                alert(`Failed to delete: ${data.error}`);
             }
         } catch (err) {
             console.error("Delete notification error:", err);
+            alert("An error occurred while deleting");
+        }
+    };
+
+    // Handle Grant Re-attempt
+    const handleGrantReattempt = async (notification: Notification) => {
+        const meta = notification.metadata;
+        if (!meta?.studentId || !meta?.practicalId) return;
+
+        setGrantingId(notification.id);
+        try {
+            const res = await fetch('/api/faculty/allow-reattempt', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    studentId: meta.studentId,
+                    practicalId: meta.practicalId
+                })
+            });
+            if (res.ok) {
+                await markAsRead(notification.id);
+                alert('Re-attempt granted successfully!');
+            } else {
+                alert('Failed to grant re-attempt');
+            }
+        } catch (err) {
+            console.error(err);
+            alert('Failed to grant re-attempt');
+        } finally {
+            setGrantingId(null);
         }
     };
 
@@ -257,10 +295,15 @@ export default function NotificationsPage() {
                                 <div className="flex gap-4">
                                     {/* Icon */}
                                     <div
-                                        className={`flex-shrink-0 w-12 h-12 rounded-xl flex items-center justify-center border ${notificationColors[notification.type] || "bg-gray-100 dark:bg-gray-800 border-gray-200 dark:border-gray-700"
+                                        className={`flex-shrink-0 w-12 h-12 rounded-xl flex items-center justify-center border ${notification.metadata?.isReattemptRequest
+                                            ? "bg-purple-100 dark:bg-purple-900/30 border-purple-200 dark:border-purple-800"
+                                            : notificationColors[notification.type] || "bg-gray-100 dark:bg-gray-800 border-gray-200 dark:border-gray-700"
                                             }`}
                                     >
-                                        {notificationIcons[notification.type] || <Bell className="w-6 h-6 text-gray-500" />}
+                                        {notification.metadata?.isReattemptRequest
+                                            ? <RefreshCw className="w-6 h-6 text-purple-500" />
+                                            : notificationIcons[notification.type] || <Bell className="w-6 h-6 text-gray-500" />
+                                        }
                                     </div>
 
                                     {/* Content */}
@@ -285,6 +328,24 @@ export default function NotificationsPage() {
                                                     {" · "}
                                                     {formatDistanceToNow(new Date(notification.created_at), { addSuffix: true })}
                                                 </p>
+
+                                                {/* Grant Button */}
+                                                {notification.metadata?.isReattemptRequest && !notification.is_read && (
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            handleGrantReattempt(notification);
+                                                        }}
+                                                        disabled={grantingId === notification.id}
+                                                        className="mt-3 px-4 py-2 text-sm font-medium bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors flex items-center gap-2 disabled:opacity-50"
+                                                    >
+                                                        {grantingId === notification.id ? (
+                                                            <><Loader2 className="w-4 h-4 animate-spin" /> Granting...</>
+                                                        ) : (
+                                                            <><RefreshCw className="w-4 h-4" /> Grant Re-attempt</>
+                                                        )}
+                                                    </button>
+                                                )}
                                             </div>
 
                                             {/* Actions */}
@@ -299,7 +360,7 @@ export default function NotificationsPage() {
                                                     </button>
                                                 )}
                                                 <button
-                                                    onClick={() => deleteNotification(notification.id)}
+                                                    onClick={(e) => deleteNotification(notification.id, e)}
                                                     className="p-2 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
                                                     title="Delete"
                                                 >

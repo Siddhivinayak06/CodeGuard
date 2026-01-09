@@ -36,7 +36,7 @@ export async function GET(request: Request) {
         // Collect all faculty IDs
         const facultyIds = Array.from(new Set(schedules.map((s) => s.faculty_id).filter((id): id is string => !!id)));
 
-        let facultyMap: Record<string, any> = {};
+        const facultyMap: Record<string, any> = {};
 
         if (facultyIds.length > 0) {
             const { data: facultyData, error: facultyError } = await supabase

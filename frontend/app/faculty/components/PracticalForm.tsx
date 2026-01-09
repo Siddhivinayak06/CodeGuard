@@ -194,7 +194,7 @@ export default function PracticalForm({
           roll_no: s.roll_no || "",
           semester: s.semester || "",
           batch: s.batch || "",
-          role: "student" as "student",
+          role: "student" as const,
           profile_pic: null,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),

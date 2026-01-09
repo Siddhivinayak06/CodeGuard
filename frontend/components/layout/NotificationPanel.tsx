@@ -11,6 +11,9 @@ import {
     Clock,
     X,
     ChevronRight,
+    RefreshCw,
+    Loader2,
+    Trash2,
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import Link from "next/link";
@@ -49,6 +52,7 @@ export default function NotificationPanel() {
     const [loading, setLoading] = useState(true);
     const [isOpen, setIsOpen] = useState(false);
     const [userId, setUserId] = useState<string | null>(null);
+    const [grantingId, setGrantingId] = useState<string | null>(null);
 
     const unreadCount = notifications.filter((n) => !n.is_read).length;
 
@@ -157,12 +161,62 @@ export default function NotificationPanel() {
         }
     };
 
+    // Delete notification
+    const deleteNotification = async (id: string) => {
+        try {
+            const res = await fetch(`/api/notifications?id=${id}`, {
+                method: "DELETE",
+            });
+
+            if (res.ok) {
+                setNotifications((prev) => prev.filter((n) => n.id !== id));
+            } else {
+                const data = await res.json();
+                console.error("Failed to delete notification:", data.error);
+                alert(`Failed to delete: ${data.error}`);
+            }
+        } catch (err) {
+            console.error("Delete notification error:", err);
+            alert("An error occurred while deleting");
+        }
+    };
+
     // Format time
     const formatTime = (date: string) => {
         try {
             return formatDistanceToNow(new Date(date), { addSuffix: true });
         } catch {
             return "";
+        }
+    };
+
+    // Handle Grant Re-attempt
+    const handleGrantReattempt = async (notification: Notification) => {
+        const meta = notification.metadata;
+        if (!meta?.studentId || !meta?.practicalId) return;
+
+        setGrantingId(notification.id);
+        try {
+            const res = await fetch('/api/faculty/allow-reattempt', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    studentId: meta.studentId,
+                    practicalId: meta.practicalId
+                })
+            });
+            if (res.ok) {
+                // Mark as read and update notification
+                await markAsRead(notification.id);
+                alert('Re-attempt granted successfully!');
+            } else {
+                alert('Failed to grant re-attempt');
+            }
+        } catch (err) {
+            console.error(err);
+            alert('Failed to grant re-attempt');
+        } finally {
+            setGrantingId(null);
         }
     };
 
@@ -253,37 +307,93 @@ export default function NotificationPanel() {
                                 </div>
                             ) : (
                                 <div className="divide-y divide-gray-100 dark:divide-gray-800">
-                                    {notifications.map((notification) => (
-                                        <div
-                                            key={notification.id}
-                                            className={`p-4 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors cursor-pointer ${!notification.is_read
-                                                ? "bg-indigo-50/50 dark:bg-indigo-900/10"
-                                                : ""
-                                                }`}
-                                            onClick={() => {
-                                                if (!notification.is_read) {
-                                                    markAsRead(notification.id);
-                                                }
-                                                if (notification.link) {
-                                                    setIsOpen(false);
-                                                }
-                                            }}
-                                        >
-                                            {notification.link ? (
-                                                <Link
-                                                    href={notification.link}
-                                                    className="flex gap-3"
-                                                    onClick={() => setIsOpen(false)}
-                                                >
-                                                    <NotificationContent notification={notification} formatTime={formatTime} />
-                                                </Link>
-                                            ) : (
+                                    {notifications.map((notification) => {
+                                        const isReattemptRequest = notification.metadata?.isReattemptRequest;
+
+                                        return (
+                                            <div
+                                                key={notification.id}
+                                                className={`group p-4 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors ${!notification.is_read
+                                                    ? "bg-indigo-50/50 dark:bg-indigo-900/10"
+                                                    : ""
+                                                    } ${isReattemptRequest ? "border-l-4 border-purple-500" : ""}`}
+                                                onClick={() => {
+                                                    if (!notification.is_read && !isReattemptRequest) {
+                                                        markAsRead(notification.id);
+                                                    }
+                                                    if (notification.link) {
+                                                        setIsOpen(false);
+                                                    }
+                                                }}
+                                            >
                                                 <div className="flex gap-3">
-                                                    <NotificationContent notification={notification} formatTime={formatTime} />
+                                                    <div
+                                                        className={`flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center ${isReattemptRequest
+                                                            ? "bg-purple-100 dark:bg-purple-900/30"
+                                                            : notificationColors[notification.type] || "bg-gray-100 dark:bg-gray-800"
+                                                            }`}
+                                                    >
+                                                        {isReattemptRequest
+                                                            ? <RefreshCw className="w-5 h-5 text-purple-500" />
+                                                            : notificationIcons[notification.type] || <Bell className="w-5 h-5 text-gray-500" />}
+                                                    </div>
+                                                    <div className="flex-1 min-w-0">
+                                                        <div className="flex items-start justify-between gap-2">
+                                                            <p
+                                                                className={`text-sm font-medium ${!notification.is_read
+                                                                    ? "text-gray-900 dark:text-white"
+                                                                    : "text-gray-700 dark:text-gray-300"
+                                                                    }`}
+                                                            >
+                                                                {notification.title}
+                                                            </p>
+                                                            <div className="flex items-center gap-1">
+                                                                {!notification.is_read && (
+                                                                    <span className="w-2 h-2 rounded-full bg-indigo-500 flex-shrink-0" />
+                                                                )}
+                                                                <button
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        deleteNotification(notification.id);
+                                                                    }}
+                                                                    className="p-1 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors opacity-0 group-hover:opacity-100"
+                                                                    title="Delete notification"
+                                                                >
+                                                                    <Trash2 className="w-3.5 h-3.5" />
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                        {notification.message && (
+                                                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 line-clamp-2">
+                                                                {notification.message}
+                                                            </p>
+                                                        )}
+                                                        <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-1">
+                                                            {formatTime(notification.created_at)}
+                                                        </p>
+
+                                                        {/* Grant Re-attempt Button */}
+                                                        {isReattemptRequest && !notification.is_read && (
+                                                            <button
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    handleGrantReattempt(notification);
+                                                                }}
+                                                                disabled={grantingId === notification.id}
+                                                                className="mt-2 px-3 py-1.5 text-xs font-medium bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors flex items-center gap-1.5 disabled:opacity-50"
+                                                            >
+                                                                {grantingId === notification.id ? (
+                                                                    <><Loader2 className="w-3 h-3 animate-spin" /> Granting...</>
+                                                                ) : (
+                                                                    <><RefreshCw className="w-3 h-3" /> Grant Re-attempt</>
+                                                                )}
+                                                            </button>
+                                                        )}
+                                                    </div>
                                                 </div>
-                                            )}
-                                        </div>
-                                    ))}
+                                            </div>
+                                        )
+                                    })}
                                 </div>
                             )}
                         </div>
@@ -308,45 +418,4 @@ export default function NotificationPanel() {
     );
 }
 
-// Separated for cleaner code
-function NotificationContent({
-    notification,
-    formatTime,
-}: {
-    notification: Notification;
-    formatTime: (date: string) => string;
-}) {
-    return (
-        <>
-            <div
-                className={`flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center ${notificationColors[notification.type] || "bg-gray-100 dark:bg-gray-800"
-                    }`}
-            >
-                {notificationIcons[notification.type] || <Bell className="w-5 h-5 text-gray-500" />}
-            </div>
-            <div className="flex-1 min-w-0">
-                <div className="flex items-start justify-between gap-2">
-                    <p
-                        className={`text-sm font-medium ${!notification.is_read
-                            ? "text-gray-900 dark:text-white"
-                            : "text-gray-700 dark:text-gray-300"
-                            }`}
-                    >
-                        {notification.title}
-                    </p>
-                    {!notification.is_read && (
-                        <span className="w-2 h-2 rounded-full bg-indigo-500 flex-shrink-0 mt-1.5" />
-                    )}
-                </div>
-                {notification.message && (
-                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 line-clamp-2">
-                        {notification.message}
-                    </p>
-                )}
-                <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-1">
-                    {formatTime(notification.created_at)}
-                </p>
-            </div>
-        </>
-    );
-}
+

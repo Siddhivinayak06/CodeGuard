@@ -21,6 +21,7 @@ import {
   Loader2,
   Code2,
   FileText,
+  RefreshCw,
 } from "lucide-react";
 import { motion } from "framer-motion";
 import Link from "next/link";
@@ -101,8 +102,14 @@ interface TestCaseResult {
 }
 
 interface PracticalWithRelations extends Tables<"practicals"> {
-  subjects: Pick<Subject, "subject_name"> | null;
-  practical_levels: PracticalLevel[];
+  subjects: { subject_name: string; semester: number | string } | null;
+  practical_levels: {
+    id: number;
+    level: "easy" | "medium" | "hard";
+    title: string | null;
+    description: string | null;
+    max_marks: number;
+  }[];
 }
 
 interface FormattedPractical {
@@ -122,7 +129,13 @@ interface FormattedPractical {
   marks_obtained?: number;
   max_marks?: number;
   notes?: string | null;
-  levels?: PracticalLevel[];
+  levels?: {
+    id: number;
+    level: "easy" | "medium" | "hard";
+    title: string | null;
+    description: string | null;
+    max_marks: number;
+  }[];
 }
 
 type FilterType = 'all' | 'pending' | 'overdue' | 'completed';
@@ -423,7 +436,6 @@ export default function StudentPracticals() {
 
           processedIds.add(pid);
           const sub = submissionMap.get(pid);
-          // @ts-ignore
           const levels = p.practical_levels || [];
 
           // Status Logic:
@@ -434,7 +446,6 @@ export default function StudentPracticals() {
           else if (sub?.status) finalStatus = sub.status;
           else if (assignedMeta.status) finalStatus = assignedMeta.status;
 
-          // @ts-ignore
           const subjectSemester = p.subjects?.semester;
 
           // Filter by semester if both exist (and strictly match)
@@ -450,12 +461,10 @@ export default function StudentPracticals() {
             language: p.language,
             deadline: isBatch ? assignedMeta.date : assignedMeta.assigned_deadline,
             subject_id: p.subject_id,
-            // @ts-ignore
             subject_name: p.subjects?.subject_name || "Unknown",
             status: finalStatus as any,
             notes: isBatch ? "" : assignedMeta.notes,
             hasLevels: levels.length > 0,
-            // @ts-ignore
             levels: levels.sort((a, b) => { const order = { easy: 0, medium: 1, hard: 2 }; return (order[a.level] || 0) - (order[b.level] || 0); }),
             is_locked: !isBatch && (assignedMeta.is_locked || (assignedMeta.attempt_count || 0) >= (assignedMeta.max_attempts || 1)),
             attempt_count: isBatch ? 0 : (assignedMeta.attempt_count || 0),
@@ -816,14 +825,17 @@ export default function StudentPracticals() {
 
                   {/* Action Button */}
                   <div className="flex flex-col gap-2 w-full md:w-auto md:items-end mt-4 md:mt-0 pl-0 md:pl-4 border-t md:border-t-0 md:border-l border-gray-100 dark:border-gray-800 pt-4 md:pt-0">
-                    {!isDone && !isSubmitted ? (
+                    {/* Show Start/Continue for pending, or Try Again for failed with attempts available */}
+                    {(!isDone && !isSubmitted) || (p.status === 'failed' && !p.is_locked && (p.attempt_count || 0) < (p.max_attempts || 1)) ? (
                       <Link href={`/editor?practicalId=${p.id}&subject=${p.subject_id || 0}&language=${p.language || 'java'}${p.hasLevels ? '&hasLevels=true' : ''}`} className="w-full md:w-auto">
                         <Button
                           className="w-full md:w-auto shadow-sm"
                           size="sm"
-                          variant={timeInfo?.urgency === 'overdue' ? "destructive" : "outline"}
+                          variant={p.status === 'failed' ? "outline" : (timeInfo?.urgency === 'overdue' ? "destructive" : "outline")}
                         >
-                          {p.status === 'in_progress' ? (
+                          {p.status === 'failed' ? (
+                            <>Try Again <RefreshCw className="ml-2 w-4 h-4" /></>
+                          ) : p.status === 'in_progress' ? (
                             <>Continue <ArrowRight className="ml-2 w-4 h-4" /></>
                           ) : (
                             <>Start Challenge <ArrowRight className="ml-2 w-4 h-4" /></>
@@ -836,6 +848,12 @@ export default function StudentPracticals() {
                           {p.marks_obtained !== undefined && (
                             <span className="text-sm font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/20 px-2 py-0.5 rounded-md">
                               {p.marks_obtained}/{p.max_marks}
+                            </span>
+                          )}
+                          {/* Show attempts used for failed+locked */}
+                          {p.status === 'failed' && p.is_locked && (
+                            <span className="text-xs text-gray-500 dark:text-gray-400">
+                              {p.attempt_count}/{p.max_attempts} attempts
                             </span>
                           )}
                           <Button

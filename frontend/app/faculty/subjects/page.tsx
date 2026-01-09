@@ -20,7 +20,8 @@ import {
   X,
   FileText,
   CheckCircle2,
-  ListFilter
+  ListFilter,
+  Pencil,
 } from "lucide-react";
 
 import { Practical, Subject, TestCase } from "../types";
@@ -39,7 +40,8 @@ export default function FacultySubjects() {
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [selected, setSelected] = useState<number | string | null>(null);
   const [practicals, setPracticals] = useState<Practical[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [initialLoading, setInitialLoading] = useState(true);
+  const [practicalsLoading, setPracticalsLoading] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
 
   // Modal & form states
@@ -86,8 +88,6 @@ export default function FacultySubjects() {
       } catch (err) {
         console.error("Failed to fetch user:", err);
         router.push("/auth/login");
-      } finally {
-        if (mountedRef.current) setLoading(false);
       }
     };
 
@@ -101,7 +101,6 @@ export default function FacultySubjects() {
     let isMounted = true;
 
     const fetchSubjects = async () => {
-      setLoading(true);
       try {
         if (!user?.id) {
           console.warn("fetchSubjects: missing user.id", user);
@@ -152,7 +151,7 @@ export default function FacultySubjects() {
         console.error("Unexpected error fetching subjects:", msg);
         if (isMounted) setSubjects([]);
       } finally {
-        if (isMounted) setLoading(false);
+        if (isMounted) setInitialLoading(false);
       }
     };
 
@@ -166,7 +165,7 @@ export default function FacultySubjects() {
 
 
   const loadPracticals = useCallback(async (subjectId: number | string) => {
-    setLoading(true);
+    setPracticalsLoading(true);
     try {
       const { data, error } = await supabase
         .from("practicals")
@@ -195,7 +194,7 @@ export default function FacultySubjects() {
       console.error("Failed to load practicals:", err);
       setPracticals([]);
     } finally {
-      setLoading(false);
+      setPracticalsLoading(false);
     }
   }, [supabase]);
 
@@ -211,7 +210,7 @@ export default function FacultySubjects() {
     const deadlineDate = new Date(deadline);
     const daysLeft = Math.ceil((deadlineDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
 
-    if (daysLeft < 0) return { text: "Overdue", pill: "red" as const };
+    if (daysLeft < 0) return { text: "Closed", pill: "gray" as const };
     if (daysLeft === 0) return { text: "Today", pill: "orange" as const };
     if (daysLeft <= 3) return { text: `${daysLeft} days`, pill: "yellow" as const };
     return { text: `${daysLeft} days`, pill: "green" as const };
@@ -329,109 +328,114 @@ export default function FacultySubjects() {
 
         {/* Stats */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-          <div className="card">
-            <div className="flex items-center justify-between">
+          <div className="glass-card-premium rounded-3xl p-6 hover-lift">
+            <div className="flex items-start justify-between">
               <div>
-                <p className="text-sm text-gray-500">Total Subjects</p>
-                <p className="text-2xl font-bold">{subjects.length}</p>
+                <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Total Subjects</p>
+                <p className="text-3xl font-bold text-gray-900 dark:text-white mt-2">{subjects.length}</p>
               </div>
-              <div className="p-3 bg-blue-500/10 rounded-xl">
-                <BookOpen className="w-6 h-6 text-blue-600" />
+              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-500 flex items-center justify-center shadow-lg">
+                <BookOpen className="w-6 h-6 text-white" />
               </div>
             </div>
           </div>
 
-          <div className="card">
-            <div className="flex items-center justify-between">
+          <div className="glass-card-premium rounded-3xl p-6 hover-lift">
+            <div className="flex items-start justify-between">
               <div>
-                <p className="text-sm text-gray-500">Total Practicals</p>
-                <p className="text-2xl font-bold">{totalPracticals}</p>
+                <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Total Practicals</p>
+                <p className="text-3xl font-bold text-gray-900 dark:text-white mt-2">{totalPracticals}</p>
               </div>
-              <div className="p-3 bg-purple-500/10 rounded-xl">
-                <FileCheck className="w-6 h-6 text-purple-600" />
+              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center shadow-lg">
+                <FileCheck className="w-6 h-6 text-white" />
               </div>
             </div>
           </div>
 
-          <div className="card">
-            <div className="flex items-center justify-between">
+          <div className="glass-card-premium rounded-3xl p-6 hover-lift bg-gradient-to-br from-pink-50 to-purple-50 dark:from-pink-950/20 dark:to-purple-950/20">
+            <div className="flex items-start justify-between">
               <div>
-                <p className="text-sm text-gray-500">Active Subject</p>
-                <p className="text-2xl font-bold">{selectedSubject ? selectedSubject.subject_name : "—"}</p>
+                <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Active Subject</p>
+                <p className="text-2xl font-bold text-gray-900 dark:text-white mt-2 truncate max-w-[200px]">{selectedSubject ? selectedSubject.subject_name : "—"}</p>
               </div>
-              <div className="p-3 bg-pink-500/10 rounded-xl">
-                <Sparkles className="w-6 h-6 text-pink-600" />
+              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-pink-500 to-rose-500 flex items-center justify-center shadow-lg">
+                <Sparkles className="w-6 h-6 text-white" />
               </div>
             </div>
           </div>
         </div>
 
-        {/* Main area: Subjects list and Practicals */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Subjects column */}
-          <aside className="lg:col-span-1">
-            <div className="bg-white/40 dark:bg-white/5 rounded-2xl p-4 border border-white/50 dark:border-white/10">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="font-semibold">Your Subjects</h3>
-                <span className="text-sm text-gray-500">{subjects.length}</span>
-              </div>
+        {/* Main area: Unified Container with Subjects list and Practicals */}
+        <div className="glass-card-premium rounded-3xl overflow-hidden">
+          <div className="grid grid-cols-1 lg:grid-cols-12">
+            {/* Subjects column */}
+            <aside className="lg:col-span-4 lg:border-r border-gray-100 dark:border-gray-800">
+              <div className="p-4">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="font-semibold text-gray-900 dark:text-white">Your Subjects</h3>
+                  <span className="text-sm text-gray-500 bg-gray-100 dark:bg-gray-800 px-2 py-0.5 rounded-lg">{subjects.length}</span>
+                </div>
 
-              <div className="space-y-3">
-                {loading ? (
-                  Array.from({ length: 3 }).map((_, i) => <div key={i} className="animate-pulse h-12 rounded-lg bg-white/30" />)
-                ) : subjects.length === 0 ? (
-                  <div className="text-center py-8 text-sm text-gray-600">No subjects found</div>
-                ) : (
-                  subjects.map((s) => (
-                    <button
-                      key={s.id}
-                      onClick={() => setSelected(s.id)}
-                      className={`w-full text-left flex items-center gap-3 p-3 rounded-lg transition-all ${selected === s.id ? "bg-gradient-to-r from-blue-500/10 to-purple-500/10 border border-blue-200" : "hover:bg-white/30"}`}
-                      aria-pressed={selected === s.id}
-                    >
-                      <div className="p-2 rounded-md bg-white/20">
-                        <BookOpen className="w-5 h-5 text-purple-600" />
-                      </div>
-                      <div className="flex-1">
-                        <div className="font-medium">{s.subject_name}</div>
-                        <div className="text-xs text-gray-500">{s.subject_code} • {s.practical_count} practicals</div>
-                      </div>
-                      <ChevronRight className="w-4 h-4 text-gray-400" />
-                    </button>
-                  ))
-                )}
+                <div className="space-y-2">
+                  {initialLoading ? (
+                    Array.from({ length: 3 }).map((_, i) => <div key={i} className="animate-pulse h-14 rounded-xl bg-gray-100 dark:bg-gray-800" />)
+                  ) : subjects.length === 0 ? (
+                    <div className="text-center py-8 text-sm text-gray-600">No subjects found</div>
+                  ) : (
+                    subjects.map((s) => (
+                      <button
+                        key={s.id}
+                        onClick={() => setSelected(s.id)}
+                        className={`w-full text-left flex items-center gap-3 p-3 rounded-xl transition-all ${selected === s.id
+                          ? "bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-900/30 dark:to-purple-900/30 border border-indigo-200 dark:border-indigo-800"
+                          : "hover:bg-gray-50 dark:hover:bg-gray-800/50 border border-transparent"
+                          }`}
+                        aria-pressed={selected === s.id}
+                      >
+                        <div className={`p-2 rounded-lg ${selected === s.id ? "bg-gradient-to-br from-indigo-500 to-purple-500" : "bg-gray-100 dark:bg-gray-800"}`}>
+                          <BookOpen className={`w-5 h-5 ${selected === s.id ? "text-white" : "text-purple-600 dark:text-purple-400"}`} />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="font-medium text-gray-900 dark:text-white truncate">{s.subject_name}</div>
+                          <div className="text-xs text-gray-500">{s.subject_code} • {s.practical_count} practicals</div>
+                        </div>
+                        <ChevronRight className={`w-4 h-4 shrink-0 transition-colors ${selected === s.id ? "text-indigo-500" : "text-gray-300 dark:text-gray-600"}`} />
+                      </button>
+                    ))
+                  )}
+                </div>
               </div>
-            </div>
-          </aside>
+            </aside>
 
-          {/* Practicals column */}
-          <section className="lg:col-span-2">
-            <div className="bg-white/40 dark:bg-white/5 rounded-2xl overflow-hidden border border-white/50 dark:border-white/10">
-              <div className="p-5 border-b border-white/30 dark:border-white/10 flex items-center justify-between">
+            {/* Practicals column */}
+            <section className="lg:col-span-8">
+              <div className="p-5 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between">
                 <div>
-                  <h2 className="font-extrabold text-lg">Practicals</h2>
-                  <p className="text-sm text-gray-600">{selectedSubject?.subject_name || "Select a subject"}</p>
+                  <h2 className="text-xl font-bold text-gray-900 dark:text-white">{selectedSubject?.subject_name || "Select a subject"}</h2>
+                  <p className="text-sm text-gray-500 mt-0.5">Managing {practicals.length} practical{practicals.length !== 1 ? "s" : ""}</p>
                 </div>
-                <div className="flex items-center gap-3">
-                  <div className="text-sm text-gray-500">{practicals.length} items</div>
-                  <div className="px-3 py-1 rounded-xl bg-white/60 dark:bg-white/5 border border-white/30">
-                    <TrendingUp className="w-4 h-4 inline-block align-middle mr-2" />
-                    <span className="align-middle text-sm">{practicals.length} total</span>
-                  </div>
-                </div>
+                {selectedSubject && (
+                  <button
+                    onClick={openNewPractical}
+                    className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/30 rounded-lg hover:bg-indigo-100 dark:hover:bg-indigo-900/50 transition-colors"
+                  >
+                    <Plus className="w-4 h-4" />
+                    Add Practical
+                  </button>
+                )}
               </div>
 
               <div className="p-4">
-                {loading ? (
+                {practicalsLoading ? (
                   <div className="space-y-3">
-                    {Array.from({ length: 4 }).map((_, i) => <div key={i} className="animate-pulse h-16 rounded-lg bg-white/20" />)}
+                    {Array.from({ length: 4 }).map((_, i) => <div key={i} className="animate-pulse h-16 rounded-xl bg-gray-100 dark:bg-gray-800" />)}
                   </div>
                 ) : practialsEmpty(practicals) ? (
                   <div className="p-12 text-center">
                     <div className="inline-flex p-6 bg-gradient-to-br from-purple-500/20 to-pink-500/20 rounded-full mb-4">
                       <FileCheck className="w-12 h-12 text-gray-400" />
                     </div>
-                    <p className="text-gray-600 font-medium">No practicals found</p>
+                    <p className="text-gray-600 dark:text-gray-300 font-medium">No practicals found</p>
                     <p className="text-gray-500 text-sm mt-2">Create a practical or select another subject.</p>
                     <div className="mt-4">
                       <button onClick={openNewPractical} className="inline-flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-medium rounded-xl shadow-lg shadow-indigo-500/25 hover:shadow-indigo-500/40 transition-all hover:-translate-y-0.5">
@@ -441,76 +445,76 @@ export default function FacultySubjects() {
                     </div>
                   </div>
                 ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full table-auto divide-y divide-white/20">
-                      <thead>
-                        <tr className="text-left text-xs text-gray-600 uppercase tracking-wider">
-                          <th className="px-4 py-3">Title</th>
-                          <th className="px-4 py-3">Deadline</th>
-                          <th className="px-4 py-3">Submissions</th>
-                          <th className="px-4 py-3 text-right">Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {practicals.map((p, idx) => {
-                          const status = getDeadlineStatus(p.deadline);
-                          return (
-                            <tr key={p.id} className={`${idx % 2 === 0 ? "bg-white/5" : "bg-transparent"}`}>
-                              <td className="px-4 py-4">
-                                <div className="font-semibold">{p.title}</div>
-                              </td>
-                              <td className="px-4 py-4">
-                                {p.deadline ? (
-                                  <div className="flex items-center gap-3">
-                                    <Clock className="w-4 h-4 text-gray-400" />
-                                    <div>
-                                      <div className="text-sm font-medium">{formatDate(p.deadline)}</div>
-                                      <div className={`text-xs mt-0.5 font-medium`}>{status.text}</div>
-                                    </div>
-                                  </div>
-                                ) : (
-                                  <span className="text-sm text-gray-500">No deadline</span>
-                                )}
-                              </td>
-                              <td className="px-4 py-4">
-                                <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full ${p.submission_count && p.submission_count > 0 ? "bg-green-500/10 text-green-700" : "bg-gray-500/10 text-gray-600"}`}>
-                                  <BookOpen className="w-4 h-4" />
-                                  <span className="text-sm font-semibold">{p.submission_count || 0}</span>
-                                </div>
-                              </td>
-                              <td className="px-4 py-4 text-right">
-                                <div className="flex items-center justify-end gap-2">
-                                  <Button
-                                    size="icon"
-                                    variant="ghost"
-                                    onClick={() => handleViewPractical(p)}
-                                    className="bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 hover:bg-indigo-100 dark:hover:bg-indigo-900/40"
-                                    title="View Details"
-                                  >
-                                    <Eye className="w-4 h-4" />
-                                  </Button>
-                                  <Button
-                                    size="sm"
-                                    onClick={() => router.push(`/faculty/submissions?practical=${p.id}`)}
-                                    className="bg-gradient-to-r from-blue-500 to-purple-500 text-white"
-                                  >
-                                    Submissions
-                                  </Button>
-                                  <Button size="icon" variant="ghost" onClick={() => openEditPractical(p.id)} title="Edit">
-                                    <FileText className="w-4 h-4" />
-                                  </Button>
-                                </div>
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
+                  <div className="space-y-2">
+                    {practicals.map((p) => {
+                      const status = getDeadlineStatus(p.deadline);
+                      const statusColors = {
+                        red: "text-red-600 dark:text-red-400",
+                        orange: "text-orange-600 dark:text-orange-400",
+                        yellow: "text-amber-600 dark:text-amber-400",
+                        green: "text-emerald-600 dark:text-emerald-400",
+                        gray: "text-gray-500",
+                      };
+                      return (
+                        <div key={p.id} className="flex items-center justify-between p-4 bg-white dark:bg-gray-800/60 border border-gray-100 dark:border-gray-700/50 rounded-xl hover:shadow-md hover:border-indigo-200 dark:hover:border-indigo-800/50 transition-all">
+                          {/* Left: Title & Deadline */}
+                          <div className="flex-1 min-w-0">
+                            <h4 className="font-semibold text-gray-900 dark:text-white truncate">{p.title}</h4>
+                            <div className="flex items-center gap-2 mt-1">
+                              <Clock className={`w-3.5 h-3.5 ${statusColors[status.pill]}`} />
+                              <span className={`text-xs font-medium ${statusColors[status.pill]}`}>                                {status.text} {p.deadline && `• ${formatDate(p.deadline)}`}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Middle: Submissions Badge (Clickable) */}
+                          <div className="px-4">
+                            <button
+                              onClick={() => router.push(`/faculty/submissions?practical=${p.id}`)}
+                              className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${p.submission_count && p.submission_count > 0
+                                ? "bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/40"
+                                : "bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700"
+                                }`}
+                            >
+                              <BookOpen className="w-4 h-4" />
+                              {p.submission_count || 0} Submissions
+                            </button>
+                          </div>
+
+                          {/* Right: Actions */}
+                          <div className="flex items-center gap-1">
+                            <button
+                              onClick={() => handleViewPractical(p)}
+                              className="p-2 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-lg transition-colors"
+                              title="Preview"
+                            >
+                              <Eye className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => openEditPractical(p.id)}
+                              className="p-2 text-gray-400 hover:text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-900/20 rounded-lg transition-colors"
+                              title="Edit"
+                            >
+                              <Pencil className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+
+                    {/* Inline Add Button */}
+                    <button
+                      onClick={openNewPractical}
+                      className="w-full p-4 border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-xl text-gray-500 dark:text-gray-400 hover:border-indigo-300 dark:hover:border-indigo-700 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-indigo-50/50 dark:hover:bg-indigo-900/10 transition-all flex items-center justify-center gap-2"
+                    >
+                      <Plus className="w-4 h-4" />
+                      Add New Practical
+                    </button>
                   </div>
                 )}
               </div>
-            </div>
-          </section>
+            </section>
+          </div>
         </div>
       </main>
 

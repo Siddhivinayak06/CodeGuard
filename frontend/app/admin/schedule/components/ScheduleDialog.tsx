@@ -97,8 +97,7 @@ export function ScheduleDialog({ onScheduleCreated, selectedDate }: ScheduleDial
         try {
             const payload = { ...formData };
             if (payload.practical_id === "_none" || !payload.practical_id) {
-                // @ts-ignore
-                delete payload.practical_id;
+                delete (payload as any).practical_id;
             }
 
             const res = await fetch("/api/schedule/create", {

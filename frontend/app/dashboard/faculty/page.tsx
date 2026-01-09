@@ -27,7 +27,10 @@ import {
   TrendingUp,
   Clock,
   Plus,
-  ArrowUpRight
+  ArrowUpRight,
+  Pencil,
+  Trash2,
+  BookOpen,
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -121,61 +124,61 @@ function PracticalCard({
   const timeUntil = Math.ceil((deadline.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
 
   return (
-    <div className="group relative p-5 bg-white/40 dark:bg-gray-800/40 backdrop-blur-xl border border-white/20 dark:border-gray-700/30 rounded-2xl hover:bg-white/60 dark:hover:bg-gray-800/60 hover:shadow-xl transition-all duration-300">
-      <div className="flex items-start justify-between gap-4">
-        <div className="flex-1 min-w-0 space-y-3">
-          <div>
-            <h3 className="font-semibold text-lg text-gray-900 dark:text-white mb-1.5 truncate">{practical.title}</h3>
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-gradient-to-br from-purple-500/10 to-pink-500/10 dark:from-purple-500/20 dark:to-pink-500/20 border border-purple-500/20 dark:border-purple-500/30 text-purple-700 dark:text-purple-300 text-xs font-medium rounded-full backdrop-blur-sm">
-                {subject}
-              </span>
-              {practical.language && (
-                <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-gradient-to-br from-blue-500/10 to-cyan-500/10 dark:from-blue-500/20 dark:to-cyan-500/20 border border-blue-500/20 dark:border-blue-500/30 text-blue-700 dark:text-blue-300 text-xs font-medium rounded-full backdrop-blur-sm">
-                  {practical.language}
-                </span>
-              )}
-              <span
-                className={cn(
-                  "inline-flex items-center gap-1.5 px-3 py-1 text-xs font-medium rounded-full backdrop-blur-sm border",
-                  isPast
-                    ? "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 border-gray-200 dark:border-gray-700"
-                    : timeUntil <= 2
-                      ? "bg-orange-50 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400 border-orange-200 dark:border-orange-800"
-                      : "bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800"
-                )}
-              >
-                <div
-                  className={cn(
-                    "w-1.5 h-1.5 rounded-full",
-                    isPast ? "bg-gray-400" : timeUntil <= 2 ? "bg-orange-500 animate-pulse" : "bg-emerald-500"
-                  )}
-                />
-                {isPast ? "Closed" : timeUntil <= 2 ? "Due Soon" : "Active"}
-              </span>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
-            <Clock className="w-4 h-4" />
-            <span className="font-medium">
-              {deadline.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} • {deadline.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+    <div className="group p-4 bg-white dark:bg-gray-800/60 border border-gray-100 dark:border-gray-700/50 rounded-xl hover:shadow-lg hover:border-indigo-200 dark:hover:border-indigo-800/50 transition-all duration-200">
+      <div className="flex items-center justify-between gap-4">
+        {/* Left: Content */}
+        <div className="flex-1 min-w-0">
+          <h4 className="font-semibold text-gray-900 dark:text-white truncate">{practical.title}</h4>
+          <div className="flex items-center gap-2 mt-1.5 text-xs">
+            <span className="text-purple-600 dark:text-purple-400 font-medium">{subject}</span>
+            {practical.language && (
+              <>
+                <span className="text-gray-300 dark:text-gray-600">•</span>
+                <span className="text-blue-600 dark:text-blue-400">{practical.language}</span>
+              </>
+            )}
+            <span className="text-gray-300 dark:text-gray-600">•</span>
+            <span className="text-gray-500 dark:text-gray-400">
+              {deadline.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
             </span>
           </div>
         </div>
 
-        <div className="flex gap-2 shrink-0">
+        {/* Middle: Status */}
+        <span
+          className={cn(
+            "shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-full",
+            isPast
+              ? "bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400"
+              : timeUntil <= 2
+                ? "bg-orange-50 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400"
+                : "bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400"
+          )}
+        >
+          <div
+            className={cn(
+              "w-1.5 h-1.5 rounded-full",
+              isPast ? "bg-gray-400" : timeUntil <= 2 ? "bg-orange-500 animate-pulse" : "bg-emerald-500"
+            )}
+          />
+          {isPast ? "Closed" : timeUntil <= 2 ? "Due Soon" : "Active"}
+        </span>
+
+        {/* Right: Actions */}
+        <div className="flex gap-1 shrink-0">
           <button
             onClick={() => onEdit(practical)}
-            className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500 dark:text-gray-400 transition-colors"
+            className="p-2.5 rounded-lg text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors"
+            title="Edit"
           >
-            Edit
+            <Pencil className="w-4 h-4" />
           </button>
           <button
             onClick={() => onDelete(practical.id)}
-            className="p-2 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 text-red-500 transition-colors"
+            className="p-2.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+            title="Delete"
           >
-            Delete
+            <Trash2 className="w-4 h-4" />
           </button>
         </div>
       </div>
@@ -402,35 +405,40 @@ export default function FacultyDashboardPage() {
             className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-6"
           >
 
-            {/* 1. Quick Stats (Row 1) */}
-            {/* 1. Quick Stats (Row 1) */}
-            <motion.div variants={itemVariants} className="glass-card rounded-2xl p-5 flex items-center gap-4 hover-lift">
-              <div className="w-12 h-12 rounded-xl bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center">
-                <FileCheck className="w-6 h-6 text-indigo-600 dark:text-indigo-400" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-gray-900 dark:text-white">{activePracticalsCount}</p>
-                <p className="text-xs text-gray-500 dark:text-gray-400">Active Practicals</p>
-              </div>
-            </motion.div>
-
-            <motion.div variants={itemVariants} className="glass-card rounded-2xl p-5 flex items-center gap-4 hover-lift">
-              <div className="w-12 h-12 rounded-xl bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center">
-                <TrendingUp className="w-6 h-6 text-purple-600 dark:text-purple-400" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-gray-900 dark:text-white">{submissions.length}</p>
-                <p className="text-xs text-gray-500 dark:text-gray-400">Total Submissions</p>
+            {/* 1. Quick Stats (Row 1) - Solid Gradient Icons */}
+            <motion.div variants={itemVariants} className="glass-card-premium rounded-3xl p-6 hover-lift">
+              <div className="flex items-start justify-between">
+                <div>
+                  <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Active Practicals</p>
+                  <p className="text-3xl font-bold text-gray-900 dark:text-white mt-2">{activePracticalsCount}</p>
+                </div>
+                <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-500 flex items-center justify-center shadow-lg">
+                  <FileCheck className="w-6 h-6 text-white" />
+                </div>
               </div>
             </motion.div>
 
-            <motion.div variants={itemVariants} className="glass-card rounded-2xl p-5 flex items-center gap-4 hover-lift">
-              <div className="w-12 h-12 rounded-xl bg-pink-100 dark:bg-pink-900/30 flex items-center justify-center">
-                <Users className="w-6 h-6 text-pink-600 dark:text-pink-400" />
+            <motion.div variants={itemVariants} className="glass-card-premium rounded-3xl p-6 hover-lift">
+              <div className="flex items-start justify-between">
+                <div>
+                  <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Total Submissions</p>
+                  <p className="text-3xl font-bold text-gray-900 dark:text-white mt-2">{submissions.length}</p>
+                </div>
+                <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center shadow-lg">
+                  <TrendingUp className="w-6 h-6 text-white" />
+                </div>
               </div>
-              <div>
-                <p className="text-2xl font-bold text-gray-900 dark:text-white">--</p>
-                <p className="text-xs text-gray-500 dark:text-gray-400">Students Assigned</p>
+            </motion.div>
+
+            <motion.div variants={itemVariants} className="glass-card-premium rounded-3xl p-6 hover-lift">
+              <div className="flex items-start justify-between">
+                <div>
+                  <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">My Subjects</p>
+                  <p className="text-3xl font-bold text-gray-900 dark:text-white mt-2">{subjects.length}</p>
+                </div>
+                <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-pink-500 to-rose-500 flex items-center justify-center shadow-lg">
+                  <BookOpen className="w-6 h-6 text-white" />
+                </div>
               </div>
             </motion.div>
 
@@ -452,10 +460,10 @@ export default function FacultyDashboardPage() {
 
             {/* 2. Charts Row (Row 2, split 2:2 or 3:1) */}
 
-            {/* Activity Chart (Wide) */}
-            <motion.div variants={itemVariants} className="md:col-span-2 lg:col-span-3 glass-card-premium rounded-3xl p-6 min-h-[350px]">
-              <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-6">Submission Activity</h3>
-              <div className="h-[250px] w-full">
+            {/* Activity Chart (Wide) - Reduced Height */}
+            <motion.div variants={itemVariants} className="md:col-span-2 lg:col-span-3 glass-card-premium rounded-3xl p-6">
+              <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">Submission Activity</h3>
+              <div className="h-[200px] w-full">
                 <ResponsiveContainer width="100%" height="100%">
                   <AreaChart data={activityData}>
                     <defs>

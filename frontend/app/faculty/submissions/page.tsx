@@ -173,6 +173,11 @@ function FacultySubmissionsContent() {
   const [query, setQuery] = useState<string>(searchParams.get("q") || "");
   const isMounted = useRef(true);
 
+  // Grading state
+  const [gradeMarks, setGradeMarks] = useState<string>("");
+  const [gradeStatus, setGradeStatus] = useState<string>("passed");
+  const [gradingLoading, setGradingLoading] = useState(false);
+
   useEffect(() => {
     isMounted.current = true;
     return () => {
@@ -545,10 +550,8 @@ function FacultySubmissionsContent() {
                 <tr>
                   <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Student</th>
                   <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Practical</th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Language</th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Access</th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Marks</th>
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">State</th>
+                  <th className="px-6 py-4 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">Marks</th>
                   <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Submitted</th>
                   <th className="px-6 py-4 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">Actions</th>
                 </tr>
@@ -559,17 +562,15 @@ function FacultySubmissionsContent() {
                     <tr key={i} className="animate-pulse">
                       <td className="px-6 py-4"><div className="h-10 w-40 bg-gray-200 dark:bg-gray-700 rounded-lg"></div></td>
                       <td className="px-6 py-4"><div className="h-6 w-32 bg-gray-200 dark:bg-gray-700 rounded"></div></td>
-                      <td className="px-6 py-4"><div className="h-6 w-16 bg-gray-200 dark:bg-gray-700 rounded"></div></td>
-                      <td className="px-6 py-4"><div className="h-6 w-20 bg-gray-200 dark:bg-gray-700 rounded"></div></td>
-                      <td className="px-6 py-4"><div className="h-6 w-20 bg-gray-200 dark:bg-gray-700 rounded"></div></td>
-                      <td className="px-6 py-4"><div className="h-6 w-12 bg-gray-200 dark:bg-gray-700 rounded"></div></td>
                       <td className="px-6 py-4"><div className="h-6 w-24 bg-gray-200 dark:bg-gray-700 rounded"></div></td>
+                      <td className="px-6 py-4"><div className="h-6 w-12 bg-gray-200 dark:bg-gray-700 rounded"></div></td>
+                      <td className="px-6 py-4"><div className="h-6 w-20 bg-gray-200 dark:bg-gray-700 rounded"></div></td>
                       <td className="px-6 py-4"></td>
                     </tr>
                   ))
                 ) : filteredSubmissions.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="px-6 py-12 text-center">
+                    <td colSpan={6} className="px-6 py-12 text-center">
                       <div className="flex flex-col items-center justify-center text-gray-400 dark:text-gray-500">
                         <ListFilter className="w-12 h-12 mb-3 opacity-20" />
                         <p className="text-lg font-medium">No submissions found</p>
@@ -578,167 +579,171 @@ function FacultySubmissionsContent() {
                     </td>
                   </tr>
                 ) : (
-                  filteredSubmissions.map((s) => (
-                    <tr key={s.submission_id} className="group hover:bg-indigo-50/50 dark:hover:bg-indigo-900/10 transition-colors">
-                      <td className="px-6 py-4">
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 text-white flex items-center justify-center font-bold text-sm shadow-md shadow-indigo-500/20">
-                            {initials(s.student_name)}
+                  filteredSubmissions.map((s) => {
+                    // Determine unified state
+                    const isPending = s.status === 'pending' || s.status === 'submitted';
+                    const isPassed = s.status === 'passed';
+                    const isFailed = s.status === 'failed';
+                    const attempts = s.attempt_count || 0;
+                    const max = s.max_attempts || 1;
+                    const isLocked = s.is_locked || attempts >= max;
+                    const hasRetry = isFailed && !isLocked;
+
+                    // Determine marks display
+                    const marksDisplay = () => {
+                      if (isPending || s.marks_obtained === null) {
+                        return <span className="text-gray-400 font-mono">—</span>;
+                      }
+                      const marks = s.marks_obtained || 0;
+                      if (isPassed || marks >= 5) {
+                        return <span className="font-bold text-emerald-600 dark:text-emerald-400">{marks}</span>;
+                      }
+                      return <span className="font-bold text-red-600 dark:text-red-400">{marks}</span>;
+                    };
+
+                    // Format relative time
+                    const formatRelativeTime = (dateStr: string) => {
+                      const date = new Date(dateStr);
+                      const now = new Date();
+                      const diffMs = now.getTime() - date.getTime();
+                      const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+                      const diffDays = Math.floor(diffHours / 24);
+
+                      if (diffHours < 1) return 'Just now';
+                      if (diffHours < 24) return `${diffHours}h ago`;
+                      if (diffDays < 7) return `${diffDays}d ago`;
+                      return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                    };
+
+                    return (
+                      <tr key={s.submission_id} className={`group transition-colors border-b border-gray-50 dark:border-gray-800/50 ${isPending ? 'bg-amber-50/30 hover:bg-amber-50/60 dark:bg-amber-900/5 dark:hover:bg-amber-900/10' : 'hover:bg-indigo-50/50 dark:hover:bg-indigo-900/10'}`}>
+                        {/* Student */}
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 text-white flex items-center justify-center font-bold text-sm shadow-md shadow-indigo-500/20">
+                              {initials(s.student_name)}
+                            </div>
+                            <div>
+                              <div className="font-semibold text-gray-900 dark:text-white">{s.student_name}</div>
+                              <div className="text-xs text-gray-600 dark:text-gray-400 font-mono">{s.roll_no || s.student_id}</div>
+                            </div>
                           </div>
-                          <div>
-                            <div className="font-semibold text-gray-900 dark:text-white">{s.student_name}</div>
-                            <div className="text-xs text-gray-500 font-mono">{s.roll_no || s.student_id}</div>
+                        </td>
+
+                        {/* Practical (with language tag, no ID) */}
+                        <td className="px-6 py-4">
+                          <div className="font-medium text-gray-800 dark:text-gray-200 max-w-[200px] truncate" title={s.practical_title}>
+                            {s.practical_title}
                           </div>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="font-medium text-gray-800 dark:text-gray-200 max-w-[200px] truncate" title={s.practical_title}>
-                          {s.practical_title}
-                        </div>
-                        <div className="text-xs text-gray-500">ID: {s.practical_id}</div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <span className="inline-flex items-center text-xs font-semibold px-2.5 py-1 rounded-md bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-700 uppercase">
-                          {s.language}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4">
-                        <StatusBadge status={s.status} />
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="flex items-center gap-2">
-                          {/* Derived State Machine Logic */}
-                          {(() => {
-                            const attempts = s.attempt_count || 0;
-                            const max = s.max_attempts || 1;
-                            const isLocked = s.is_locked || attempts >= max;
+                          <span className="inline-block mt-1 text-[10px] font-bold tracking-wide text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 px-1.5 py-0.5 rounded uppercase">
+                            {s.language}
+                          </span>
+                        </td>
 
-                            // Case 1: Passed -> Completed
-                            if (s.status === 'passed') {
-                              return (
-                                <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-2 py-0.5 rounded text-green-700 bg-green-50 dark:text-green-300 dark:bg-green-900/30 border border-green-200 dark:border-green-800">
-                                  <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></span>
-                                  Completed
-                                </span>
-                              );
-                            }
-
-                            // Case 2: Failed + Attempts Left -> Retry Available
-                            if (s.status === 'failed' && !isLocked) {
-                              return (
-                                <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-2 py-0.5 rounded text-blue-700 bg-blue-50 dark:text-blue-300 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800">
-                                  Retry Available ({attempts}/{max})
-                                </span>
-                              );
-                            }
-
-                            // Case 3: Failed + No Attempts -> Exhausted (Actionable)
-                            if (s.status === 'failed' && isLocked) {
-                              return (
-                                <div className="flex items-center gap-2">
-                                  <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-2 py-0.5 rounded text-red-700 bg-red-50 dark:text-red-300 dark:bg-red-900/30 border border-red-200 dark:border-red-800">
-                                    Attempts Exhausted
-                                  </span>
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    className="h-6 text-[10px] px-2 border-red-200 bg-white hover:bg-red-50 text-red-700 dark:bg-transparent dark:border-red-800 dark:text-red-400"
-                                    onClick={async () => {
-                                      if (!confirm(`Grant extra attempt for ${s.student_name}?`)) return;
-                                      try {
-                                        const res = await fetch('/api/faculty/allow-reattempt', {
-                                          method: 'POST', body: JSON.stringify({ studentId: s.student_id, practicalId: s.practical_id })
-                                        });
-                                        if (res.ok) await fetchSubmissions(true);
-                                      } catch (e) { console.error(e); }
-                                    }}
-                                  >
-                                    Grant Attempt
-                                  </Button>
-                                </div>
-                              );
-                            }
-
-                            // Case 4: Pending -> Under Review
-                            if (s.status === 'pending' || s.status === 'submitted') {
-                              return (
-                                <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-2 py-0.5 rounded text-amber-700 bg-amber-50 dark:text-amber-300 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-800">
-                                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
-                                  Under Review
-                                </span>
-                              );
-                            }
-
-                            // Default / Fallback
-                            if (isLocked) {
-                              return (
-                                <div className="flex items-center gap-2">
-                                  <span className="text-xs font-semibold text-gray-500">Locked</span>
-                                  <Button size="sm" variant="ghost" className="h-6 w-6 p-0" title="Unlock"
-                                    onClick={async () => {
-                                      if (!confirm(`Unlock ${s.student_name}?`)) return;
-                                      await fetch('/api/faculty/allow-reattempt', { method: 'POST', body: JSON.stringify({ studentId: s.student_id, practicalId: s.practical_id }) });
-                                      await fetchSubmissions(true);
-                                    }}
-                                  >
-                                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
-                                  </Button>
-                                </div>
-                              );
-                            }
-
-                            return (
-                              <span className="text-xs text-gray-500 dark:text-gray-400">
-                                Active ({attempts}/{max})
+                        {/* Unified State */}
+                        <td className="px-6 py-4">
+                          <div className="flex flex-col items-start gap-1">
+                            {isPending && (
+                              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-lg bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800">
+                                <Clock className="w-3.5 h-3.5" />
+                                Needs Grading
                               </span>
-                            );
-                          })()}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="font-bold text-gray-900 dark:text-white">
-                          {s.marks_obtained !== null ? (
-                            <span className="inline-flex items-center px-2 py-0.5 rounded text-sm bg-indigo-50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-300">
-                              {s.marks_obtained}
-                            </span>
-                          ) : <span className="text-gray-400">—</span>}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 text-sm text-gray-500">
-                        {new Date(s.created_at).toLocaleDateString()}
-                        <div className="text-xs opacity-70">
-                          {new Date(s.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 text-right">
-                        <div className="flex items-center justify-end gap-2 transition-opacity">
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            onClick={() => handleViewSubmission(s)}
-                            className="bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 hover:bg-indigo-100 dark:hover:bg-indigo-900/40"
-                            title="View Details"
-                          >
-                            <Eye className="w-4 h-4" />
-                          </Button>
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            onClick={() => handleDownloadPdf(s)}
-                            disabled={pdfLoadingId === s.submission_id}
-                            className="bg-purple-50 dark:bg-purple-900/20 text-purple-600 hover:bg-purple-100 dark:hover:bg-purple-900/40"
-                            title="Download PDF"
-                          >
-                            {pdfLoadingId === s.submission_id ? (
-                              <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
-                            ) : (
-                              <Download className="w-4 h-4" />
                             )}
-                          </Button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))
+                            {isPassed && (
+                              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-lg bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800">
+                                <CheckCircle2 className="w-3.5 h-3.5" />
+                                Passed
+                              </span>
+                            )}
+                            {isFailed && (
+                              <>
+                                {hasRetry ? (
+                                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-lg bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400 border border-blue-200 dark:border-blue-800">
+                                    Retry Active
+                                  </span>
+                                ) : (
+                                  <>
+                                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-lg bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-800">
+                                      <XCircle className="w-3.5 h-3.5" />
+                                      Failed
+                                    </span>
+                                    <button
+                                      className="text-xs text-purple-600 dark:text-purple-400 hover:text-purple-800 dark:hover:text-purple-300 font-medium hover:underline ml-1"
+                                      onClick={async () => {
+                                        if (!confirm(`Grant extra attempt for ${s.student_name}?`)) return;
+                                        try {
+                                          const res = await fetch('/api/faculty/allow-reattempt', {
+                                            method: 'POST',
+                                            headers: { 'Content-Type': 'application/json' },
+                                            body: JSON.stringify({ studentId: s.student_id, practicalId: s.practical_id })
+                                          });
+                                          if (res.ok) await fetchSubmissions(true);
+                                        } catch (e) { console.error(e); }
+                                      }}
+                                    >
+                                      Grant Re-attempt
+                                    </button>
+                                  </>
+                                )}
+                              </>
+                            )}
+                            {!isPending && !isPassed && !isFailed && (
+                              <span className="text-xs text-gray-500">Unknown</span>
+                            )}
+                          </div>
+                        </td>
+
+                        {/* Marks (Right-aligned) */}
+                        <td className="px-6 py-4 text-right tabular-nums">
+                          {marksDisplay()}
+                        </td>
+
+                        {/* Submitted (relative time) */}
+                        <td className="px-6 py-4 text-sm text-gray-500">
+                          {formatRelativeTime(s.created_at)}
+                        </td>
+
+                        {/* Context-Aware Actions */}
+                        <td className="px-6 py-4 text-right">
+                          <div className="flex items-center justify-end gap-2">
+                            {isPending ? (
+                              <Button
+                                size="sm"
+                                onClick={() => handleViewSubmission(s)}
+                                className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white shadow-lg shadow-indigo-500/25"
+                              >
+                                Grade Now
+                              </Button>
+                            ) : (
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                onClick={() => handleViewSubmission(s)}
+                                className="bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+                                title="View Result"
+                              >
+                                <Eye className="w-4 h-4" />
+                              </Button>
+                            )}
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              onClick={() => handleDownloadPdf(s)}
+                              disabled={pdfLoadingId === s.submission_id}
+                              className="bg-purple-50 dark:bg-purple-900/20 text-purple-600 hover:bg-purple-100 dark:hover:bg-purple-900/40"
+                              title="Download PDF"
+                            >
+                              {pdfLoadingId === s.submission_id ? (
+                                <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                              ) : (
+                                <Download className="w-4 h-4" />
+                              )}
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
                 )}
               </tbody>
             </table>
@@ -888,24 +893,95 @@ function FacultySubmissionsContent() {
             </div>
 
             {/* Modal Footer */}
-            <div className="p-4 border-t border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 flex justify-end gap-3">
-              <Button
-                variant="outline"
-                onClick={() => setViewingSubmission(null)}
-              >
-                Close
-              </Button>
-              <Button
-                onClick={() => handleDownloadPdf(viewingSubmission)}
-                disabled={pdfLoadingId === viewingSubmission.submission_id}
-                className="bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white shadow-lg shadow-indigo-500/20"
-              >
-                {pdfLoadingId === viewingSubmission.submission_id ? (
-                  <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin mr-2" /> Generating...</>
-                ) : (
-                  <><Download className="w-4 h-4 mr-2" /> Download Report</>
-                )}
-              </Button>
+            <div className="p-4 border-t border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900">
+              {/* Manual Grading Section for Pending */}
+              {(viewingSubmission.status === 'pending' || viewingSubmission.status === 'submitted') && (
+                <div className="mb-4 p-4 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
+                  <h4 className="text-sm font-semibold text-amber-800 dark:text-amber-300 mb-3 flex items-center gap-2">
+                    <Clock className="w-4 h-4" />
+                    Manual Grading
+                  </h4>
+                  <div className="flex items-center gap-4">
+                    <div className="flex-1">
+                      <label className="text-xs text-gray-600 dark:text-gray-400 mb-1 block">Marks</label>
+                      <input
+                        type="number"
+                        min="0"
+                        max="10"
+                        value={gradeMarks}
+                        onChange={(e) => setGradeMarks(e.target.value)}
+                        placeholder="0-10"
+                        className="w-full px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                      />
+                    </div>
+                    <div className="flex-1">
+                      <label className="text-xs text-gray-600 dark:text-gray-400 mb-1 block">Status</label>
+                      <select
+                        value={gradeStatus}
+                        onChange={(e) => setGradeStatus(e.target.value)}
+                        className="w-full px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                      >
+                        <option value="passed">Passed</option>
+                        <option value="failed">Failed</option>
+                      </select>
+                    </div>
+                    <div className="pt-5">
+                      <Button
+                        onClick={async () => {
+                          if (!gradeMarks) {
+                            alert('Please enter marks');
+                            return;
+                          }
+                          setGradingLoading(true);
+                          try {
+                            const { error } = await supabase
+                              .from('submissions')
+                              .update({
+                                marks_obtained: parseInt(gradeMarks),
+                                status: gradeStatus as 'passed' | 'failed'
+                              })
+                              .eq('id', viewingSubmission.id);
+                            if (error) throw error;
+                            await fetchSubmissions(true);
+                            setViewingSubmission(null);
+                            setGradeMarks("");
+                            setGradeStatus("passed");
+                          } catch (e) {
+                            console.error('Failed to grade:', e);
+                            alert('Failed to save grade');
+                          } finally {
+                            setGradingLoading(false);
+                          }
+                        }}
+                        disabled={gradingLoading}
+                        className="bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white shadow-lg"
+                      >
+                        {gradingLoading ? 'Saving...' : 'Save Grade'}
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex justify-end gap-3">
+                <Button
+                  variant="outline"
+                  onClick={() => setViewingSubmission(null)}
+                >
+                  Close
+                </Button>
+                <Button
+                  onClick={() => handleDownloadPdf(viewingSubmission)}
+                  disabled={pdfLoadingId === viewingSubmission.submission_id}
+                  className="bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white shadow-lg shadow-indigo-500/20"
+                >
+                  {pdfLoadingId === viewingSubmission.submission_id ? (
+                    <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin mr-2" /> Generating...</>
+                  ) : (
+                    <><Download className="w-4 h-4 mr-2" /> Download Report</>
+                  )}
+                </Button>
+              </div>
             </div>
           </div>
         </div>

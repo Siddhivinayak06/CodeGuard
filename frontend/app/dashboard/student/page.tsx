@@ -232,8 +232,7 @@ export default function StudentDashboard() {
 
                 if (sdErr || !sd) throw new Error("Failed to fetch student details");
 
-                // @ts-ignore
-                setStudentDetails({ semester: sd.semester || "1", name: sd.name });
+                setStudentDetails({ semester: sd.semester || "1", name: sd.name || undefined });
 
                 // 2. Fetch ALL Assignments (Manual + Batch)
                 // Manual Assignments
@@ -284,8 +283,7 @@ export default function StudentDashboard() {
                 const semesterPids = new Set<number>();
                 const filteredPracticalsDetails = (practicalsDetails || []).filter((p: any) => {
                     const subjectSemester = p.subjects?.semester;
-                    // @ts-ignore
-                    const studentSemester = sd.semester || "1";
+                    const studentSemester = (sd?.semester as string) || "1";
 
                     // Keep if semester matches (or if subject has no semester defined, assuming global)
                     // Requirement is "check semester", so we likely want strict matching if data exists.

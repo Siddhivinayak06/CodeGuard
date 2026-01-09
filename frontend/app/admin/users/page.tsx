@@ -348,19 +348,6 @@ export default function AdminUsers() {
 
         {/* Users Table */}
         <div className="glass-card-premium rounded-3xl overflow-hidden animate-slideUp" style={{ animationDelay: "200ms" }}>
-          <div className="px-6 py-5 border-b border-gray-200/50 dark:border-gray-700/50 bg-gradient-to-r from-indigo-50/50 to-purple-50/50 dark:from-indigo-900/20 dark:to-purple-900/20">
-            <h2 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
-              {selectedRole === "student" && <GraduationCap className="w-5 h-5 text-blue-500" />}
-              {selectedRole === "faculty" && <UserCog className="w-5 h-5 text-purple-500" />}
-              {selectedRole === "admin" && <Shield className="w-5 h-5 text-pink-500" />}
-              {selectedRole.charAt(0).toUpperCase() + selectedRole.slice(1)}s
-              {filteredUsers.length !== usersByRole[selectedRole].length && (
-                <span className="text-sm font-normal text-gray-500">
-                  ({filteredUsers.length} of {usersByRole[selectedRole].length})
-                </span>
-              )}
-            </h2>
-          </div>
 
           {loading ? (
             <div className="overflow-x-auto">
@@ -432,37 +419,34 @@ export default function AdminUsers() {
                           </div>
                         </td>
                         <td className="px-5 py-4">
-                          <div className="flex items-center gap-2 text-gray-600 dark:text-gray-400">
-                            <Mail className="w-4 h-4" />
+                          <span className="text-sm text-gray-600 dark:text-gray-400 max-w-[200px] truncate block">
                             {u.email}
-                          </div>
+                          </span>
                         </td>
                         {selectedRole === "student" && (
                           <>
                             <td className="px-5 py-4">
                               {u.roll_no ? (
-                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400 rounded-lg">
-                                  <Hash className="w-3 h-3" />
+                                <span className="font-mono text-sm text-gray-700 dark:text-gray-300">
                                   {u.roll_no}
                                 </span>
                               ) : (
-                                <span className="text-gray-400">—</span>
+                                <span className="text-gray-400 text-sm">—</span>
                               )}
                             </td>
                             <td className="px-5 py-4">
                               {u.semester ? (
-                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400 rounded-lg">
-                                  <Calendar className="w-3 h-3" />
+                                <span className="inline-flex px-2.5 py-1 text-xs font-semibold bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400 rounded-lg">
                                   Sem {u.semester}
                                 </span>
                               ) : (
-                                <span className="text-gray-400">—</span>
+                                <span className="text-gray-400 text-sm">—</span>
                               )}
                             </td>
                           </>
                         )}
                         <td className="px-5 py-4">
-                          <div className="flex items-center justify-end gap-2">
+                          <div className="flex items-center justify-end gap-3">
                             <button
                               onClick={() => {
                                 setForm({
@@ -477,7 +461,7 @@ export default function AdminUsers() {
                                 setOpen(true);
                               }}
                               disabled={busy}
-                              className="p-2 rounded-lg text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors disabled:opacity-50"
+                              className="p-2.5 rounded-lg text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/30 transition-colors disabled:opacity-50"
                               title="Edit"
                             >
                               <Pencil className="w-4 h-4" />
@@ -485,7 +469,7 @@ export default function AdminUsers() {
                             <button
                               onClick={() => handleDelete(u.uid)}
                               disabled={busy}
-                              className="p-2 rounded-lg text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors disabled:opacity-50"
+                              className="p-2.5 rounded-lg text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors disabled:opacity-50"
                               title="Delete"
                             >
                               <Trash2 className="w-4 h-4" />

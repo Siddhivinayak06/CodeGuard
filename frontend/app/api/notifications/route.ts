@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { supabaseAdmin } from "@/lib/supabase/service";
 import { NextRequest, NextResponse } from "next/server";
 
 export const dynamic = 'force-dynamic';
@@ -138,5 +139,54 @@ export async function PATCH(request: NextRequest) {
     } catch (err) {
         console.error("Update notification API error:", err);
         return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    }
+}
+// DELETE - Delete a notification
+export async function DELETE(request: NextRequest) {
+    try {
+        console.log("DELETE /api/notifications called");
+
+        // Check for Service Role Key
+        if (!process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY === "placeholder") {
+            console.error("Critical: SUPABASE_SERVICE_ROLE_KEY is missing or invalid");
+            return NextResponse.json({ error: "Server configuration error: Missing admin key" }, { status: 500 });
+        }
+
+        const supabase = await createClient();
+        const { data: { user }, error: authError } = await supabase.auth.getUser();
+
+        if (authError || !user) {
+            console.error("Auth error in delete:", authError);
+            return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+        }
+
+        const { searchParams } = new URL(request.url);
+        const id = searchParams.get("id");
+
+        if (!id) {
+            return NextResponse.json({ error: "Notification id is required" }, { status: 400 });
+        }
+
+        console.log(`Attempting to delete notification ${id} for user ${user.id}`);
+
+        // Use supabaseAdmin to bypass RLS
+        const { error, count } = await supabaseAdmin
+            .from("notifications")
+            .delete({ count: 'exact' })
+            .eq("id", id)
+            .eq("user_id", user.id);
+
+        if (error) {
+            console.error("Supabase delete error:", error);
+            return NextResponse.json({ error: error.message }, { status: 500 });
+        }
+
+        // Log generic success even if 0 rows deleted (id might be wrong or already deleted)
+        console.log(`Delete operation completed. Rows affected: ${count}`);
+
+        return NextResponse.json({ success: true, count });
+    } catch (err: any) {
+        console.error("Delete notification API error:", err);
+        return NextResponse.json({ error: err.message || "Internal server error" }, { status: 500 });
     }
 }

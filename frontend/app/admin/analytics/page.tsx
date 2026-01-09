@@ -34,6 +34,7 @@ import {
     Activity,
     ArrowUpRight,
     RefreshCw,
+    Plus,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -354,33 +355,50 @@ export default function AnalyticsPage() {
                             />
                         </div>
 
-                        {/* Submission Stats Cards */}
-                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-5 mb-8">
-                            <div className="glass-card-premium rounded-2xl p-5 flex items-center gap-4 hover-lift animate-slideUp" style={{ animationDelay: "300ms" }}>
-                                <div className="w-12 h-12 rounded-xl bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center">
-                                    <CheckCircle2 className="w-6 h-6 text-emerald-600 dark:text-emerald-400" />
-                                </div>
-                                <div>
-                                    <p className="text-2xl font-bold text-gray-900 dark:text-white">{data.submissions.accepted}</p>
-                                    <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Passed</p>
-                                </div>
-                            </div>
-                            <div className="glass-card-premium rounded-2xl p-5 flex items-center gap-4 hover-lift animate-slideUp" style={{ animationDelay: "350ms" }}>
-                                <div className="w-12 h-12 rounded-xl bg-red-100 dark:bg-red-900/30 flex items-center justify-center">
-                                    <XCircle className="w-6 h-6 text-red-600 dark:text-red-400" />
-                                </div>
-                                <div>
-                                    <p className="text-2xl font-bold text-gray-900 dark:text-white">{data.submissions.failed}</p>
-                                    <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Failed</p>
+                        {/* Submission Stats Cards - 4 columns to match top row */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 mb-8">
+                            <div className="glass-card-premium rounded-3xl p-6 hover-lift animate-slideUp" style={{ animationDelay: "300ms" }}>
+                                <div className="flex items-start justify-between">
+                                    <div>
+                                        <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Passed</p>
+                                        <p className="text-3xl font-bold text-gray-900 dark:text-white mt-2">{data.submissions.accepted}</p>
+                                    </div>
+                                    <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center shadow-lg">
+                                        <CheckCircle2 className="w-6 h-6 text-white" />
+                                    </div>
                                 </div>
                             </div>
-                            <div className="glass-card-premium rounded-2xl p-5 flex items-center gap-4 hover-lift animate-slideUp" style={{ animationDelay: "400ms" }}>
-                                <div className="w-12 h-12 rounded-xl bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
-                                    <FileCode className="w-6 h-6 text-blue-600 dark:text-blue-400" />
+                            <div className="glass-card-premium rounded-3xl p-6 hover-lift animate-slideUp" style={{ animationDelay: "350ms" }}>
+                                <div className="flex items-start justify-between">
+                                    <div>
+                                        <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Failed</p>
+                                        <p className="text-3xl font-bold text-gray-900 dark:text-white mt-2">{data.submissions.failed}</p>
+                                    </div>
+                                    <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-red-500 to-rose-500 flex items-center justify-center shadow-lg">
+                                        <XCircle className="w-6 h-6 text-white" />
+                                    </div>
                                 </div>
-                                <div>
-                                    <p className="text-2xl font-bold text-gray-900 dark:text-white">{data.submissions.evaluated}</p>
-                                    <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Evaluated</p>
+                            </div>
+                            <div className="glass-card-premium rounded-3xl p-6 hover-lift animate-slideUp" style={{ animationDelay: "400ms" }}>
+                                <div className="flex items-start justify-between">
+                                    <div>
+                                        <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Pending</p>
+                                        <p className="text-3xl font-bold text-gray-900 dark:text-white mt-2">{data.submissions.pending}</p>
+                                    </div>
+                                    <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-amber-500 to-orange-500 flex items-center justify-center shadow-lg">
+                                        <Clock className="w-6 h-6 text-white" />
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="glass-card-premium rounded-3xl p-6 hover-lift animate-slideUp" style={{ animationDelay: "450ms" }}>
+                                <div className="flex items-start justify-between">
+                                    <div>
+                                        <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Evaluated</p>
+                                        <p className="text-3xl font-bold text-gray-900 dark:text-white mt-2">{data.submissions.evaluated}</p>
+                                    </div>
+                                    <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-500 flex items-center justify-center shadow-lg">
+                                        <FileCode className="w-6 h-6 text-white" />
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -391,7 +409,7 @@ export default function AnalyticsPage() {
                             <ChartCard
                                 title="Submission Activity (Last 7 Days)"
                                 icon={<Activity className="w-5 h-5 text-indigo-500" />}
-                                delay={450}
+                                delay={500}
                             >
                                 <div className="h-64">
                                     <ResponsiveContainer width="100%" height="100%">
@@ -407,8 +425,8 @@ export default function AnalyticsPage() {
                                                 </linearGradient>
                                             </defs>
                                             <CartesianGrid strokeDasharray="3 3" className="stroke-gray-200 dark:stroke-gray-700" />
-                                            <XAxis dataKey="day" className="text-xs" tick={{ fill: "#9ca3af" }} />
-                                            <YAxis className="text-xs" tick={{ fill: "#9ca3af" }} />
+                                            <XAxis dataKey="day" className="text-xs" tick={{ fill: "#6b7280", fontSize: 12 }} />
+                                            <YAxis className="text-xs" tick={{ fill: "#6b7280", fontSize: 12 }} />
                                             <Tooltip
                                                 contentStyle={{
                                                     backgroundColor: "rgba(255, 255, 255, 0.95)",
@@ -417,7 +435,7 @@ export default function AnalyticsPage() {
                                                     boxShadow: "0 10px 40px rgba(0,0,0,0.1)",
                                                 }}
                                             />
-                                            <Legend />
+                                            <Legend verticalAlign="top" align="right" wrapperStyle={{ paddingBottom: 10 }} />
                                             <Area
                                                 type="monotone"
                                                 dataKey="total"
@@ -443,17 +461,17 @@ export default function AnalyticsPage() {
                             <ChartCard
                                 title="Submission Status"
                                 icon={<PieChartIcon className="w-5 h-5 text-purple-500" />}
-                                delay={500}
+                                delay={550}
                             >
                                 <div className="h-64 flex items-center">
                                     <ResponsiveContainer width="100%" height="100%">
                                         <PieChart>
                                             <Pie
                                                 data={submissionStatusData}
-                                                cx="50%"
+                                                cx="35%"
                                                 cy="50%"
-                                                innerRadius={60}
-                                                outerRadius={90}
+                                                innerRadius={50}
+                                                outerRadius={80}
                                                 paddingAngle={3}
                                                 dataKey="value"
                                             >
@@ -468,7 +486,12 @@ export default function AnalyticsPage() {
                                                     border: "1px solid #e5e7eb",
                                                 }}
                                             />
-                                            <Legend />
+                                            <Legend
+                                                layout="vertical"
+                                                align="right"
+                                                verticalAlign="middle"
+                                                wrapperStyle={{ paddingLeft: 20 }}
+                                            />
                                         </PieChart>
                                     </ResponsiveContainer>
                                 </div>
@@ -486,7 +509,14 @@ export default function AnalyticsPage() {
                                 {data.deadlines.upcoming.length === 0 ? (
                                     <div className="text-center py-8">
                                         <Calendar className="w-12 h-12 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
-                                        <p className="text-gray-500 dark:text-gray-400">No upcoming deadlines</p>
+                                        <p className="text-gray-500 dark:text-gray-400 mb-4">No upcoming deadlines</p>
+                                        <Link
+                                            href="/faculty/practicals"
+                                            className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/30 rounded-lg hover:bg-indigo-100 dark:hover:bg-indigo-900/50 transition-colors"
+                                        >
+                                            <Plus className="w-4 h-4" />
+                                            Create Assignment
+                                        </Link>
                                     </div>
                                 ) : (
                                     <div className="space-y-3">
