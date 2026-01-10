@@ -275,7 +275,7 @@ export default function Home() {
               <ResizablePanelGroup direction="vertical" className="h-full">
 
                 {/* Code Editor */}
-                <ResizablePanel defaultSize={60} minSize={30} className="relative transition-all duration-300">
+                <ResizablePanel defaultSize={60} minSize={30} className="relative">
                   <div className="absolute inset-0 bg-gradient-to-b from-white/60 to-white/40 dark:from-gray-900/60 dark:to-gray-900/40 backdrop-blur-sm -z-10" />
                   <AnimatePresence mode="wait">
                     <motion.div
@@ -343,8 +343,8 @@ export default function Home() {
                   </AnimatePresence>
                 </ResizablePanel>
 
-                <ResizableHandle className="h-3 bg-gradient-to-r from-transparent via-gray-200/60 to-transparent dark:via-gray-700/40 hover:via-indigo-400/60 dark:hover:via-indigo-500/50 transition-all duration-300 flex items-center justify-center group outline-none focus-visible:ring-2 focus-visible:ring-indigo-500">
-                  <div className="w-12 h-1 rounded-full bg-gray-300/80 dark:bg-gray-600/80 group-hover:bg-indigo-500 group-hover:w-20 transition-all duration-300" />
+                <ResizableHandle className="h-3 bg-gradient-to-r from-transparent via-gray-200/60 to-transparent dark:via-gray-700/40 hover:via-indigo-400/60 dark:hover:via-indigo-500/50 flex items-center justify-center group outline-none focus-visible:ring-2 focus-visible:ring-indigo-500">
+                  <div className="w-12 h-1 rounded-full bg-gray-300/80 dark:bg-gray-600/80 group-hover:bg-indigo-500 group-hover:w-20" />
                 </ResizableHandle>
 
                 {/* Terminal */}
@@ -391,8 +391,8 @@ export default function Home() {
 
             {showAssistant && (
               <>
-                <ResizableHandle className="w-3 bg-gradient-to-b from-transparent via-gray-200/60 to-transparent dark:via-gray-700/40 hover:via-indigo-400/60 dark:hover:via-indigo-500/50 transition-all duration-300 flex items-center justify-center group outline-none">
-                  <div className="h-12 w-1 rounded-full bg-gray-300/80 dark:bg-gray-600/80 group-hover:bg-indigo-500 group-hover:h-20 transition-all duration-300" />
+                <ResizableHandle className="w-3 bg-gradient-to-b from-transparent via-gray-200/60 to-transparent dark:via-gray-700/40 hover:via-indigo-400/60 dark:hover:via-indigo-500/50 flex items-center justify-center group outline-none">
+                  <div className="h-12 w-1 rounded-full bg-gray-300/80 dark:bg-gray-600/80 group-hover:bg-indigo-500 group-hover:h-20" />
                 </ResizableHandle>
                 <ResizablePanel defaultSize={25} minSize={20} maxSize={40} className="bg-white/70 dark:bg-gray-900/70 backdrop-blur-2xl border-l border-white/30 dark:border-gray-700/50">
                   <AssistantPanel

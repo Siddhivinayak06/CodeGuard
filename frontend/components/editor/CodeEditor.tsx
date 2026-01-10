@@ -355,6 +355,7 @@ export default function CodeEditor({
                                 folding: true,
                                 scrollBeyondLastLine: false,
                                 padding: { top: 16, bottom: 16 },
+                                stickyScroll: { enabled: false },
                             }}
                         />
 
