@@ -10,6 +10,7 @@ import { AssistantPanel } from "./AssistantPanel";
 import { FileExplorer, FileData } from "./FileExplorer";
 import { StatusBar } from "./StatusBar";
 import { X, FileCode2 } from "lucide-react";
+import { registerCompletionProviders } from "@/utils/completion-provider";
 
 interface CodeEditorProps {
     code: string;
@@ -149,8 +150,14 @@ export default function CodeEditor({
 
     const [cursorPosition, setCursorPosition] = useState({ lineNumber: 1, column: 1 });
 
+
+
     const handleEditorMount: OnMount = (editor, monaco) => {
         editorRef.current = editor;
+
+        // Register static auto-completion
+        registerCompletionProviders(monaco);
+
         editor.updateOptions({ contextmenu: false });
 
         // Define Glassmorphism Themes
