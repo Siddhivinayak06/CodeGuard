@@ -211,10 +211,10 @@ export default function FacultySchedulePage() {
               <Card
                 key={schedule.id}
                 className={`relative overflow-hidden bg-white dark:bg-gray-900/50 border-gray-100 dark:border-gray-800 hover:shadow-lg transition-all ${!isConfigured && !isPast
-                    ? 'ring-2 ring-orange-300 dark:ring-orange-700 border-orange-200 dark:border-orange-800'
-                    : isToday
-                      ? 'ring-2 ring-indigo-300 dark:ring-indigo-700 border-indigo-200 dark:border-indigo-800'
-                      : 'hover:border-indigo-200 dark:hover:border-indigo-800/50'
+                  ? 'ring-2 ring-orange-300 dark:ring-orange-700 border-orange-200 dark:border-orange-800'
+                  : isToday
+                    ? 'ring-2 ring-indigo-300 dark:ring-indigo-700 border-indigo-200 dark:border-indigo-800'
+                    : 'hover:border-indigo-200 dark:hover:border-indigo-800/50'
                   }`}
               >
                 <CardHeader className="pb-3">
@@ -225,16 +225,16 @@ export default function FacultySchedulePage() {
                     </span>
                     {/* Status Badge */}
                     <span className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${isPast
-                        ? "bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400"
-                        : isConfigured
-                          ? "bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400"
-                          : "bg-orange-50 dark:bg-orange-900/20 text-orange-700 dark:text-orange-400"
+                      ? "bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400"
+                      : isConfigured
+                        ? "bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400"
+                        : "bg-orange-50 dark:bg-orange-900/20 text-orange-700 dark:text-orange-400"
                       }`}>
                       <div className={`w-1.5 h-1.5 rounded-full ${isPast
-                          ? "bg-gray-400"
-                          : isConfigured
-                            ? "bg-emerald-500"
-                            : "bg-orange-500 animate-pulse"
+                        ? "bg-gray-400"
+                        : isConfigured
+                          ? "bg-emerald-500"
+                          : "bg-orange-500 animate-pulse"
                         }`} />
                       {isPast ? "Completed" : isConfigured ? "Ready" : "Pending Setup"}
                     </span>
@@ -267,10 +267,10 @@ export default function FacultySchedulePage() {
                   {/* Priority Indicator */}
                   {!isPast && (
                     <div className={`text-xs font-medium mb-4 ${isToday
-                        ? 'text-indigo-600 dark:text-indigo-400'
-                        : isUrgent
-                          ? 'text-orange-600 dark:text-orange-400'
-                          : 'text-gray-400 dark:text-gray-500'
+                      ? 'text-indigo-600 dark:text-indigo-400'
+                      : isUrgent
+                        ? 'text-orange-600 dark:text-orange-400'
+                        : 'text-gray-400 dark:text-gray-500'
                       }`}>
                       {isToday ? '📍 Today' : isUrgent ? `⚡ ${daysUntil} day${daysUntil === 1 ? '' : 's'} left` : `${daysUntil} days away`}
                     </div>
@@ -332,6 +332,7 @@ export default function FacultySchedulePage() {
           setSampleCode={setSampleCode}
           sampleLanguage={sampleLanguage}
           setSampleLanguage={setSampleLanguage}
+          singleStep={true}
           onSaved={async () => {
             setDialogOpen(false);
             setEditingPractical(null);

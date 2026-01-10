@@ -78,6 +78,17 @@ const handleConnection = (ws) => {
 
     lang = newLang; // Sync lang for release
     const containerId = await poolManager.acquire(newLang);
+
+    // Validate container ID before proceeding
+    if (!containerId) {
+      logger.error(`Failed to acquire container for ${newLang}`);
+      safeSend(ws, JSON.stringify({
+        type: 'error',
+        message: `No container available for ${newLang}. Please try again.`
+      }));
+      return;
+    }
+
     pooledContainer = containerId;
     suppressNextOutput = false;
 
@@ -216,7 +227,7 @@ const handleConnection = (ws) => {
         name:
           parsed.filename ||
           'main' +
-            (lang === 'python' ? '.py' : lang === 'java' ? '.java' : '.c'),
+          (lang === 'python' ? '.py' : lang === 'java' ? '.java' : '.c'),
         content: parsed.data || '',
         isActive: parsed.activeFile || false,
       });

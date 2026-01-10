@@ -232,15 +232,23 @@ const InteractiveTerminal = forwardRef<
       // Check if session is ready (not still switching languages)
       if (isSwitching.current || !isSessionReady.current) {
         term.current?.write("\r\n\x1b[1;33m⏳ Waiting for session to be ready...\x1b[0m\r\n");
-        // Retry after a delay
+
+        // Retry with multiple attempts
+        let retryCount = 0;
+        const maxRetries = 5;
+
         const retryExecution = () => {
+          retryCount++;
           if (isSessionReady.current && !isSwitching.current) {
             performExecution(filesOrCode, activeFileOrLang);
+          } else if (retryCount < maxRetries) {
+            term.current?.write(`\r\n\x1b[1;33m⏳ Still waiting... (attempt ${retryCount}/${maxRetries})\x1b[0m\r\n`);
+            setTimeout(retryExecution, 1000);
           } else {
-            term.current?.write("\r\n\x1b[1;31m❌ Session not ready, please try again.\x1b[0m\r\n");
+            term.current?.write("\r\n\x1b[1;31m❌ Session not ready after multiple attempts. Please try again.\x1b[0m\r\n");
           }
         };
-        setTimeout(retryExecution, 2000);
+        setTimeout(retryExecution, 1000);
         return;
       }
 

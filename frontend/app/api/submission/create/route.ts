@@ -5,7 +5,7 @@ export const dynamic = 'force-dynamic';
 
 export async function POST(req: Request) {
   try {
-    const { student_id, practical_id, code, language, status = "pending", marks_obtained = 0 } = await req.json();
+    const { student_id, practical_id, code, language, status = "pending", marks_obtained = 0, execution_details } = await req.json();
 
     if (!student_id || !practical_id || !code || !language) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
@@ -20,15 +20,31 @@ export async function POST(req: Request) {
       .single();
 
     if (existingSubmission) {
-      // Update existing submission with new code (UPSERT behavior)
+      const existingMarks = existingSubmission.marks_obtained ?? 0;
+      const newMarks = marks_obtained ?? 0;
+
+      // Compare marks: only update code and marks if new submission is better or equal
+      const shouldUpdateCode = newMarks >= existingMarks;
+
+      const updateData: Record<string, unknown> = {
+        language,
+        status,
+      };
+
+      if (shouldUpdateCode) {
+        // New submission is better - update everything
+        updateData.code = code;
+        updateData.marks_obtained = marks_obtained;
+        if (execution_details !== undefined) updateData.execution_details = execution_details;
+      } else {
+        // Keep existing code and marks, but still track this attempt
+        console.log(`Keeping existing submission (${existingMarks} marks) as it has higher marks than new attempt (${newMarks} marks)`);
+        // Don't update code, marks, or execution_details - keep the better submission
+      }
+
       const { data: updatedSubmission, error: updateError } = await supabaseAdmin
         .from("submissions")
-        .update({
-          code,
-          language,
-          status, // e.g. "pending"
-          marks_obtained: marks_obtained || existingSubmission.marks_obtained,
-        })
+        .update(updateData)
         .eq("id", existingSubmission.id)
         .select("*")
         .single();
@@ -38,7 +54,12 @@ export async function POST(req: Request) {
         return NextResponse.json({ error: updateError }, { status: 500 });
       }
 
-      return NextResponse.json({ submission: updatedSubmission });
+      return NextResponse.json({
+        submission: updatedSubmission,
+        keptHigherMarks: !shouldUpdateCode,
+        previousMarks: existingMarks,
+        newMarks: newMarks
+      });
     }
 
     // Insert new submission if none exists
@@ -52,6 +73,7 @@ export async function POST(req: Request) {
         status,
         output: "",
         marks_obtained: marks_obtained || 0,
+        execution_details: execution_details || null,
       })
       .select("*")
       .single();

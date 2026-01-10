@@ -22,6 +22,7 @@ import {
   Code2,
   FileText,
   RefreshCw,
+  AlertTriangle,
 } from "lucide-react";
 import { motion } from "framer-motion";
 import Link from "next/link";
@@ -355,6 +356,12 @@ export default function StudentPracticals() {
   const [loadingDetails, setLoadingDetails] = useState<boolean>(false);
   const [testCases, setTestCases] = useState<TestCase[]>([]);
 
+  // Attempt Warning Modal State
+  const [attemptWarning, setAttemptWarning] = useState<{
+    show: boolean;
+    practical: FormattedPractical | null;
+  }>({ show: false, practical: null });
+
 
   // Fetch user
   useEffect(() => {
@@ -479,19 +486,41 @@ export default function StudentPracticals() {
 
         combinedPracticals.sort((a, b) => {
           const getPriority = (p: FormattedPractical) => {
-            const isDone = ['passed', 'failed', 'completed'].includes(p.status);
+            const isDone = ['passed', 'completed'].includes(p.status);
+            const isFailed = p.status === 'failed';
+            const canRetry = isFailed && !p.is_locked && (p.attempt_count || 0) < (p.max_attempts || 1);
             const isSubmitted = p.status === 'submitted';
 
-            if (isDone) return 100; // Lowest priority
-            if (isSubmitted) return 50; // Middle priority
+            // Done (passed/completed) - Lowest priority
+            if (isDone) return 100;
 
-            if (!p.deadline) return 10; // Pending but no urgency
+            // Failed without retry option - Low priority
+            if (isFailed && !canRetry) return 90;
+
+            // Submitted (under review) - Medium-low priority
+            if (isSubmitted) return 50;
+
+            // Calculate deadline-based priority
+            if (!p.deadline) {
+              // Failed with retry but no deadline - Medium priority
+              if (canRetry) return 15;
+              return 20; // Pending but no urgency
+            }
 
             const now = Date.now();
             const due = new Date(p.deadline).getTime();
             const diffHours = (due - now) / (1000 * 60 * 60);
 
+            // Failed with retry option - treat like pending
+            if (canRetry) {
+              if (diffHours < 0) return -15; // Overdue retry
+              if (diffHours < 72) return -5; // Urgent retry
+              return 5; // Normal retry
+            }
+
+            // Pending practicals - highest priority based on deadline
             if (diffHours < 0) return -20; // Overdue (Highest)
+            if (diffHours < 24) return -18; // Due within 24 hours
             if (diffHours < 72) return -10; // Urgent (< 3 days)
 
             return 0; // Normal pending
@@ -502,7 +531,7 @@ export default function StudentPracticals() {
 
           if (prioA !== prioB) return prioA - prioB;
 
-          // Secondary sort: Deadline
+          // Secondary sort: Deadline (earlier first)
           const timeA = (a.deadline && typeof a.deadline === 'string') ? new Date(a.deadline).getTime() : Infinity;
           const timeB = (b.deadline && typeof b.deadline === 'string') ? new Date(b.deadline).getTime() : Infinity;
           return timeA - timeB;
@@ -609,6 +638,30 @@ export default function StudentPracticals() {
     } finally {
       setLoadingDetails(false);
     }
+  };
+
+  // Handle Start Practical with Attempt Check
+  const handleStartPractical = (practical: FormattedPractical) => {
+    const remainingAttempts = (practical.max_attempts || 1) - (practical.attempt_count || 0);
+
+    // If no attempts remaining, block
+    if (remainingAttempts <= 0) {
+      alert("You have no remaining attempts for this practical.");
+      return;
+    }
+
+    // If only 1 attempt remaining, show warning
+    if (remainingAttempts === 1) {
+      setAttemptWarning({ show: true, practical });
+      return;
+    }
+
+    // Otherwise, navigate directly
+    navigateToPractical(practical);
+  };
+
+  const navigateToPractical = (practical: FormattedPractical) => {
+    router.push(`/editor?practicalId=${practical.id}&subject=${practical.subject_id || 0}&language=${practical.language || 'java'}${practical.hasLevels ? '&hasLevels=true' : ''}`);
   };
 
 
@@ -825,33 +878,49 @@ export default function StudentPracticals() {
 
                   {/* Action Button */}
                   <div className="flex flex-col gap-2 w-full md:w-auto md:items-end mt-4 md:mt-0 pl-0 md:pl-4 border-t md:border-t-0 md:border-l border-gray-100 dark:border-gray-800 pt-4 md:pt-0">
-                    {/* Show Start/Continue for pending, or Try Again for failed with attempts available */}
-                    {(!isDone && !isSubmitted) || (p.status === 'failed' && !p.is_locked && (p.attempt_count || 0) < (p.max_attempts || 1)) ? (
-                      <Link href={`/editor?practicalId=${p.id}&subject=${p.subject_id || 0}&language=${p.language || 'java'}${p.hasLevels ? '&hasLevels=true' : ''}`} className="w-full md:w-auto">
-                        <Button
-                          className="w-full md:w-auto shadow-sm"
-                          size="sm"
-                          variant={p.status === 'failed' ? "outline" : (timeInfo?.urgency === 'overdue' ? "destructive" : "outline")}
-                        >
-                          {p.status === 'failed' ? (
-                            <>Try Again <RefreshCw className="ml-2 w-4 h-4" /></>
-                          ) : p.status === 'in_progress' ? (
-                            <>Continue <ArrowRight className="ml-2 w-4 h-4" /></>
-                          ) : (
-                            <>Start Challenge <ArrowRight className="ml-2 w-4 h-4" /></>
-                          )}
-                        </Button>
-                      </Link>
+                    {/* Show remaining attempts for pending or failed practicals with attempts left */}
+                    {((!isDone && !isSubmitted) || (p.status === 'failed' && !p.is_locked)) && (p.max_attempts || 1) > 1 && (
+                      <div className={`text-xs font-medium px-2 py-1 rounded-lg mb-1 ${((p.max_attempts || 1) - (p.attempt_count || 0)) <= 1
+                        ? 'bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400'
+                        : 'bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400'
+                        }`}>
+                        {(p.max_attempts || 1) - (p.attempt_count || 0)} attempt{((p.max_attempts || 1) - (p.attempt_count || 0)) !== 1 ? 's' : ''} remaining
+                      </div>
+                    )}
+
+                    {/* Show Start/Continue for pending practicals */}
+                    {!isDone && !isSubmitted && p.status !== 'failed' ? (
+                      <Button
+                        className="w-full md:w-auto shadow-sm"
+                        size="sm"
+                        variant={timeInfo?.urgency === 'overdue' ? "destructive" : "outline"}
+                        onClick={() => handleStartPractical(p)}
+                        disabled={p.is_locked}
+                      >
+                        {p.is_locked ? (
+                          <>No Attempts Left</>
+                        ) : p.status === 'in_progress' ? (
+                          <>Continue <ArrowRight className="ml-2 w-4 h-4" /></>
+                        ) : (
+                          <>Start Challenge <ArrowRight className="ml-2 w-4 h-4" /></>
+                        )}
+                      </Button>
                     ) : (
-                      <div className="flex flex-col items-end gap-1 w-full md:w-auto">
+                      /* Show View Result for passed, failed, completed, and submitted */
+                      <div className="flex flex-col items-end gap-2 w-full md:w-auto">
                         <div className="flex items-center gap-2">
                           {p.marks_obtained !== undefined && (
-                            <span className="text-sm font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/20 px-2 py-0.5 rounded-md">
+                            <span className={`text-sm font-bold px-2 py-0.5 rounded-md ${p.status === 'passed' || p.status === 'completed'
+                              ? 'text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20'
+                              : p.status === 'failed'
+                                ? 'text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20'
+                                : 'text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/20'
+                              }`}>
                               {p.marks_obtained}/{p.max_marks}
                             </span>
                           )}
-                          {/* Show attempts used for failed+locked */}
-                          {p.status === 'failed' && p.is_locked && (
+                          {/* Show attempts used */}
+                          {(p.status === 'failed' || p.status === 'passed') && (p.max_attempts || 1) > 1 && (
                             <span className="text-xs text-gray-500 dark:text-gray-400">
                               {p.attempt_count}/{p.max_attempts} attempts
                             </span>
@@ -859,15 +928,26 @@ export default function StudentPracticals() {
                           <Button
                             variant="ghost"
                             size="sm"
-                            className="text-gray-500 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 w-full md:w-auto"
+                            className="text-gray-500 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400"
                             onClick={(e) => {
-                              e.stopPropagation(); // prevent card click
+                              e.stopPropagation();
                               handleViewResult(p.id, p.title);
                             }}
                           >
                             {isSubmitted ? 'View Submission' : 'View Result'} <ArrowRight className="ml-2 w-4 h-4" />
                           </Button>
                         </div>
+
+                        {/* Try Again button for failed practicals with attempts remaining */}
+                        {p.status === 'failed' && !p.is_locked && (p.attempt_count || 0) < (p.max_attempts || 1) && (
+                          <Button
+                            className="w-full md:w-auto shadow-sm bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white"
+                            size="sm"
+                            onClick={() => handleStartPractical(p)}
+                          >
+                            Try Again <RefreshCw className="ml-2 w-4 h-4" />
+                          </Button>
+                        )}
                       </div>
                     )}
                   </div>
@@ -1005,6 +1085,55 @@ export default function StudentPracticals() {
                     </div>
                   </div>
                 </div>
+              </div>
+            </div>
+          </div>
+        )}
+        {/* Attempt Warning Modal */}
+        {attemptWarning.show && attemptWarning.practical && (
+          <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-sm animate-fadeIn">
+            <div className="glass-card-premium rounded-3xl w-full max-w-md p-6 animate-scaleIn">
+              <div className="flex items-center gap-4 mb-4">
+                <div className="w-14 h-14 rounded-2xl bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center">
+                  <AlertTriangle className="w-7 h-7 text-orange-600 dark:text-orange-400" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-bold text-gray-900 dark:text-white">
+                    Last Attempt Warning
+                  </h3>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">
+                    This is your final attempt
+                  </p>
+                </div>
+              </div>
+
+              <div className="bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-xl p-4 mb-6">
+                <p className="text-sm text-orange-800 dark:text-orange-200">
+                  <strong>⚠️ Warning:</strong> You have only <strong>1 attempt</strong> remaining for
+                  <strong className="text-orange-600 dark:text-orange-300"> "{attemptWarning.practical.title}"</strong>.
+                  Once you start, you must complete and submit your solution. Make sure you're ready before proceeding.
+                </p>
+              </div>
+
+              <div className="flex gap-3">
+                <Button
+                  variant="outline"
+                  className="flex-1"
+                  onClick={() => setAttemptWarning({ show: false, practical: null })}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  className="flex-1 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white"
+                  onClick={() => {
+                    if (attemptWarning.practical) {
+                      navigateToPractical(attemptWarning.practical);
+                    }
+                    setAttemptWarning({ show: false, practical: null });
+                  }}
+                >
+                  I'm Ready, Start <ArrowRight className="ml-2 w-4 h-4" />
+                </Button>
               </div>
             </div>
           </div>

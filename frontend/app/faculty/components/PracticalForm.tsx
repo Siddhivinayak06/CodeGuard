@@ -27,6 +27,7 @@ interface PracticalFormProps {
   isOpen?: boolean;
   defaultSubjectId?: number | string | null;
   onSaveStep1?: (id: number) => void;
+  singleStep?: boolean; // If true, skip assignment step and save directly
 }
 
 // ---------------------- Small icons / helpers ----------------------
@@ -51,6 +52,7 @@ export default function PracticalForm({
   isOpen = false,
   defaultSubjectId,
   onSaveStep1,
+  singleStep = false,
 }: PracticalFormProps) {
 
   // Level type for multi-level practicals - now using shared type
@@ -578,7 +580,13 @@ export default function PracticalForm({
                       if (step === 1) {
                         const success = await handleSave();
                         if (success) {
-                          setStep(2);
+                          if (singleStep) {
+                            // Single step mode: save and close
+                            onSaved();
+                          } else {
+                            // Multi-step mode: go to assignment step
+                            setStep(2);
+                          }
                         }
                       } else {
                         await assign();
@@ -593,7 +601,7 @@ export default function PracticalForm({
                     )}
                   >
                     {(saving || loading) ? <LoadingSpinner /> : null}
-                    {saving ? "Saving..." : loading ? "Assigning..." : step === 1 ? "Save & Next →" : "Assign to Students"}
+                    {saving ? "Saving..." : loading ? "Assigning..." : step === 1 ? (singleStep ? "Save Practical" : "Save & Next →") : "Assign to Students"}
                   </motion.button>
                 </div>
               </div>
@@ -601,30 +609,32 @@ export default function PracticalForm({
 
             {/* Main content container */}
             <div className="w-full mx-auto px-4 xl:px-12 py-6">
-              {/* Progress indicator (redundant but helpful) */}
-              <div className="mb-6">
-                <div className="flex items-center justify-center gap-4">
-                  <div className="flex items-center gap-2">
-                    <div className={cx(
-                      "w-10 h-10 rounded-full flex items-center justify-center font-bold transition-all",
-                      step === 1 ? "bg-gradient-to-br from-blue-600 to-purple-600 text-white shadow-lg" : "bg-emerald-600 text-white"
-                    )}>
-                      {step === 1 ? "1" : <CheckIcon />}
+              {/* Progress indicator - only show if not single step */}
+              {!singleStep && (
+                <div className="mb-6">
+                  <div className="flex items-center justify-center gap-4">
+                    <div className="flex items-center gap-2">
+                      <div className={cx(
+                        "w-10 h-10 rounded-full flex items-center justify-center font-bold transition-all",
+                        step === 1 ? "bg-gradient-to-br from-blue-600 to-purple-600 text-white shadow-lg" : "bg-emerald-600 text-white"
+                      )}>
+                        {step === 1 ? "1" : <CheckIcon />}
+                      </div>
+                      <span className={cx("font-semibold", step === 1 ? "text-gray-900 dark:text-white" : "text-gray-500 dark:text-gray-400")}>Practical Details</span>
                     </div>
-                    <span className={cx("font-semibold", step === 1 ? "text-gray-900 dark:text-white" : "text-gray-500 dark:text-gray-400")}>Practical Details</span>
-                  </div>
 
-                  <div className={cx("h-1 w-16 rounded-full", step === 2 ? "bg-gradient-to-r from-blue-600 to-purple-600" : "bg-gray-200 dark:bg-gray-700")} />
+                    <div className={cx("h-1 w-16 rounded-full", step === 2 ? "bg-gradient-to-r from-blue-600 to-purple-600" : "bg-gray-200 dark:bg-gray-700")} />
 
-                  <div className="flex items-center gap-2">
-                    <div className={cx(
-                      "w-10 h-10 rounded-full flex items-center justify-center font-bold transition-all",
-                      step === 2 ? "bg-gradient-to-br from-blue-600 to-purple-600 text-white shadow-lg" : "bg-gray-200 dark:bg-gray-700 text-gray-400"
-                    )}>2</div>
-                    <span className={cx("font-semibold", step === 2 ? "text-gray-900 dark:text-white" : "text-gray-500 dark:text-gray-400")}>Assign to Students</span>
+                    <div className="flex items-center gap-2">
+                      <div className={cx(
+                        "w-10 h-10 rounded-full flex items-center justify-center font-bold transition-all",
+                        step === 2 ? "bg-gradient-to-br from-blue-600 to-purple-600 text-white shadow-lg" : "bg-gray-200 dark:bg-gray-700 text-gray-400"
+                      )}>2</div>
+                      <span className={cx("font-semibold", step === 2 ? "text-gray-900 dark:text-white" : "text-gray-500 dark:text-gray-400")}>Assign to Students</span>
+                    </div>
                   </div>
                 </div>
-              </div>
+              )}
 
               {/* ---------- STEP TRANSITIONS ---------- */}
               <AnimatePresence mode="wait">

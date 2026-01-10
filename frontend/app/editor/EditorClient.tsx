@@ -663,7 +663,7 @@ int main() {
               </p>
             </div>
             <Button
-              onClick={() => router.push("/student")}
+              onClick={() => router.push("/dashboard/student")}
               className="mt-6 w-full"
               variant="outline"
             >

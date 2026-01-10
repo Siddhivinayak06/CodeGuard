@@ -37,6 +37,10 @@ interface Submission {
   created_at: string;
   marks_obtained: number | null;
   testCaseResults: TestCaseResult[];
+  // Attempt info
+  attempt_count?: number;
+  max_attempts?: number;
+  is_locked?: boolean;
 }
 
 interface TestCase {
@@ -248,18 +252,36 @@ function StudentSubmissionsContent() {
 
         if (error) throw error;
 
-        const formatted: Submission[] = (data as unknown as any[]).map((s) => ({
-          id: s.id,
-          practical_id: s.practical_id,
-          practical_title: s.practicals?.title || "Unknown",
-          code: s.code,
-          output: s.output,
-          language: s.language,
-          status: s.status,
-          created_at: s.created_at,
-          marks_obtained: s.marks_obtained,
-          testCaseResults: s.execution_details?.results || [],
-        }));
+        // Fetch attempt info from student_practicals
+        const practicalIds = [...new Set((data as unknown as any[]).map(s => s.practical_id).filter(Boolean))];
+        const { data: attemptData } = await supabase
+          .from("student_practicals")
+          .select("practical_id, attempt_count, max_attempts, is_locked")
+          .eq("student_id", user.id)
+          .in("practical_id", practicalIds);
+
+        const attemptMap = new Map(
+          (attemptData || []).map(a => [a.practical_id, a])
+        );
+
+        const formatted: Submission[] = (data as unknown as any[]).map((s) => {
+          const attemptInfo = attemptMap.get(s.practical_id);
+          return {
+            id: s.id,
+            practical_id: s.practical_id,
+            practical_title: s.practicals?.title || "Unknown",
+            code: s.code,
+            output: s.output,
+            language: s.language,
+            status: s.status,
+            created_at: s.created_at,
+            marks_obtained: s.marks_obtained,
+            testCaseResults: s.execution_details?.results || [],
+            attempt_count: attemptInfo?.attempt_count ?? 0,
+            max_attempts: attemptInfo?.max_attempts ?? 1,
+            is_locked: attemptInfo?.is_locked ?? false,
+          };
+        });
 
         if (mountedRef.current) setSubmissions(formatted);
       } catch (err) {
@@ -531,8 +553,8 @@ function StudentSubmissionsContent() {
 
                     {/* Actions */}
                     <div className="flex items-center gap-2 w-full md:w-auto mt-2 md:mt-0">
-                      {/* Request Re-attempt for Failed */}
-                      {s.status === 'failed' && (
+                      {/* Request Re-attempt for Failed with NO attempts left */}
+                      {s.status === 'failed' && (s.is_locked || (s.attempt_count ?? 0) >= (s.max_attempts ?? 1)) && (
                         <Button
                           variant="outline"
                           size="sm"
