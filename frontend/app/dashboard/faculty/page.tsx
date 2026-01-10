@@ -3,7 +3,7 @@
 import { useEffect, useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { Calendar, CalendarDayButton } from "@/components/ui/calendar";
+import { Calendar } from "@/components/ui/calendar";
 import { cn } from "@/lib/utils";
 import dynamic from "next/dynamic";
 import type { User } from "@supabase/supabase-js";
@@ -31,6 +31,7 @@ import {
   Pencil,
   Trash2,
   BookOpen,
+  ArrowRight,
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -367,6 +368,11 @@ export default function FacultyDashboardPage() {
     return map;
   }, [practicals]);
 
+  // Dates with events for Calendar modifiers
+  const eventDates = useMemo(() => {
+    return practicals.map(p => new Date(p.deadline || new Date()));
+  }, [practicals]);
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50/30 to-purple-50/30 dark:from-gray-950 dark:via-indigo-950/10 dark:to-purple-950/10">
       <main className="pt-24 pb-12 px-4 sm:px-6 lg:px-8 xl:px-12 w-full mx-auto">
@@ -534,7 +540,13 @@ export default function FacultyDashboardPage() {
             {/* Practicals List (Wide) */}
             <motion.div variants={itemVariants} className="md:col-span-2 lg:col-span-3 glass-card-premium rounded-3xl p-6 min-h-[400px]">
               <div className="flex items-center justify-between mb-6">
-                <h3 className="text-lg font-bold text-gray-900 dark:text-white">All Practicals</h3>
+                <h3 className="text-lg font-bold text-gray-900 dark:text-white">Recent Practicals</h3>
+                <button
+                  onClick={() => router.push("/dashboard/faculty/practicals")}
+                  className="text-sm font-semibold text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 flex items-center gap-1 transition-colors"
+                >
+                  View All <ArrowRight size={16} />
+                </button>
               </div>
 
               <div className="space-y-4">
@@ -547,7 +559,7 @@ export default function FacultyDashboardPage() {
                     <p className="text-gray-500 max-w-xs mx-auto mt-2">Create your first practical to start assigning work to students.</p>
                   </div>
                 ) : (
-                  practicals.map(p => {
+                  practicals.slice(0, 5).map(p => {
                     const subj = subjects.find(s => s.id === p.subject_id)?.subject_name || "Subject";
                     return <PracticalCard key={p.id} practical={p} subject={subj} onEdit={openEdit} onDelete={deletePractical} />;
                   })
@@ -578,49 +590,32 @@ export default function FacultyDashboardPage() {
                     mode="single"
                     selected={selected}
                     onSelect={(d) => d && setSelected(d)}
-                    className="rounded-xl"
-                    components={{
-                      DayButton: ({ day, ...props }) => {
-                        const date = day.date;
-                        if (!(date instanceof Date) || isNaN(date.getTime())) return <></>;
-                        const iso = date.toISOString().slice(0, 10);
-                        const hasEvent = eventsByDate.has(iso);
-                        const eventCount = eventsByDate.get(iso)?.length || 0;
-                        return (
-                          <div className="relative w-full h-full flex items-center justify-center" onClick={() => openCreate(date)}>
-                            <CalendarDayButton day={day} {...props} className={cn(
-                              props.className,
-                              hasEvent && "font-bold text-indigo-600 bg-gradient-to-br from-indigo-50 to-purple-50 dark:from-indigo-900/40 dark:to-purple-900/40 dark:text-indigo-300 ring-1 ring-indigo-200 dark:ring-indigo-700/50"
-                            )} />
-                            {hasEvent && (
-                              <div className="absolute -bottom-0.5 flex gap-0.5 justify-center">
-                                {[...Array(Math.min(eventCount, 3))].map((_, i) => (
-                                  <div key={i} className="w-1 h-1 bg-indigo-500 rounded-full" />
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        )
-                      }
+                    className="rounded-xl border-none shadow-none"
+                    modifiers={{
+                      hasEvent: eventDates
+                    }}
+                    modifiersClassNames={{
+                      hasEvent: "after:content-[''] after:absolute after:bottom-1 after:left-1/2 after:-translate-x-1/2 after:w-1 after:h-1 after:bg-indigo-500 after:rounded-full"
                     }}
                   />
                 </div>
 
                 {/* Upcoming Deadlines */}
-                <div className="mt-6 space-y-3">
-                  <div className="flex items-center justify-between">
+                <div className="mt-8 space-y-4">
+                  <div className="flex items-center gap-2">
                     <p className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Upcoming Deadlines</p>
-                    <span className="text-xs font-medium text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/30 px-2 py-0.5 rounded-full">
+                    <span className="text-xs font-medium text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/30 px-2 py-0.5 rounded-full border border-emerald-100 dark:border-emerald-800/50">
                       {practicals.filter(p => new Date(p.deadline || new Date()) >= new Date()).length} active
                     </span>
                   </div>
 
                   {practicals.filter(p => new Date(p.deadline || new Date()) >= new Date()).length === 0 ? (
-                    <div className="text-center py-6">
-                      <div className="w-12 h-12 mx-auto mb-3 rounded-xl bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
-                        <Clock size={20} className="text-gray-400" />
+                    <div className="text-center py-8 px-4 rounded-xl bg-gray-50/50 dark:bg-gray-800/50 border border-gray-100 dark:border-gray-700/50 border-dashed">
+                      <div className="w-12 h-12 mx-auto mb-3 rounded-full bg-white dark:bg-gray-700 shadow-sm flex items-center justify-center">
+                        <Clock size={20} className="text-gray-300 dark:text-gray-500" />
                       </div>
-                      <p className="text-sm text-gray-500 dark:text-gray-400">No upcoming deadlines</p>
+                      <p className="text-sm font-medium text-gray-900 dark:text-white">All caught up!</p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">No pending deadlines for now.</p>
                     </div>
                   ) : (
                     <div className="space-y-2">

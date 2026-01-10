@@ -14,6 +14,34 @@ function formatScheduleDate(dateStr: string): string {
   return date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
 }
 
+// Helper to get days until deadline
+function getDaysUntil(dateStr: string): number {
+  const date = new Date(dateStr);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  date.setHours(0, 0, 0, 0);
+  return Math.ceil((date.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+}
+
+// Priority sorting function
+function sortByPriority(a: any, b: any): number {
+  const aConfigured = !!a.practical_id;
+  const bConfigured = !!b.practical_id;
+  const aDays = getDaysUntil(a.date);
+  const bDays = getDaysUntil(b.date);
+
+  // 1. Pending setup items first (not configured)
+  if (!aConfigured && bConfigured) return -1;
+  if (aConfigured && !bConfigured) return 1;
+
+  // 2. Within same configuration status, sort by date proximity
+  // Closer dates have higher priority
+  if (aDays !== bDays) return aDays - bDays;
+
+  // 3. Same day - sort by start time
+  return a.start_time.localeCompare(b.start_time);
+}
+
 export default function FacultySchedulePage() {
   const [schedules, setSchedules] = useState<any[]>([]);
   const [subjects, setSubjects] = useState<any[]>([]);
@@ -47,7 +75,11 @@ export default function FacultySchedulePage() {
         .order("date", { ascending: true })
         .order("start_time", { ascending: true });
 
-      if (scheduleData) setSchedules(scheduleData);
+      if (scheduleData) {
+        // Sort by priority
+        const sorted = [...scheduleData].sort(sortByPriority);
+        setSchedules(sorted);
+      }
 
       // 2. Fetch subjects
       const { data: subjectData } = await supabase.from("subjects").select("*");
@@ -118,7 +150,11 @@ export default function FacultySchedulePage() {
         .order("date", { ascending: true })
         .order("start_time", { ascending: true });
 
-      if (data) setSchedules(data);
+      if (data) {
+        // Sort by priority
+        const sorted = [...data].sort(sortByPriority);
+        setSchedules(sorted);
+      }
     }
   };
 
@@ -166,9 +202,21 @@ export default function FacultySchedulePage() {
             const isConfigured = !!schedule.practical_id;
             const subjectName = schedule.practicals?.subjects?.subject_name;
             const practicalTitle = schedule.practicals?.title || schedule.title_placeholder || "Untitled Session";
+            const daysUntil = getDaysUntil(schedule.date);
+            const isToday = daysUntil === 0;
+            const isUrgent = daysUntil <= 2 && daysUntil >= 0;
+            const isPast = daysUntil < 0;
 
             return (
-              <Card key={schedule.id} className="relative overflow-hidden bg-white dark:bg-gray-900/50 border-gray-100 dark:border-gray-800 hover:shadow-lg hover:border-indigo-200 dark:hover:border-indigo-800/50 transition-all">
+              <Card
+                key={schedule.id}
+                className={`relative overflow-hidden bg-white dark:bg-gray-900/50 border-gray-100 dark:border-gray-800 hover:shadow-lg transition-all ${!isConfigured && !isPast
+                    ? 'ring-2 ring-orange-300 dark:ring-orange-700 border-orange-200 dark:border-orange-800'
+                    : isToday
+                      ? 'ring-2 ring-indigo-300 dark:ring-indigo-700 border-indigo-200 dark:border-indigo-800'
+                      : 'hover:border-indigo-200 dark:hover:border-indigo-800/50'
+                  }`}
+              >
                 <CardHeader className="pb-3">
                   <div className="flex justify-between items-start">
                     {/* Batch Badge */}
@@ -176,12 +224,19 @@ export default function FacultySchedulePage() {
                       {schedule.batch_name || "All Batches"}
                     </span>
                     {/* Status Badge */}
-                    <span className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${isConfigured
-                      ? "bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400"
-                      : "bg-orange-50 dark:bg-orange-900/20 text-orange-700 dark:text-orange-400"
+                    <span className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${isPast
+                        ? "bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400"
+                        : isConfigured
+                          ? "bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400"
+                          : "bg-orange-50 dark:bg-orange-900/20 text-orange-700 dark:text-orange-400"
                       }`}>
-                      <div className={`w-1.5 h-1.5 rounded-full ${isConfigured ? "bg-emerald-500" : "bg-orange-500 animate-pulse"}`} />
-                      {isConfigured ? "Ready" : "Pending Setup"}
+                      <div className={`w-1.5 h-1.5 rounded-full ${isPast
+                          ? "bg-gray-400"
+                          : isConfigured
+                            ? "bg-emerald-500"
+                            : "bg-orange-500 animate-pulse"
+                        }`} />
+                      {isPast ? "Completed" : isConfigured ? "Ready" : "Pending Setup"}
                     </span>
                   </div>
                   {/* Subject Eyebrow + Title */}
@@ -198,7 +253,7 @@ export default function FacultySchedulePage() {
                 </CardHeader>
                 <CardContent>
                   {/* Date & Time */}
-                  <div className="flex items-center gap-4 text-sm text-gray-500 dark:text-gray-400 mb-5">
+                  <div className="flex items-center gap-4 text-sm text-gray-500 dark:text-gray-400 mb-2">
                     <div className="flex items-center gap-1.5">
                       <CalendarIcon size={14} className="text-gray-400" />
                       <span>{formatScheduleDate(schedule.date)}</span>
@@ -208,6 +263,23 @@ export default function FacultySchedulePage() {
                       <span>{schedule.start_time.slice(0, 5)} - {schedule.end_time.slice(0, 5)}</span>
                     </div>
                   </div>
+
+                  {/* Priority Indicator */}
+                  {!isPast && (
+                    <div className={`text-xs font-medium mb-4 ${isToday
+                        ? 'text-indigo-600 dark:text-indigo-400'
+                        : isUrgent
+                          ? 'text-orange-600 dark:text-orange-400'
+                          : 'text-gray-400 dark:text-gray-500'
+                      }`}>
+                      {isToday ? '📍 Today' : isUrgent ? `⚡ ${daysUntil} day${daysUntil === 1 ? '' : 's'} left` : `${daysUntil} days away`}
+                    </div>
+                  )}
+                  {isPast && (
+                    <div className="text-xs font-medium text-gray-400 dark:text-gray-500 mb-4">
+                      Ended {Math.abs(daysUntil)} day{Math.abs(daysUntil) === 1 ? '' : 's'} ago
+                    </div>
+                  )}
 
                   {/* Action Button */}
                   {isConfigured ? (
