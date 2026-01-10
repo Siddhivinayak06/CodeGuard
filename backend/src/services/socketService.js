@@ -108,9 +108,16 @@ const handleConnection = (ws) => {
     suppressNextOutput = false;
 
     if (newLang === 'python') {
+      // Capture containerId before setTimeout to prevent race condition
+      const containerToUse = pooledContainer;
       setTimeout(() => {
+        // Validate container still exists (may have been cleaned up by disconnect)
+        if (!containerToUse || pooledContainer !== containerToUse) {
+          logger.warn('Python container was cleaned up before process could start');
+          return;
+        }
         pythonProcess = dockerService.execPython(
-          pooledContainer,
+          containerToUse,
           (data) => safeSend(ws, data.toString()),
           (code) => {
             logger.info(`Python wrapper exited with code ${code}`);
@@ -308,9 +315,10 @@ const handleConnection = (ws) => {
           safeSend(ws, '\x1b[2J\x1b[H');
           logger.info('[C] Sending code to compile');
           suppressNextOutput = true;
-          cProcess.write('__CODE_START__\r');
+          // Use __FILE_START__ to ensure file is written. Wrapper ignores __CODE_START__ without opening file.
+          cProcess.write('__FILE_START__ main.c\n');
           inputData.split('\n').forEach((line) => cProcess.write(line + '\n'));
-          cProcess.write('__RUN_CODE__\r');
+          cProcess.write('__RUN_CODE__\n');
         } else {
           logger.info(`[C Input] ${inputData}`);
           cProcess.write(inputData + '\r');
@@ -318,12 +326,27 @@ const handleConnection = (ws) => {
       } else if (lang === 'java' && javaProcess) {
         if (parsed.type === 'execute') {
           safeSend(ws, '\x1b[2J\x1b[H');
+          // Use __FILE_START__ to ensure file is written
+          javaProcess.stdin.write('__FILE_START__ Main.java\n');
           inputData
             .split('\n')
             .forEach((line) => javaProcess.stdin.write(line + '\n'));
           javaProcess.stdin.write('__RUN_CODE__\n');
         } else {
           javaProcess.stdin.write(inputData + '\n');
+        }
+      } else if (lang === 'cpp' && cppProcess) {
+        if (parsed.type === 'execute') {
+          safeSend(ws, '\x1b[2J\x1b[H');
+          logger.info('[CPP] Sending code to compile');
+          suppressNextOutput = true;
+          // Use __FILE_START__ to ensure file is written.
+          cppProcess.write('__FILE_START__ main.cpp\n');
+          inputData.split('\n').forEach((line) => cppProcess.write(line + '\n'));
+          cppProcess.write('__RUN_CODE__\n');
+        } else {
+          logger.info(`[CPP Input] ${inputData}`);
+          cppProcess.write(inputData + '\n');
         }
       } else {
         logger.warn('No process available for current language yet.');

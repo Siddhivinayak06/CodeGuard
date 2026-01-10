@@ -318,7 +318,7 @@ const InteractiveTerminal = forwardRef<
       // Send all files to the backend
       files.forEach((file, index) => {
         const msg = JSON.stringify({
-          type: "code",
+          type: "file",
           data: file.content,
           filename: file.name,
           isLast: index === files.length - 1,
@@ -331,7 +331,7 @@ const InteractiveTerminal = forwardRef<
     } else {
       // Single-file mode (backward compatibility)
       const code = filesOrCode as string;
-      const msg = JSON.stringify({ type: "code", data: code });
+      const msg = JSON.stringify({ type: "execute", data: code });
       socket.current?.send(msg);
       term.current?.write(`\r\n\x1b[1;36m🚀 Running code...\x1b[0m\r\n\n`);
     }

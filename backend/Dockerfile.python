@@ -3,30 +3,37 @@ FROM python:3.11-slim
 # Install timeout command
 RUN apt-get update && apt-get install -y coreutils time && rm -rf /var/lib/apt/lists/*
 
-# Install safe/common libraries
+# Install safe/common libraries + redis
 RUN pip install --no-cache-dir \
     numpy \
     pandas \
     matplotlib \
     seaborn \
     scipy \
-    scikit-learn
+    scikit-learn \
+    redis
 
 # Prevent excessive thread creation and enable bytecode caching
 ENV OPENBLAS_NUM_THREADS=1 \
     MKL_NUM_THREADS=1 \
     PYTHONDONTWRITEBYTECODE=0 \
     PYTHONPYCACHEPREFIX=/app/workspace/__pycache__ \
-    MPLCONFIGDIR=/tmp
+    MPLCONFIGDIR=/tmp \
+    REDIS_URL=redis://redis:6379 \
+    WORKERS_PER_CONTAINER=10
 
 # Set working directory
 WORKDIR /app
 
-# Copy wrapper script into the container
+# Copy wrapper scripts into the container
 COPY interactive_wrapper.py /app/
+COPY docker/python/multi_worker.py /app/
 
 # Create a non-root user and setup workspace
 RUN useradd -m runner && \
     mkdir -p /app/workspace && \
     chown -R runner:runner /app
 USER runner
+
+# Default command runs multi-worker pool
+CMD ["python3", "/app/multi_worker.py"]

@@ -126,6 +126,8 @@ services:
       context: ./backend
       dockerfile: Dockerfile.python
     image: ${PY_RUNTIME_IMAGE:-codeguard-python}:${PY_RUNTIME_TAG:-latest}
+    # Legacy mode: idle container for container-per-user execution
+    # To enable process pool mode, change to: python3 /app/multi_worker.py
     command: tail -f /dev/null
     restart: unless-stopped
     networks:

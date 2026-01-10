@@ -285,7 +285,11 @@ export default function Home() {
                           setPlotImages([]);
                           setIsExecuting(true);
                           if (terminalMounted && interactiveTerminalRef.current) {
-                            interactiveTerminalRef.current.startExecution(files, activeFileName, lang);
+                            // Run only the active file's code (single-file mode)
+                            const activeFile = files.find(f => f.name === activeFileName);
+                            if (activeFile) {
+                              interactiveTerminalRef.current.startExecution(activeFile.content, lang);
+                            }
                           }
                           setTimeout(() => setIsExecuting(false), 2000);
                         }}
