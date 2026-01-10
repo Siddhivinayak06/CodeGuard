@@ -152,11 +152,31 @@ export default function Home() {
       alert("File with this name already exists!");
       return;
     }
-    setFiles(prev => prev.map(f =>
-      f.name === oldName ? { ...f, name: newName } : f
-    ));
+
+    const extension = newName.split('.').pop()?.toLowerCase();
+    let newLanguage: "python" | "java" | "c" | "cpp" | undefined;
+
+    if (extension === 'py') newLanguage = 'python';
+    else if (extension === 'java') newLanguage = 'java';
+    else if (extension === 'c') newLanguage = 'c';
+    else if (extension === 'cpp' || extension === 'cc' || extension === 'hpp') newLanguage = 'cpp';
+
+    setFiles(prev => prev.map(f => {
+      if (f.name === oldName) {
+        return {
+          ...f,
+          name: newName,
+          language: newLanguage || f.language // Update language if recognized, else keep old
+        };
+      }
+      return f;
+    }));
+
     if (activeFileName === oldName) {
       setActiveFileName(newName);
+      if (newLanguage) {
+        setLang(newLanguage);
+      }
     }
   };
 
@@ -349,7 +369,7 @@ export default function Home() {
                     <div className="flex-1 overflow-hidden relative">
                       <InteractiveTerminal
                         ref={interactiveTerminalRef}
-                        wsUrl="ws://localhost:5002"
+                        wsUrl="ws://127.0.0.1:5002"
                         fontSize={15}
                         fontFamily="'Fira Code', 'JetBrains Mono', monospace"
                         onOutput={(data: string) => setInteractiveOutput((prev) => prev + data)}

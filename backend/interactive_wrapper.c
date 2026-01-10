@@ -14,7 +14,7 @@
 #define WORKSPACE "/app/workspace"
 #define EXEC_FILE "/app/workspace/user_program"
 #define ERROR_FILE "/app/workspace/compile_errors.txt"
-#define MAX_CPU_TIME 15
+// MAX_CPU_TIME removed, reading from env now
 
 // ANSI Colors
 #define RED "\033[91m"
@@ -82,13 +82,16 @@ void run_code() {
   pid_t pid = fork();
   if (pid == 0) {
     // Child
+    const char *timeout_env = getenv("EXECUTION_TIMEOUT");
+    int timeout_sec = timeout_env ? atoi(timeout_env) : 15;
+
     struct rlimit cpu_limit;
-    cpu_limit.rlim_cur = (rlim_t)MAX_CPU_TIME;
-    cpu_limit.rlim_max = (rlim_t)MAX_CPU_TIME;
+    cpu_limit.rlim_cur = (rlim_t)timeout_sec;
+    cpu_limit.rlim_max = (rlim_t)timeout_sec;
     setrlimit(RLIMIT_CPU, &cpu_limit);
 
-    // Wall-clock timeout (30s)
-    alarm(30);
+    // Wall-clock timeout
+    alarm(timeout_sec);
 
     execl(EXEC_FILE, EXEC_FILE, NULL);
     perror(RED "❌ Execution failed" RESET);

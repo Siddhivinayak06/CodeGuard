@@ -100,123 +100,148 @@ const InteractiveTerminal = forwardRef<
     const observer = new ResizeObserver(() => safeFit());
     observer.observe(terminalRef.current);
 
-    // Delay initial fit
-    const fitTimeout = setTimeout(() => {
-      safeFit();
-    }, 200);
-
-    // WebSocket setup
-    const ws = new WebSocket(wsEndpoint);
-    socket.current = ws;
-
-    ws.onopen = () => {
-      console.log("WebSocket connected:", wsEndpoint);
-      if (onMount) onMount();
-    };
-
-    ws.onmessage = (event: MessageEvent) => {
-      if (!term.current) return;
-
-      let msg;
-      try {
-        msg = JSON.parse(event.data);
-      } catch {
-        msg = { type: "raw", data: event.data };
-      }
-
-      if (msg.type === "ready") {
-        // Backend session is now ready for this language
-        isSessionReady.current = true;
-        isSwitching.current = false;
-        currentLang.current = msg.lang;
-        term.current.write(`\r\n\x1b[1;32m✅ Ready for ${msg.lang}\x1b[0m\r\n`);
-        console.log("Session ready for language:", msg.lang);
-      } else if (msg.type === "lang") {
-        // Language switch confirmed - also mark session as ready
-        // The backend sends this when the language container is acquired
-        isSessionReady.current = true;
-        isSwitching.current = false;
-        currentLang.current = msg.lang;
-        term.current.write(`\r\n\x1b[1;32m✅ Language set to ${msg.lang}\x1b[0m\r\n`);
-        console.log("Language switched and ready:", msg.lang);
-      } else if (msg.type === "error") {
-        // Display error message from backend
-        term.current.write(`\r\n\x1b[1;31m⚠️ ${msg.message || "An error occurred"}\x1b[0m\r\n`);
-        console.error("Backend error:", msg.message);
-        // Still mark as ready so user can retry
-        isSessionReady.current = true;
-        isSwitching.current = false;
-      } else {
-        const data = msg.data ?? msg;
-        const imgStart = "__IMAGE_START__";
-        const imgEnd = "__IMAGE_END__";
-
-        if (data.includes(imgStart) && data.includes(imgEnd)) {
-          const parts = data.split(imgStart);
-          let cleanData = parts[0];
-
-          for (let i = 1; i < parts.length; i++) {
-            const [imgContent, rest] = parts[i].split(imgEnd);
-            if (imgContent && onImage) {
-              onImage(imgContent.trim());
-            }
-            cleanData += rest || "";
-          }
-
-          if (cleanData) {
-            term.current.write(cleanData.replace(/\r?\n/g, "\r\n"));
-            term.current.scrollToBottom();
-            if (onOutput) onOutput(cleanData);
-          }
-        } else {
-          term.current.write(data.replace(/\r?\n/g, "\r\n"));
-          term.current.scrollToBottom();
-          if (onOutput) onOutput(data);
-        }
-      }
-    };
-
-    ws.onclose = (event: CloseEvent) => {
-      console.log("WebSocket closed:", event.code, event.reason);
-    };
-
-    term.current.onData((data: string) => {
-      if (data === "\r") {
-        term.current?.write("\r\n");
-        socket.current?.send(JSON.stringify({ type: "stdin", data: inputBuffer.current }));
-        inputBuffer.current = "";
-      } else if (data === "\u007F") {
-        if (inputBuffer.current.length > 0) {
-          inputBuffer.current = inputBuffer.current.slice(0, -1);
-          term.current?.write("\b \b");
-        }
-      } else {
-        inputBuffer.current += data;
-        term.current?.write(data);
-      }
-    });
-
     const handleResizeWindow = () => {
       safeFit();
     };
     window.addEventListener("resize", handleResizeWindow);
 
+    // Delay initial fit
+    const fitTimeout = setTimeout(() => {
+      safeFit();
+    }, 200);
+
+    let pingInterval: NodeJS.Timeout;
+
+    // WebSocket setup with debounce and heartbeat
+    const connectTimeout = setTimeout(() => {
+      if (!term.current) return;
+
+      const ws = new WebSocket(wsEndpoint);
+      socket.current = ws;
+
+      // Heartbeat interval
+      pingInterval = setInterval(() => {
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ type: "ping" }));
+        }
+      }, 25000); // 25 seconds
+
+      ws.onopen = () => {
+        console.log("WebSocket connected:", wsEndpoint);
+        if (onMount) onMount();
+      };
+
+      ws.onmessage = (event: MessageEvent) => {
+        if (!term.current) return;
+
+        let msg;
+        try {
+          msg = JSON.parse(event.data);
+        } catch {
+          msg = { type: "raw", data: event.data };
+        }
+
+        if (msg.type === "ready") {
+          // Backend session is now ready for this language
+          isSessionReady.current = true;
+          isSwitching.current = false;
+          currentLang.current = msg.lang;
+          term.current.write(`\r\n\x1b[1;32m✅ Ready for ${msg.lang}\x1b[0m\r\n`);
+          console.log("Session ready for language:", msg.lang);
+        } else if (msg.type === "lang") {
+          // Language switch confirmed - also mark session as ready
+          isSessionReady.current = true;
+          isSwitching.current = false;
+          currentLang.current = msg.lang;
+          term.current.write(`\r\n\x1b[1;32m✅ Language set to ${msg.lang}\x1b[0m\r\n`);
+          console.log("Language switched and ready:", msg.lang);
+        } else if (msg.type === "pong") {
+          // Heartbeat response, ignore
+        } else if (msg.type === "error") {
+          // Display error message from backend
+          term.current.write(`\r\n\x1b[1;31m⚠️ ${msg.message || "An error occurred"}\x1b[0m\r\n`);
+          console.error("Backend error:", msg.message);
+          isSessionReady.current = true;
+          isSwitching.current = false;
+        } else {
+          const data = msg.data ?? msg;
+
+          // Ensure data is string before checking for images
+          if (typeof data !== 'string') {
+            // If it's an object we don't know how to handle, just ignore or stringify
+            console.log("Received non-string data:", data);
+            return;
+          }
+
+          const imgStart = "__IMAGE_START__";
+          const imgEnd = "__IMAGE_END__";
+
+          if (data.includes(imgStart) && data.includes(imgEnd)) {
+            const parts = data.split(imgStart);
+            let cleanData = parts[0];
+
+            for (let i = 1; i < parts.length; i++) {
+              const [imgContent, rest] = parts[i].split(imgEnd);
+              if (imgContent && onImage) {
+                onImage(imgContent.trim());
+              }
+              cleanData += rest || "";
+            }
+
+            if (cleanData) {
+              term.current.write(cleanData.replace(/\r?\n/g, "\r\n"));
+              term.current.scrollToBottom();
+              if (onOutput) onOutput(cleanData);
+            }
+          } else {
+            term.current.write(data.replace(/\r?\n/g, "\r\n"));
+            term.current.scrollToBottom();
+            if (onOutput) onOutput(data);
+          }
+        }
+      };
+
+      ws.onclose = (event: CloseEvent) => {
+        console.log("WebSocket closed:", event.code, event.reason);
+      };
+
+      term.current.onData((data: string) => {
+        if (data === "\r") {
+          term.current?.write("\r\n");
+          socket.current?.send(JSON.stringify({ type: "stdin", data: inputBuffer.current }));
+          inputBuffer.current = "";
+        } else if (data === "\u007F") {
+          if (inputBuffer.current.length > 0) {
+            inputBuffer.current = inputBuffer.current.slice(0, -1);
+            term.current?.write("\b \b");
+          }
+        } else {
+          inputBuffer.current += data;
+          term.current?.write(data);
+        }
+      });
+    }, 100);
+
     return () => {
       observer.disconnect();
       window.removeEventListener("resize", handleResizeWindow);
 
-      // Cleanup cleanup
+      clearTimeout(fitTimeout);
+      clearTimeout(connectTimeout);
+      if (pingInterval) clearInterval(pingInterval);
+
       if (term.current) {
         term.current.dispose();
         term.current = null;
       }
       fitAddon.current = null;
 
-      // Only close WebSocket if it's open or connecting, avoid error on unmount before connect
-      if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
-        ws.close();
+      if (socket.current) {
+        if (socket.current.readyState === WebSocket.OPEN || socket.current.readyState === WebSocket.CONNECTING) {
+          socket.current.close();
+        }
+        socket.current = null;
       }
-      clearTimeout(fitTimeout);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [wsEndpoint]); // Re-run only if endpoint changes

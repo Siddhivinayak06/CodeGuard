@@ -238,6 +238,11 @@ const handleConnection = (ws) => {
       parsed = { type: 'stdin', data: msg.toString() };
     }
 
+    if (parsed.type === 'ping') {
+      safeSend(ws, JSON.stringify({ type: 'pong' }));
+      return;
+    }
+
     if (parsed.type === 'lang') {
       lang = parsed.lang;
       startSession(lang);

@@ -31,7 +31,12 @@ def custom_input(prompt=""):
         print(prompt, end="", flush=True)
     signal.alarm(0)  # Cancel timeout while waiting for input
     line = sys.stdin.readline().rstrip("\n")
-    signal.alarm(30)  # Restart timeout after input received
+    signal.alarm(0)  # Cancel timeout while waiting for input
+    line = sys.stdin.readline().rstrip("\n")
+    # Debug print
+    # print(f"DEBUG: EXECUTION_TIMEOUT={os.environ.get('EXECUTION_TIMEOUT')}", file=sys.stderr)
+    timeout_sec = int(os.environ.get("EXECUTION_TIMEOUT", 15))
+    signal.alarm(timeout_sec)  # Restart timeout after input received
     return line
 
 __builtins__.input = custom_input
@@ -108,7 +113,8 @@ while True:
             
             # Execute the code
             try:
-                signal.alarm(30)  # Start 30-second timeout
+                timeout_sec = int(os.environ.get("EXECUTION_TIMEOUT", 15))
+                signal.alarm(timeout_sec)  # Start timeout
                 exec(code, globals())
                 signal.alarm(0)
             except TimeoutError as e:

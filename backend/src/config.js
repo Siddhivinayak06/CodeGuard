@@ -83,6 +83,7 @@ module.exports = {
     model: env.AI_MODEL,
     ollamaUrl: env.OLLAMA_URL,
   },
+  executionTimeout: parseInt(process.env.EXECUTION_TIMEOUT || '15', 10),
   logging: {
     level: env.LOG_LEVEL,
   },
