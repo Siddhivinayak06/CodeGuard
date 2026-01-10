@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useMemo } from "react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Send, X, Sparkles, Loader2, Copy, Check, Bot, User } from "lucide-react";
 import ReactMarkdown from "react-markdown";
@@ -111,7 +111,7 @@ export function AssistantPanel({ codeContext, onClose }: AssistantPanelProps) {
             const config = JSON.parse(localStorage.getItem("ai_settings") || "{}");
             const apiUrl = process.env.NEXT_PUBLIC_AI_API_URL || "http://localhost:5002/ai";
 
-            const res = await fetch(`${apiUrl}/chat`, {
+            const res = await fetch(`${apiUrl}/chat2`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ messages: apiMessages, codeContext, config }),
@@ -218,16 +218,27 @@ export function AssistantPanel({ codeContext, onClose }: AssistantPanelProps) {
                                                             }
                                                             if (!inline) {
                                                                 return (
-                                                                    <div className="relative my-3 overflow-hidden rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-gray-950/50 backdrop-blur-sm">
-                                                                        <div className="flex items-center justify-between border-b border-gray-200 dark:border-white/10 bg-gray-100 dark:bg-white/5 px-3 py-2">
-                                                                            <span className="text-xs font-medium text-purple-600 dark:text-purple-400 uppercase tracking-wider">{lang || "code"}</span>
-                                                                            <CopyButton text={text.replace(/\n$/, "")} />
+                                                                    <div className="relative my-4 overflow-hidden rounded-xl bg-transparent dark:bg-gray-900 p-0 dark:p-3 shadow-sm dark:shadow-lg dark:ring-1 dark:ring-white/10">
+                                                                        <div className="overflow-hidden rounded-lg bg-white dark:bg-[#1e1e1e] border border-gray-200 dark:border-white/5">
+                                                                            <div className="flex items-center justify-between bg-white dark:bg-[#252526] px-4 py-3 border-b border-gray-100 dark:border-white/5">
+                                                                                <div className="flex items-center gap-2">
+                                                                                    <div className="flex items-center gap-1.5 opacity-100">
+                                                                                        <div className="w-3 h-3 rounded-full bg-[#ff5f56] shadow-sm border border-black/5 dark:border-transparent" />
+                                                                                        <div className="w-3 h-3 rounded-full bg-[#ffbd2e] shadow-sm border border-black/5 dark:border-transparent" />
+                                                                                        <div className="w-3 h-3 rounded-full bg-[#27c93f] shadow-sm border border-black/5 dark:border-transparent" />
+                                                                                    </div>
+                                                                                    <span className="ml-3 text-xs font-bold text-gray-400 dark:text-gray-500 font-mono tracking-wider">{lang || "TEXT"}</span>
+                                                                                </div>
+                                                                                <CopyButton text={text.replace(/\n$/, "")} />
+                                                                            </div>
+                                                                            <div className="relative bg-[#fbfcff] dark:bg-[#1e1e1e]">
+                                                                                <pre className="overflow-x-auto p-4 not-prose text-[13px] leading-relaxed text-gray-800 dark:text-gray-300 font-mono scrollbar-thin scrollbar-thumb-gray-200 dark:scrollbar-thumb-gray-700 hover:scrollbar-thumb-gray-300 dark:hover:scrollbar-thumb-gray-600"><code className={className} {...props}>{children}</code></pre>
+                                                                            </div>
                                                                         </div>
-                                                                        <pre className="overflow-x-auto p-4 not-prose text-[13px] leading-relaxed text-gray-800 dark:text-gray-200"><code className={className} {...props}>{children}</code></pre>
                                                                     </div>
                                                                 );
                                                             }
-                                                            return <code className="rounded bg-purple-100 dark:bg-purple-500/20 px-1.5 py-0.5 font-mono text-purple-600 dark:text-purple-300" {...props}>{children}</code>;
+                                                            return <code className="rounded bg-gray-50 dark:bg-white/10 px-1.5 py-0.5 font-mono text-gray-800 dark:text-gray-200 border border-gray-100 dark:border-white/5" {...props}>{children}</code>;
                                                         },
                                                     }}
                                                 >
@@ -236,11 +247,13 @@ export function AssistantPanel({ codeContext, onClose }: AssistantPanelProps) {
                                             </div>
                                         )}
                                     </div>
-                                    {msg.role === "user" && (
-                                        <div className="flex-shrink-0 w-7 h-7 rounded-lg bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center shadow-lg shadow-blue-500/20">
-                                            <User className="h-4 w-4 text-white" />
-                                        </div>
-                                    )}
+                                    {
+                                        msg.role === "user" && (
+                                            <div className="flex-shrink-0 w-7 h-7 rounded-lg bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center shadow-lg shadow-blue-500/20">
+                                                <User className="h-4 w-4 text-white" />
+                                            </div>
+                                        )
+                                    }
                                 </motion.div>
                             ))}
                         </AnimatePresence>
@@ -265,18 +278,24 @@ export function AssistantPanel({ codeContext, onClose }: AssistantPanelProps) {
                         )}
                     </div>
                 </ScrollArea>
-            </div>
+            </div >
 
             {/* Input */}
-            <div className="relative border-t border-gray-200 dark:border-white/10 p-4 bg-gradient-to-t from-gray-100 dark:from-gray-950 to-transparent">
+            < div className="relative border-t border-gray-200 dark:border-white/10 p-4 bg-gradient-to-t from-gray-100 dark:from-gray-950 to-transparent" >
                 <form onSubmit={(e) => { e.preventDefault(); handleSend(); }} className="flex gap-2">
                     <div className="relative flex-1">
-                        <Input
+                        <Textarea
                             value={input}
                             onChange={(e) => setInput(e.target.value)}
-                            placeholder="Ask anything about your code…"
+                            onKeyDown={(e) => {
+                                if (e.key === "Enter" && !e.shiftKey) {
+                                    e.preventDefault();
+                                    handleSend();
+                                }
+                            }}
+                            placeholder="Ask anything about your code… (Shift+Enter for new line)"
                             disabled={loading}
-                            className="w-full bg-white dark:bg-white/5 border-gray-200 dark:border-white/10 text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-500 rounded-xl py-5 px-4 focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500/50 transition-all shadow-sm"
+                            className="w-full min-h-[50px] max-h-[200px] resize-none bg-white dark:bg-white/5 border-gray-200 dark:border-white/10 text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-500 rounded-xl py-3 px-4 focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500/50 transition-all shadow-sm scrollbar-thin scrollbar-thumb-gray-200 dark:scrollbar-thumb-gray-700"
                         />
                     </div>
                     <Button
@@ -289,8 +308,8 @@ export function AssistantPanel({ codeContext, onClose }: AssistantPanelProps) {
                     </Button>
                 </form>
                 <p className="text-[10px] text-gray-400 dark:text-gray-500 text-center mt-2">AI can make mistakes. Verify important code.</p>
-            </div>
-        </div>
+            </div >
+        </div >
     );
 }
 

@@ -62,7 +62,6 @@ export default function CodeEditor({
     showInput,
     setShowInput,
     isFullscreen = true,
-    // terminalRef,
     violations = 0,
     files,
     activeFileName,

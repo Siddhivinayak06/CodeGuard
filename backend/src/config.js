@@ -17,6 +17,7 @@ const envSchema = z.object({
   CORS_ORIGIN: z.string().default('http://localhost:3000'),
   AI_PROVIDER: z.enum(['gemini', 'ollama', 'mock']).default('gemini'),
   AI_API_KEY: z.string().optional(),
+  AI_API_KEY_2: z.string().optional(),
   AI_MODEL: z.string().default('gemini-1.5-flash'),
   OLLAMA_URL: z.string().default('http://127.0.0.1:11434'),
   LOG_LEVEL: z.enum(['error', 'warn', 'info', 'http', 'debug']).default('info'),
@@ -80,6 +81,7 @@ module.exports = {
   ai: {
     provider: env.AI_PROVIDER,
     apiKey: env.AI_API_KEY,
+    apiKey2: env.AI_API_KEY_2,
     model: env.AI_MODEL,
     ollamaUrl: env.OLLAMA_URL,
   },

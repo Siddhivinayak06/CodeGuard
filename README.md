@@ -12,8 +12,8 @@
 
 - **⚡ Zero-Latency Execution** – "Pre-warmed" container pools ensure code runs instantly without cold start delays.
 - **🔒 Secure Sandboxing** – All code executes in isolated, resource-constrained Docker containers (Alpine Linux) to prevent malicious activity.
-- **📝 Advanced Editor** – Monaco-based rich text editor with syntax highlighting, auto-completion, and multi-language support (C, C++, Python, Java).
-- **📶 Interactive Terminal** – Full WebSocket-based terminal experience supporting real-time `stdin`/`stdout` interaction.
+- **📝 Advanced Editor** – Monaco-based rich text editor with glassmorphism UI, smart language switching, and smooth resizing capabilities.
+- **📶 Interactive Terminal** – WebSocket-based terminal facilitating real-time partial output streaming, infinite loop protection, and interactive input.
 - **🤖 Clinical AI Intelligence** – Integrated Gemini AI for smart error diagnostics, code explanation, and automated hints.
 - **✨ Premium UI** – Modern glassmorphism design with fluid animations and responsive layouts.
 - **👩‍🏫 Faculty & Admin Dashboards** – specialized interfaces for managing classes, students, and system resources.
@@ -55,6 +55,7 @@ DOCKER_MEMORY_LIMIT=128m
 DOCKER_CPU_LIMIT=0.5
 DOCKER_POOL_SIZE_PYTHON=2
 DOCKER_POOL_SIZE_CPP=2
+EXECUTION_TIMEOUT=15 # Seconds before an infinite loop is killed
 ```
 
 ### 2. Launch
