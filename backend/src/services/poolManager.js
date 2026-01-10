@@ -113,10 +113,47 @@ class PoolManager {
       return available.id;
     }
 
-    // No available containers, wait in queue
-    return new Promise((resolve) => {
-      this.waiting[lang].push(resolve);
-    });
+    // No available containers - try to create a new one dynamically
+    logger.info(`No available ${lang} containers, creating new one dynamically...`);
+
+    try {
+      // Create a new container with a timeout
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Container creation timeout')), 15000)
+      );
+
+      const containerId = await Promise.race([
+        this._createContainer(lang),
+        timeoutPromise
+      ]);
+
+      // Mark the newly created container as busy immediately
+      const newContainer = pool.find(c => c.id === containerId);
+      if (newContainer) {
+        newContainer.busy = true;
+      }
+
+      return containerId;
+    } catch (err) {
+      logger.error(`Failed to create dynamic container for ${lang}:`, err.message);
+
+      // Fallback: wait in queue with a timeout
+      return new Promise((resolve, reject) => {
+        const timeout = setTimeout(() => {
+          // Remove from waiting queue
+          const idx = this.waiting[lang].indexOf(resolveFunc);
+          if (idx > -1) this.waiting[lang].splice(idx, 1);
+          reject(new Error(`No container available for ${lang} after timeout`));
+        }, 10000);
+
+        const resolveFunc = (containerId) => {
+          clearTimeout(timeout);
+          resolve(containerId);
+        };
+
+        this.waiting[lang].push(resolveFunc);
+      });
+    }
   }
 
   async release(lang, containerId) {

@@ -132,9 +132,20 @@ const InteractiveTerminal = forwardRef<
         term.current.write(`\r\n\x1b[1;32m✅ Ready for ${msg.lang}\x1b[0m\r\n`);
         console.log("Session ready for language:", msg.lang);
       } else if (msg.type === "lang") {
-        // Legacy support - still handle lang messages
-        term.current.write(`\r\n\x1b[1;32m✅ Language set to ${msg.lang}\x1b[0m\r\n`);
+        // Language switch confirmed - also mark session as ready
+        // The backend sends this when the language container is acquired
+        isSessionReady.current = true;
+        isSwitching.current = false;
         currentLang.current = msg.lang;
+        term.current.write(`\r\n\x1b[1;32m✅ Language set to ${msg.lang}\x1b[0m\r\n`);
+        console.log("Language switched and ready:", msg.lang);
+      } else if (msg.type === "error") {
+        // Display error message from backend
+        term.current.write(`\r\n\x1b[1;31m⚠️ ${msg.message || "An error occurred"}\x1b[0m\r\n`);
+        console.error("Backend error:", msg.message);
+        // Still mark as ready so user can retry
+        isSessionReady.current = true;
+        isSwitching.current = false;
       } else {
         const data = msg.data ?? msg;
         const imgStart = "__IMAGE_START__";
@@ -201,7 +212,10 @@ const InteractiveTerminal = forwardRef<
       }
       fitAddon.current = null;
 
-      ws.close();
+      // Only close WebSocket if it's open or connecting, avoid error on unmount before connect
+      if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
+        ws.close();
+      }
       clearTimeout(fitTimeout);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps

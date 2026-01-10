@@ -77,7 +77,21 @@ const handleConnection = (ws) => {
     await cleanup();
 
     lang = newLang; // Sync lang for release
-    const containerId = await poolManager.acquire(newLang);
+
+    let containerId;
+    try {
+      containerId = await poolManager.acquire(newLang);
+    } catch (err) {
+      logger.error(`Failed to acquire container for ${newLang}: ${err.message}`);
+      safeSend(ws, JSON.stringify({
+        type: 'error',
+        message: `Container unavailable for ${newLang}. System is busy, please try again.`
+      }));
+      // Still send a ready signal so frontend doesn't wait forever
+      // This allows the user to retry
+      setTimeout(() => sendReady(newLang), 100);
+      return;
+    }
 
     // Validate container ID before proceeding
     if (!containerId) {
@@ -86,6 +100,7 @@ const handleConnection = (ws) => {
         type: 'error',
         message: `No container available for ${newLang}. Please try again.`
       }));
+      setTimeout(() => sendReady(newLang), 100);
       return;
     }
 
