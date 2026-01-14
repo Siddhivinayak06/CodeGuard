@@ -47,7 +47,10 @@ router.post('/chat2', async (req, res) => {
     res.setHeader('Connection', 'keep-alive');
 
     // Inject the secondary API Key into config overrides
-    const configOverrides = { ...config, apiKey: require('../config').ai.apiKey2 };
+    const configOverrides = {
+      ...config,
+      apiKey: require('../config').ai.apiKey2,
+    };
 
     await aiService.chat(messages, codeContext, configOverrides, (chunk) => {
       res.write(`data: ${JSON.stringify({ text: chunk })}\n\n`);

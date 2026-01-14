@@ -82,11 +82,16 @@ const handleConnection = (ws) => {
     try {
       containerId = await poolManager.acquire(newLang);
     } catch (err) {
-      logger.error(`Failed to acquire container for ${newLang}: ${err.message}`);
-      safeSend(ws, JSON.stringify({
-        type: 'error',
-        message: `Container unavailable for ${newLang}. System is busy, please try again.`
-      }));
+      logger.error(
+        `Failed to acquire container for ${newLang}: ${err.message}`
+      );
+      safeSend(
+        ws,
+        JSON.stringify({
+          type: 'error',
+          message: `Container unavailable for ${newLang}. System is busy, please try again.`,
+        })
+      );
       // Still send a ready signal so frontend doesn't wait forever
       // This allows the user to retry
       setTimeout(() => sendReady(newLang), 100);
@@ -96,10 +101,13 @@ const handleConnection = (ws) => {
     // Validate container ID before proceeding
     if (!containerId) {
       logger.error(`Failed to acquire container for ${newLang}`);
-      safeSend(ws, JSON.stringify({
-        type: 'error',
-        message: `No container available for ${newLang}. Please try again.`
-      }));
+      safeSend(
+        ws,
+        JSON.stringify({
+          type: 'error',
+          message: `No container available for ${newLang}. Please try again.`,
+        })
+      );
       setTimeout(() => sendReady(newLang), 100);
       return;
     }
@@ -113,7 +121,9 @@ const handleConnection = (ws) => {
       setTimeout(() => {
         // Validate container still exists (may have been cleaned up by disconnect)
         if (!containerToUse || pooledContainer !== containerToUse) {
-          logger.warn('Python container was cleaned up before process could start');
+          logger.warn(
+            'Python container was cleaned up before process could start'
+          );
           return;
         }
         pythonProcess = dockerService.execPython(
@@ -254,7 +264,7 @@ const handleConnection = (ws) => {
         name:
           parsed.filename ||
           'main' +
-          (lang === 'python' ? '.py' : lang === 'java' ? '.java' : '.c'),
+            (lang === 'python' ? '.py' : lang === 'java' ? '.java' : '.c'),
         content: parsed.data || '',
         isActive: parsed.activeFile || false,
       });
@@ -347,7 +357,9 @@ const handleConnection = (ws) => {
           suppressNextOutput = true;
           // Use __FILE_START__ to ensure file is written.
           cppProcess.write('__FILE_START__ main.cpp\n');
-          inputData.split('\n').forEach((line) => cppProcess.write(line + '\n'));
+          inputData
+            .split('\n')
+            .forEach((line) => cppProcess.write(line + '\n'));
           cppProcess.write('__RUN_CODE__\n');
         } else {
           logger.info(`[CPP Input] ${inputData}`);

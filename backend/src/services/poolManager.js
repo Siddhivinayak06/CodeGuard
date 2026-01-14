@@ -114,7 +114,9 @@ class PoolManager {
     }
 
     // No available containers - try to create a new one dynamically
-    logger.info(`No available ${lang} containers, creating new one dynamically...`);
+    logger.info(
+      `No available ${lang} containers, creating new one dynamically...`
+    );
 
     try {
       // Create a new container with a timeout
@@ -124,18 +126,21 @@ class PoolManager {
 
       const containerId = await Promise.race([
         this._createContainer(lang),
-        timeoutPromise
+        timeoutPromise,
       ]);
 
       // Mark the newly created container as busy immediately
-      const newContainer = pool.find(c => c.id === containerId);
+      const newContainer = pool.find((c) => c.id === containerId);
       if (newContainer) {
         newContainer.busy = true;
       }
 
       return containerId;
     } catch (err) {
-      logger.error(`Failed to create dynamic container for ${lang}:`, err.message);
+      logger.error(
+        `Failed to create dynamic container for ${lang}:`,
+        err.message
+      );
 
       // Fallback: wait in queue with a timeout
       return new Promise((resolve, reject) => {

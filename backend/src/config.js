@@ -27,7 +27,10 @@ const envSchema = z.object({
   DOCKER_POOL_SIZE_JAVA: z.string().transform(Number).default('5'),
   DOCKER_POOL_SIZE_C: z.string().transform(Number).default('5'),
   WORKERS_PER_CONTAINER: z.string().transform(Number).default('10'),
-  USE_PROCESS_POOL: z.string().transform(val => val === 'true').default('true'),
+  USE_PROCESS_POOL: z
+    .string()
+    .transform((val) => val === 'true')
+    .default('true'),
 });
 
 // Validate environment variables
