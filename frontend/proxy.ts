@@ -1,75 +1,132 @@
-import { updateSession } from "@/lib/supabase/middleware";
-import { NextResponse } from "next/server";
-import type { NextRequest } from "next/server";
-import { createServerClient } from "@supabase/ssr";
+import { createServerClient } from "@supabase/ssr"
+import { NextResponse, type NextRequest } from "next/server"
+import { Database } from "@/lib/supabase/database.types"
+
+/* -------------------------------------------------------------------------- */
+/*                                CONFIGURATION                               */
+/* -------------------------------------------------------------------------- */
+
+const PUBLIC_ROUTES = [
+  "/",
+  "/auth/",
+  "/api/",
+  "/unauthorized",
+]
+
+const AUTH_REDIRECT = "/auth/login"
+
+/* -------------------------------------------------------------------------- */
+/*                               PROXY LOGIC                                  */
+/* -------------------------------------------------------------------------- */
 
 export async function proxy(request: NextRequest) {
-  // Step 1: Maintain session
-  const response = await updateSession(request);
+  let response = NextResponse.next({
+    request: {
+      headers: request.headers,
+    },
+  })
 
-  // Step 2: Create a Supabase client using the updated session
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    { cookies: { get: (key) => request.cookies.get(key)?.value } },
-  );
+  const { pathname } = request.nextUrl
 
-  // Step 3: Fetch user + role
+  /* ------------------------------------------------------------------------ */
+  /*                               PUBLIC ROUTES                               */
+  /* ------------------------------------------------------------------------ */
+
+  if (PUBLIC_ROUTES.some((route) => pathname === route || pathname.startsWith(route))) {
+    return response
+  }
+
+  /* ------------------------------------------------------------------------ */
+  /*                              ENV VALIDATION                               */
+  /* ------------------------------------------------------------------------ */
+
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+
+  if (!supabaseUrl || !supabaseAnonKey) {
+    if (process.env.NODE_ENV === "development") {
+      console.warn("[Proxy] Supabase environment variables missing")
+    }
+    return response
+  }
+
+  /* ------------------------------------------------------------------------ */
+  /*                          SUPABASE SERVER CLIENT                           */
+  /* ------------------------------------------------------------------------ */
+
+  const supabase = createServerClient<Database>(supabaseUrl, supabaseAnonKey, {
+    cookies: {
+      getAll: () => request.cookies.getAll(),
+      setAll: (cookies) => {
+        cookies.forEach(({ name, value, options }) => {
+          response.cookies.set(name, value, {
+            ...options,
+            httpOnly: true,
+            secure: process.env.NODE_ENV === "production",
+            sameSite: "lax",
+            maxAge: 60 * 60 * 2, // 2 hours
+          })
+        })
+      },
+    },
+  })
+
+  /* ------------------------------------------------------------------------ */
+  /* ⚠️ CRITICAL: DO NOT INSERT LOGIC BETWEEN CLIENT & getUser()                */
+  /* ------------------------------------------------------------------------ */
+
   const {
     data: { user },
-  } = await supabase.auth.getUser();
+  } = await supabase.auth.getUser()
 
-  const pathname = request.nextUrl.pathname;
+  /* ------------------------------------------------------------------------ */
+  /*                             AUTH ENFORCEMENT                              */
+  /* ------------------------------------------------------------------------ */
 
-  // Public routes (no restriction)
-  // Check for public routes or if the path starts with /auth, /api, or /unauthorized
-  const isPublicRoute =
-    pathname === "/" ||
-    pathname.startsWith("/auth/") ||
-    pathname.startsWith("/api/") ||
-    pathname.startsWith("/unauthorized");
+  if (!user) {
+    const redirectUrl = new URL(AUTH_REDIRECT, request.url)
+    redirectUrl.searchParams.set("redirect", pathname)
 
-  if (isPublicRoute) return response;
+    return NextResponse.redirect(redirectUrl)
+  }
 
-  // Require login for anything else
-  if (!user) return NextResponse.redirect(new URL("/auth/login", request.url));
+  /* ------------------------------------------------------------------------ */
+  /*                          ROLE-BASED ACCESS CONTROL                        */
+  /* ------------------------------------------------------------------------ */
 
-  // Step 4: Get user role from Supabase DB (stored in 'users' table, not 'profiles')
+  // Fetch user role from 'users' table
   const { data: dbUser } = await supabase
     .from("users")
     .select("role")
     .eq("uid", user.id)
-    .single();
+    .single()
 
-  // Fallback to user_metadata if db role is missing
-  const role = dbUser?.role || user?.user_metadata?.role;
+  const role = dbUser?.role || user?.user_metadata?.role
 
-  console.log("Middleware Debug:", {
-    path: pathname,
-    userId: user?.id,
-    role: role,
-    source: dbUser?.role ? "db_users_table" : "user_metadata_fallback",
-    redirectingToUnauthorized:
-      (pathname.startsWith("/dashboard/admin") && role !== "admin") ||
-      (pathname.startsWith("/dashboard/faculty") && role !== "faculty") ||
-      (pathname.startsWith("/dashboard/student") && role !== "student"),
-  });
+  if (pathname.startsWith("/dashboard/admin") && role !== "admin") {
+    return NextResponse.redirect(new URL("/unauthorized", request.url))
+  }
 
-  // Step 5: Role-based access control
-  if (pathname.startsWith("/dashboard/admin") && role !== "admin")
-    return NextResponse.redirect(new URL("/unauthorized", request.url));
+  if (pathname.startsWith("/dashboard/faculty") && role !== "faculty") {
+    return NextResponse.redirect(new URL("/unauthorized", request.url))
+  }
 
-  if (pathname.startsWith("/dashboard/faculty") && role !== "faculty")
-    return NextResponse.redirect(new URL("/unauthorized", request.url));
+  if (pathname.startsWith("/dashboard/student") && role !== "student") {
+    return NextResponse.redirect(new URL("/unauthorized", request.url))
+  }
 
-  if (pathname.startsWith("/dashboard/student") && role !== "student")
-    return NextResponse.redirect(new URL("/unauthorized", request.url));
-
-  return response;
+  return response
 }
+
+/* -------------------------------------------------------------------------- */
+/*                                   MATCHER                                   */
+/* -------------------------------------------------------------------------- */
 
 export const config = {
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    /*
+     * Exclude static files & API routes
+     */
+    "/((?!_next/static|_next/image|favicon.ico|api|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
-};
+}
