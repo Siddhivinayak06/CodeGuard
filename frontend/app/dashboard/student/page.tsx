@@ -4,6 +4,7 @@ import { useEffect, useState, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Skeleton } from "@/components/ui/skeleton";
+import StudentDashboardSkeleton from "@/components/skeletons/StudentDashboardSkeleton";
 import type { User } from "@supabase/supabase-js";
 import {
   BookOpen,
@@ -451,17 +452,7 @@ export default function StudentDashboard() {
 
         {/* Main Content Area */}
         {loading || !user ? (
-          <div className="space-y-8">
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-              <Skeleton className="h-40 rounded-3xl md:col-span-2" />
-              <Skeleton className="h-40 rounded-3xl" />
-              <Skeleton className="h-40 rounded-3xl" />
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <Skeleton className="h-80 rounded-3xl md:col-span-2" />
-              <Skeleton className="h-80 rounded-3xl" />
-            </div>
-          </div>
+          <StudentDashboardSkeleton />
         ) : (
           <motion.div
             variants={containerVariants}

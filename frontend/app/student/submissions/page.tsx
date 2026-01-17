@@ -466,13 +466,6 @@ function StudentSubmissionsContent() {
     return matchesSearch && matchesFilter;
   });
 
-  if (!user) {
-    return (
-      <div className="flex items-center justify-center min-h-screen bg-gray-50 dark:bg-gray-900">
-        <div className="w-10 h-10 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin" />
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50/30 to-purple-50/30 dark:from-gray-950 dark:via-indigo-950/10 dark:to-purple-950/10">
@@ -541,10 +534,9 @@ function StudentSubmissionsContent() {
                   onClick={() => setFilterStatus(tab.id)}
                   className={`
                     px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2
-                    ${
-                      filterStatus === tab.id
-                        ? "bg-white dark:bg-gray-800 text-indigo-600 dark:text-indigo-400 shadow-sm"
-                        : "text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800/50"
+                    ${filterStatus === tab.id
+                      ? "bg-white dark:bg-gray-800 text-indigo-600 dark:text-indigo-400 shadow-sm"
+                      : "text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800/50"
                     }
                   `}
                 >
@@ -592,12 +584,11 @@ function StudentSubmissionsContent() {
                 <div
                   key={s.id}
                   className={`p-4 rounded-xl glass-card border-l-4 transition-all hover:shadow-sm
-                    ${
-                      s.status === "passed"
-                        ? "border-emerald-500 bg-emerald-50/20 dark:bg-emerald-900/10"
-                        : s.status === "failed"
-                          ? "border-red-500 bg-red-50/20 dark:bg-red-900/10"
-                          : "border-gray-200 dark:border-gray-700 hover:border-indigo-400"
+                    ${s.status === "passed"
+                      ? "border-emerald-500 bg-emerald-50/20 dark:bg-emerald-900/10"
+                      : s.status === "failed"
+                        ? "border-red-500 bg-red-50/20 dark:bg-red-900/10"
+                        : "border-gray-200 dark:border-gray-700 hover:border-indigo-400"
                     }
                   `}
                 >
@@ -605,14 +596,13 @@ function StudentSubmissionsContent() {
                     {/* Dynamic Icon */}
                     <div
                       className={`w-12 h-12 rounded-xl flex items-center justify-center shadow-sm text-white bg-gradient-to-br
-                        ${
-                          s.language === "python"
-                            ? "from-yellow-400 to-yellow-600"
-                            : s.language === "c" || s.language === "cpp"
-                              ? "from-blue-500 to-indigo-600"
-                              : s.language === "java"
-                                ? "from-orange-500 to-red-600"
-                                : "from-indigo-500 to-purple-600"
+                        ${s.language === "python"
+                          ? "from-yellow-400 to-yellow-600"
+                          : s.language === "c" || s.language === "cpp"
+                            ? "from-blue-500 to-indigo-600"
+                            : s.language === "java"
+                              ? "from-orange-500 to-red-600"
+                              : "from-indigo-500 to-purple-600"
                         }
                       `}
                     >
@@ -846,11 +836,10 @@ function StudentSubmissionsContent() {
                                 </span>
                               </div>
                               <span
-                                className={`text-xs font-bold px-2 py-0.5 rounded ${
-                                  r.status?.toLowerCase() === "passed"
-                                    ? "text-emerald-600 bg-emerald-50 dark:bg-emerald-900/20"
-                                    : "text-red-600 bg-red-50 dark:bg-red-900/20"
-                                }`}
+                                className={`text-xs font-bold px-2 py-0.5 rounded ${r.status?.toLowerCase() === "passed"
+                                  ? "text-emerald-600 bg-emerald-50 dark:bg-emerald-900/20"
+                                  : "text-red-600 bg-red-50 dark:bg-red-900/20"
+                                  }`}
                               >
                                 {r.status?.toUpperCase()}
                               </span>
@@ -895,18 +884,7 @@ function StudentSubmissionsContent() {
 // Wrapper component with Suspense boundary for useSearchParams
 export default function StudentSubmissions() {
   return (
-    <Suspense
-      fallback={
-        <div className="min-h-screen flex items-center justify-center">
-          <div className="flex flex-col items-center gap-4">
-            <div className="w-12 h-12 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin" />
-            <p className="text-gray-500 dark:text-gray-400">
-              Loading submissions...
-            </p>
-          </div>
-        </div>
-      }
-    >
+    <Suspense fallback={null}>
       <StudentSubmissionsContent />
     </Suspense>
   );

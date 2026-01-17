@@ -37,6 +37,7 @@ import {
   Plus,
 } from "lucide-react";
 import Link from "next/link";
+import AdminAnalyticsSkeleton from "@/components/skeletons/AdminAnalyticsSkeleton";
 
 // Types
 interface AnalyticsData {
@@ -219,40 +220,33 @@ export default function AnalyticsPage() {
   // User distribution data for pie chart
   const userDistribution = data
     ? [
-        { name: "Students", value: data.overview.students, color: "#6366f1" },
-        { name: "Faculty", value: data.overview.faculty, color: "#8b5cf6" },
-        { name: "Admins", value: data.overview.admins, color: "#ec4899" },
-      ]
+      { name: "Students", value: data.overview.students, color: "#6366f1" },
+      { name: "Faculty", value: data.overview.faculty, color: "#8b5cf6" },
+      { name: "Admins", value: data.overview.admins, color: "#ec4899" },
+    ]
     : [];
 
   // Submission status data for pie chart (from submissions)
   const submissionStatusData = data
     ? [
-        {
-          name: "Passed",
-          value: data.submissions.accepted,
-          color: STATUS_COLORS.passed,
-        },
-        {
-          name: "Failed",
-          value: data.submissions.failed,
-          color: STATUS_COLORS.failed,
-        },
-        {
-          name: "Pending",
-          value: data.submissions.pending,
-          color: STATUS_COLORS.pending,
-        },
-      ]
+      {
+        name: "Passed",
+        value: data.submissions.accepted,
+        color: STATUS_COLORS.passed,
+      },
+      {
+        name: "Failed",
+        value: data.submissions.failed,
+        color: STATUS_COLORS.failed,
+      },
+      {
+        name: "Pending",
+        value: data.submissions.pending,
+        color: STATUS_COLORS.pending,
+      },
+    ]
     : [];
 
-  if (!user) {
-    return (
-      <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50/30 to-purple-50/30 dark:from-gray-950 dark:via-indigo-950/10 dark:to-purple-950/10">
-        <div className="w-12 h-12 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin" />
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-indigo-50/40 via-purple-50/40 to-pink-50/40 dark:from-gray-950 dark:via-indigo-950/20 dark:to-purple-950/20">
@@ -284,77 +278,7 @@ export default function AnalyticsPage() {
         </div>
 
         {loading ? (
-          <div className="space-y-8">
-            {/* Overview Loading */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-              {[1, 2, 3, 4].map((i) => (
-                <div
-                  key={i}
-                  className="glass-card-premium rounded-3xl p-6 animate-pulse"
-                >
-                  <div className="flex justify-between items-start">
-                    <div className="space-y-3">
-                      <div className="h-3 w-20 bg-gray-200 dark:bg-gray-700 rounded-full" />
-                      <div className="h-8 w-16 bg-gray-200 dark:bg-gray-700 rounded-lg" />
-                    </div>
-                    <div className="w-12 h-12 rounded-2xl bg-gray-200 dark:bg-gray-700" />
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            {/* Submission Stats Loading */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
-              {[1, 2, 3].map((i) => (
-                <div
-                  key={i}
-                  className="glass-card-premium rounded-2xl p-5 flex items-center gap-4 animate-pulse"
-                >
-                  <div className="w-12 h-12 rounded-xl bg-gray-200 dark:bg-gray-700" />
-                  <div className="space-y-2">
-                    <div className="h-6 w-12 bg-gray-200 dark:bg-gray-700 rounded" />
-                    <div className="h-3 w-16 bg-gray-200 dark:bg-gray-700 rounded" />
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            {/* Charts Loading */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {[1, 2].map((i) => (
-                <div
-                  key={i}
-                  className="glass-card-premium rounded-3xl p-6 animate-pulse"
-                >
-                  <div className="h-6 w-48 bg-gray-200 dark:bg-gray-700 rounded-lg mb-6" />
-                  <div className="h-64 bg-gray-100 dark:bg-gray-800/50 rounded-2xl" />
-                </div>
-              ))}
-            </div>
-
-            {/* Bottom Row Loading */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              {[1, 2, 3].map((i) => (
-                <div
-                  key={i}
-                  className="glass-card-premium rounded-3xl p-6 animate-pulse"
-                >
-                  <div className="h-5 w-40 bg-gray-200 dark:bg-gray-700 rounded-lg mb-6" />
-                  <div className="space-y-4">
-                    {[1, 2, 3].map((j) => (
-                      <div key={j} className="flex items-center gap-3">
-                        <div className="h-10 w-10 rounded-lg bg-gray-200 dark:bg-gray-700" />
-                        <div className="flex-1 space-y-2">
-                          <div className="h-4 w-full bg-gray-200 dark:bg-gray-700 rounded" />
-                          <div className="h-3 w-2/3 bg-gray-200 dark:bg-gray-700 rounded" />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
+          <AdminAnalyticsSkeleton />
         ) : data ? (
           <>
             {/* Overview Stats */}
@@ -672,15 +596,14 @@ export default function AnalyticsPage() {
                         className="flex items-center gap-3 p-3 rounded-xl bg-gray-50 dark:bg-gray-800/50"
                       >
                         <div
-                          className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm font-bold text-white ${
-                            idx === 0
-                              ? "bg-amber-500"
-                              : idx === 1
-                                ? "bg-gray-400"
-                                : idx === 2
-                                  ? "bg-orange-600"
-                                  : "bg-gray-300"
-                          }`}
+                          className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm font-bold text-white ${idx === 0
+                            ? "bg-amber-500"
+                            : idx === 1
+                              ? "bg-gray-400"
+                              : idx === 2
+                                ? "bg-orange-600"
+                                : "bg-gray-300"
+                            }`}
                         >
                           {idx + 1}
                         </div>

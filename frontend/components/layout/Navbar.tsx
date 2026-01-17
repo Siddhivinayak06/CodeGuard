@@ -123,6 +123,11 @@ export default function Navbar() {
           icon: <BookOpen size={18} />,
         },
         {
+          name: "Practicals",
+          href: "/dashboard/faculty/practicals",
+          icon: <FileText size={18} />,
+        },
+        {
           name: "Submissions",
           href: "/faculty/submissions",
           icon: <FileCheck size={18} />,
@@ -179,8 +184,8 @@ export default function Navbar() {
     <>
       <nav
         className={`fixed top-0 left-0 w-full z-50 transition-all duration-500 ${scrolled
-            ? "bg-white/80 dark:bg-gray-900/80 backdrop-blur-2xl shadow-lg shadow-gray-900/5 dark:shadow-black/20 border-b border-gray-200/50 dark:border-gray-800/50"
-            : "bg-white/60 dark:bg-gray-900/60 backdrop-blur-xl border-b border-white/20 dark:border-white/5"
+          ? "bg-white/80 dark:bg-gray-900/80 backdrop-blur-2xl shadow-lg shadow-gray-900/5 dark:shadow-black/20 border-b border-gray-200/50 dark:border-gray-800/50"
+          : "bg-white/60 dark:bg-gray-900/60 backdrop-blur-xl border-b border-white/20 dark:border-white/5"
           }`}
       >
         <div className="w-full px-4 sm:px-6 lg:px-8">
@@ -265,14 +270,14 @@ export default function Navbar() {
                     key={link.href}
                     href={link.href}
                     className={`relative flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-xl transition-all duration-300 ${pathname === link.href
-                        ? "bg-white dark:bg-gray-900 text-gray-900 dark:text-white shadow-md"
-                        : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200"
+                      ? "bg-white dark:bg-gray-900 text-gray-900 dark:text-white shadow-md"
+                      : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200"
                       }`}
                   >
                     <span
                       className={`transition-colors ${pathname === link.href
-                          ? "text-purple-600 dark:text-purple-400"
-                          : "text-gray-400 dark:text-gray-500"
+                        ? "text-purple-600 dark:text-purple-400"
+                        : "text-gray-400 dark:text-gray-500"
                         }`}
                     >
                       {link.icon}
@@ -421,8 +426,8 @@ export default function Navbar() {
       {/* Mobile Navigation - Slide in (OUTSIDE nav for proper z-index) */}
       <div
         className={`md:hidden fixed inset-x-0 top-16 bottom-0 z-[110] transition-all duration-300 ${mobileMenuOpen
-            ? "opacity-100 pointer-events-auto"
-            : "opacity-0 pointer-events-none"
+          ? "opacity-100 pointer-events-auto"
+          : "opacity-0 pointer-events-none"
           }`}
       >
         {/* Backdrop */}
@@ -502,8 +507,8 @@ export default function Navbar() {
                     href={link.href}
                     onClick={() => setMobileMenuOpen(false)}
                     className={`flex items-center gap-3 px-4 py-3.5 text-sm font-medium rounded-xl transition-all ${pathname === link.href
-                        ? "bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-900/20 dark:to-purple-900/20 text-purple-700 dark:text-purple-400 border border-purple-200 dark:border-purple-800"
-                        : "text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800"
+                      ? "bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-900/20 dark:to-purple-900/20 text-purple-700 dark:text-purple-400 border border-purple-200 dark:border-purple-800"
+                      : "text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800"
                       }`}
                   >
                     <span

@@ -36,7 +36,6 @@ import {
 import { motion } from "framer-motion";
 import { Skeleton } from "@/components/ui/skeleton";
 import FacultyDashboardSkeleton from "@/components/skeletons/FacultyDashboardSkeleton";
-import FullPageLoader from "@/components/loaders/FullPageLoader";
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -767,7 +766,7 @@ export default function FacultyDashboardPage() {
                           const deadline = new Date(p.deadline || new Date());
                           const daysLeft = Math.ceil(
                             (deadline.getTime() - Date.now()) /
-                              (1000 * 60 * 60 * 24),
+                            (1000 * 60 * 60 * 24),
                           );
                           const isUrgent = daysLeft <= 2;
 

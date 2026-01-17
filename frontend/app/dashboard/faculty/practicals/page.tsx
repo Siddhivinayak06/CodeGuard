@@ -6,8 +6,8 @@ import { createClient } from "@/lib/supabase/client";
 import { Practical, Subject } from "../../../faculty/types";
 import PracticalList from "../../../faculty/components/PracticalList";
 import PracticalForm from "../../../faculty/components/PracticalForm";
-import FullPageLoader from "@/components/loaders/FullPageLoader";
 import { ArrowLeft, Plus } from "lucide-react";
+import PracticalsSkeleton from "@/components/skeletons/PracticalsSkeleton";
 import { motion } from "framer-motion";
 
 export default function AllPracticalsPage() {
@@ -113,7 +113,14 @@ export default function AllPracticalsPage() {
     }
   };
 
-  if (loading) return <FullPageLoader />;
+  if (loading)
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50/30 to-purple-50/30 dark:from-gray-950 dark:via-indigo-950/10 dark:to-purple-950/10 transition-colors duration-500">
+        <main className="pt-24 pb-12 px-4 sm:px-6 lg:px-8 xl:px-12 w-full mx-auto max-w-7xl">
+          <PracticalsSkeleton />
+        </main>
+      </div>
+    );
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50/30 to-purple-50/30 dark:from-gray-950 dark:via-indigo-950/10 dark:to-purple-950/10">
@@ -162,7 +169,7 @@ export default function AllPracticalsPage() {
               subjects={subjects}
               onEdit={openEdit}
               onDelete={deletePractical}
-              // onAssign logic could be added if needed, or left optional
+            // onAssign logic could be added if needed, or left optional
             />
           </motion.div>
         </div>

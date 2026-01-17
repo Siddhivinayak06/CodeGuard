@@ -412,15 +412,6 @@ export default function AdminDashboard() {
     return "Good evening";
   };
 
-  if (!user)
-    return (
-      <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50/30 to-purple-50/30 dark:from-gray-950 dark:via-indigo-950/10 dark:to-purple-950/10">
-        <div className="flex flex-col items-center gap-4">
-          <div className="w-12 h-12 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin" />
-          <p className="text-gray-500 dark:text-gray-400">Loading...</p>
-        </div>
-      </div>
-    );
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50/30 to-purple-50/30 dark:from-gray-950 dark:via-indigo-950/10 dark:to-purple-950/10">
@@ -633,15 +624,14 @@ export default function AdminDashboard() {
                         {s.semester ? (
                           <span
                             className={`inline-flex px-3 py-1 text-xs font-bold rounded-full
-                             ${
-                               s.semester === 1 || s.semester === 2
-                                 ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300"
-                                 : s.semester === 3 || s.semester === 4
-                                   ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300"
-                                   : s.semester === 5 || s.semester === 6
-                                     ? "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300"
-                                     : "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300"
-                             }
+                             ${s.semester === 1 || s.semester === 2
+                                ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300"
+                                : s.semester === 3 || s.semester === 4
+                                  ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300"
+                                  : s.semester === 5 || s.semester === 6
+                                    ? "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300"
+                                    : "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300"
+                              }
                           `}
                           >
                             Sem {s.semester}

@@ -14,6 +14,7 @@ import {
   RefreshCw,
   Loader2,
 } from "lucide-react";
+import NotificationsSkeleton from "@/components/skeletons/NotificationsSkeleton";
 import { formatDistanceToNow, format } from "date-fns";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -226,21 +227,19 @@ export default function NotificationsPage() {
             <div className="flex items-center bg-gray-100 dark:bg-gray-800 rounded-xl p-1">
               <button
                 onClick={() => setFilter("all")}
-                className={`px-4 py-2 text-sm font-medium rounded-lg transition-all ${
-                  filter === "all"
+                className={`px-4 py-2 text-sm font-medium rounded-lg transition-all ${filter === "all"
                     ? "bg-white dark:bg-gray-900 text-gray-900 dark:text-white shadow-sm"
                     : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
-                }`}
+                  }`}
               >
                 All
               </button>
               <button
                 onClick={() => setFilter("unread")}
-                className={`px-4 py-2 text-sm font-medium rounded-lg transition-all ${
-                  filter === "unread"
+                className={`px-4 py-2 text-sm font-medium rounded-lg transition-all ${filter === "unread"
                     ? "bg-white dark:bg-gray-900 text-gray-900 dark:text-white shadow-sm"
                     : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
-                }`}
+                  }`}
               >
                 Unread
               </button>
@@ -261,20 +260,7 @@ export default function NotificationsPage() {
 
         {/* Content */}
         {loading ? (
-          <div className="space-y-4">
-            {[1, 2, 3, 4, 5].map((i) => (
-              <div key={i} className="glass-card rounded-2xl p-5 animate-pulse">
-                <div className="flex gap-4">
-                  <div className="w-12 h-12 rounded-xl bg-gray-200 dark:bg-gray-700" />
-                  <div className="flex-1 space-y-2">
-                    <div className="h-5 w-48 bg-gray-200 dark:bg-gray-700 rounded" />
-                    <div className="h-4 w-full bg-gray-200 dark:bg-gray-700 rounded" />
-                    <div className="h-3 w-24 bg-gray-200 dark:bg-gray-700 rounded" />
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
+          <NotificationsSkeleton />
         ) : notifications.length === 0 ? (
           <div className="glass-card rounded-2xl p-12 text-center animate-fadeIn">
             <div className="w-20 h-20 mx-auto mb-4 rounded-2xl bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
@@ -296,22 +282,20 @@ export default function NotificationsPage() {
             {notifications.map((notification, index) => (
               <div
                 key={notification.id}
-                className={`glass-card rounded-2xl p-5 hover-lift animate-slideUp border transition-all ${
-                  !notification.is_read
+                className={`glass-card rounded-2xl p-5 hover-lift animate-slideUp border transition-all ${!notification.is_read
                     ? "bg-indigo-50/50 dark:bg-indigo-900/10 border-indigo-200/50 dark:border-indigo-800/30"
                     : "border-transparent"
-                }`}
+                  }`}
                 style={{ animationDelay: `${index * 30}ms` }}
               >
                 <div className="flex gap-4">
                   {/* Icon */}
                   <div
-                    className={`flex-shrink-0 w-12 h-12 rounded-xl flex items-center justify-center border ${
-                      notification.metadata?.isReattemptRequest
+                    className={`flex-shrink-0 w-12 h-12 rounded-xl flex items-center justify-center border ${notification.metadata?.isReattemptRequest
                         ? "bg-purple-100 dark:bg-purple-900/30 border-purple-200 dark:border-purple-800"
                         : notificationColors[notification.type] ||
-                          "bg-gray-100 dark:bg-gray-800 border-gray-200 dark:border-gray-700"
-                    }`}
+                        "bg-gray-100 dark:bg-gray-800 border-gray-200 dark:border-gray-700"
+                      }`}
                   >
                     {notification.metadata?.isReattemptRequest ? (
                       <RefreshCw className="w-6 h-6 text-purple-500" />
@@ -327,11 +311,10 @@ export default function NotificationsPage() {
                     <div className="flex items-start justify-between gap-3">
                       <div>
                         <h3
-                          className={`font-semibold ${
-                            !notification.is_read
+                          className={`font-semibold ${!notification.is_read
                               ? "text-gray-900 dark:text-white"
                               : "text-gray-700 dark:text-gray-300"
-                          }`}
+                            }`}
                         >
                           {notification.title}
                         </h3>

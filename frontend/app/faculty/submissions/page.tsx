@@ -535,11 +535,10 @@ function FacultySubmissionsContent() {
                 <button
                   key={status}
                   onClick={() => setFilterStatus(status)}
-                  className={`px-4 py-2 rounded-xl text-sm font-medium transition-all whitespace-nowrap capitalize ${
-                    filterStatus === status
+                  className={`px-4 py-2 rounded-xl text-sm font-medium transition-all whitespace-nowrap capitalize ${filterStatus === status
                       ? "bg-indigo-600 text-white shadow-lg shadow-indigo-500/30"
                       : "bg-white/50 dark:bg-gray-800/50 text-gray-600 dark:text-gray-300 hover:bg-white dark:hover:bg-gray-700"
-                  }`}
+                    }`}
                 >
                   {status}
                 </button>
@@ -562,9 +561,9 @@ function FacultySubmissionsContent() {
                   <span className="truncate">
                     {searchParams.get("practical")
                       ? allPracticals.find(
-                          (p) =>
-                            p.id.toString() === searchParams.get("practical"),
-                        )?.title
+                        (p) =>
+                          p.id.toString() === searchParams.get("practical"),
+                      )?.title
                       : "Filter by Practical..."}
                   </span>
                   <Filter className="ml-2 h-4 w-4 shrink-0 opacity-50" />
@@ -597,12 +596,11 @@ function FacultySubmissionsContent() {
                         className="cursor-pointer"
                       >
                         <CheckCircle2
-                          className={`mr-2 h-4 w-4 ${
-                            searchParams.get("practical") ===
-                            practical.id.toString()
+                          className={`mr-2 h-4 w-4 ${searchParams.get("practical") ===
+                              practical.id.toString()
                               ? "opacity-100 text-indigo-500"
                               : "opacity-0"
-                          }`}
+                            }`}
                         />
                         <span className="truncate">{practical.title}</span>
                       </CommandItem>
@@ -997,11 +995,10 @@ function FacultySubmissionsContent() {
                                   </span>
                                 </div>
                                 <span
-                                  className={`text-xs font-bold px-2 py-0.5 rounded ${
-                                    r.status?.toLowerCase() === "passed"
+                                  className={`text-xs font-bold px-2 py-0.5 rounded ${r.status?.toLowerCase() === "passed"
                                       ? "text-emerald-600 bg-emerald-50 dark:bg-emerald-900/20"
                                       : "text-red-600 bg-red-50 dark:bg-red-900/20"
-                                  }`}
+                                    }`}
                                 >
                                   {r.status?.toUpperCase()}
                                 </span>
@@ -1067,76 +1064,76 @@ function FacultySubmissionsContent() {
               {/* Manual Grading Section for Pending */}
               {(viewingSubmission.status === "pending" ||
                 viewingSubmission.status === "submitted") && (
-                <div className="mb-4 p-4 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
-                  <h4 className="text-sm font-semibold text-amber-800 dark:text-amber-300 mb-3 flex items-center gap-2">
-                    <Clock className="w-4 h-4" />
-                    Manual Grading
-                  </h4>
-                  <div className="flex items-center gap-4">
-                    <div className="flex-1">
-                      <label className="text-xs text-gray-600 dark:text-gray-400 mb-1 block">
-                        Marks
-                      </label>
-                      <input
-                        type="number"
-                        min="0"
-                        max="10"
-                        value={gradeMarks}
-                        onChange={(e) => setGradeMarks(e.target.value)}
-                        placeholder="0-10"
-                        className="w-full px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                      />
-                    </div>
-                    <div className="flex-1">
-                      <label className="text-xs text-gray-600 dark:text-gray-400 mb-1 block">
-                        Status
-                      </label>
-                      <select
-                        value={gradeStatus}
-                        onChange={(e) => setGradeStatus(e.target.value)}
-                        className="w-full px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                      >
-                        <option value="passed">Passed</option>
-                        <option value="failed">Failed</option>
-                      </select>
-                    </div>
-                    <div className="pt-5">
-                      <Button
-                        onClick={async () => {
-                          if (!gradeMarks) {
-                            alert("Please enter marks");
-                            return;
-                          }
-                          setGradingLoading(true);
-                          try {
-                            const { error } = await supabase
-                              .from("submissions")
-                              .update({
-                                marks_obtained: parseInt(gradeMarks),
-                                status: gradeStatus as "passed" | "failed",
-                              })
-                              .eq("id", viewingSubmission.id);
-                            if (error) throw error;
-                            await fetchSubmissions(true);
-                            setViewingSubmission(null);
-                            setGradeMarks("");
-                            setGradeStatus("passed");
-                          } catch (e) {
-                            console.error("Failed to grade:", e);
-                            alert("Failed to save grade");
-                          } finally {
-                            setGradingLoading(false);
-                          }
-                        }}
-                        disabled={gradingLoading}
-                        className="bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white shadow-lg"
-                      >
-                        {gradingLoading ? "Saving..." : "Save Grade"}
-                      </Button>
+                  <div className="mb-4 p-4 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
+                    <h4 className="text-sm font-semibold text-amber-800 dark:text-amber-300 mb-3 flex items-center gap-2">
+                      <Clock className="w-4 h-4" />
+                      Manual Grading
+                    </h4>
+                    <div className="flex items-center gap-4">
+                      <div className="flex-1">
+                        <label className="text-xs text-gray-600 dark:text-gray-400 mb-1 block">
+                          Marks
+                        </label>
+                        <input
+                          type="number"
+                          min="0"
+                          max="10"
+                          value={gradeMarks}
+                          onChange={(e) => setGradeMarks(e.target.value)}
+                          placeholder="0-10"
+                          className="w-full px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                        />
+                      </div>
+                      <div className="flex-1">
+                        <label className="text-xs text-gray-600 dark:text-gray-400 mb-1 block">
+                          Status
+                        </label>
+                        <select
+                          value={gradeStatus}
+                          onChange={(e) => setGradeStatus(e.target.value)}
+                          className="w-full px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                        >
+                          <option value="passed">Passed</option>
+                          <option value="failed">Failed</option>
+                        </select>
+                      </div>
+                      <div className="pt-5">
+                        <Button
+                          onClick={async () => {
+                            if (!gradeMarks) {
+                              alert("Please enter marks");
+                              return;
+                            }
+                            setGradingLoading(true);
+                            try {
+                              const { error } = await supabase
+                                .from("submissions")
+                                .update({
+                                  marks_obtained: parseInt(gradeMarks),
+                                  status: gradeStatus as "passed" | "failed",
+                                })
+                                .eq("id", viewingSubmission.id);
+                              if (error) throw error;
+                              await fetchSubmissions(true);
+                              setViewingSubmission(null);
+                              setGradeMarks("");
+                              setGradeStatus("passed");
+                            } catch (e) {
+                              console.error("Failed to grade:", e);
+                              alert("Failed to save grade");
+                            } finally {
+                              setGradingLoading(false);
+                            }
+                          }}
+                          disabled={gradingLoading}
+                          className="bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white shadow-lg"
+                        >
+                          {gradingLoading ? "Saving..." : "Save Grade"}
+                        </Button>
+                      </div>
                     </div>
                   </div>
-                </div>
-              )}
+                )}
 
               <div className="flex justify-end gap-3">
                 <Button
@@ -1172,13 +1169,7 @@ function FacultySubmissionsContent() {
 
 export default function FacultySubmissionsPage() {
   return (
-    <Suspense
-      fallback={
-        <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
-          <div className="w-10 h-10 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin" />
-        </div>
-      }
-    >
+    <Suspense fallback={null}>
       <FacultySubmissionsContent />
     </Suspense>
   );

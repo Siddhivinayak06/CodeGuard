@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import StudentPracticalsSkeleton from "@/components/skeletons/StudentPracticalsSkeleton";
 import type { User } from "@supabase/supabase-js";
 import {
   BookOpen,
@@ -121,14 +122,14 @@ interface FormattedPractical {
   description: string | null;
   deadline: string | null;
   status:
-    | "assigned"
-    | "in_progress"
-    | "completed"
-    | "overdue"
-    | "passed"
-    | "failed"
-    | "submitted"
-    | "pending";
+  | "assigned"
+  | "in_progress"
+  | "completed"
+  | "overdue"
+  | "passed"
+  | "failed"
+  | "submitted"
+  | "pending";
   subject_name: string;
   language: string | null;
   hasLevels: boolean;
@@ -355,11 +356,10 @@ function FilterTabs({
             onClick={() => onFilterChange(f.key)}
             className={`
                             relative flex items-center gap-2 px-4 py-2 text-sm font-bold rounded-lg transition-all duration-200
-                            ${
-                              isActive
-                                ? "text-gray-900 dark:text-white"
-                                : "text-gray-500 dark:text-gray-400 font-medium hover:text-gray-700 dark:hover:text-gray-200 hover:bg-white/40 dark:hover:bg-gray-700/40"
-                            }
+                            ${isActive
+                ? "text-gray-900 dark:text-white"
+                : "text-gray-500 dark:text-gray-400 font-medium hover:text-gray-700 dark:hover:text-gray-200 hover:bg-white/40 dark:hover:bg-gray-700/40"
+              }
                         `}
           >
             {isActive && (
@@ -372,11 +372,10 @@ function FilterTabs({
             )}
             <span>{f.label}</span>
             <span
-              className={`px-1.5 py-0.5 text-xs rounded-md ${
-                isActive
-                  ? "bg-gray-100 dark:bg-gray-600 text-gray-900 dark:text-white"
-                  : "bg-gray-200/50 dark:bg-gray-800 text-gray-500 dark:text-gray-400"
-              }`}
+              className={`px-1.5 py-0.5 text-xs rounded-md ${isActive
+                ? "bg-gray-100 dark:bg-gray-600 text-gray-900 dark:text-white"
+                : "bg-gray-200/50 dark:bg-gray-800 text-gray-500 dark:text-gray-400"
+                }`}
             >
               {f.count}
             </span>
@@ -565,7 +564,7 @@ export default function StudentPracticals() {
               !isBatch &&
               (assignedMeta.is_locked ||
                 (assignedMeta.attempt_count || 0) >=
-                  (assignedMeta.max_attempts || 1)),
+                (assignedMeta.max_attempts || 1)),
             attempt_count: isBatch ? 0 : assignedMeta.attempt_count || 0,
             max_attempts: isBatch ? 1 : assignedMeta.max_attempts || 1,
             marks_obtained: sub?.marks_obtained ?? undefined,
@@ -803,16 +802,6 @@ export default function StudentPracticals() {
     );
   };
 
-  // Loading State
-  if (!user) {
-    return (
-      <div className="min-h-screen bg-slate-50 dark:bg-gray-950 flex items-center justify-center">
-        <div className="flex flex-col items-center gap-4">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50/30 to-purple-50/30 dark:from-gray-950 dark:via-indigo-950/10 dark:to-purple-950/10">
@@ -907,11 +896,10 @@ export default function StudentPracticals() {
 
             <div
               className={`rounded-2xl p-4 flex flex-col items-center justify-center text-center hover-lift min-h-[140px] border transition-all duration-300 group
-                            ${
-                              stats.overdue > 0
-                                ? "bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800 shadow-sm"
-                                : "glass-card"
-                            }`}
+                            ${stats.overdue > 0
+                  ? "bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800 shadow-sm"
+                  : "glass-card"
+                }`}
             >
               <div
                 className={`w-12 h-12 rounded-2xl flex items-center justify-center mb-3 group-hover:scale-110 transition-transform ${stats.overdue > 0 ? "bg-red-100 dark:bg-red-900/40" : "bg-gray-100/50 dark:bg-gray-800"}`}
@@ -950,11 +938,7 @@ export default function StudentPracticals() {
 
         {/* Listing */}
         {loading ? (
-          <div className="space-y-3">
-            {[1, 2, 3, 4, 5].map((i) => (
-              <Skeleton key={i} className="h-20 rounded-2xl w-full" />
-            ))}
-          </div>
+          <StudentPracticalsSkeleton />
         ) : filteredPracticals.length === 0 ? (
           <div className="text-center py-16 bg-white/50 dark:bg-gray-800/20 rounded-3xl border border-dashed border-gray-300 dark:border-gray-700">
             <FileCode className="w-16 h-16 text-gray-300 dark:text-gray-600 mx-auto mb-4" />
@@ -982,7 +966,7 @@ export default function StudentPracticals() {
                 !isSubmitted &&
                 p.deadline &&
                 new Date(p.deadline).getTime() - Date.now() <
-                  3 * 24 * 60 * 60 * 1000;
+                3 * 24 * 60 * 60 * 1000;
               const timeInfo = p.deadline
                 ? formatTimeRemaining(p.deadline)
                 : null;
@@ -1055,13 +1039,12 @@ export default function StudentPracticals() {
                         <span
                           key={idx}
                           className={`text-xs px-2.5 py-1 rounded-lg font-semibold
-                           ${
-                             tag.type === "subject"
-                               ? "bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400"
-                               : tag.type === "language"
-                                 ? "bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400"
-                                 : "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300"
-                           }
+                           ${tag.type === "subject"
+                              ? "bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400"
+                              : tag.type === "language"
+                                ? "bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400"
+                                : "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300"
+                            }
                          `}
                         >
                           {tag.text}
@@ -1070,12 +1053,11 @@ export default function StudentPracticals() {
                       {p.deadline && !isDone && !isSubmitted && (
                         <span
                           className={`text-xs px-2.5 py-1 rounded-lg font-bold flex items-center gap-1.5
-                            ${
-                              timeInfo?.urgency === "overdue"
-                                ? "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400"
-                                : timeInfo?.urgency === "urgent"
-                                  ? "bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400"
-                                  : "bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400"
+                            ${timeInfo?.urgency === "overdue"
+                              ? "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400"
+                              : timeInfo?.urgency === "urgent"
+                                ? "bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400"
+                                : "bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400"
                             }
                           `}
                         >
@@ -1097,11 +1079,10 @@ export default function StudentPracticals() {
                       (p.status === "failed" && !p.is_locked)) &&
                       (p.max_attempts || 1) > 1 && (
                         <div
-                          className={`text-xs font-medium px-2 py-1 rounded-lg mb-1 ${
-                            (p.max_attempts || 1) - (p.attempt_count || 0) <= 1
-                              ? "bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400"
-                              : "bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400"
-                          }`}
+                          className={`text-xs font-medium px-2 py-1 rounded-lg mb-1 ${(p.max_attempts || 1) - (p.attempt_count || 0) <= 1
+                            ? "bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400"
+                            : "bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400"
+                            }`}
                         >
                           {(p.max_attempts || 1) - (p.attempt_count || 0)}{" "}
                           attempt
@@ -1144,14 +1125,13 @@ export default function StudentPracticals() {
                         <div className="flex items-center gap-2">
                           {p.marks_obtained !== undefined && (
                             <span
-                              className={`text-sm font-bold px-2 py-0.5 rounded-md ${
-                                p.status === "passed" ||
+                              className={`text-sm font-bold px-2 py-0.5 rounded-md ${p.status === "passed" ||
                                 p.status === "completed"
-                                  ? "text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20"
-                                  : p.status === "failed"
-                                    ? "text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20"
-                                    : "text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/20"
-                              }`}
+                                ? "text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20"
+                                : p.status === "failed"
+                                  ? "text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20"
+                                  : "text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/20"
+                                }`}
                             >
                               {p.marks_obtained}/{p.max_marks}
                             </span>
@@ -1330,11 +1310,10 @@ export default function StudentPracticals() {
                                   </span>
                                 </div>
                                 <span
-                                  className={`text-[10px] font-black px-2 py-0.5 rounded uppercase tracking-wider ${
-                                    r.status?.toLowerCase() === "passed"
-                                      ? "text-emerald-600 bg-emerald-50 dark:bg-emerald-900/20"
-                                      : "text-red-600 bg-red-50 dark:bg-red-900/20"
-                                  }`}
+                                  className={`text-[10px] font-black px-2 py-0.5 rounded uppercase tracking-wider ${r.status?.toLowerCase() === "passed"
+                                    ? "text-emerald-600 bg-emerald-50 dark:bg-emerald-900/20"
+                                    : "text-red-600 bg-red-50 dark:bg-red-900/20"
+                                    }`}
                                 >
                                   {r.status}
                                 </span>

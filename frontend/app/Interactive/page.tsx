@@ -8,6 +8,7 @@ import { ChevronDown, Loader2 } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { generatePdfClient } from "@/lib/ClientPdf";
+import InteractiveSkeleton from "@/components/skeletons/InteractiveSkeleton";
 import {
   ResizableHandle,
   ResizablePanel,
@@ -291,17 +292,6 @@ export default function Home() {
     }
   };
 
-  if (!user)
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 via-indigo-50/50 to-purple-50/50 dark:from-gray-950 dark:via-indigo-950/20 dark:to-purple-950/20">
-        <div className="relative">
-          <div className="absolute inset-0 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 rounded-full blur-xl opacity-30 animate-pulse" />
-          <div className="relative glass-card-premium p-8 rounded-2xl">
-            <Loader2 className="w-10 h-10 text-indigo-600 dark:text-indigo-400 animate-spin" />
-          </div>
-        </div>
-      </div>
-    );
 
   return (
     <div className="flex flex-col h-screen overflow-hidden bg-gradient-to-br from-slate-50 via-indigo-50/40 to-purple-50/40 dark:from-gray-950 dark:via-indigo-950/20 dark:to-purple-950/20 relative">
@@ -384,7 +374,7 @@ export default function Home() {
                           setTimeout(() => setIsExecuting(false), 2000);
                         }}
                         onDownload={downloadPdf}
-                        onSubmit={() => {}}
+                        onSubmit={() => { }}
                         loading={false}
                         locked={false}
                         lang={lang}
@@ -392,7 +382,7 @@ export default function Home() {
                         showLangSelector={true}
                         showInputToggle={false}
                         showInput={false}
-                        setShowInput={() => {}}
+                        setShowInput={() => { }}
                         terminalRef={interactiveTerminalRef}
                         violations={0}
                         isFullscreen={true}

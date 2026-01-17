@@ -4,6 +4,7 @@ import { useEffect, useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { User } from "@supabase/supabase-js";
+import ProfileSkeleton from "@/components/skeletons/ProfileSkeleton";
 import {
   User as UserIcon,
   Mail,
@@ -169,12 +170,7 @@ export default function ProfilePage() {
     }
   };
 
-  if (loading)
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-gray-950">
-        <Loader2 className="w-10 h-10 text-indigo-600 animate-spin" />
-      </div>
-    );
+  if (loading) return <ProfileSkeleton />;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950">
@@ -314,11 +310,10 @@ export default function ProfilePage() {
           <div className="lg:col-span-2 space-y-6 animate-slideUp animation-delay-100">
             {message && (
               <div
-                className={`p-4 rounded-xl border flex items-center gap-3 ${
-                  message.type === "success"
-                    ? "bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300"
-                    : "bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800 text-red-800 dark:text-red-300"
-                }`}
+                className={`p-4 rounded-xl border flex items-center gap-3 ${message.type === "success"
+                  ? "bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300"
+                  : "bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800 text-red-800 dark:text-red-300"
+                  }`}
               >
                 {message.type === "success" ? (
                   <CheckCircle2 size={20} />
