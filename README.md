@@ -10,14 +10,24 @@
 
 ## 🚀 Features
 
+### Core Execution
 - **⚡ Zero-Latency Execution** – "Pre-warmed" container pools ensure code runs instantly without cold start delays.
 - **🔒 Secure Sandboxing** – All code executes in isolated, resource-constrained Docker containers (Alpine Linux) to prevent malicious activity.
 - **📝 Advanced Editor** – Monaco-based rich text editor with glassmorphism UI, smart language switching, and smooth resizing capabilities.
 - **📶 Interactive Terminal** – WebSocket-based terminal facilitating real-time partial output streaming, infinite loop protection, and interactive input.
+
+### AI & Intelligence
 - **🤖 Clinical AI Intelligence** – Integrated Gemini AI for smart error diagnostics, code explanation, and automated hints.
+
+### User Experience
 - **✨ Premium UI** – Modern glassmorphism design with fluid animations and responsive layouts.
-- **👩‍🏫 Faculty & Admin Dashboards** – specialized interfaces for managing classes, students, and system resources.
+- **📱 Fully Responsive** – Mobile-first design with card/table hybrid views that adapt to any screen size.
+- **⏳ Skeleton Loaders** – High-fidelity skeleton components for instant page rendering without blocking loaders.
+
+### Administration
+- **👩‍🏫 Faculty & Admin Dashboards** – Specialized interfaces for managing classes, students, and system resources.
 - **📊 Detailed Analytics** – Track submission history, performance metrics, and automated grading results.
+- **📥 Bulk User Import** – Import users from CSV or Excel files with drag-and-drop support.
 
 ---
 
