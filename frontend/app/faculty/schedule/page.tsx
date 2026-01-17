@@ -2,16 +2,32 @@
 
 import React, { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { Loader2, Plus, Calendar as CalendarIcon, Clock, CheckCircle2, Pencil } from "lucide-react";
+import {
+  Loader2,
+  Plus,
+  Calendar as CalendarIcon,
+  Clock,
+  Pencil,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from "@/components/ui/card";
 import PracticalForm from "../components/PracticalForm";
 import { toast } from "sonner";
 
 // Helper to format date with day name
 function formatScheduleDate(dateStr: string): string {
   const date = new Date(dateStr);
-  return date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+  return date.toLocaleDateString("en-US", {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+  });
 }
 
 // Helper to get days until deadline
@@ -61,16 +77,20 @@ export default function FacultySchedulePage() {
   useEffect(() => {
     const loadData = async () => {
       setLoading(true);
-      const { data: { user } } = await supabase.auth.getUser();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
       if (!user) return;
 
       // 1. Fetch schedules
       const { data: scheduleData } = await supabase
         .from("schedules")
-        .select(`
+        .select(
+          `
         *,
         practicals (id, title, subjects (subject_name))
-      `)
+      `,
+        )
         .eq("faculty_id", user.id)
         .order("date", { ascending: true })
         .order("start_time", { ascending: true });
@@ -138,14 +158,18 @@ export default function FacultySchedulePage() {
   };
 
   const refreshSchedules = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
     if (user) {
       const { data } = await supabase
         .from("schedules")
-        .select(`
+        .select(
+          `
           *,
           practicals (id, title, subjects (subject_name))
-        `)
+        `,
+        )
         .eq("faculty_id", user.id)
         .order("date", { ascending: true })
         .order("start_time", { ascending: true });
@@ -167,7 +191,7 @@ export default function FacultySchedulePage() {
         .from("schedules")
         .update({
           practical_id: practicalId,
-          title_placeholder: null // Clear placeholder since we have a real practical now
+          title_placeholder: null, // Clear placeholder since we have a real practical now
         })
         .eq("id", selectedSchedule.id);
 
@@ -178,7 +202,6 @@ export default function FacultySchedulePage() {
 
       // Refresh schedules
       await refreshSchedules();
-
     } catch (e: any) {
       console.error("Failed to link practical", e);
       toast.error("Failed to link practical to schedule: " + e.message);
@@ -188,8 +211,12 @@ export default function FacultySchedulePage() {
   return (
     <div className="container mx-auto py-8 pt-24 space-y-8">
       <div>
-        <h1 className="text-3xl font-bold text-gray-900 dark:text-white">My Schedule</h1>
-        <p className="text-gray-500 dark:text-gray-400">View your assigned practical sessions and add details.</p>
+        <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
+          My Schedule
+        </h1>
+        <p className="text-gray-500 dark:text-gray-400">
+          View your assigned practical sessions and add details.
+        </p>
       </div>
 
       {loading ? (
@@ -201,7 +228,10 @@ export default function FacultySchedulePage() {
           {schedules.map((schedule) => {
             const isConfigured = !!schedule.practical_id;
             const subjectName = schedule.practicals?.subjects?.subject_name;
-            const practicalTitle = schedule.practicals?.title || schedule.title_placeholder || "Untitled Session";
+            const practicalTitle =
+              schedule.practicals?.title ||
+              schedule.title_placeholder ||
+              "Untitled Session";
             const daysUntil = getDaysUntil(schedule.date);
             const isToday = daysUntil === 0;
             const isUrgent = daysUntil <= 2 && daysUntil >= 0;
@@ -210,12 +240,13 @@ export default function FacultySchedulePage() {
             return (
               <Card
                 key={schedule.id}
-                className={`relative overflow-hidden bg-white dark:bg-gray-900/50 border-gray-100 dark:border-gray-800 hover:shadow-lg transition-all ${!isConfigured && !isPast
-                  ? 'ring-2 ring-orange-300 dark:ring-orange-700 border-orange-200 dark:border-orange-800'
-                  : isToday
-                    ? 'ring-2 ring-indigo-300 dark:ring-indigo-700 border-indigo-200 dark:border-indigo-800'
-                    : 'hover:border-indigo-200 dark:hover:border-indigo-800/50'
-                  }`}
+                className={`relative overflow-hidden bg-white dark:bg-gray-900/50 border-gray-100 dark:border-gray-800 hover:shadow-lg transition-all ${
+                  !isConfigured && !isPast
+                    ? "ring-2 ring-orange-300 dark:ring-orange-700 border-orange-200 dark:border-orange-800"
+                    : isToday
+                      ? "ring-2 ring-indigo-300 dark:ring-indigo-700 border-indigo-200 dark:border-indigo-800"
+                      : "hover:border-indigo-200 dark:hover:border-indigo-800/50"
+                }`}
               >
                 <CardHeader className="pb-3">
                   <div className="flex justify-between items-start">
@@ -224,19 +255,29 @@ export default function FacultySchedulePage() {
                       {schedule.batch_name || "All Batches"}
                     </span>
                     {/* Status Badge */}
-                    <span className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${isPast
-                      ? "bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400"
-                      : isConfigured
-                        ? "bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400"
-                        : "bg-orange-50 dark:bg-orange-900/20 text-orange-700 dark:text-orange-400"
-                      }`}>
-                      <div className={`w-1.5 h-1.5 rounded-full ${isPast
-                        ? "bg-gray-400"
+                    <span
+                      className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${
+                        isPast
+                          ? "bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400"
+                          : isConfigured
+                            ? "bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400"
+                            : "bg-orange-50 dark:bg-orange-900/20 text-orange-700 dark:text-orange-400"
+                      }`}
+                    >
+                      <div
+                        className={`w-1.5 h-1.5 rounded-full ${
+                          isPast
+                            ? "bg-gray-400"
+                            : isConfigured
+                              ? "bg-emerald-500"
+                              : "bg-orange-500 animate-pulse"
+                        }`}
+                      />
+                      {isPast
+                        ? "Completed"
                         : isConfigured
-                          ? "bg-emerald-500"
-                          : "bg-orange-500 animate-pulse"
-                        }`} />
-                      {isPast ? "Completed" : isConfigured ? "Ready" : "Pending Setup"}
+                          ? "Ready"
+                          : "Pending Setup"}
                     </span>
                   </div>
                   {/* Subject Eyebrow + Title */}
@@ -260,24 +301,35 @@ export default function FacultySchedulePage() {
                     </div>
                     <div className="flex items-center gap-1.5">
                       <Clock size={14} className="text-gray-400" />
-                      <span>{schedule.start_time.slice(0, 5)} - {schedule.end_time.slice(0, 5)}</span>
+                      <span>
+                        {schedule.start_time.slice(0, 5)} -{" "}
+                        {schedule.end_time.slice(0, 5)}
+                      </span>
                     </div>
                   </div>
 
                   {/* Priority Indicator */}
                   {!isPast && (
-                    <div className={`text-xs font-medium mb-4 ${isToday
-                      ? 'text-indigo-600 dark:text-indigo-400'
-                      : isUrgent
-                        ? 'text-orange-600 dark:text-orange-400'
-                        : 'text-gray-400 dark:text-gray-500'
-                      }`}>
-                      {isToday ? '📍 Today' : isUrgent ? `⚡ ${daysUntil} day${daysUntil === 1 ? '' : 's'} left` : `${daysUntil} days away`}
+                    <div
+                      className={`text-xs font-medium mb-4 ${
+                        isToday
+                          ? "text-indigo-600 dark:text-indigo-400"
+                          : isUrgent
+                            ? "text-orange-600 dark:text-orange-400"
+                            : "text-gray-400 dark:text-gray-500"
+                      }`}
+                    >
+                      {isToday
+                        ? "📍 Today"
+                        : isUrgent
+                          ? `⚡ ${daysUntil} day${daysUntil === 1 ? "" : "s"} left`
+                          : `${daysUntil} days away`}
                     </div>
                   )}
                   {isPast && (
                     <div className="text-xs font-medium text-gray-400 dark:text-gray-500 mb-4">
-                      Ended {Math.abs(daysUntil)} day{Math.abs(daysUntil) === 1 ? '' : 's'} ago
+                      Ended {Math.abs(daysUntil)} day
+                      {Math.abs(daysUntil) === 1 ? "" : "s"} ago
                     </div>
                   )}
 
@@ -294,7 +346,9 @@ export default function FacultySchedulePage() {
                       ) : (
                         <Pencil className="mr-2 h-4 w-4" />
                       )}
-                      {loadingEdit === schedule.id ? "Loading..." : "Edit Details"}
+                      {loadingEdit === schedule.id
+                        ? "Loading..."
+                        : "Edit Details"}
                     </Button>
                   ) : (
                     <Button

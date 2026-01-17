@@ -54,13 +54,78 @@ export default function PracticalForm({
   onSaveStep1,
   singleStep = false,
 }: PracticalFormProps) {
-
   // Level type for multi-level practicals - now using shared type
 
   const defaultLevels: Level[] = [
-    { id: 0, practical_id: 0, created_at: "", updated_at: "", level: 'easy', title: 'Easy', description: '', max_marks: 5, testCases: [{ id: 0, practical_id: null, level_id: null, created_at: "", input: '', expected_output: '', is_hidden: false, time_limit_ms: 2000, memory_limit_kb: 65536 }] },
-    { id: 0, practical_id: 0, created_at: "", updated_at: "", level: 'medium', title: 'Medium', description: '', max_marks: 10, testCases: [{ id: 0, practical_id: null, level_id: null, created_at: "", input: '', expected_output: '', is_hidden: false, time_limit_ms: 2000, memory_limit_kb: 65536 }] },
-    { id: 0, practical_id: 0, created_at: "", updated_at: "", level: 'hard', title: 'Hard', description: '', max_marks: 15, testCases: [{ id: 0, practical_id: null, level_id: null, created_at: "", input: '', expected_output: '', is_hidden: false, time_limit_ms: 2000, memory_limit_kb: 65536 }] },
+    {
+      id: 0,
+      practical_id: 0,
+      created_at: "",
+      updated_at: "",
+      level: "easy",
+      title: "Easy",
+      description: "",
+      max_marks: 5,
+      testCases: [
+        {
+          id: 0,
+          practical_id: null,
+          level_id: null,
+          created_at: "",
+          input: "",
+          expected_output: "",
+          is_hidden: false,
+          time_limit_ms: 2000,
+          memory_limit_kb: 65536,
+        },
+      ],
+    },
+    {
+      id: 0,
+      practical_id: 0,
+      created_at: "",
+      updated_at: "",
+      level: "medium",
+      title: "Medium",
+      description: "",
+      max_marks: 10,
+      testCases: [
+        {
+          id: 0,
+          practical_id: null,
+          level_id: null,
+          created_at: "",
+          input: "",
+          expected_output: "",
+          is_hidden: false,
+          time_limit_ms: 2000,
+          memory_limit_kb: 65536,
+        },
+      ],
+    },
+    {
+      id: 0,
+      practical_id: 0,
+      created_at: "",
+      updated_at: "",
+      level: "hard",
+      title: "Hard",
+      description: "",
+      max_marks: 15,
+      testCases: [
+        {
+          id: 0,
+          practical_id: null,
+          level_id: null,
+          created_at: "",
+          input: "",
+          expected_output: "",
+          is_hidden: false,
+          time_limit_ms: 2000,
+          memory_limit_kb: 65536,
+        },
+      ],
+    },
   ];
 
   const [form, setForm] = useState<Practical>({
@@ -77,25 +142,43 @@ export default function PracticalForm({
   });
 
   const [testCases, setTestCases] = useState<TestCase[]>([
-    { id: 0, practical_id: null, level_id: null, created_at: "", input: "", expected_output: "", is_hidden: false, time_limit_ms: 2000, memory_limit_kb: 65536 },
+    {
+      id: 0,
+      practical_id: null,
+      level_id: null,
+      created_at: "",
+      input: "",
+      expected_output: "",
+      is_hidden: false,
+      time_limit_ms: 2000,
+      memory_limit_kb: 65536,
+    },
   ]);
 
   // Multi-level support
   const [levels, setLevels] = useState<Level[]>(defaultLevels);
-  const [activeLevel, setActiveLevel] = useState<'easy' | 'medium' | 'hard'>('easy');
+  const [activeLevel, setActiveLevel] = useState<"easy" | "medium" | "hard">(
+    "easy",
+  );
   const [enableLevels, setEnableLevels] = useState(false);
 
   const [step, setStep] = useState<1 | 2>(1);
   const [students, setStudents] = useState<Student[]>([]);
   const [selectedStudents, setSelectedStudents] = useState<Student[]>([]);
-  const [assignmentDeadline, setAssignmentDeadline] = useState<string>(form.deadline || "");
+  const [assignmentDeadline, setAssignmentDeadline] = useState<string>(
+    form.deadline || "",
+  );
   const [notes, setNotes] = useState("");
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [generatingTests, setGeneratingTests] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const [filters, setFilters] = useState({ query: "", semester: "", batch: "" });
+  const [filters, setFilters] = useState({
+    query: "",
+    semester: "",
+    batch: "",
+  });
 
   // Reset step when modal opens
   useEffect(() => {
@@ -108,7 +191,9 @@ export default function PracticalForm({
   // set initial state when practical prop changes
   useEffect(() => {
     if (practical) {
-      const deadline = practical.deadline ? (practical.deadline as string).slice(0, 16) : "";
+      const deadline = practical.deadline
+        ? (practical.deadline as string).slice(0, 16)
+        : "";
       setForm({
         ...practical,
         deadline,
@@ -119,7 +204,10 @@ export default function PracticalForm({
       const loadData = async () => {
         try {
           // load test cases for existing practical
-          const { data: testData } = await supabase.from("test_cases").select("*").eq("practical_id", practical.id);
+          const { data: testData } = await supabase
+            .from("test_cases")
+            .select("*")
+            .eq("practical_id", practical.id);
           if (testData && testData.length > 0) {
             setTestCases(testData as TestCase[]);
           }
@@ -131,9 +219,13 @@ export default function PracticalForm({
             .eq("practical_id", practical.id);
 
           if (!studentError && studentData && studentData.length > 0) {
-            const assignedIds = studentData.map((sp: { student_id: string }) => sp.student_id);
+            const assignedIds = studentData.map(
+              (sp: { student_id: string }) => sp.student_id,
+            );
             // Store the IDs temporarily - we'll match with students when they load
-            (window as unknown as { __assignedStudentIds: string[] }).__assignedStudentIds = assignedIds;
+            (
+              window as unknown as { __assignedStudentIds: string[] }
+            ).__assignedStudentIds = assignedIds;
           }
         } catch (e) {
           console.error("Failed to fetch practical data:", e);
@@ -143,7 +235,7 @@ export default function PracticalForm({
       loadData();
     } else {
       // reset for new practical
-      setForm(prev => ({
+      setForm((prev) => ({
         ...prev,
         id: 0,
         title: "",
@@ -151,9 +243,23 @@ export default function PracticalForm({
         language: "",
         deadline: new Date().toISOString().slice(0, 16),
         max_marks: 100,
-        subject_id: defaultSubjectId ? Number(defaultSubjectId) : (subjects[0]?.id ?? prev.subject_id),
+        subject_id: defaultSubjectId
+          ? Number(defaultSubjectId)
+          : (subjects[0]?.id ?? prev.subject_id),
       }));
-      setTestCases([{ id: 0, practical_id: null, level_id: null, created_at: "", input: "", expected_output: "", is_hidden: false, time_limit_ms: 2000, memory_limit_kb: 65536 }]);
+      setTestCases([
+        {
+          id: 0,
+          practical_id: null,
+          level_id: null,
+          created_at: "",
+          input: "",
+          expected_output: "",
+          is_hidden: false,
+          time_limit_ms: 2000,
+          memory_limit_kb: 65536,
+        },
+      ]);
       setAssignmentDeadline(new Date().toISOString().slice(0, 16));
       setSelectedStudents([]); // Clear selected students for new practical
     }
@@ -166,7 +272,8 @@ export default function PracticalForm({
       try {
         const { data, error } = await supabase
           .from("users")
-          .select(`
+          .select(
+            `
             uid,
             name,
             email,
@@ -174,7 +281,8 @@ export default function PracticalForm({
             roll_no,
             semester,
             batch
-          `)
+          `,
+          )
           .eq("role", "student");
 
         if (error) {
@@ -207,13 +315,18 @@ export default function PracticalForm({
         setStudents(mapped);
 
         // Check if there are pre-assigned students to select
-        const assignedIds = (window as unknown as { __assignedStudentIds: string[] }).__assignedStudentIds;
+        const assignedIds = (
+          window as unknown as { __assignedStudentIds: string[] }
+        ).__assignedStudentIds;
         if (assignedIds && assignedIds.length > 0) {
-          const preSelected = mapped.filter((s: Student) => assignedIds.includes(s.uid));
+          const preSelected = mapped.filter((s: Student) =>
+            assignedIds.includes(s.uid),
+          );
           if (preSelected.length > 0) {
             setSelectedStudents(preSelected);
           }
-          delete (window as unknown as { __assignedStudentIds?: string[] }).__assignedStudentIds; // Clean up
+          delete (window as unknown as { __assignedStudentIds?: string[] })
+            .__assignedStudentIds; // Clean up
         }
       } catch (err) {
         console.error("Error fetching students:", err);
@@ -225,13 +338,27 @@ export default function PracticalForm({
   }, [supabase, practical]);
 
   // ---------- handlers ----------
-  const handleInput = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
-    const { name, value } = e.target as HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement;
-    setForm(prev => ({ ...prev, [name]: name === "max_marks" ? Number(value) : value }));
+  const handleInput = (
+    e: React.ChangeEvent<
+      HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
+    >,
+  ) => {
+    const { name, value } = e.target as
+      | HTMLInputElement
+      | HTMLTextAreaElement
+      | HTMLSelectElement;
+    setForm((prev) => ({
+      ...prev,
+      [name]: name === "max_marks" ? Number(value) : value,
+    }));
   };
 
-  const handleTestCaseChange = (index: number, field: keyof TestCase, value: string | number | boolean) => {
-    setTestCases(prev => {
+  const handleTestCaseChange = (
+    index: number,
+    field: keyof TestCase,
+    value: string | number | boolean,
+  ) => {
+    setTestCases((prev) => {
       const copy = [...prev];
       if (copy[index]) {
         (copy[index] as any)[field] = value;
@@ -240,40 +367,91 @@ export default function PracticalForm({
     });
   };
 
-  const addTestCase = () => setTestCases(prev => [...prev, { id: 0, practical_id: null, level_id: null, created_at: "", input: "", expected_output: "", is_hidden: false, time_limit_ms: 2000, memory_limit_kb: 65536 }]);
-  const removeTestCase = (index: number) => setTestCases(prev => prev.filter((_, i) => i !== index));
+  const addTestCase = () =>
+    setTestCases((prev) => [
+      ...prev,
+      {
+        id: 0,
+        practical_id: null,
+        level_id: null,
+        created_at: "",
+        input: "",
+        expected_output: "",
+        is_hidden: false,
+        time_limit_ms: 2000,
+        memory_limit_kb: 65536,
+      },
+    ]);
+  const removeTestCase = (index: number) =>
+    setTestCases((prev) => prev.filter((_, i) => i !== index));
 
   // Level management helpers
-  const updateLevelField = (level: 'easy' | 'medium' | 'hard', field: string, value: string | number | boolean) => {
-    setLevels(prev => prev.map(l => l.level === level ? { ...l, [field]: value } : l));
+  const updateLevelField = (
+    level: "easy" | "medium" | "hard",
+    field: string,
+    value: string | number | boolean,
+  ) => {
+    setLevels((prev) =>
+      prev.map((l) => (l.level === level ? { ...l, [field]: value } : l)),
+    );
   };
 
-  const addLevelTestCase = (level: 'easy' | 'medium' | 'hard') => {
-    setLevels(prev => prev.map(l =>
-      l.level === level
-        ? { ...l, testCases: [...l.testCases, { id: 0, practical_id: null, level_id: null, created_at: "", input: '', expected_output: '', is_hidden: false, time_limit_ms: 2000, memory_limit_kb: 65536 }] }
-        : l
-    ));
+  const addLevelTestCase = (level: "easy" | "medium" | "hard") => {
+    setLevels((prev) =>
+      prev.map((l) =>
+        l.level === level
+          ? {
+              ...l,
+              testCases: [
+                ...l.testCases,
+                {
+                  id: 0,
+                  practical_id: null,
+                  level_id: null,
+                  created_at: "",
+                  input: "",
+                  expected_output: "",
+                  is_hidden: false,
+                  time_limit_ms: 2000,
+                  memory_limit_kb: 65536,
+                },
+              ],
+            }
+          : l,
+      ),
+    );
   };
 
-  const removeLevelTestCase = (level: 'easy' | 'medium' | 'hard', index: number) => {
-    setLevels(prev => prev.map(l =>
-      l.level === level
-        ? { ...l, testCases: l.testCases.filter((_, i) => i !== index) }
-        : l
-    ));
+  const removeLevelTestCase = (
+    level: "easy" | "medium" | "hard",
+    index: number,
+  ) => {
+    setLevels((prev) =>
+      prev.map((l) =>
+        l.level === level
+          ? { ...l, testCases: l.testCases.filter((_, i) => i !== index) }
+          : l,
+      ),
+    );
   };
 
-  const updateLevelTestCase = (level: 'easy' | 'medium' | 'hard', index: number, field: keyof TestCase, value: string | number | boolean) => {
-    setLevels(prev => prev.map(l => {
-      if (l.level !== level) return l;
-      const newTestCases = [...l.testCases];
-      (newTestCases[index] as any)[field] = value;
-      return { ...l, testCases: newTestCases };
-    }));
+  const updateLevelTestCase = (
+    level: "easy" | "medium" | "hard",
+    index: number,
+    field: keyof TestCase,
+    value: string | number | boolean,
+  ) => {
+    setLevels((prev) =>
+      prev.map((l) => {
+        if (l.level !== level) return l;
+        const newTestCases = [...l.testCases];
+        (newTestCases[index] as any)[field] = value;
+        return { ...l, testCases: newTestCases };
+      }),
+    );
   };
 
-  const getCurrentLevel = () => levels.find(l => l.level === activeLevel)!;
+  const getCurrentLevel = () => levels.find((l) => l.level === activeLevel)!;
 
   const generateTestCases = async () => {
     // Determine source description based on mode
@@ -301,14 +479,15 @@ export default function PracticalForm({
 
       const savedSettings = localStorage.getItem("ai_settings");
       const config = savedSettings ? JSON.parse(savedSettings) : {};
-      const apiUrl = process.env.NEXT_PUBLIC_AI_API_URL || "http://localhost:5002/ai";
+      const apiUrl =
+        process.env.NEXT_PUBLIC_AI_API_URL || "http://localhost:5002/ai";
 
       const res = await fetch(`${apiUrl}/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           messages: [{ role: "user", parts: [{ text: prompt }] }],
-          config
+          config,
         }),
       });
 
@@ -342,7 +521,10 @@ export default function PracticalForm({
 
       let jsonStr = fullText;
       // Clean up markdown if present
-      jsonStr = jsonStr.replace(/```json/g, "").replace(/```/g, "").trim();
+      jsonStr = jsonStr
+        .replace(/```json/g, "")
+        .replace(/```/g, "")
+        .trim();
 
       const newTests = JSON.parse(jsonStr);
       if (Array.isArray(newTests)) {
@@ -360,27 +542,38 @@ export default function PracticalForm({
 
         if (enableLevels) {
           // Add to current level test cases
-          setLevels(prev => prev.map(l =>
-            l.level === activeLevel
-              ? { ...l, testCases: [...l.testCases, ...formattedTests] }
-              : l
-          ));
+          setLevels((prev) =>
+            prev.map((l) =>
+              l.level === activeLevel
+                ? { ...l, testCases: [...l.testCases, ...formattedTests] }
+                : l,
+            ),
+          );
         } else {
           // Add to global test cases
-          setTestCases(prev => [...prev, ...formattedTests]);
+          setTestCases((prev) => [...prev, ...formattedTests]);
         }
       } else {
         throw new Error("Invalid response format");
       }
     } catch (err: any) {
       console.error("AI Generation Error:", err);
-      alert("Failed to generate test cases. Please try again. " + (err.message || ""));
+      alert(
+        "Failed to generate test cases. Please try again. " +
+          (err.message || ""),
+      );
     } finally {
       setGeneratingTests(false);
     }
   };
 
-  const getLanguageExtension = useCallback(() => (String(sampleLanguage || "").toLowerCase() === "python" ? python() : cpp()), [sampleLanguage]);
+  const getLanguageExtension = useCallback(
+    () =>
+      String(sampleLanguage || "").toLowerCase() === "python"
+        ? python()
+        : cpp(),
+    [sampleLanguage],
+  );
 
   // Save practical (create/update)
   const handleSave = useCallback(async () => {
@@ -390,21 +583,38 @@ export default function PracticalForm({
       const payload = {
         title: form.title,
         subject_id: form.subject_id,
-        description: enableLevels ? '' : form.description, // Use level descriptions when levels enabled
+        description: enableLevels ? "" : form.description, // Use level descriptions when levels enabled
         language: form.language,
         deadline: form.deadline,
-        max_marks: enableLevels ? levels.reduce((sum, l) => sum + l.max_marks, 0) : (form.max_marks ?? 100),
+        max_marks: enableLevels
+          ? levels.reduce((sum, l) => sum + l.max_marks, 0)
+          : (form.max_marks ?? 100),
       };
 
       if (practicalId && practicalId > 0) {
-        const { data, error } = await supabase.from("practicals").update(payload).eq("id", practicalId).select().single();
+        const { data, error } = await supabase
+          .from("practicals")
+          .update(payload)
+          .eq("id", practicalId)
+          .select()
+          .single();
         if (error) throw error;
         practicalId = data.id;
         // delete old test cases and levels then re-insert below
-        await supabase.from("test_cases").delete().eq("practical_id", practicalId);
-        await supabase.from("practical_levels").delete().eq("practical_id", practicalId);
+        await supabase
+          .from("test_cases")
+          .delete()
+          .eq("practical_id", practicalId);
+        await supabase
+          .from("practical_levels")
+          .delete()
+          .eq("practical_id", practicalId);
       } else {
-        const { data, error } = await supabase.from("practicals").insert(payload).select().single();
+        const { data, error } = await supabase
+          .from("practicals")
+          .insert(payload)
+          .select()
+          .single();
         if (error) throw error;
         practicalId = data.id;
       }
@@ -429,7 +639,7 @@ export default function PracticalForm({
 
           // Insert test cases for this level
           if (levelData && level.testCases.length > 0) {
-            const tcData = level.testCases.map(tc => ({
+            const tcData = level.testCases.map((tc) => ({
               practical_id: practicalId,
               level_id: levelData.id,
               input: tc.input,
@@ -438,14 +648,16 @@ export default function PracticalForm({
               time_limit_ms: Number(tc.time_limit_ms) || 2000,
               memory_limit_kb: Number(tc.memory_limit_kb) || 65536,
             }));
-            const { error: tcErr } = await supabase.from("test_cases").insert(tcData);
+            const { error: tcErr } = await supabase
+              .from("test_cases")
+              .insert(tcData);
             if (tcErr) throw tcErr;
           }
         }
       } else {
         // Original single-level test cases
         if (practicalId && testCases.length > 0) {
-          const insertData = testCases.map(tc => ({
+          const insertData = testCases.map((tc) => ({
             practical_id: practicalId,
             input: tc.input,
             expected_output: tc.expected_output,
@@ -453,13 +665,15 @@ export default function PracticalForm({
             time_limit_ms: Number(tc.time_limit_ms) || 2000,
             memory_limit_kb: Number(tc.memory_limit_kb) || 65536,
           }));
-          const { error: tcErr } = await supabase.from("test_cases").insert(insertData);
+          const { error: tcErr } = await supabase
+            .from("test_cases")
+            .insert(insertData);
           if (tcErr) throw tcErr;
         }
       }
 
       // update local form id
-      setForm(prev => ({ ...prev, id: practicalId }));
+      setForm((prev) => ({ ...prev, id: practicalId }));
 
       if (onSaveStep1) {
         onSaveStep1(practicalId);
@@ -493,7 +707,7 @@ export default function PracticalForm({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           practical_id: form.id,
-          student_ids: selectedStudents.map(s => s.uid),
+          student_ids: selectedStudents.map((s) => s.uid),
           assigned_deadline: assignmentDeadline,
           notes,
         }),
@@ -518,7 +732,10 @@ export default function PracticalForm({
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const isMac = navigator.platform.toUpperCase().includes("MAC");
-      if ((isMac && e.metaKey && e.key === "s") || (!isMac && e.ctrlKey && e.key === "s")) {
+      if (
+        (isMac && e.metaKey && e.key === "s") ||
+        (!isMac && e.ctrlKey && e.key === "s")
+      ) {
         e.preventDefault();
         if (!saving) handleSave();
       }
@@ -548,10 +765,14 @@ export default function PracticalForm({
             <div className="sticky top-0 z-40 backdrop-blur-sm bg-white/80 dark:bg-gray-900/80 border-b border-gray-200 dark:border-gray-700">
               <div className="w-full mx-auto px-4 xl:px-12 py-3 flex items-center justify-between gap-3">
                 <div className="flex items-center gap-3">
-                  <div className={cx(
-                    "w-9 h-9 rounded-full flex items-center justify-center font-bold transition-all",
-                    step === 1 ? "bg-gradient-to-br from-blue-600 to-purple-600 text-white shadow" : "bg-gray-200 dark:bg-gray-700 text-gray-700"
-                  )}>
+                  <div
+                    className={cx(
+                      "w-9 h-9 rounded-full flex items-center justify-center font-bold transition-all",
+                      step === 1
+                        ? "bg-gradient-to-br from-blue-600 to-purple-600 text-white shadow"
+                        : "bg-gray-200 dark:bg-gray-700 text-gray-700",
+                    )}
+                  >
                     {step === 1 ? "1" : <CheckIcon />}
                   </div>
                   <div className="leading-tight">
@@ -559,7 +780,9 @@ export default function PracticalForm({
                       {step === 1 ? "Practical Details" : "Assign Practical"}
                     </div>
                     <div className="text-xs text-gray-500 dark:text-gray-400">
-                      {step === 1 ? "Fill details & test cases" : "Select students & assign"}
+                      {step === 1
+                        ? "Fill details & test cases"
+                        : "Select students & assign"}
                     </div>
                   </div>
                 </div>
@@ -595,13 +818,21 @@ export default function PracticalForm({
                     disabled={saving || loading}
                     className={cx(
                       "inline-flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-bold transition-all shadow-lg",
-                      (saving || loading)
+                      saving || loading
                         ? "bg-gray-300 dark:bg-gray-700 text-gray-500 cursor-wait"
-                        : "bg-gradient-to-r from-indigo-600 to-purple-600 text-white hover:from-indigo-700 hover:to-purple-700 shadow-indigo-500/30"
+                        : "bg-gradient-to-r from-indigo-600 to-purple-600 text-white hover:from-indigo-700 hover:to-purple-700 shadow-indigo-500/30",
                     )}
                   >
-                    {(saving || loading) ? <LoadingSpinner /> : null}
-                    {saving ? "Saving..." : loading ? "Assigning..." : step === 1 ? (singleStep ? "Save Practical" : "Save & Next →") : "Assign to Students"}
+                    {saving || loading ? <LoadingSpinner /> : null}
+                    {saving
+                      ? "Saving..."
+                      : loading
+                        ? "Assigning..."
+                        : step === 1
+                          ? singleStep
+                            ? "Save Practical"
+                            : "Save & Next →"
+                          : "Assign to Students"}
                   </motion.button>
                 </div>
               </div>
@@ -614,23 +845,58 @@ export default function PracticalForm({
                 <div className="mb-6">
                   <div className="flex items-center justify-center gap-4">
                     <div className="flex items-center gap-2">
-                      <div className={cx(
-                        "w-10 h-10 rounded-full flex items-center justify-center font-bold transition-all",
-                        step === 1 ? "bg-gradient-to-br from-blue-600 to-purple-600 text-white shadow-lg" : "bg-emerald-600 text-white"
-                      )}>
+                      <div
+                        className={cx(
+                          "w-10 h-10 rounded-full flex items-center justify-center font-bold transition-all",
+                          step === 1
+                            ? "bg-gradient-to-br from-blue-600 to-purple-600 text-white shadow-lg"
+                            : "bg-emerald-600 text-white",
+                        )}
+                      >
                         {step === 1 ? "1" : <CheckIcon />}
                       </div>
-                      <span className={cx("font-semibold", step === 1 ? "text-gray-900 dark:text-white" : "text-gray-500 dark:text-gray-400")}>Practical Details</span>
+                      <span
+                        className={cx(
+                          "font-semibold",
+                          step === 1
+                            ? "text-gray-900 dark:text-white"
+                            : "text-gray-500 dark:text-gray-400",
+                        )}
+                      >
+                        Practical Details
+                      </span>
                     </div>
 
-                    <div className={cx("h-1 w-16 rounded-full", step === 2 ? "bg-gradient-to-r from-blue-600 to-purple-600" : "bg-gray-200 dark:bg-gray-700")} />
+                    <div
+                      className={cx(
+                        "h-1 w-16 rounded-full",
+                        step === 2
+                          ? "bg-gradient-to-r from-blue-600 to-purple-600"
+                          : "bg-gray-200 dark:bg-gray-700",
+                      )}
+                    />
 
                     <div className="flex items-center gap-2">
-                      <div className={cx(
-                        "w-10 h-10 rounded-full flex items-center justify-center font-bold transition-all",
-                        step === 2 ? "bg-gradient-to-br from-blue-600 to-purple-600 text-white shadow-lg" : "bg-gray-200 dark:bg-gray-700 text-gray-400"
-                      )}>2</div>
-                      <span className={cx("font-semibold", step === 2 ? "text-gray-900 dark:text-white" : "text-gray-500 dark:text-gray-400")}>Assign to Students</span>
+                      <div
+                        className={cx(
+                          "w-10 h-10 rounded-full flex items-center justify-center font-bold transition-all",
+                          step === 2
+                            ? "bg-gradient-to-br from-blue-600 to-purple-600 text-white shadow-lg"
+                            : "bg-gray-200 dark:bg-gray-700 text-gray-400",
+                        )}
+                      >
+                        2
+                      </div>
+                      <span
+                        className={cx(
+                          "font-semibold",
+                          step === 2
+                            ? "text-gray-900 dark:text-white"
+                            : "text-gray-500 dark:text-gray-400",
+                        )}
+                      >
+                        Assign to Students
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -647,7 +913,6 @@ export default function PracticalForm({
                     transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
                     className="space-y-6"
                   >
-
                     {/* 1. Basic Information */}
                     <BasicDetailsForm
                       form={form}

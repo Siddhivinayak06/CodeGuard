@@ -112,7 +112,7 @@ export async function generatePdfClient({
 
     const safeOutput = cleanText(
       // eslint-disable-next-line no-control-regex
-      output.replace(/\x1B\[[0-9;]*[A-Za-z]/g, "")
+      output.replace(/\x1B\[[0-9;]*[A-Za-z]/g, ""),
     );
 
     const wrappedOutput = doc.splitTextToSize(safeOutput, usableWidth);
@@ -150,7 +150,7 @@ export async function generatePdfClient({
           margin,
           cursorY,
           imgWidth,
-          imgHeight
+          imgHeight,
         );
       } catch (error) {
         console.error("Image load error:", error);
@@ -196,7 +196,7 @@ export async function generatePdfClient({
     doc.text(
       `Page ${p} of ${totalPages}`,
       pageWidth - margin - 60,
-      pageHeight - 20
+      pageHeight - 20,
     );
   }
 

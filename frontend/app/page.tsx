@@ -21,7 +21,6 @@ export default async function HomePage() {
 
   const role = user.user_metadata?.role || "student";
 
-
   // ✅ Role-based redirection
   switch (role) {
     case "admin":

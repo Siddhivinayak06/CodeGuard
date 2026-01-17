@@ -5,8 +5,15 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import { createClient } from "@/lib/supabase/client";
-import { Mail, Lock, ArrowRight, Shield, Code, Zap, CheckCircle } from "lucide-react";
-
+import {
+  Mail,
+  Lock,
+  ArrowRight,
+  Shield,
+  Code,
+  Zap,
+  CheckCircle,
+} from "lucide-react";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -43,11 +50,13 @@ export default function LoginPage() {
         const normalizedRole = role?.toLowerCase();
 
         if (normalizedRole === "admin") router.push("/dashboard/admin");
-        else if (normalizedRole === "faculty") router.push("/dashboard/faculty");
+        else if (normalizedRole === "faculty")
+          router.push("/dashboard/faculty");
         else router.push("/dashboard/student");
       }, 1500);
     } catch (err: unknown) {
-      const errorMessage = err instanceof Error ? err.message : "An error occurred during login";
+      const errorMessage =
+        err instanceof Error ? err.message : "An error occurred during login";
       setError(errorMessage);
       setIsLoading(false);
     }
@@ -84,7 +93,6 @@ export default function LoginPage() {
 
   return (
     <div className="flex min-h-screen selection:bg-purple-500/30">
-
       {/* Left Panel - Animated Background */}
       <motion.div
         initial={{ x: "-100%" }}
@@ -100,7 +108,7 @@ export default function LoginPage() {
           <motion.div
             animate={{
               y: [0, -20, 0],
-              rotate: [0, 5, 0]
+              rotate: [0, 5, 0],
             }}
             transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }}
             className="absolute w-96 h-96 bg-white/10 rounded-full -top-20 -left-20 blur-3xl opacity-50"
@@ -108,16 +116,26 @@ export default function LoginPage() {
           <motion.div
             animate={{
               y: [0, 20, 0],
-              rotate: [0, -5, 0]
+              rotate: [0, -5, 0],
             }}
-            transition={{ duration: 7, repeat: Infinity, ease: "easeInOut", delay: 1 }}
+            transition={{
+              duration: 7,
+              repeat: Infinity,
+              ease: "easeInOut",
+              delay: 1,
+            }}
             className="absolute w-72 h-72 bg-pink-400/20 rounded-full top-1/3 left-1/4 blur-3xl opacity-40"
           />
           <motion.div
             animate={{
-              scale: [1, 1.1, 1]
+              scale: [1, 1.1, 1],
             }}
-            transition={{ duration: 8, repeat: Infinity, ease: "easeInOut", delay: 2 }}
+            transition={{
+              duration: 8,
+              repeat: Infinity,
+              ease: "easeInOut",
+              delay: 2,
+            }}
             className="absolute w-64 h-64 bg-cyan-400/20 rounded-full bottom-20 left-10 blur-3xl opacity-30"
           />
         </div>
@@ -142,9 +160,21 @@ export default function LoginPage() {
           {/* Features */}
           <div className="space-y-8">
             {[
-              { icon: Shield, title: "Proctored Environment", desc: "Secure code execution with violation tracking" },
-              { icon: Code, title: "Multi-Language Support", desc: "Python, C, Java with Docker isolation" },
-              { icon: Zap, title: "AI-Powered Assistance", desc: "Get intelligent help while learning" }
+              {
+                icon: Shield,
+                title: "Proctored Environment",
+                desc: "Secure code execution with violation tracking",
+              },
+              {
+                icon: Code,
+                title: "Multi-Language Support",
+                desc: "Python, C, Java with Docker isolation",
+              },
+              {
+                icon: Zap,
+                title: "AI-Powered Assistance",
+                desc: "Get intelligent help while learning",
+              },
             ].map((feature, index) => (
               <motion.div
                 key={index}
@@ -241,7 +271,10 @@ export default function LoginPage() {
                     <label className="text-sm font-semibold text-gray-700 dark:text-gray-300 ml-1">
                       Email Address
                     </label>
-                    <motion.div whileFocus={{ scale: 1.01 }} className="relative">
+                    <motion.div
+                      whileFocus={{ scale: 1.01 }}
+                      className="relative"
+                    >
                       <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
                       <input
                         type="email"
@@ -259,7 +292,10 @@ export default function LoginPage() {
                     <label className="text-sm font-semibold text-gray-700 dark:text-gray-300 ml-1">
                       Password
                     </label>
-                    <motion.div whileFocus={{ scale: 1.01 }} className="relative">
+                    <motion.div
+                      whileFocus={{ scale: 1.01 }}
+                      className="relative"
+                    >
                       <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
                       <input
                         type="password"
@@ -285,7 +321,11 @@ export default function LoginPage() {
                       <>
                         <motion.div
                           animate={{ rotate: 360 }}
-                          transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                          transition={{
+                            duration: 1,
+                            repeat: Infinity,
+                            ease: "linear",
+                          }}
                           className="w-5 h-5 border-2 border-white border-t-transparent rounded-full"
                         />
                         Signing In...
@@ -303,7 +343,9 @@ export default function LoginPage() {
                 {/* Divider */}
                 <div className="my-8 flex items-center gap-4">
                   <div className="flex-1 h-px bg-gray-200 dark:bg-gray-800" />
-                  <span className="text-sm text-gray-500 font-medium">New here?</span>
+                  <span className="text-sm text-gray-500 font-medium">
+                    New here?
+                  </span>
                   <div className="flex-1 h-px bg-gray-200 dark:bg-gray-800" />
                 </div>
 
@@ -327,7 +369,12 @@ export default function LoginPage() {
                 <motion.div
                   initial={{ scale: 0 }}
                   animate={{ scale: 1 }}
-                  transition={{ type: "spring", stiffness: 200, damping: 10, delay: 0.2 }}
+                  transition={{
+                    type: "spring",
+                    stiffness: 200,
+                    damping: 10,
+                    delay: 0.2,
+                  }}
                   className="w-24 h-24 rounded-full bg-green-500 flex items-center justify-center shadow-lg shadow-green-500/30"
                 >
                   <CheckCircle className="w-12 h-12 text-white" />

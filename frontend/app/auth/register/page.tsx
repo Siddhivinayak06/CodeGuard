@@ -72,7 +72,7 @@ export default function RegisterPage() {
       router.push("/auth/verify-email");
     } catch (err: unknown) {
       setError(
-        err instanceof Error ? err.message : "An unexpected error occurred"
+        err instanceof Error ? err.message : "An unexpected error occurred",
       );
     } finally {
       setIsLoading(false);
@@ -80,7 +80,11 @@ export default function RegisterPage() {
   };
 
   const roleOptions = [
-    { value: "student", label: "Student", icon: <GraduationCap className="w-4 h-4" /> },
+    {
+      value: "student",
+      label: "Student",
+      icon: <GraduationCap className="w-4 h-4" />,
+    },
     { value: "faculty", label: "Faculty", icon: <User className="w-4 h-4" /> },
     { value: "admin", label: "Admin", icon: <Shield className="w-4 h-4" /> },
   ];
@@ -124,7 +128,7 @@ export default function RegisterPage() {
           <motion.div
             animate={{
               y: [0, -20, 0],
-              rotate: [0, 5, 0]
+              rotate: [0, 5, 0],
             }}
             transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }}
             className="absolute w-96 h-96 bg-white/10 rounded-full -top-20 -left-20 blur-3xl opacity-50"
@@ -132,16 +136,26 @@ export default function RegisterPage() {
           <motion.div
             animate={{
               y: [0, 20, 0],
-              rotate: [0, -5, 0]
+              rotate: [0, -5, 0],
             }}
-            transition={{ duration: 7, repeat: Infinity, ease: "easeInOut", delay: 1 }}
+            transition={{
+              duration: 7,
+              repeat: Infinity,
+              ease: "easeInOut",
+              delay: 1,
+            }}
             className="absolute w-72 h-72 bg-pink-400/20 rounded-full top-1/3 left-1/4 blur-3xl opacity-40"
           />
           <motion.div
             animate={{
-              scale: [1, 1.1, 1]
+              scale: [1, 1.1, 1],
             }}
-            transition={{ duration: 8, repeat: Infinity, ease: "easeInOut", delay: 2 }}
+            transition={{
+              duration: 8,
+              repeat: Infinity,
+              ease: "easeInOut",
+              delay: 2,
+            }}
             className="absolute w-80 h-80 bg-indigo-400/20 rounded-full -bottom-20 right-20 blur-3xl opacity-30"
           />
         </div>
@@ -166,9 +180,21 @@ export default function RegisterPage() {
           {/* Features */}
           <div className="space-y-8">
             {[
-              { icon: Shield, title: "Secure Environment", desc: "Proctored sessions with violation tracking" },
-              { icon: Code, title: "Multi-Language Support", desc: "Code in Python, C, or Java" },
-              { icon: Zap, title: "Instant Feedback", desc: "Real-time code execution and grading" }
+              {
+                icon: Shield,
+                title: "Secure Environment",
+                desc: "Proctored sessions with violation tracking",
+              },
+              {
+                icon: Code,
+                title: "Multi-Language Support",
+                desc: "Code in Python, C, or Java",
+              },
+              {
+                icon: Zap,
+                title: "Instant Feedback",
+                desc: "Real-time code execution and grading",
+              },
             ].map((feature, index) => (
               <motion.div
                 key={index}
@@ -267,7 +293,9 @@ export default function RegisterPage() {
                       placeholder="John Doe"
                       className="input-premium pl-9 !py-2.5 text-sm h-11"
                       value={formData.name}
-                      onChange={(e) => handleInputChange("name", e.target.value)}
+                      onChange={(e) =>
+                        handleInputChange("name", e.target.value)
+                      }
                       required
                     />
                   </motion.div>
@@ -286,9 +314,15 @@ export default function RegisterPage() {
                       className="input-premium flex items-center gap-3 pl-3 pr-10 !py-2.5 text-sm cursor-pointer h-11 bg-white/80 dark:bg-gray-800/80 overflow-hidden"
                     >
                       <div className="flex-shrink-0 text-gray-400 w-4 h-4 flex items-center justify-center">
-                        {formData.role === "student" && <GraduationCap className="w-4 h-4" />}
-                        {formData.role === "faculty" && <User className="w-4 h-4" />}
-                        {formData.role === "admin" && <Shield className="w-4 h-4" />}
+                        {formData.role === "student" && (
+                          <GraduationCap className="w-4 h-4" />
+                        )}
+                        {formData.role === "faculty" && (
+                          <User className="w-4 h-4" />
+                        )}
+                        {formData.role === "admin" && (
+                          <Shield className="w-4 h-4" />
+                        )}
                       </div>
                       <span className="truncate font-medium flex-1 text-left">
                         {selectedRole?.label}
@@ -323,10 +357,11 @@ export default function RegisterPage() {
                                   handleInputChange("role", option.value);
                                   setRoleMenuOpen(false);
                                 }}
-                                className={`w-full px-4 py-3 flex items-center gap-3 text-left hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-sm font-semibold ${formData.role === option.value
-                                  ? "bg-indigo-50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-400"
-                                  : "text-gray-700 dark:text-gray-300"
-                                  }`}
+                                className={`w-full px-4 py-3 flex items-center gap-3 text-left hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-sm font-semibold ${
+                                  formData.role === option.value
+                                    ? "bg-indigo-50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-400"
+                                    : "text-gray-700 dark:text-gray-300"
+                                }`}
                               >
                                 {option.icon}
                                 {option.label}
@@ -418,7 +453,11 @@ export default function RegisterPage() {
                   <>
                     <motion.div
                       animate={{ rotate: 360 }}
-                      transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                      transition={{
+                        duration: 1,
+                        repeat: Infinity,
+                        ease: "linear",
+                      }}
                       className="w-4 h-4 border-2 border-white border-t-transparent rounded-full"
                     />
                     Creating Account...
@@ -435,7 +474,9 @@ export default function RegisterPage() {
             {/* Divider */}
             <div className="my-5 flex items-center gap-4">
               <div className="flex-1 h-px bg-gray-200 dark:bg-gray-800" />
-              <span className="text-xs text-gray-500 font-medium">Already a member?</span>
+              <span className="text-xs text-gray-500 font-medium">
+                Already a member?
+              </span>
               <div className="flex-1 h-px bg-gray-200 dark:bg-gray-800" />
             </div>
 
@@ -458,7 +499,13 @@ export default function RegisterPage() {
             className="mt-6 text-center text-xs text-gray-500 font-medium leading-relaxed"
           >
             By registering, you agree to our <br />
-            <Link href="#" className="text-indigo-500 hover:underline">Terms of Service</Link> and <Link href="#" className="text-indigo-500 hover:underline">Privacy Policy</Link>
+            <Link href="#" className="text-indigo-500 hover:underline">
+              Terms of Service
+            </Link>{" "}
+            and{" "}
+            <Link href="#" className="text-indigo-500 hover:underline">
+              Privacy Policy
+            </Link>
           </motion.p>
         </div>
       </motion.div>

@@ -30,9 +30,9 @@ const containerVariants = {
     opacity: 1,
     transition: {
       staggerChildren: 0.1,
-      delayChildren: 0.2
-    }
-  }
+      delayChildren: 0.2,
+    },
+  },
 } as const;
 
 const itemVariants = {
@@ -43,11 +43,10 @@ const itemVariants = {
     transition: {
       type: "spring" as const,
       stiffness: 260,
-      damping: 30
-    }
-  }
+      damping: 30,
+    },
+  },
 } as const;
-
 
 type Subject = {
   id: string;
@@ -76,7 +75,9 @@ function StatCard({
       variants={itemVariants}
       className="glass-card rounded-2xl p-5 hover-lift flex items-center gap-4 border border-gray-100 dark:border-gray-800"
     >
-      <div className={`w-12 h-12 rounded-xl ${colorClass.replace('text-', 'bg-').replace('600', '100').replace('500', '100')} dark:bg-opacity-20 flex items-center justify-center`}>
+      <div
+        className={`w-12 h-12 rounded-xl ${colorClass.replace("text-", "bg-").replace("600", "100").replace("500", "100")} dark:bg-opacity-20 flex items-center justify-center`}
+      >
         {/* Clone element to force color if needed, or rely on parent class */}
         <div className={colorClass}>{icon}</div>
       </div>
@@ -118,13 +119,19 @@ function QuickActionCard({
         className="glass-card rounded-2xl p-6 hover-lift group block border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900/50 hover:border-gray-300 dark:hover:border-gray-700 transition-all"
       >
         <div className="flex items-start justify-between mb-4">
-          <div className={`p-3 rounded-xl ${colorClass.replace('text-', 'bg-').replace('600', '50').replace('500', '50')} dark:bg-opacity-20`}>
+          <div
+            className={`p-3 rounded-xl ${colorClass.replace("text-", "bg-").replace("600", "50").replace("500", "50")} dark:bg-opacity-20`}
+          >
             <div className={colorClass}>{icon}</div>
           </div>
           <ArrowUpRight className="w-5 h-5 text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-300 group-hover:-translate-y-0.5 group-hover:translate-x-0.5 transition-all" />
         </div>
-        <h3 className="text-lg font-bold text-gray-900 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">{title}</h3>
-        <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">{description}</p>
+        <h3 className="text-lg font-bold text-gray-900 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
+          {title}
+        </h3>
+        <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">
+          {description}
+        </p>
       </Link>
     </motion.div>
   );
@@ -232,15 +239,17 @@ export default function AdminDashboard() {
       setLoading(true);
       try {
         const token = await getAccessToken();
-        const headers: Record<string, string> = { "Content-Type": "application/json" };
+        const headers: Record<string, string> = {
+          "Content-Type": "application/json",
+        };
         if (token) headers["Authorization"] = `Bearer ${token}`;
 
         const [statsRes, subjRes] = await Promise.all([
           fetch(`/api/admin/stats`, { headers }).then((r) =>
-            r.json().catch(() => ({}))
+            r.json().catch(() => ({})),
           ),
           fetch(`/api/admin/subjects`, { headers }).then((r) =>
-            r.json().catch(() => [])
+            r.json().catch(() => []),
           ),
         ]);
 
@@ -261,7 +270,13 @@ export default function AdminDashboard() {
 
   // Form helpers
   const openAddForm = () => {
-    setFormData({ id: "", subject_code: "", subject_name: "", faculty_name: "", semester: "" });
+    setFormData({
+      id: "",
+      subject_code: "",
+      subject_name: "",
+      faculty_name: "",
+      semester: "",
+    });
     setIsEditing(false);
     setFormOpen(true);
   };
@@ -309,13 +324,18 @@ export default function AdminDashboard() {
 
       const payload = await res.json().catch(() => null);
 
-      if (!res.ok) throw new Error(payload?.error ?? payload?.message ?? "Operation failed");
+      if (!res.ok)
+        throw new Error(
+          payload?.error ?? payload?.message ?? "Operation failed",
+        );
 
       const returned = payload?.data ?? payload ?? null;
 
       if (isEditing) {
         const updated = Array.isArray(returned) ? returned[0] : returned;
-        setSubjects((prev) => prev.map((p) => (p.id === updated?.id ? updated : p)));
+        setSubjects((prev) =>
+          prev.map((p) => (p.id === updated?.id ? updated : p)),
+        );
       } else {
         const newItem = Array.isArray(returned) ? returned[0] : returned;
         if (newItem) setSubjects((prev) => [...prev, newItem]);
@@ -331,7 +351,12 @@ export default function AdminDashboard() {
   };
 
   const handleDelete = async (s: Subject) => {
-    if (!confirm(`Delete "${s.subject_name ?? s.subject_code}"? This can't be undone.`)) return;
+    if (
+      !confirm(
+        `Delete "${s.subject_name ?? s.subject_code}"? This can't be undone.`,
+      )
+    )
+      return;
 
     setBusy(true);
     try {
@@ -339,7 +364,7 @@ export default function AdminDashboard() {
 
       const res = await fetch(
         `/api/admin/subjects?id=${encodeURIComponent(s.id)}&uid=${encodeURIComponent(user.id)}`,
-        { method: "DELETE" }
+        { method: "DELETE" },
       );
 
       const payload = await res.json().catch(() => null);
@@ -358,11 +383,17 @@ export default function AdminDashboard() {
     setLoading(true);
     try {
       const token = await getAccessToken();
-      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+      };
       if (token) headers["Authorization"] = `Bearer ${token}`;
       const [statsRes, subjRes] = await Promise.all([
-        fetch(`/api/admin/stats`, { headers }).then((r) => r.json().catch(() => ({}))),
-        fetch(`/api/admin/subjects`, { headers }).then((r) => r.json().catch(() => [])),
+        fetch(`/api/admin/stats`, { headers }).then((r) =>
+          r.json().catch(() => ({})),
+        ),
+        fetch(`/api/admin/subjects`, { headers }).then((r) =>
+          r.json().catch(() => []),
+        ),
       ]);
       setStats(statsRes?.data ?? statsRes ?? {});
       setSubjects(subjRes?.data ?? subjRes ?? []);
@@ -393,7 +424,6 @@ export default function AdminDashboard() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50/30 to-purple-50/30 dark:from-gray-950 dark:via-indigo-950/10 dark:to-purple-950/10">
-
       <main className="pt-24 pb-12 px-4 sm:px-6 lg:px-8 xl:px-12 w-full mx-auto">
         {/* Header */}
         <motion.div
@@ -407,7 +437,9 @@ export default function AdminDashboard() {
               <Shield className="w-8 h-8 text-white" />
             </div>
             <div className="space-y-1">
-              <p className="text-gray-500 dark:text-gray-400 text-sm">{getGreeting()},</p>
+              <p className="text-gray-500 dark:text-gray-400 text-sm">
+                {getGreeting()},
+              </p>
               <h1 className="text-3xl font-black text-gray-900 dark:text-white tracking-tight">
                 <span className="text-gradient">{userName || "Admin"}</span> 👋
               </h1>
@@ -431,7 +463,9 @@ export default function AdminDashboard() {
               disabled={loading}
               className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 font-medium hover:bg-gray-50 dark:hover:bg-gray-700 transition-all disabled:opacity-60"
             >
-              <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
+              <RefreshCw
+                className={`w-4 h-4 ${loading ? "animate-spin" : ""}`}
+              />
               Refresh
             </button>
           </div>
@@ -581,10 +615,14 @@ export default function AdminDashboard() {
                       </td>
                       <td className="px-5 py-4">
                         <div className="flex items-center gap-3">
-                          <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white
-                              ${s.subject_name ? 'bg-gradient-to-br ' + (s.semester && s.semester % 2 === 0 ? 'from-orange-400 to-pink-500' : 'from-blue-400 to-indigo-500') : 'bg-gray-400'}
-                            `}>
-                            {s.faculty_name ? s.faculty_name.charAt(0).toUpperCase() : '?'}
+                          <div
+                            className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white
+                              ${s.subject_name ? "bg-gradient-to-br " + (s.semester && s.semester % 2 === 0 ? "from-orange-400 to-pink-500" : "from-blue-400 to-indigo-500") : "bg-gray-400"}
+                            `}
+                          >
+                            {s.faculty_name
+                              ? s.faculty_name.charAt(0).toUpperCase()
+                              : "?"}
                           </div>
                           <span className="text-gray-700 dark:text-gray-300 font-medium text-sm">
                             {s.faculty_name ?? "Not Assigned"}
@@ -593,12 +631,19 @@ export default function AdminDashboard() {
                       </td>
                       <td className="px-5 py-4">
                         {s.semester ? (
-                          <span className={`inline-flex px-3 py-1 text-xs font-bold rounded-full
-                             ${s.semester === 1 || s.semester === 2 ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' :
-                              s.semester === 3 || s.semester === 4 ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300' :
-                                s.semester === 5 || s.semester === 6 ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300' :
-                                  'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300'}
-                          `}>
+                          <span
+                            className={`inline-flex px-3 py-1 text-xs font-bold rounded-full
+                             ${
+                               s.semester === 1 || s.semester === 2
+                                 ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300"
+                                 : s.semester === 3 || s.semester === 4
+                                   ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300"
+                                   : s.semester === 5 || s.semester === 6
+                                     ? "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300"
+                                     : "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300"
+                             }
+                          `}
+                          >
                             Sem {s.semester}
                           </span>
                         ) : (
@@ -665,42 +710,67 @@ export default function AdminDashboard() {
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
-                  <label className="text-xs font-medium text-gray-700 dark:text-gray-300">Subject Code</label>
+                  <label className="text-xs font-medium text-gray-700 dark:text-gray-300">
+                    Subject Code
+                  </label>
                   <input
                     className="input-premium"
                     placeholder="e.g., CS101"
                     value={formData.subject_code}
-                    onChange={(e) => setFormData((f) => ({ ...f, subject_code: e.target.value }))}
+                    onChange={(e) =>
+                      setFormData((f) => ({
+                        ...f,
+                        subject_code: e.target.value,
+                      }))
+                    }
                     required
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-xs font-medium text-gray-700 dark:text-gray-300">Semester</label>
+                  <label className="text-xs font-medium text-gray-700 dark:text-gray-300">
+                    Semester
+                  </label>
                   <input
                     className="input-premium"
                     placeholder="e.g., 1"
                     value={formData.semester}
-                    onChange={(e) => setFormData((f) => ({ ...f, semester: e.target.value }))}
+                    onChange={(e) =>
+                      setFormData((f) => ({ ...f, semester: e.target.value }))
+                    }
                     inputMode="numeric"
                   />
                 </div>
                 <div className="space-y-1.5 sm:col-span-2">
-                  <label className="text-xs font-medium text-gray-700 dark:text-gray-300">Subject Name</label>
+                  <label className="text-xs font-medium text-gray-700 dark:text-gray-300">
+                    Subject Name
+                  </label>
                   <input
                     className="input-premium"
                     placeholder="Enter subject name"
                     value={formData.subject_name}
-                    onChange={(e) => setFormData((f) => ({ ...f, subject_name: e.target.value }))}
+                    onChange={(e) =>
+                      setFormData((f) => ({
+                        ...f,
+                        subject_name: e.target.value,
+                      }))
+                    }
                     required
                   />
                 </div>
                 <div className="space-y-1.5 sm:col-span-2">
-                  <label className="text-xs font-medium text-gray-700 dark:text-gray-300">Faculty Name (optional)</label>
+                  <label className="text-xs font-medium text-gray-700 dark:text-gray-300">
+                    Faculty Name (optional)
+                  </label>
                   <input
                     className="input-premium"
                     placeholder="Enter faculty name"
                     value={formData.faculty_name}
-                    onChange={(e) => setFormData((f) => ({ ...f, faculty_name: e.target.value }))}
+                    onChange={(e) =>
+                      setFormData((f) => ({
+                        ...f,
+                        faculty_name: e.target.value,
+                      }))
+                    }
                   />
                 </div>
               </div>

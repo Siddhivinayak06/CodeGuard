@@ -5,17 +5,30 @@ import { supabaseAdmin } from "@/lib/supabase/service";
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { code, lang, practicalId, submissionId, userTestCases = [], mode = "run", level, useCustomTestCases = false } = body;
-
-
+    const {
+      code,
+      lang,
+      practicalId,
+      submissionId,
+      userTestCases = [],
+      mode = "run",
+      level,
+      useCustomTestCases = false,
+    } = body;
 
     if (!code || !lang || !practicalId) {
-      return NextResponse.json({ error: "Missing code, lang, or practicalId" }, { status: 400 });
+      return NextResponse.json(
+        { error: "Missing code, lang, or practicalId" },
+        { status: 400 },
+      );
     }
 
     const pid = Number(practicalId);
     if (!Number.isFinite(pid) || pid <= 0) {
-      return NextResponse.json({ error: "Invalid practicalId" }, { status: 400 });
+      return NextResponse.json(
+        { error: "Invalid practicalId" },
+        { status: 400 },
+      );
     }
 
     // Determine max marks and level filter
@@ -43,7 +56,7 @@ export async function POST(req: Request) {
       .eq("practical_id", pid)
       .order("id", { ascending: true });
 
-    // Key filtering logic: 
+    // Key filtering logic:
     // If levelId exists, only get test cases for that level.
     // If no levelId (single level mode), only get test cases where level_id IS NULL.
     if (levelId) {
@@ -95,11 +108,14 @@ export async function POST(req: Request) {
     if (refLangNorm && reqLangNorm && refLangNorm !== reqLangNorm) {
       // Reduced to low-level log or removed if we expect mismatch often
       // Use informative log instead of warn if we found a fallback
-      console.log(`Using fallback reference language (${refLangNorm}) for runner language (${reqLangNorm})`);
+      console.log(
+        `Using fallback reference language (${refLangNorm}) for runner language (${reqLangNorm})`,
+      );
     }
 
     // helper to call runner service
-    const EXECUTE_URL = process.env.EXECUTE_URL || "http://localhost:5002/execute";
+    const EXECUTE_URL =
+      process.env.EXECUTE_URL || "http://localhost:5002/execute";
     const callRunner = async (payload: any) => {
       const runnerRes = await fetch(EXECUTE_URL, {
         method: "POST",
@@ -120,15 +136,15 @@ export async function POST(req: Request) {
     if (mode === "run") {
       if (useCustomTestCases && userTestCases.length > 0) {
         // Build user batch (ids prefixed with user-)
-        const userBatch = userTestCases
-          .map((utc: any, idx: number) => ({
-            id: `user-${idx + 1}`,
-            stdinInput: utc.input ?? "",
-            expectedOutput: utc.expectedOutput ?? "", // will be filled from reference if available
-            is_hidden: false,
-            time_limit_ms: utc.time_limit_ms ?? 2000,
-            memory_limit_kb: utc.memory_limit_kb ?? (reqLangNorm === 'java' ? 262144 : 65536),
-          }));
+        const userBatch = userTestCases.map((utc: any, idx: number) => ({
+          id: `user-${idx + 1}`,
+          stdinInput: utc.input ?? "",
+          expectedOutput: utc.expectedOutput ?? "", // will be filled from reference if available
+          is_hidden: false,
+          time_limit_ms: utc.time_limit_ms ?? 2000,
+          memory_limit_kb:
+            utc.memory_limit_kb ?? (reqLangNorm === "java" ? 262144 : 65536),
+        }));
 
         usedTestCaseSource = "user";
 
@@ -138,7 +154,12 @@ export async function POST(req: Request) {
             const refPayload = {
               code: referenceCode,
               lang: refLangNorm || reqLangNorm || String(lang),
-              batch: userBatch.map((u: any) => ({ id: u.id, stdinInput: u.stdinInput, time_limit_ms: u.time_limit_ms, memory_limit_kb: u.memory_limit_kb })),
+              batch: userBatch.map((u: any) => ({
+                id: u.id,
+                stdinInput: u.stdinInput,
+                time_limit_ms: u.time_limit_ms,
+                memory_limit_kb: u.memory_limit_kb,
+              })),
             };
             const refRes = await callRunner(refPayload);
             const refDetails = refRes.details ?? [];
@@ -156,9 +177,11 @@ export async function POST(req: Request) {
               ...u,
               expectedOutput: refMap.get(u.id) ?? "",
             }));
-
           } catch (e: any) {
-            console.error("Failed to run reference code for user test cases:", e);
+            console.error(
+              "Failed to run reference code for user test cases:",
+              e,
+            );
             // If reference run fails, still fallback to running student code without expected outputs
             batch = userBatch;
           }
@@ -173,16 +196,23 @@ export async function POST(req: Request) {
           expectedOutput: tc.expected_output ?? "",
           is_hidden: tc.is_hidden ?? true,
           time_limit_ms: tc.time_limit_ms ?? 2000,
-          memory_limit_kb: tc.memory_limit_kb ?? (reqLangNorm === 'java' ? 262144 : 65536),
+          memory_limit_kb:
+            tc.memory_limit_kb ?? (reqLangNorm === "java" ? 262144 : 65536),
         }));
         usedTestCaseSource = "db";
       }
     } else if (mode === "submit") {
       if (dbTestCases.length === 0) {
-        return NextResponse.json({ error: "No test cases configured for this practical" }, { status: 400 });
+        return NextResponse.json(
+          { error: "No test cases configured for this practical" },
+          { status: 400 },
+        );
       }
       if (!submissionId) {
-        return NextResponse.json({ error: "submissionId required for mode 'submit'" }, { status: 400 });
+        return NextResponse.json(
+          { error: "submissionId required for mode 'submit'" },
+          { status: 400 },
+        );
       }
 
       // Use reference output for submission
@@ -192,12 +222,16 @@ export async function POST(req: Request) {
         expectedOutput: tc.expected_output ?? "",
         is_hidden: tc.is_hidden ?? true,
         time_limit_ms: tc.time_limit_ms ?? 2000,
-        memory_limit_kb: tc.memory_limit_kb ?? (reqLangNorm === 'java' ? 262144 : 65536),
+        memory_limit_kb:
+          tc.memory_limit_kb ?? (reqLangNorm === "java" ? 262144 : 65536),
       }));
 
       usedTestCaseSource = "db";
     } else {
-      return NextResponse.json({ error: "Invalid mode. Use 'run' or 'submit'." }, { status: 400 });
+      return NextResponse.json(
+        { error: "Invalid mode. Use 'run' or 'submit'." },
+        { status: 400 },
+      );
     }
 
     if (batch.length === 0) {
@@ -217,15 +251,22 @@ export async function POST(req: Request) {
       });
     } catch (e: any) {
       console.error("Runner error:", e);
-      return NextResponse.json({ error: e.message || "Runner failed" }, { status: 500 });
+      return NextResponse.json(
+        { error: e.message || "Runner failed" },
+        { status: 500 },
+      );
     }
 
     const details = runnerResults.details ?? [];
 
     const normalizeOutputText = (s: any) =>
-      String(s ?? "").split("\n").map(line => line.trim()).filter(Boolean).join("\n");
+      String(s ?? "")
+        .split("\n")
+        .map((line) => line.trim())
+        .filter(Boolean)
+        .join("\n");
 
-    const batchMap = new Map(batch.map(b => [String(b.id), b]));
+    const batchMap = new Map(batch.map((b) => [String(b.id), b]));
 
     // Build results: for user-testcases with expectedOutput filled, compare student's stdout with expected.
     const allResults = details.map((d: any) => {
@@ -272,7 +313,9 @@ export async function POST(req: Request) {
     let passed = 0;
     let total = 0;
     let marksObtained = 0;
-    const predefinedResults = allResults.filter((r: any) => !String(r.test_case_id).startsWith("user-"));
+    const predefinedResults = allResults.filter(
+      (r: any) => !String(r.test_case_id).startsWith("user-"),
+    );
 
     const { data: practicalData } = await supabaseAdmin
       .from("practicals")
@@ -280,11 +323,15 @@ export async function POST(req: Request) {
       .eq("id", pid)
       .single();
 
-    const globalDeadline = practicalData?.deadline ? new Date(practicalData.deadline) : null;
+    const globalDeadline = practicalData?.deadline
+      ? new Date(practicalData.deadline)
+      : null;
 
     if (mode === "submit" && submissionId) {
       // Calculate marks first
-      passed = predefinedResults.filter((r: any) => r.status === "passed").length;
+      passed = predefinedResults.filter(
+        (r: any) => r.status === "passed",
+      ).length;
       total = predefinedResults.length;
       const baseMarks = total > 0 ? Math.round((passed / total) * maxMarks) : 0;
 
@@ -318,7 +365,9 @@ export async function POST(req: Request) {
             .eq("student_id", studentId)
             .single();
 
-          const effectiveDeadline = assignment?.assigned_deadline ? new Date(assignment.assigned_deadline) : globalDeadline;
+          const effectiveDeadline = assignment?.assigned_deadline
+            ? new Date(assignment.assigned_deadline)
+            : globalDeadline;
 
           if (new Date() > effectiveDeadline) {
             penalty = 1;
@@ -362,12 +411,13 @@ export async function POST(req: Request) {
               code,
               language: reqLangNorm || lang,
               test_cases_passed: passed, // Save test cases passed count
-              output: predefinedResults.length > 0 ? predefinedResults[0].stdout : "", // Save first test case output as summary
+              output:
+                predefinedResults.length > 0 ? predefinedResults[0].stdout : "", // Save first test case output as summary
               execution_details: {
                 verdict: newStatus,
                 results: predefinedResults, // Array of test case results
-                judged_at: new Date().toISOString()
-              }
+                judged_at: new Date().toISOString(),
+              },
             })
             .eq("id", submissionId);
         } catch (e) {
@@ -378,7 +428,9 @@ export async function POST(req: Request) {
         // But keeping the consistent pattern.
       }
     } else {
-      passed = predefinedResults.filter((r: any) => r.status === "passed").length;
+      passed = predefinedResults.filter(
+        (r: any) => r.status === "passed",
+      ).length;
       total = predefinedResults.length;
       marksObtained = total > 0 ? Math.round((passed / total) * maxMarks) : 0;
     }
@@ -392,9 +444,11 @@ export async function POST(req: Request) {
       usedTestCaseSource,
       raw_details: details,
     });
-
   } catch (err) {
     console.error("Run API error:", err);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 },
+    );
   }
 }

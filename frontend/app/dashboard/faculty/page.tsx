@@ -19,7 +19,7 @@ import {
   Cell,
   Legend,
   AreaChart,
-  Area
+  Area,
 } from "recharts";
 import {
   Users,
@@ -44,17 +44,17 @@ const containerVariants = {
     opacity: 1,
     transition: {
       staggerChildren: 0.1,
-      delayChildren: 0.2
-    }
-  }
+      delayChildren: 0.2,
+    },
+  },
 } as const;
 
 const shellVariants = {
   hidden: { opacity: 0 },
   visible: {
     opacity: 1,
-    transition: { duration: 0.3 }
-  }
+    transition: { duration: 0.3 },
+  },
 } as const;
 
 const revealVariants = {
@@ -65,9 +65,9 @@ const revealVariants = {
     transition: {
       type: "spring" as const,
       stiffness: 260,
-      damping: 30
-    }
-  }
+      damping: 30,
+    },
+  },
 } as const;
 
 const itemVariants = revealVariants; // Aliasing for compatibility with existing code
@@ -104,7 +104,7 @@ const initialTestCase: TestCase = {
   time_limit_ms: 2000,
   memory_limit_kb: 65536,
   created_at: new Date().toISOString(),
-  level_id: null
+  level_id: null,
 };
 
 // ---------------------- Components ----------------------
@@ -120,27 +120,39 @@ function PracticalCard({
   onEdit: (p: Practical) => void;
   onDelete: (id: number) => void;
 }) {
-  const isPast = new Date(practical.deadline || new Date()).getTime() < Date.now();
+  const isPast =
+    new Date(practical.deadline || new Date()).getTime() < Date.now();
   const deadline = new Date(practical.deadline || new Date());
-  const timeUntil = Math.ceil((deadline.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+  const timeUntil = Math.ceil(
+    (deadline.getTime() - Date.now()) / (1000 * 60 * 60 * 24),
+  );
 
   return (
     <div className="group p-4 bg-white dark:bg-gray-800/60 border border-gray-100 dark:border-gray-700/50 rounded-xl hover:shadow-lg hover:border-indigo-200 dark:hover:border-indigo-800/50 transition-all duration-200">
       <div className="flex items-center justify-between gap-4">
         {/* Left: Content */}
         <div className="flex-1 min-w-0">
-          <h4 className="font-semibold text-gray-900 dark:text-white truncate">{practical.title}</h4>
+          <h4 className="font-semibold text-gray-900 dark:text-white truncate">
+            {practical.title}
+          </h4>
           <div className="flex items-center gap-2 mt-1.5 text-xs">
-            <span className="text-purple-600 dark:text-purple-400 font-medium">{subject}</span>
+            <span className="text-purple-600 dark:text-purple-400 font-medium">
+              {subject}
+            </span>
             {practical.language && (
               <>
                 <span className="text-gray-300 dark:text-gray-600">•</span>
-                <span className="text-blue-600 dark:text-blue-400">{practical.language}</span>
+                <span className="text-blue-600 dark:text-blue-400">
+                  {practical.language}
+                </span>
               </>
             )}
             <span className="text-gray-300 dark:text-gray-600">•</span>
             <span className="text-gray-500 dark:text-gray-400">
-              {deadline.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+              {deadline.toLocaleDateString("en-US", {
+                month: "short",
+                day: "numeric",
+              })}
             </span>
           </div>
         </div>
@@ -153,13 +165,17 @@ function PracticalCard({
               ? "bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400"
               : timeUntil <= 2
                 ? "bg-orange-50 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400"
-                : "bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400"
+                : "bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400",
           )}
         >
           <div
             className={cn(
               "w-1.5 h-1.5 rounded-full",
-              isPast ? "bg-gray-400" : timeUntil <= 2 ? "bg-orange-500 animate-pulse" : "bg-emerald-500"
+              isPast
+                ? "bg-gray-400"
+                : timeUntil <= 2
+                  ? "bg-orange-500 animate-pulse"
+                  : "bg-emerald-500",
             )}
           />
           {isPast ? "Closed" : timeUntil <= 2 ? "Due Soon" : "Active"}
@@ -202,7 +218,9 @@ export default function FacultyDashboardPage() {
   const [selected, setSelected] = useState<Date>(new Date());
   const [modalOpen, setModalOpen] = useState(false);
 
-  const [editingPractical, setEditingPractical] = useState<Practical | null>(null);
+  const [editingPractical, setEditingPractical] = useState<Practical | null>(
+    null,
+  );
   const [sampleCode, setSampleCode] = useState<string>("");
   const [sampleLanguage, setSampleLanguage] = useState<string>("c");
 
@@ -253,7 +271,7 @@ export default function FacultyDashboardPage() {
           setPracticals(pracData as Practical[]);
 
           // 4. Fetch Submissions (for charts)
-          const pIds = pracData.map(p => p.id);
+          const pIds = pracData.map((p) => p.id);
           if (pIds.length > 0) {
             const { data: subData } = await supabase
               .from("submissions")
@@ -261,11 +279,11 @@ export default function FacultyDashboardPage() {
               .in("practical_id", pIds);
 
             if (subData) {
-              const mappedSubmissions = subData.map(s => ({
+              const mappedSubmissions = subData.map((s) => ({
                 id: s.id,
                 status: s.status || "pending",
                 created_at: s.created_at,
-                practical_id: s.practical_id
+                practical_id: s.practical_id,
               }));
               setSubmissions(mappedSubmissions as Submission[]);
             }
@@ -325,17 +343,17 @@ export default function FacultyDashboardPage() {
   // 1. Status Distribution
   const statusData = useMemo(() => {
     const counts = { passed: 0, failed: 0, pending: 0 };
-    submissions.forEach(s => {
+    submissions.forEach((s) => {
       const st = (s.status || "pending").toLowerCase();
-      if (counts[st as keyof typeof counts] !== undefined) counts[st as keyof typeof counts]++;
+      if (counts[st as keyof typeof counts] !== undefined)
+        counts[st as keyof typeof counts]++;
       else counts.pending++;
     });
     return [
-      { name: 'Passed', value: counts.passed, color: '#10b981' }, // green
-      { name: 'Failed', value: counts.failed, color: '#ef4444' }, // red
-      { name: 'Pending', value: counts.pending, color: '#fbbf24' }, // amber
-
-    ].filter(d => d.value > 0);
+      { name: "Passed", value: counts.passed, color: "#10b981" }, // green
+      { name: "Failed", value: counts.failed, color: "#ef4444" }, // red
+      { name: "Pending", value: counts.pending, color: "#fbbf24" }, // amber
+    ].filter((d) => d.value > 0);
   }, [submissions]);
 
   // 2. Activity (Submissions per day, last 7 days)
@@ -346,17 +364,21 @@ export default function FacultyDashboardPage() {
       return d.toISOString().slice(0, 10);
     });
 
-    const data = last7Days.map(date => {
-      const count = submissions.filter(s => s.created_at.startsWith(date)).length;
+    const data = last7Days.map((date) => {
+      const count = submissions.filter((s) =>
+        s.created_at.startsWith(date),
+      ).length;
       return {
-        date: new Date(date).toLocaleDateString('en-US', { weekday: 'short' }),
-        submissions: count
+        date: new Date(date).toLocaleDateString("en-US", { weekday: "short" }),
+        submissions: count,
       };
     });
     return data;
   }, [submissions]);
 
-  const activePracticalsCount = practicals.filter(p => new Date(p.deadline || new Date()).getTime() >= Date.now()).length;
+  const activePracticalsCount = practicals.filter(
+    (p) => new Date(p.deadline || new Date()).getTime() >= Date.now(),
+  ).length;
   const eventsByDate = useMemo(() => {
     const map = new Map<string, Practical[]>();
     practicals.forEach((p) => {
@@ -370,7 +392,7 @@ export default function FacultyDashboardPage() {
 
   // Dates with events for Calendar modifiers
   const eventDates = useMemo(() => {
-    return practicals.map(p => new Date(p.deadline || new Date()));
+    return practicals.map((p) => new Date(p.deadline || new Date()));
   }, [practicals]);
 
   return (
@@ -385,7 +407,11 @@ export default function FacultyDashboardPage() {
         >
           <div className="space-y-1">
             <h1 className="text-3xl font-black text-gray-900 dark:text-white tracking-tight">
-              Welcome back, <span className="text-gradient">{userName || (loading ? "..." : "Faculty")}</span> 👋
+              Welcome back,{" "}
+              <span className="text-gradient">
+                {userName || (loading ? "..." : "Faculty")}
+              </span>{" "}
+              👋
             </h1>
             <p className="text-gray-500 dark:text-gray-400 font-medium">
               Manage your practicals and track student performance.
@@ -410,13 +436,19 @@ export default function FacultyDashboardPage() {
             animate="visible"
             className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-6"
           >
-
             {/* 1. Quick Stats (Row 1) - Solid Gradient Icons */}
-            <motion.div variants={itemVariants} className="glass-card-premium rounded-3xl p-6 hover-lift">
+            <motion.div
+              variants={itemVariants}
+              className="glass-card-premium rounded-3xl p-6 hover-lift"
+            >
               <div className="flex items-start justify-between">
                 <div>
-                  <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Active Practicals</p>
-                  <p className="text-3xl font-bold text-gray-900 dark:text-white mt-2">{activePracticalsCount}</p>
+                  <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                    Active Practicals
+                  </p>
+                  <p className="text-3xl font-bold text-gray-900 dark:text-white mt-2">
+                    {activePracticalsCount}
+                  </p>
                 </div>
                 <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-500 flex items-center justify-center shadow-lg">
                   <FileCheck className="w-6 h-6 text-white" />
@@ -424,11 +456,18 @@ export default function FacultyDashboardPage() {
               </div>
             </motion.div>
 
-            <motion.div variants={itemVariants} className="glass-card-premium rounded-3xl p-6 hover-lift">
+            <motion.div
+              variants={itemVariants}
+              className="glass-card-premium rounded-3xl p-6 hover-lift"
+            >
               <div className="flex items-start justify-between">
                 <div>
-                  <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Total Submissions</p>
-                  <p className="text-3xl font-bold text-gray-900 dark:text-white mt-2">{submissions.length}</p>
+                  <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                    Total Submissions
+                  </p>
+                  <p className="text-3xl font-bold text-gray-900 dark:text-white mt-2">
+                    {submissions.length}
+                  </p>
                 </div>
                 <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center shadow-lg">
                   <TrendingUp className="w-6 h-6 text-white" />
@@ -436,11 +475,18 @@ export default function FacultyDashboardPage() {
               </div>
             </motion.div>
 
-            <motion.div variants={itemVariants} className="glass-card-premium rounded-3xl p-6 hover-lift">
+            <motion.div
+              variants={itemVariants}
+              className="glass-card-premium rounded-3xl p-6 hover-lift"
+            >
               <div className="flex items-start justify-between">
                 <div>
-                  <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">My Subjects</p>
-                  <p className="text-3xl font-bold text-gray-900 dark:text-white mt-2">{subjects.length}</p>
+                  <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                    My Subjects
+                  </p>
+                  <p className="text-3xl font-bold text-gray-900 dark:text-white mt-2">
+                    {subjects.length}
+                  </p>
                 </div>
                 <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-pink-500 to-rose-500 flex items-center justify-center shadow-lg">
                   <BookOpen className="w-6 h-6 text-white" />
@@ -457,32 +503,72 @@ export default function FacultyDashboardPage() {
                 <FileCheck className="w-6 h-6 text-white" />
               </div>
               <div className="flex-1">
-                <h3 className="font-semibold text-gray-900 dark:text-white">Review Work</h3>
-                <p className="text-xs text-gray-500 dark:text-gray-400">5 Pending Grinds</p>
+                <h3 className="font-semibold text-gray-900 dark:text-white">
+                  Review Work
+                </h3>
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  5 Pending Grinds
+                </p>
               </div>
               <ArrowUpRight className="w-5 h-5 text-gray-400 group-hover:text-indigo-500 group-hover:-translate-y-0.5 group-hover:translate-x-0.5 transition-all" />
             </motion.div>
 
-
             {/* 2. Charts Row (Row 2, split 2:2 or 3:1) */}
 
             {/* Activity Chart (Wide) - Reduced Height */}
-            <motion.div variants={itemVariants} className="md:col-span-2 lg:col-span-3 glass-card-premium rounded-3xl p-6">
-              <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">Submission Activity</h3>
+            <motion.div
+              variants={itemVariants}
+              className="md:col-span-2 lg:col-span-3 glass-card-premium rounded-3xl p-6"
+            >
+              <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">
+                Submission Activity
+              </h3>
               <div className="h-[200px] w-full">
                 <ResponsiveContainer width="100%" height="100%">
                   <AreaChart data={activityData}>
                     <defs>
-                      <linearGradient id="colorSubs" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.8} />
-                        <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0} />
+                      <linearGradient
+                        id="colorSubs"
+                        x1="0"
+                        y1="0"
+                        x2="0"
+                        y2="1"
+                      >
+                        <stop
+                          offset="5%"
+                          stopColor="#8b5cf6"
+                          stopOpacity={0.8}
+                        />
+                        <stop
+                          offset="95%"
+                          stopColor="#8b5cf6"
+                          stopOpacity={0}
+                        />
                       </linearGradient>
                     </defs>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(156, 163, 175, 0.2)" />
-                    <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fill: '#9ca3af', fontSize: 12 }} />
-                    <YAxis axisLine={false} tickLine={false} tick={{ fill: '#9ca3af', fontSize: 12 }} />
+                    <CartesianGrid
+                      strokeDasharray="3 3"
+                      vertical={false}
+                      stroke="rgba(156, 163, 175, 0.2)"
+                    />
+                    <XAxis
+                      dataKey="date"
+                      axisLine={false}
+                      tickLine={false}
+                      tick={{ fill: "#9ca3af", fontSize: 12 }}
+                    />
+                    <YAxis
+                      axisLine={false}
+                      tickLine={false}
+                      tick={{ fill: "#9ca3af", fontSize: 12 }}
+                    />
                     <Tooltip
-                      contentStyle={{ backgroundColor: 'rgba(255, 255, 255, 0.8)', borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' }}
+                      contentStyle={{
+                        backgroundColor: "rgba(255, 255, 255, 0.8)",
+                        borderRadius: "12px",
+                        border: "none",
+                        boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.1)",
+                      }}
                     />
                     <Area
                       type="monotone"
@@ -501,8 +587,13 @@ export default function FacultyDashboardPage() {
             </motion.div>
 
             {/* Status Donut Chart */}
-            <motion.div variants={itemVariants} className="md:col-span-1 glass-card-premium rounded-3xl p-6 flex flex-col">
-              <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">Submission Status</h3>
+            <motion.div
+              variants={itemVariants}
+              className="md:col-span-1 glass-card-premium rounded-3xl p-6 flex flex-col"
+            >
+              <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">
+                Submission Status
+              </h3>
               <div className="flex-1 min-h-[200px] relative">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
@@ -529,7 +620,9 @@ export default function FacultyDashboardPage() {
                 </ResponsiveContainer>
                 {/* Center Stat */}
                 <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none pb-8">
-                  <span className="text-3xl font-bold text-gray-900 dark:text-white">{submissions.length}</span>
+                  <span className="text-3xl font-bold text-gray-900 dark:text-white">
+                    {submissions.length}
+                  </span>
                   <span className="text-xs text-gray-500">Total</span>
                 </div>
               </div>
@@ -538,9 +631,14 @@ export default function FacultyDashboardPage() {
             {/* 3. Main Content: List & Calendar */}
 
             {/* Practicals List (Wide) */}
-            <motion.div variants={itemVariants} className="md:col-span-2 lg:col-span-3 glass-card-premium rounded-3xl p-6 min-h-[400px]">
+            <motion.div
+              variants={itemVariants}
+              className="md:col-span-2 lg:col-span-3 glass-card-premium rounded-3xl p-6 min-h-[400px]"
+            >
               <div className="flex items-center justify-between mb-6">
-                <h3 className="text-lg font-bold text-gray-900 dark:text-white">Recent Practicals</h3>
+                <h3 className="text-lg font-bold text-gray-900 dark:text-white">
+                  Recent Practicals
+                </h3>
                 <button
                   onClick={() => router.push("/dashboard/faculty/practicals")}
                   className="text-sm font-semibold text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 flex items-center gap-1 transition-colors"
@@ -555,20 +653,38 @@ export default function FacultyDashboardPage() {
                     <div className="w-16 h-16 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center mb-4">
                       <FileCheck className="text-gray-400" size={32} />
                     </div>
-                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white">No practicals found</h3>
-                    <p className="text-gray-500 max-w-xs mx-auto mt-2">Create your first practical to start assigning work to students.</p>
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                      No practicals found
+                    </h3>
+                    <p className="text-gray-500 max-w-xs mx-auto mt-2">
+                      Create your first practical to start assigning work to
+                      students.
+                    </p>
                   </div>
                 ) : (
-                  practicals.slice(0, 5).map(p => {
-                    const subj = subjects.find(s => s.id === p.subject_id)?.subject_name || "Subject";
-                    return <PracticalCard key={p.id} practical={p} subject={subj} onEdit={openEdit} onDelete={deletePractical} />;
+                  practicals.slice(0, 5).map((p) => {
+                    const subj =
+                      subjects.find((s) => s.id === p.subject_id)
+                        ?.subject_name || "Subject";
+                    return (
+                      <PracticalCard
+                        key={p.id}
+                        practical={p}
+                        subject={subj}
+                        onEdit={openEdit}
+                        onDelete={deletePractical}
+                      />
+                    );
                   })
                 )}
               </div>
             </motion.div>
 
             {/* Calendar (Narrow) */}
-            <motion.div variants={itemVariants} className="md:col-span-1 glass-card-premium rounded-3xl p-6 relative overflow-hidden">
+            <motion.div
+              variants={itemVariants}
+              className="md:col-span-1 glass-card-premium rounded-3xl p-6 relative overflow-hidden"
+            >
               {/* Gradient overlay */}
               <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-bl from-indigo-500/10 via-purple-500/5 to-transparent rounded-full blur-2xl" />
 
@@ -579,8 +695,12 @@ export default function FacultyDashboardPage() {
                     <Clock size={18} className="text-white" />
                   </div>
                   <div>
-                    <h3 className="text-lg font-bold text-gray-900 dark:text-white">Schedule</h3>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">Click a date to create practical</p>
+                    <h3 className="text-lg font-bold text-gray-900 dark:text-white">
+                      Schedule
+                    </h3>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                      Click a date to create practical
+                    </p>
                   </div>
                 </div>
 
@@ -592,10 +712,11 @@ export default function FacultyDashboardPage() {
                     onSelect={(d) => d && setSelected(d)}
                     className="rounded-xl border-none shadow-none"
                     modifiers={{
-                      hasEvent: eventDates
+                      hasEvent: eventDates,
                     }}
                     modifiersClassNames={{
-                      hasEvent: "after:content-[''] after:absolute after:bottom-1 after:left-1/2 after:-translate-x-1/2 after:w-1 after:h-1 after:bg-indigo-500 after:rounded-full"
+                      hasEvent:
+                        "after:content-[''] after:absolute after:bottom-1 after:left-1/2 after:-translate-x-1/2 after:w-1 after:h-1 after:bg-indigo-500 after:rounded-full",
                     }}
                   />
                 </div>
@@ -603,71 +724,114 @@ export default function FacultyDashboardPage() {
                 {/* Upcoming Deadlines */}
                 <div className="mt-8 space-y-4">
                   <div className="flex items-center gap-2">
-                    <p className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Upcoming Deadlines</p>
+                    <p className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                      Upcoming Deadlines
+                    </p>
                     <span className="text-xs font-medium text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/30 px-2 py-0.5 rounded-full border border-emerald-100 dark:border-emerald-800/50">
-                      {practicals.filter(p => new Date(p.deadline || new Date()) >= new Date()).length} active
+                      {
+                        practicals.filter(
+                          (p) =>
+                            new Date(p.deadline || new Date()) >= new Date(),
+                        ).length
+                      }{" "}
+                      active
                     </span>
                   </div>
 
-                  {practicals.filter(p => new Date(p.deadline || new Date()) >= new Date()).length === 0 ? (
+                  {practicals.filter(
+                    (p) => new Date(p.deadline || new Date()) >= new Date(),
+                  ).length === 0 ? (
                     <div className="text-center py-8 px-4 rounded-xl bg-gray-50/50 dark:bg-gray-800/50 border border-gray-100 dark:border-gray-700/50 border-dashed">
                       <div className="w-12 h-12 mx-auto mb-3 rounded-full bg-white dark:bg-gray-700 shadow-sm flex items-center justify-center">
-                        <Clock size={20} className="text-gray-300 dark:text-gray-500" />
+                        <Clock
+                          size={20}
+                          className="text-gray-300 dark:text-gray-500"
+                        />
                       </div>
-                      <p className="text-sm font-medium text-gray-900 dark:text-white">All caught up!</p>
-                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">No pending deadlines for now.</p>
+                      <p className="text-sm font-medium text-gray-900 dark:text-white">
+                        All caught up!
+                      </p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                        No pending deadlines for now.
+                      </p>
                     </div>
                   ) : (
                     <div className="space-y-2">
-                      {practicals.filter(p => new Date(p.deadline || new Date()) >= new Date()).slice(0, 4).map((p, index) => {
-                        const deadline = new Date(p.deadline || new Date());
-                        const daysLeft = Math.ceil((deadline.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
-                        const isUrgent = daysLeft <= 2;
+                      {practicals
+                        .filter(
+                          (p) =>
+                            new Date(p.deadline || new Date()) >= new Date(),
+                        )
+                        .slice(0, 4)
+                        .map((p, index) => {
+                          const deadline = new Date(p.deadline || new Date());
+                          const daysLeft = Math.ceil(
+                            (deadline.getTime() - Date.now()) /
+                              (1000 * 60 * 60 * 24),
+                          );
+                          const isUrgent = daysLeft <= 2;
 
-                        return (
-                          <motion.div
-                            key={p.id}
-                            initial={{ opacity: 0, x: -10 }}
-                            animate={{ opacity: 1, x: 0 }}
-                            transition={{ delay: index * 0.1 }}
-                            className={cn(
-                              "flex items-center gap-3 p-3 rounded-xl transition-all cursor-pointer hover:scale-[1.02]",
-                              isUrgent
-                                ? "bg-gradient-to-r from-orange-50 to-red-50 dark:from-orange-900/20 dark:to-red-900/20 border border-orange-200 dark:border-orange-800/50"
-                                : "bg-gray-50 dark:bg-gray-800/50 hover:bg-gray-100 dark:hover:bg-gray-800"
-                            )}
-                          >
-                            <div className={cn(
-                              "p-2 rounded-lg shadow-sm",
-                              isUrgent
-                                ? "bg-gradient-to-br from-orange-500 to-red-500"
-                                : "bg-white dark:bg-gray-700"
-                            )}>
-                              <Clock size={14} className={isUrgent ? "text-white" : "text-indigo-500"} />
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <p className="text-sm font-medium text-gray-900 dark:text-white truncate">{p.title}</p>
-                              <p className="text-xs text-gray-500 dark:text-gray-400">
-                                {deadline.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                              </p>
-                            </div>
-                            <span className={cn(
-                              "text-xs font-semibold px-2 py-1 rounded-lg",
-                              isUrgent
-                                ? "text-orange-600 dark:text-orange-400 bg-orange-100 dark:bg-orange-900/30"
-                                : "text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-700"
-                            )}>
-                              {daysLeft === 0 ? 'Today' : daysLeft === 1 ? '1 day' : `${daysLeft}d`}
-                            </span>
-                          </motion.div>
-                        );
-                      })}
+                          return (
+                            <motion.div
+                              key={p.id}
+                              initial={{ opacity: 0, x: -10 }}
+                              animate={{ opacity: 1, x: 0 }}
+                              transition={{ delay: index * 0.1 }}
+                              className={cn(
+                                "flex items-center gap-3 p-3 rounded-xl transition-all cursor-pointer hover:scale-[1.02]",
+                                isUrgent
+                                  ? "bg-gradient-to-r from-orange-50 to-red-50 dark:from-orange-900/20 dark:to-red-900/20 border border-orange-200 dark:border-orange-800/50"
+                                  : "bg-gray-50 dark:bg-gray-800/50 hover:bg-gray-100 dark:hover:bg-gray-800",
+                              )}
+                            >
+                              <div
+                                className={cn(
+                                  "p-2 rounded-lg shadow-sm",
+                                  isUrgent
+                                    ? "bg-gradient-to-br from-orange-500 to-red-500"
+                                    : "bg-white dark:bg-gray-700",
+                                )}
+                              >
+                                <Clock
+                                  size={14}
+                                  className={
+                                    isUrgent ? "text-white" : "text-indigo-500"
+                                  }
+                                />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                                  {p.title}
+                                </p>
+                                <p className="text-xs text-gray-500 dark:text-gray-400">
+                                  {deadline.toLocaleDateString("en-US", {
+                                    month: "short",
+                                    day: "numeric",
+                                  })}
+                                </p>
+                              </div>
+                              <span
+                                className={cn(
+                                  "text-xs font-semibold px-2 py-1 rounded-lg",
+                                  isUrgent
+                                    ? "text-orange-600 dark:text-orange-400 bg-orange-100 dark:bg-orange-900/30"
+                                    : "text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-700",
+                                )}
+                              >
+                                {daysLeft === 0
+                                  ? "Today"
+                                  : daysLeft === 1
+                                    ? "1 day"
+                                    : `${daysLeft}d`}
+                              </span>
+                            </motion.div>
+                          );
+                        })}
                     </div>
                   )}
                 </div>
               </div>
             </motion.div>
-
           </motion.div>
         )}
 
@@ -687,7 +851,6 @@ export default function FacultyDashboardPage() {
             setModalOpen(false);
           }}
         />
-
       </main>
     </div>
   );

@@ -128,7 +128,22 @@ const handleConnection = (ws) => {
         }
         pythonProcess = dockerService.execPython(
           containerToUse,
-          (data) => safeSend(ws, data.toString()),
+          (data) => {
+            const output = data.toString();
+            if (output.includes('__SERVER_LOG__')) {
+              const lines = output.split('\n');
+              lines.forEach((line) => {
+                if (line.includes('__SERVER_LOG__')) {
+                  const logMsg = line.replace('__SERVER_LOG__', '').trim();
+                  logger.info(`[Python Container] ${logMsg}`);
+                } else {
+                  safeSend(ws, line + '\n');
+                }
+              });
+            } else {
+              safeSend(ws, output);
+            }
+          },
           (code) => {
             logger.info(`Python wrapper exited with code ${code}`);
             if (code !== 0) {

@@ -1,14 +1,25 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/service";
 
-export const dynamic = 'force-dynamic';
+export const dynamic = "force-dynamic";
 
 export async function POST(req: Request) {
   try {
-    const { student_id, practical_id, code, language, status = "pending", marks_obtained = 0, execution_details } = await req.json();
+    const {
+      student_id,
+      practical_id,
+      code,
+      language,
+      status = "pending",
+      marks_obtained = 0,
+      execution_details,
+    } = await req.json();
 
     if (!student_id || !practical_id || !code || !language) {
-      return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
+      return NextResponse.json(
+        { error: "Missing required fields" },
+        { status: 400 },
+      );
     }
 
     // Check if submission already exists
@@ -35,22 +46,29 @@ export async function POST(req: Request) {
         // New submission is better - update everything
         updateData.code = code;
         updateData.marks_obtained = marks_obtained;
-        if (execution_details !== undefined) updateData.execution_details = execution_details;
+        if (execution_details !== undefined)
+          updateData.execution_details = execution_details;
       } else {
         // Keep existing code and marks, but still track this attempt
-        console.log(`Keeping existing submission (${existingMarks} marks) as it has higher marks than new attempt (${newMarks} marks)`);
+        console.log(
+          `Keeping existing submission (${existingMarks} marks) as it has higher marks than new attempt (${newMarks} marks)`,
+        );
         // Don't update code, marks, or execution_details - keep the better submission
       }
 
-      const { data: updatedSubmission, error: updateError } = await supabaseAdmin
-        .from("submissions")
-        .update(updateData)
-        .eq("id", existingSubmission.id)
-        .select("*")
-        .single();
+      const { data: updatedSubmission, error: updateError } =
+        await supabaseAdmin
+          .from("submissions")
+          .update(updateData)
+          .eq("id", existingSubmission.id)
+          .select("*")
+          .single();
 
       if (updateError) {
-        console.error("Supabase update error during create/upsert:", updateError);
+        console.error(
+          "Supabase update error during create/upsert:",
+          updateError,
+        );
         return NextResponse.json({ error: updateError }, { status: 500 });
       }
 
@@ -58,7 +76,7 @@ export async function POST(req: Request) {
         submission: updatedSubmission,
         keptHigherMarks: !shouldUpdateCode,
         previousMarks: existingMarks,
-        newMarks: newMarks
+        newMarks: newMarks,
       });
     }
 
@@ -86,6 +104,9 @@ export async function POST(req: Request) {
     return NextResponse.json({ submission });
   } catch (err) {
     console.error("Server error in submission/create:", err);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 },
+    );
   }
 }

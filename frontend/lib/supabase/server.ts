@@ -20,13 +20,13 @@ export async function createClient() {
         setAll(cookiesToSet) {
           try {
             cookiesToSet.forEach(({ name, value, options }) =>
-              cookieStore.set(name, value, { ...options, maxAge: 7200 })
+              cookieStore.set(name, value, { ...options, maxAge: 7200 }),
             );
           } catch {
             // Safe to ignore if called from a Server Component
           }
         },
       },
-    }
+    },
   );
 }

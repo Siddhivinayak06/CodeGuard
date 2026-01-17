@@ -2,12 +2,13 @@ import { NextResponse } from "next/server";
 import { createClient as createServerClient } from "@/lib/supabase/server";
 import { supabaseAdmin } from "@/lib/supabase/service";
 
-export const dynamic = 'force-dynamic';
+export const dynamic = "force-dynamic";
 
 /** Check if current user is faculty or admin */
 async function isFacultyOrAdmin(supabaseServerClient: any) {
   try {
-    const { data: userData, error: userErr } = await supabaseServerClient.auth.getUser();
+    const { data: userData, error: userErr } =
+      await supabaseServerClient.auth.getUser();
     if (userErr) {
       console.error("Error getting user:", userErr);
       return false;
@@ -39,7 +40,8 @@ export async function GET() {
   try {
     const { data, error } = await supabaseAdmin
       .from("practicals")
-      .select(`
+      .select(
+        `
         id,
         title,
         description,
@@ -52,7 +54,8 @@ export async function GET() {
           faculty_id,
           users!faculty_id (name, email)
         )
-      `)
+      `,
+      )
       .order("deadline", { ascending: true });
 
     if (error) throw error;
@@ -72,7 +75,10 @@ export async function GET() {
     return NextResponse.json({ success: true, data: practicals });
   } catch (err: any) {
     console.error("Error fetching practicals:", err);
-    return NextResponse.json({ success: false, error: err.message ?? "Server error" }, { status: 500 });
+    return NextResponse.json(
+      { success: false, error: err.message ?? "Server error" },
+      { status: 500 },
+    );
   }
 }
 
@@ -81,14 +87,24 @@ export async function POST(request: Request) {
   try {
     const supabaseServerClient = await createServerClient();
     if (!(await isFacultyOrAdmin(supabaseServerClient))) {
-      return NextResponse.json({ success: false, error: "Forbidden: faculty/admin only" }, { status: 403 });
+      return NextResponse.json(
+        { success: false, error: "Forbidden: faculty/admin only" },
+        { status: 403 },
+      );
     }
 
     const body = await request.json().catch(() => ({}));
-    const { title, subject_id, description, language, deadline, max_marks } = body;
+    const { title, subject_id, description, language, deadline, max_marks } =
+      body;
 
     if (!title || !subject_id) {
-      return NextResponse.json({ success: false, error: "Missing required fields (title, subject_id)." }, { status: 400 });
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Missing required fields (title, subject_id).",
+        },
+        { status: 400 },
+      );
     }
 
     const payload: Record<string, any> = {
@@ -100,13 +116,19 @@ export async function POST(request: Request) {
       max_marks: max_marks || 100,
     };
 
-    const { data, error } = await supabaseAdmin.from("practicals").insert([payload]).select();
+    const { data, error } = await supabaseAdmin
+      .from("practicals")
+      .insert([payload])
+      .select();
     if (error) throw error;
 
     return NextResponse.json({ success: true, data }, { status: 201 });
   } catch (err: any) {
     console.error("Error creating practical:", err);
-    return NextResponse.json({ success: false, error: err.message ?? "Server error" }, { status: 500 });
+    return NextResponse.json(
+      { success: false, error: err.message ?? "Server error" },
+      { status: 500 },
+    );
   }
 }
 
@@ -115,14 +137,28 @@ export async function PUT(request: Request) {
   try {
     const supabaseServerClient = await createServerClient();
     if (!(await isFacultyOrAdmin(supabaseServerClient))) {
-      return NextResponse.json({ success: false, error: "Forbidden: faculty/admin only" }, { status: 403 });
+      return NextResponse.json(
+        { success: false, error: "Forbidden: faculty/admin only" },
+        { status: 403 },
+      );
     }
 
     const body = await request.json().catch(() => ({}));
-    const { id, title, subject_id, description, language, deadline, max_marks } = body;
+    const {
+      id,
+      title,
+      subject_id,
+      description,
+      language,
+      deadline,
+      max_marks,
+    } = body;
 
     if (!id) {
-      return NextResponse.json({ success: false, error: "Missing required field: id" }, { status: 400 });
+      return NextResponse.json(
+        { success: false, error: "Missing required field: id" },
+        { status: 400 },
+      );
     }
 
     const updates: Record<string, any> = {};
@@ -133,13 +169,20 @@ export async function PUT(request: Request) {
     if (deadline !== undefined) updates.deadline = deadline;
     if (max_marks !== undefined) updates.max_marks = max_marks;
 
-    const { data, error } = await supabaseAdmin.from("practicals").update(updates).eq("id", id).select();
+    const { data, error } = await supabaseAdmin
+      .from("practicals")
+      .update(updates)
+      .eq("id", id)
+      .select();
     if (error) throw error;
 
     return NextResponse.json({ success: true, data });
   } catch (err: any) {
     console.error("Error updating practical:", err);
-    return NextResponse.json({ success: false, error: err.message ?? "Server error" }, { status: 500 });
+    return NextResponse.json(
+      { success: false, error: err.message ?? "Server error" },
+      { status: 500 },
+    );
   }
 }
 
@@ -148,7 +191,10 @@ export async function DELETE(request: Request) {
   try {
     const supabaseServerClient = await createServerClient();
     if (!(await isFacultyOrAdmin(supabaseServerClient))) {
-      return NextResponse.json({ success: false, error: "Forbidden: faculty/admin only" }, { status: 403 });
+      return NextResponse.json(
+        { success: false, error: "Forbidden: faculty/admin only" },
+        { status: 403 },
+      );
     }
 
     const url = new URL(request.url);
@@ -159,15 +205,25 @@ export async function DELETE(request: Request) {
     }
 
     if (!id) {
-      return NextResponse.json({ success: false, error: "Missing required: id (query or JSON body)" }, { status: 400 });
+      return NextResponse.json(
+        { success: false, error: "Missing required: id (query or JSON body)" },
+        { status: 400 },
+      );
     }
 
-    const { data, error } = await supabaseAdmin.from("practicals").delete().eq("id", id).select();
+    const { data, error } = await supabaseAdmin
+      .from("practicals")
+      .delete()
+      .eq("id", id)
+      .select();
     if (error) throw error;
 
     return NextResponse.json({ success: true, deleted: data?.length ?? 0 });
   } catch (err: any) {
     console.error("Error deleting practical:", err);
-    return NextResponse.json({ success: false, error: err.message ?? "Server error" }, { status: 500 });
+    return NextResponse.json(
+      { success: false, error: err.message ?? "Server error" },
+      { status: 500 },
+    );
   }
 }

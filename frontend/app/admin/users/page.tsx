@@ -25,9 +25,12 @@ type ApiUsersResponse = { success?: boolean; data?: any[] } | any[];
 // Role badge component
 function RoleBadge({ role }: { role: string }) {
   const styles: Record<string, string> = {
-    student: "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 border-blue-200/50 dark:border-blue-800/50",
-    faculty: "bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400 border-purple-200/50 dark:border-purple-800/50",
-    admin: "bg-pink-100 dark:bg-pink-900/30 text-pink-700 dark:text-pink-400 border-pink-200/50 dark:border-pink-800/50",
+    student:
+      "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 border-blue-200/50 dark:border-blue-800/50",
+    faculty:
+      "bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400 border-purple-200/50 dark:border-purple-800/50",
+    admin:
+      "bg-pink-100 dark:bg-pink-900/30 text-pink-700 dark:text-pink-400 border-pink-200/50 dark:border-pink-800/50",
   };
 
   const icons: Record<string, React.ReactNode> = {
@@ -37,7 +40,9 @@ function RoleBadge({ role }: { role: string }) {
   };
 
   return (
-    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-lg border ${styles[role.toLowerCase()] || styles.student}`}>
+    <span
+      className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-lg border ${styles[role.toLowerCase()] || styles.student}`}
+    >
       {icons[role.toLowerCase()]}
       {role.charAt(0).toUpperCase() + role.slice(1)}
     </span>
@@ -45,31 +50,62 @@ function RoleBadge({ role }: { role: string }) {
 }
 
 // Skeleton Row
-function SkeletonRow({ showStudentCols = false }: { showStudentCols?: boolean }) {
+function SkeletonRow({
+  showStudentCols = false,
+}: {
+  showStudentCols?: boolean;
+}) {
   return (
     <tr className="animate-pulse">
-      <td className="px-5 py-4"><div className="flex items-center gap-3"><div className="w-10 h-10 bg-gray-200 dark:bg-gray-700 rounded-xl" /><div className="h-4 w-28 bg-gray-200 dark:bg-gray-700 rounded" /></div></td>
-      <td className="px-5 py-4"><div className="h-4 w-36 bg-gray-200 dark:bg-gray-700 rounded" /></td>
+      <td className="px-5 py-4">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 bg-gray-200 dark:bg-gray-700 rounded-xl" />
+          <div className="h-4 w-28 bg-gray-200 dark:bg-gray-700 rounded" />
+        </div>
+      </td>
+      <td className="px-5 py-4">
+        <div className="h-4 w-36 bg-gray-200 dark:bg-gray-700 rounded" />
+      </td>
       {showStudentCols && (
         <>
-          <td className="px-5 py-4"><div className="h-4 w-20 bg-gray-200 dark:bg-gray-700 rounded" /></td>
-          <td className="px-5 py-4"><div className="h-4 w-16 bg-gray-200 dark:bg-gray-700 rounded" /></td>
+          <td className="px-5 py-4">
+            <div className="h-4 w-20 bg-gray-200 dark:bg-gray-700 rounded" />
+          </td>
+          <td className="px-5 py-4">
+            <div className="h-4 w-16 bg-gray-200 dark:bg-gray-700 rounded" />
+          </td>
         </>
       )}
-      <td className="px-5 py-4"><div className="h-6 w-20 bg-gray-200 dark:bg-gray-700 rounded" /></td>
+      <td className="px-5 py-4">
+        <div className="h-6 w-20 bg-gray-200 dark:bg-gray-700 rounded" />
+      </td>
     </tr>
   );
 }
 
 // Stat Card
-function StatCard({ label, value, icon, gradient }: { label: string; value: number; icon: React.ReactNode; gradient: string }) {
+function StatCard({
+  label,
+  value,
+  icon,
+  gradient,
+}: {
+  label: string;
+  value: number;
+  icon: React.ReactNode;
+  gradient: string;
+}) {
   return (
     <div className="glass-card rounded-2xl p-5 flex items-center gap-4">
-      <div className={`w-12 h-12 rounded-xl ${gradient} flex items-center justify-center shadow-lg`}>
+      <div
+        className={`w-12 h-12 rounded-xl ${gradient} flex items-center justify-center shadow-lg`}
+      >
         {icon}
       </div>
       <div>
-        <p className="text-2xl font-bold text-gray-900 dark:text-white">{value}</p>
+        <p className="text-2xl font-bold text-gray-900 dark:text-white">
+          {value}
+        </p>
         <p className="text-xs text-gray-500 dark:text-gray-400">{label}</p>
       </div>
     </div>
@@ -90,7 +126,9 @@ export default function AdminUsers() {
 
   const [open, setOpen] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
-  const [selectedRole, setSelectedRole] = useState<"student" | "faculty" | "admin">("student");
+  const [selectedRole, setSelectedRole] = useState<
+    "student" | "faculty" | "admin"
+  >("student");
 
   const [form, setForm] = useState({
     id: "",
@@ -116,25 +154,39 @@ export default function AdminUsers() {
       }
     };
     fetchUser();
-    return () => { mountedRef.current = false; };
+    return () => {
+      mountedRef.current = false;
+    };
   }, [router, supabase]);
 
   // API Helpers
   const getAccessToken = async (): Promise<string | null> => {
     try {
-      const { data: { session } } = await supabase.auth.getSession();
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
       return session?.access_token ?? null;
     } catch {
       return null;
     }
   };
 
-  const safeFetchJson = async (url: string, opts?: RequestInit): Promise<ApiUsersResponse> => {
+  const safeFetchJson = async (
+    url: string,
+    opts?: RequestInit,
+  ): Promise<ApiUsersResponse> => {
     const res = await fetch(url, opts);
     const text = await res.text();
-    if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText} - ${text || "<no body>"}`);
+    if (!res.ok)
+      throw new Error(
+        `HTTP ${res.status} ${res.statusText} - ${text || "<no body>"}`,
+      );
     if (!text) return [];
-    try { return JSON.parse(text); } catch { return text as any; }
+    try {
+      return JSON.parse(text);
+    } catch {
+      return text as any;
+    }
   };
 
   // Load users
@@ -143,7 +195,9 @@ export default function AdminUsers() {
     setLoading(true);
     try {
       const token = await getAccessToken();
-      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+      };
       if (token) headers["Authorization"] = `Bearer ${token}`;
 
       const payload = await safeFetchJson(`/api/admin/users`, { headers });
@@ -159,13 +213,19 @@ export default function AdminUsers() {
     }
   };
 
-  useEffect(() => { loadUsers(); }, [user]);
+  useEffect(() => {
+    loadUsers();
+  }, [user]);
 
-  const handleChange = (key: string, value: string) => setForm(prev => ({ ...prev, [key]: value }));
+  const handleChange = (key: string, value: string) =>
+    setForm((prev) => ({ ...prev, [key]: value }));
 
   // Save user
   const handleSave = async (form: any) => {
-    if (!form.email) { alert("Email is required!"); return; }
+    if (!form.email) {
+      alert("Email is required!");
+      return;
+    }
 
     setBusy(true);
     try {
@@ -209,12 +269,20 @@ export default function AdminUsers() {
     setBusy(true);
     try {
       const token = await getAccessToken();
-      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+      };
       if (token) headers["Authorization"] = `Bearer ${token}`;
 
-      const res = await fetch(`/api/admin/users/${encodeURIComponent(id)}`, { method: "DELETE", headers });
+      const res = await fetch(`/api/admin/users/${encodeURIComponent(id)}`, {
+        method: "DELETE",
+        headers,
+      });
       const text = await res.text();
-      if (!res.ok) throw new Error(`Delete failed: ${res.status} ${res.statusText} - ${text || "<no body>"}`);
+      if (!res.ok)
+        throw new Error(
+          `Delete failed: ${res.status} ${res.statusText} - ${text || "<no body>"}`,
+        );
 
       await loadUsers();
     } catch (err: any) {
@@ -236,7 +304,11 @@ export default function AdminUsers() {
     );
 
   // Group users by role
-  const usersByRole: Record<string, any[]> = { student: [], faculty: [], admin: [] };
+  const usersByRole: Record<string, any[]> = {
+    student: [],
+    faculty: [],
+    admin: [],
+  };
   users.forEach((u) => {
     const r = (u.role ?? "student").toLowerCase();
     if (!usersByRole[r]) usersByRole[r] = [];
@@ -244,10 +316,13 @@ export default function AdminUsers() {
   });
 
   // Filter by search
-  const filteredUsers = usersByRole[selectedRole].filter((u) =>
-    u.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    u.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    u.student_details?.roll_no?.toLowerCase().includes(searchTerm.toLowerCase())
+  const filteredUsers = usersByRole[selectedRole].filter(
+    (u) =>
+      u.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      u.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      u.student_details?.roll_no
+        ?.toLowerCase()
+        .includes(searchTerm.toLowerCase()),
   );
 
   return (
@@ -271,7 +346,14 @@ export default function AdminUsers() {
 
           <button
             onClick={() => {
-              setForm({ id: "", name: "", email: "", role: "student", roll_no: "", semester: "" });
+              setForm({
+                id: "",
+                name: "",
+                email: "",
+                role: "student",
+                roll_no: "",
+                semester: "",
+              });
               setIsEditing(false);
               setOpen(true);
             }}
@@ -283,7 +365,10 @@ export default function AdminUsers() {
         </div>
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6 animate-slideUp" style={{ animationDelay: "100ms" }}>
+        <div
+          className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6 animate-slideUp"
+          style={{ animationDelay: "100ms" }}
+        >
           <StatCard
             label="Students"
             value={usersByRole.student.length}
@@ -305,7 +390,10 @@ export default function AdminUsers() {
         </div>
 
         {/* Role Tabs & Search */}
-        <div className="glass-card rounded-2xl p-4 mb-6 animate-slideUp" style={{ animationDelay: "150ms" }}>
+        <div
+          className="glass-card rounded-2xl p-4 mb-6 animate-slideUp"
+          style={{ animationDelay: "150ms" }}
+        >
           <div className="flex flex-col sm:flex-row gap-4 items-center justify-between">
             {/* Role Tabs */}
             <div className="flex items-center bg-gray-100 dark:bg-gray-800 rounded-xl p-1">
@@ -313,19 +401,23 @@ export default function AdminUsers() {
                 <button
                   key={role}
                   onClick={() => setSelectedRole(role)}
-                  className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-all ${selectedRole === role
-                    ? "bg-white dark:bg-gray-900 text-gray-900 dark:text-white shadow-sm"
-                    : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
-                    }`}
+                  className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-all ${
+                    selectedRole === role
+                      ? "bg-white dark:bg-gray-900 text-gray-900 dark:text-white shadow-sm"
+                      : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
+                  }`}
                 >
                   {role === "student" && <GraduationCap className="w-4 h-4" />}
                   {role === "faculty" && <UserCog className="w-4 h-4" />}
                   {role === "admin" && <Shield className="w-4 h-4" />}
                   {role.charAt(0).toUpperCase() + role.slice(1)}
-                  <span className={`ml-1 px-2 py-0.5 text-xs rounded-full ${selectedRole === role
-                    ? "bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400"
-                    : "bg-gray-200 dark:bg-gray-700 text-gray-500"
-                    }`}>
+                  <span
+                    className={`ml-1 px-2 py-0.5 text-xs rounded-full ${
+                      selectedRole === role
+                        ? "bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400"
+                        : "bg-gray-200 dark:bg-gray-700 text-gray-500"
+                    }`}
+                  >
                     {usersByRole[role].length}
                   </span>
                 </button>
@@ -347,26 +439,43 @@ export default function AdminUsers() {
         </div>
 
         {/* Users Table */}
-        <div className="glass-card-premium rounded-3xl overflow-hidden animate-slideUp" style={{ animationDelay: "200ms" }}>
-
+        <div
+          className="glass-card-premium rounded-3xl overflow-hidden animate-slideUp"
+          style={{ animationDelay: "200ms" }}
+        >
           {loading ? (
             <div className="overflow-x-auto">
               <table className="w-full min-w-[600px]">
                 <thead className="bg-gray-50/70 dark:bg-gray-800/70">
                   <tr>
-                    <th className="px-5 py-3.5 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">User</th>
-                    <th className="px-5 py-3.5 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">Email</th>
+                    <th className="px-5 py-3.5 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">
+                      User
+                    </th>
+                    <th className="px-5 py-3.5 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">
+                      Email
+                    </th>
                     {selectedRole === "student" && (
                       <>
-                        <th className="px-5 py-3.5 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">Roll No.</th>
-                        <th className="px-5 py-3.5 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">Semester</th>
+                        <th className="px-5 py-3.5 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">
+                          Roll No.
+                        </th>
+                        <th className="px-5 py-3.5 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">
+                          Semester
+                        </th>
                       </>
                     )}
-                    <th className="px-5 py-3.5 text-right text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">Actions</th>
+                    <th className="px-5 py-3.5 text-right text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">
+                      Actions
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200/50 dark:divide-gray-700/50">
-                  {[1, 2, 3, 4, 5].map((i) => <SkeletonRow key={i} showStudentCols={selectedRole === "student"} />)}
+                  {[1, 2, 3, 4, 5].map((i) => (
+                    <SkeletonRow
+                      key={i}
+                      showStudentCols={selectedRole === "student"}
+                    />
+                  ))}
                 </tbody>
               </table>
             </div>
@@ -376,10 +485,14 @@ export default function AdminUsers() {
                 <Users className="w-10 h-10 text-gray-400" />
               </div>
               <p className="text-gray-500 dark:text-gray-400 font-medium">
-                {searchTerm ? "No users match your search" : `No ${selectedRole}s found`}
+                {searchTerm
+                  ? "No users match your search"
+                  : `No ${selectedRole}s found`}
               </p>
               <p className="text-sm text-gray-400 dark:text-gray-500 mt-1">
-                {searchTerm ? "Try a different search term" : `Add your first ${selectedRole} to get started`}
+                {searchTerm
+                  ? "Try a different search term"
+                  : `Add your first ${selectedRole} to get started`}
               </p>
             </div>
           ) : (
@@ -387,26 +500,44 @@ export default function AdminUsers() {
               <table className="w-full min-w-[600px]">
                 <thead className="bg-gray-50/70 dark:bg-gray-800/70">
                   <tr>
-                    <th className="px-5 py-3.5 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">User</th>
-                    <th className="px-5 py-3.5 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">Email</th>
+                    <th className="px-5 py-3.5 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">
+                      User
+                    </th>
+                    <th className="px-5 py-3.5 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">
+                      Email
+                    </th>
                     {selectedRole === "student" && (
                       <>
-                        <th className="px-5 py-3.5 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">Roll No.</th>
-                        <th className="px-5 py-3.5 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">Semester</th>
+                        <th className="px-5 py-3.5 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">
+                          Roll No.
+                        </th>
+                        <th className="px-5 py-3.5 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">
+                          Semester
+                        </th>
                       </>
                     )}
-                    <th className="px-5 py-3.5 text-right text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">Actions</th>
+                    <th className="px-5 py-3.5 text-right text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">
+                      Actions
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200/50 dark:divide-gray-700/50">
                   {filteredUsers.map((u) => {
-                    const initials = (u.name || u.email || "U").split(" ").map((n: string) => n[0]).slice(0, 2).join("").toUpperCase();
+                    const initials = (u.name || u.email || "U")
+                      .split(" ")
+                      .map((n: string) => n[0])
+                      .slice(0, 2)
+                      .join("")
+                      .toUpperCase();
 
                     return (
                       <tr
                         key={u.uid}
-                        className={`hover:bg-indigo-50/30 dark:hover:bg-indigo-900/10 transition-colors ${highlightId === u.uid ? "bg-emerald-50 dark:bg-emerald-900/20" : ""
-                          }`}
+                        className={`hover:bg-indigo-50/30 dark:hover:bg-indigo-900/10 transition-colors ${
+                          highlightId === u.uid
+                            ? "bg-emerald-50 dark:bg-emerald-900/20"
+                            : ""
+                        }`}
                       >
                         <td className="px-5 py-4">
                           <div className="flex items-center gap-3">
@@ -514,7 +645,9 @@ export default function AdminUsers() {
 
             <div className="space-y-4">
               <div className="space-y-1.5">
-                <label className="text-xs font-medium text-gray-700 dark:text-gray-300">Full Name</label>
+                <label className="text-xs font-medium text-gray-700 dark:text-gray-300">
+                  Full Name
+                </label>
                 <input
                   className="input-premium"
                   value={form.name}
@@ -524,7 +657,9 @@ export default function AdminUsers() {
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-xs font-medium text-gray-700 dark:text-gray-300">Email *</label>
+                <label className="text-xs font-medium text-gray-700 dark:text-gray-300">
+                  Email *
+                </label>
                 <input
                   className="input-premium"
                   type="email"
@@ -536,7 +671,9 @@ export default function AdminUsers() {
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-xs font-medium text-gray-700 dark:text-gray-300">Role</label>
+                <label className="text-xs font-medium text-gray-700 dark:text-gray-300">
+                  Role
+                </label>
                 <div className="relative">
                   <select
                     className="input-premium appearance-none pr-10 cursor-pointer"
@@ -554,7 +691,9 @@ export default function AdminUsers() {
               {form.role === "student" && (
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-1.5">
-                    <label className="text-xs font-medium text-gray-700 dark:text-gray-300">Roll No.</label>
+                    <label className="text-xs font-medium text-gray-700 dark:text-gray-300">
+                      Roll No.
+                    </label>
                     <input
                       className="input-premium"
                       value={form.roll_no}
@@ -563,7 +702,9 @@ export default function AdminUsers() {
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-xs font-medium text-gray-700 dark:text-gray-300">Semester</label>
+                    <label className="text-xs font-medium text-gray-700 dark:text-gray-300">
+                      Semester
+                    </label>
                     <input
                       className="input-premium"
                       value={form.semester}

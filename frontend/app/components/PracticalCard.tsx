@@ -2,7 +2,9 @@
 "use client";
 import { Practical } from "@/lib/types";
 
-interface Props { practical: Practical; }
+interface Props {
+  practical: Practical;
+}
 
 export default function PracticalCard({ practical }: Props) {
   return (

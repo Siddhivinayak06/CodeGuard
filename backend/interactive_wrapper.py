@@ -115,6 +115,7 @@ while True:
             try:
                 timeout_sec = int(os.environ.get("EXECUTION_TIMEOUT", 15))
                 signal.alarm(timeout_sec)  # Start timeout
+                print(f"__SERVER_LOG__ Executing {current_file if current_file else 'code snippet'} with timeout {timeout_sec}s", flush=True)
                 exec(code, globals())
                 signal.alarm(0)
             except TimeoutError as e:
@@ -142,6 +143,7 @@ while True:
             finally:
                 sys.stdout.flush()
                 sys.stderr.flush()
+                print(f"__SERVER_LOG__ Execution completed for {current_file if current_file else 'code snippet'}", flush=True)
         
         flush_stdin()
         print(f"\n{CYAN}--- Execution Finished ---{RESET}\n", flush=True)

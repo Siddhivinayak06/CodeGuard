@@ -36,11 +36,21 @@ type Faculty = {
 function SkeletonRow() {
   return (
     <tr className="animate-pulse">
-      <td className="px-5 py-4"><div className="h-4 w-24 bg-gray-200 dark:bg-gray-700 rounded" /></td>
-      <td className="px-5 py-4"><div className="h-4 w-32 bg-gray-200 dark:bg-gray-700 rounded" /></td>
-      <td className="px-5 py-4"><div className="h-4 w-16 bg-gray-200 dark:bg-gray-700 rounded" /></td>
-      <td className="px-5 py-4"><div className="h-4 w-28 bg-gray-200 dark:bg-gray-700 rounded" /></td>
-      <td className="px-5 py-4"><div className="h-8 w-20 bg-gray-200 dark:bg-gray-700 rounded" /></td>
+      <td className="px-5 py-4">
+        <div className="h-4 w-24 bg-gray-200 dark:bg-gray-700 rounded" />
+      </td>
+      <td className="px-5 py-4">
+        <div className="h-4 w-32 bg-gray-200 dark:bg-gray-700 rounded" />
+      </td>
+      <td className="px-5 py-4">
+        <div className="h-4 w-16 bg-gray-200 dark:bg-gray-700 rounded" />
+      </td>
+      <td className="px-5 py-4">
+        <div className="h-4 w-28 bg-gray-200 dark:bg-gray-700 rounded" />
+      </td>
+      <td className="px-5 py-4">
+        <div className="h-8 w-20 bg-gray-200 dark:bg-gray-700 rounded" />
+      </td>
     </tr>
   );
 }
@@ -52,14 +62,14 @@ function stringToColor(str: string): string {
     hash = str.charCodeAt(i) + ((hash << 5) - hash);
   }
   const colors = [
-    'from-blue-400 to-cyan-500',
-    'from-purple-400 to-pink-500',
-    'from-emerald-400 to-teal-500',
-    'from-orange-400 to-amber-500',
-    'from-rose-400 to-pink-500',
-    'from-indigo-400 to-violet-500',
-    'from-sky-400 to-blue-500',
-    'from-fuchsia-400 to-purple-500',
+    "from-blue-400 to-cyan-500",
+    "from-purple-400 to-pink-500",
+    "from-emerald-400 to-teal-500",
+    "from-orange-400 to-amber-500",
+    "from-rose-400 to-pink-500",
+    "from-indigo-400 to-violet-500",
+    "from-sky-400 to-blue-500",
+    "from-fuchsia-400 to-purple-500",
   ];
   return colors[Math.abs(hash) % colors.length];
 }
@@ -134,15 +144,17 @@ export default function AdminSubjects() {
     setLoading(true);
     try {
       const token = await getAccessToken();
-      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+      };
       if (token) headers["Authorization"] = `Bearer ${token}`;
 
       const [subjRes, facRes] = await Promise.all([
         fetch(`/api/admin/subjects`, { headers }).then((r) =>
-          r.json().catch(() => [])
+          r.json().catch(() => []),
         ),
         fetch(`/api/admin/faculty`, { headers }).then((r) =>
-          r.json().catch(() => [])
+          r.json().catch(() => []),
         ),
       ]);
 
@@ -184,17 +196,30 @@ export default function AdminSubjects() {
       };
 
       const token = await getAccessToken();
-      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+      };
       if (token) headers["Authorization"] = `Bearer ${token}`;
 
-      const res = await fetch(endpoint, { method, headers, body: JSON.stringify(body) });
+      const res = await fetch(endpoint, {
+        method,
+        headers,
+        body: JSON.stringify(body),
+      });
       const payload = await res.json().catch(() => ({}));
-      if (!res.ok || payload?.success === false) throw new Error(payload?.error || "Operation failed");
+      if (!res.ok || payload?.success === false)
+        throw new Error(payload?.error || "Operation failed");
 
       if (!mountedRef.current) return;
 
       setOpen(false);
-      setForm({ id: "", subject_name: "", subject_code: "", semester: "", faculty_id: "" });
+      setForm({
+        id: "",
+        subject_name: "",
+        subject_code: "",
+        semester: "",
+        faculty_id: "",
+      });
       setIsEditing(false);
       fetchData();
     } catch (err: any) {
@@ -211,16 +236,22 @@ export default function AdminSubjects() {
     setBusy(true);
     try {
       const token = await getAccessToken();
-      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+      };
       if (token) headers["Authorization"] = `Bearer ${token}`;
 
-      const res = await fetch(`/api/admin/subjects?id=${encodeURIComponent(id)}`, {
-        method: "DELETE",
-        headers,
-      });
+      const res = await fetch(
+        `/api/admin/subjects?id=${encodeURIComponent(id)}`,
+        {
+          method: "DELETE",
+          headers,
+        },
+      );
 
       const payload = await res.json().catch(() => ({}));
-      if (!res.ok || payload?.success === false) throw new Error(payload?.error || "Delete failed");
+      if (!res.ok || payload?.success === false)
+        throw new Error(payload?.error || "Delete failed");
 
       if (!mountedRef.current) return;
       setSubjects((prev) => prev.filter((s) => s.id !== id));
@@ -238,12 +269,15 @@ export default function AdminSubjects() {
       s.subject_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       s.subject_code?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       s.faculty_name?.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesSemester = filterSemester === "all" || s.semester === filterSemester;
+    const matchesSemester =
+      filterSemester === "all" || s.semester === filterSemester;
     return matchesSearch && matchesSemester;
   });
 
   // Get unique semesters
-  const semesters = [...new Set(subjects.map((s) => s.semester).filter(Boolean))].sort();
+  const semesters = [
+    ...new Set(subjects.map((s) => s.semester).filter(Boolean)),
+  ].sort();
 
   if (!user)
     return (
@@ -269,14 +303,21 @@ export default function AdminSubjects() {
                 Manage Subjects
               </h1>
               <p className="text-sm text-gray-600 dark:text-gray-400 mt-0.5">
-                {subjects.length} subject{subjects.length !== 1 ? "s" : ""} total
+                {subjects.length} subject{subjects.length !== 1 ? "s" : ""}{" "}
+                total
               </p>
             </div>
           </div>
 
           <button
             onClick={() => {
-              setForm({ id: "", subject_name: "", subject_code: "", semester: "", faculty_id: "" });
+              setForm({
+                id: "",
+                subject_name: "",
+                subject_code: "",
+                semester: "",
+                faculty_id: "",
+              });
               setIsEditing(false);
               setOpen(true);
             }}
@@ -288,7 +329,10 @@ export default function AdminSubjects() {
         </div>
 
         {/* Subjects Table */}
-        <div className="glass-card-premium rounded-3xl overflow-hidden animate-slideUp" style={{ animationDelay: "100ms" }}>
+        <div
+          className="glass-card-premium rounded-3xl overflow-hidden animate-slideUp"
+          style={{ animationDelay: "100ms" }}
+        >
           {/* Consolidated Header with Search & Filter */}
           <div className="px-6 py-4 border-b border-gray-200/50 dark:border-gray-700/50 bg-gradient-to-r from-indigo-50/50 to-purple-50/50 dark:from-indigo-900/20 dark:to-purple-900/20">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -298,8 +342,7 @@ export default function AdminSubjects() {
                 <span className="font-medium">
                   {filteredSubjects.length === subjects.length
                     ? `${subjects.length} subjects`
-                    : `${filteredSubjects.length} of ${subjects.length} subjects`
-                  }
+                    : `${filteredSubjects.length} of ${subjects.length} subjects`}
                 </span>
               </div>
 
@@ -339,15 +382,27 @@ export default function AdminSubjects() {
               <table className="w-full min-w-[700px]">
                 <thead className="bg-gray-50/70 dark:bg-gray-800/70">
                   <tr>
-                    <th className="px-5 py-3.5 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">Name</th>
-                    <th className="px-5 py-3.5 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">Code</th>
-                    <th className="px-5 py-3.5 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">Semester</th>
-                    <th className="px-5 py-3.5 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">Faculty</th>
-                    <th className="px-5 py-3.5 text-right text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">Actions</th>
+                    <th className="px-5 py-3.5 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">
+                      Name
+                    </th>
+                    <th className="px-5 py-3.5 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">
+                      Code
+                    </th>
+                    <th className="px-5 py-3.5 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">
+                      Semester
+                    </th>
+                    <th className="px-5 py-3.5 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">
+                      Faculty
+                    </th>
+                    <th className="px-5 py-3.5 text-right text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">
+                      Actions
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200/50 dark:divide-gray-700/50">
-                  {[1, 2, 3, 4, 5].map((i) => <SkeletonRow key={i} />)}
+                  {[1, 2, 3, 4, 5].map((i) => (
+                    <SkeletonRow key={i} />
+                  ))}
                 </tbody>
               </table>
             </div>
@@ -372,11 +427,21 @@ export default function AdminSubjects() {
               <table className="w-full min-w-[700px]">
                 <thead className="bg-gray-50/70 dark:bg-gray-800/70">
                   <tr>
-                    <th className="px-5 py-3.5 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">Name</th>
-                    <th className="px-5 py-3.5 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">Code</th>
-                    <th className="px-5 py-3.5 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">Semester</th>
-                    <th className="px-5 py-3.5 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">Faculty</th>
-                    <th className="px-5 py-3.5 text-right text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">Actions</th>
+                    <th className="px-5 py-3.5 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">
+                      Name
+                    </th>
+                    <th className="px-5 py-3.5 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">
+                      Code
+                    </th>
+                    <th className="px-5 py-3.5 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">
+                      Semester
+                    </th>
+                    <th className="px-5 py-3.5 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">
+                      Faculty
+                    </th>
+                    <th className="px-5 py-3.5 text-right text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">
+                      Actions
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200/50 dark:divide-gray-700/50">
@@ -405,13 +470,19 @@ export default function AdminSubjects() {
                       <td className="px-5 py-4">
                         {s.faculty_name ? (
                           <div className="flex items-center gap-3">
-                            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white bg-gradient-to-br ${stringToColor(s.faculty_name)}`}>
+                            <div
+                              className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white bg-gradient-to-br ${stringToColor(s.faculty_name)}`}
+                            >
                               {s.faculty_name.charAt(0).toUpperCase()}
                             </div>
-                            <span className="text-gray-700 dark:text-gray-300 text-sm font-medium">{s.faculty_name}</span>
+                            <span className="text-gray-700 dark:text-gray-300 text-sm font-medium">
+                              {s.faculty_name}
+                            </span>
                           </div>
                         ) : (
-                          <span className="text-gray-400 text-sm">Not assigned</span>
+                          <span className="text-gray-400 text-sm">
+                            Not assigned
+                          </span>
                         )}
                       </td>
                       <td className="px-5 py-4">
@@ -481,7 +552,9 @@ export default function AdminSubjects() {
 
             <div className="space-y-4">
               <div className="space-y-1.5">
-                <label className="text-xs font-medium text-gray-700 dark:text-gray-300">Subject Name *</label>
+                <label className="text-xs font-medium text-gray-700 dark:text-gray-300">
+                  Subject Name *
+                </label>
                 <input
                   className="input-premium"
                   value={form.subject_name}
@@ -492,17 +565,23 @@ export default function AdminSubjects() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1.5">
-                  <label className="text-xs font-medium text-gray-700 dark:text-gray-300">Subject Code *</label>
+                  <label className="text-xs font-medium text-gray-700 dark:text-gray-300">
+                    Subject Code *
+                  </label>
                   <input
                     className="input-premium"
                     value={form.subject_code}
-                    onChange={(e) => handleChange("subject_code", e.target.value)}
+                    onChange={(e) =>
+                      handleChange("subject_code", e.target.value)
+                    }
                     placeholder="e.g., CS101"
                   />
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-xs font-medium text-gray-700 dark:text-gray-300">Semester</label>
+                  <label className="text-xs font-medium text-gray-700 dark:text-gray-300">
+                    Semester
+                  </label>
                   <input
                     className="input-premium"
                     value={form.semester}
@@ -513,7 +592,9 @@ export default function AdminSubjects() {
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-xs font-medium text-gray-700 dark:text-gray-300">Assign Faculty</label>
+                <label className="text-xs font-medium text-gray-700 dark:text-gray-300">
+                  Assign Faculty
+                </label>
                 <div className="relative">
                   <select
                     className="input-premium appearance-none pr-10 cursor-pointer"
@@ -545,7 +626,11 @@ export default function AdminSubjects() {
                 className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-medium shadow-lg shadow-indigo-500/25 hover:shadow-indigo-500/40 transition-all"
                 disabled={busy}
               >
-                {busy ? "Saving..." : isEditing ? "Save Changes" : "Add Subject"}
+                {busy
+                  ? "Saving..."
+                  : isEditing
+                    ? "Save Changes"
+                    : "Add Subject"}
               </button>
             </div>
           </div>

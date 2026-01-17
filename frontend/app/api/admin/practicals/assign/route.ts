@@ -2,12 +2,13 @@ import { NextResponse } from "next/server";
 import { createClient as createServerClient } from "@/lib/supabase/server";
 import { supabaseAdmin } from "@/lib/supabase/service";
 
-export const dynamic = 'force-dynamic';
+export const dynamic = "force-dynamic";
 
 /** Check if current user is faculty or admin */
 async function isFacultyOrAdmin(supabaseServerClient: any) {
   try {
-    const { data: userData, error: userErr } = await supabaseServerClient.auth.getUser();
+    const { data: userData, error: userErr } =
+      await supabaseServerClient.auth.getUser();
     if (userErr) {
       console.error("Error getting user:", userErr);
       return false;
@@ -39,17 +40,28 @@ export async function POST(request: Request) {
   try {
     const supabaseServerClient = await createServerClient();
     if (!(await isFacultyOrAdmin(supabaseServerClient))) {
-      return NextResponse.json({ success: false, error: "Forbidden: faculty/admin only" }, { status: 403 });
+      return NextResponse.json(
+        { success: false, error: "Forbidden: faculty/admin only" },
+        { status: 403 },
+      );
     }
 
     const body = await request.json().catch(() => ({}));
     const { practical_id, student_ids, assigned_deadline, notes } = body;
 
-    if (!practical_id || !student_ids || !Array.isArray(student_ids) || student_ids.length === 0) {
-      return NextResponse.json({
-        success: false,
-        error: "Missing required fields (practical_id, student_ids array)."
-      }, { status: 400 });
+    if (
+      !practical_id ||
+      !student_ids ||
+      !Array.isArray(student_ids) ||
+      student_ids.length === 0
+    ) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Missing required fields (practical_id, student_ids array).",
+        },
+        { status: 400 },
+      );
     }
 
     // Check if practical exists and user has access to it
@@ -60,7 +72,10 @@ export async function POST(request: Request) {
       .single<any>();
 
     if (practicalError || !practical) {
-      return NextResponse.json({ success: false, error: "Practical not found" }, { status: 404 });
+      return NextResponse.json(
+        { success: false, error: "Practical not found" },
+        { status: 404 },
+      );
     }
 
     // Get current user
@@ -74,11 +89,17 @@ export async function POST(request: Request) {
       .eq("uid", userId)
       .single();
 
-    if (userRole?.role !== "admin" && practical.subjects?.faculty_id !== userId) {
-      return NextResponse.json({
-        success: false,
-        error: "You can only assign practicals for subjects you teach"
-      }, { status: 403 });
+    if (
+      userRole?.role !== "admin" &&
+      practical.subjects?.faculty_id !== userId
+    ) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "You can only assign practicals for subjects you teach",
+        },
+        { status: 403 },
+      );
     }
 
     // Validate student_ids exist and are students
@@ -90,14 +111,19 @@ export async function POST(request: Request) {
 
     if (studentsError) throw studentsError;
 
-    const validStudentIds = validStudents?.map(s => s.uid) || [];
-    const invalidIds = student_ids.filter(id => !validStudentIds.includes(id));
+    const validStudentIds = validStudents?.map((s) => s.uid) || [];
+    const invalidIds = student_ids.filter(
+      (id) => !validStudentIds.includes(id),
+    );
 
     if (invalidIds.length > 0) {
-      return NextResponse.json({
-        success: false,
-        error: `Invalid student IDs: ${invalidIds.join(", ")}`
-      }, { status: 400 });
+      return NextResponse.json(
+        {
+          success: false,
+          error: `Invalid student IDs: ${invalidIds.join(", ")}`,
+        },
+        { status: 400 },
+      );
     }
 
     // Check for existing assignments to avoid duplicates
@@ -107,18 +133,24 @@ export async function POST(request: Request) {
       .eq("practical_id", practical_id)
       .in("student_id", student_ids);
 
-    const existingStudentIds = existingAssignments?.map(a => a.student_id) || [];
-    const newAssignments = student_ids.filter(id => !existingStudentIds.includes(id));
+    const existingStudentIds =
+      existingAssignments?.map((a) => a.student_id) || [];
+    const newAssignments = student_ids.filter(
+      (id) => !existingStudentIds.includes(id),
+    );
 
     if (newAssignments.length === 0) {
-      return NextResponse.json({
-        success: false,
-        error: "All selected students are already assigned to this practical"
-      }, { status: 400 });
+      return NextResponse.json(
+        {
+          success: false,
+          error: "All selected students are already assigned to this practical",
+        },
+        { status: 400 },
+      );
     }
 
     // Create assignments
-    const assignments = newAssignments.map(student_id => ({
+    const assignments = newAssignments.map((student_id) => ({
       student_id,
       practical_id,
       assigned_deadline: assigned_deadline || null,
@@ -134,13 +166,13 @@ export async function POST(request: Request) {
 
     // Create notifications for assigned students
     try {
-      const notifications = newAssignments.map(student_id => ({
+      const notifications = newAssignments.map((student_id) => ({
         user_id: student_id,
         type: "practical_assigned", // Corrected type to match frontend
         title: "New Practical Assigned",
         message: `You have been assigned practical: ${practical.title}`,
         link: `/editor?practicalId=${practical_id}`,
-        metadata: { practical_id, subject_id: practical.subject_id }
+        metadata: { practical_id, subject_id: practical.subject_id },
       }));
 
       await supabaseAdmin.from("notifications").insert(notifications);
@@ -149,15 +181,24 @@ export async function POST(request: Request) {
       // Don't fail the request if notifications fail
     }
 
-    return NextResponse.json({
-      success: true,
-      data,
-      message: `Assigned practical to ${newAssignments.length} student(s)${existingStudentIds.length > 0 ? ` (${existingStudentIds.length} were already assigned)` : ""
-        }`
-    }, { status: 201 });
+    return NextResponse.json(
+      {
+        success: true,
+        data,
+        message: `Assigned practical to ${newAssignments.length} student(s)${
+          existingStudentIds.length > 0
+            ? ` (${existingStudentIds.length} were already assigned)`
+            : ""
+        }`,
+      },
+      { status: 201 },
+    );
   } catch (err: any) {
     console.error("Error assigning practical:", err);
-    return NextResponse.json({ success: false, error: err.message ?? "Server error" }, { status: 500 });
+    return NextResponse.json(
+      { success: false, error: err.message ?? "Server error" },
+      { status: 500 },
+    );
   }
 }
 
@@ -166,19 +207,26 @@ export async function GET(request: Request) {
   try {
     const supabaseServerClient = await createServerClient();
     if (!(await isFacultyOrAdmin(supabaseServerClient))) {
-      return NextResponse.json({ success: false, error: "Forbidden: faculty/admin only" }, { status: 403 });
+      return NextResponse.json(
+        { success: false, error: "Forbidden: faculty/admin only" },
+        { status: 403 },
+      );
     }
 
     const url = new URL(request.url);
     const practicalId = url.searchParams.get("practical_id");
 
     if (!practicalId) {
-      return NextResponse.json({ success: false, error: "Missing practical_id parameter" }, { status: 400 });
+      return NextResponse.json(
+        { success: false, error: "Missing practical_id parameter" },
+        { status: 400 },
+      );
     }
 
     const { data, error } = await supabaseAdmin
       .from("student_practicals")
-      .select(`
+      .select(
+        `
         id,
         assigned_deadline,
         status,
@@ -189,7 +237,8 @@ export async function GET(request: Request) {
           name,
           email
         )
-      `)
+      `,
+      )
       .eq("practical_id", practicalId)
       .order("assigned_at", { ascending: false });
 
@@ -209,7 +258,10 @@ export async function GET(request: Request) {
     return NextResponse.json({ success: true, data: assignments });
   } catch (err: any) {
     console.error("Error fetching assignments:", err);
-    return NextResponse.json({ success: false, error: err.message ?? "Server error" }, { status: 500 });
+    return NextResponse.json(
+      { success: false, error: err.message ?? "Server error" },
+      { status: 500 },
+    );
   }
 }
 
@@ -218,14 +270,20 @@ export async function DELETE(request: Request) {
   try {
     const supabaseServerClient = await createServerClient();
     if (!(await isFacultyOrAdmin(supabaseServerClient))) {
-      return NextResponse.json({ success: false, error: "Forbidden: faculty/admin only" }, { status: 403 });
+      return NextResponse.json(
+        { success: false, error: "Forbidden: faculty/admin only" },
+        { status: 403 },
+      );
     }
 
     const url = new URL(request.url);
     const assignmentId = url.searchParams.get("assignment_id");
 
     if (!assignmentId) {
-      return NextResponse.json({ success: false, error: "Missing assignment_id parameter" }, { status: 400 });
+      return NextResponse.json(
+        { success: false, error: "Missing assignment_id parameter" },
+        { status: 400 },
+      );
     }
 
     const { data, error } = await supabaseAdmin
@@ -239,6 +297,9 @@ export async function DELETE(request: Request) {
     return NextResponse.json({ success: true, deleted: data?.length ?? 0 });
   } catch (err: any) {
     console.error("Error deleting assignment:", err);
-    return NextResponse.json({ success: false, error: err.message ?? "Server error" }, { status: 500 });
+    return NextResponse.json(
+      { success: false, error: err.message ?? "Server error" },
+      { status: 500 },
+    );
   }
 }

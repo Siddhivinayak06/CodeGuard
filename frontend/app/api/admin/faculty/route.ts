@@ -2,7 +2,7 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/service";
 
-export const dynamic = 'force-dynamic';
+export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
@@ -16,6 +16,9 @@ export async function GET() {
     return NextResponse.json({ success: true, data });
   } catch (err: any) {
     console.error("Error fetching faculty:", err);
-    return NextResponse.json({ success: false, error: err.message ?? "Server error" }, { status: 500 });
+    return NextResponse.json(
+      { success: false, error: err.message ?? "Server error" },
+      { status: 500 },
+    );
   }
 }

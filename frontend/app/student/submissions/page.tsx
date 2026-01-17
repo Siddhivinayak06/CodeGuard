@@ -22,7 +22,7 @@ import {
   X,
   Code2,
   Sparkles,
-  RefreshCw
+  RefreshCw,
 } from "lucide-react";
 
 // Types
@@ -61,7 +61,10 @@ interface TestCaseResult {
 
 // Status badge component matching dashboard/practicals
 function StatusBadge({ status }: { status: string }) {
-  const styles: Record<string, { bg: string; text: string; icon: React.ReactNode }> = {
+  const styles: Record<
+    string,
+    { bg: string; text: string; icon: React.ReactNode }
+  > = {
     passed: {
       bg: "bg-emerald-100 dark:bg-emerald-900/30 border-emerald-200 dark:border-emerald-800",
       text: "text-emerald-700 dark:text-emerald-400",
@@ -101,7 +104,9 @@ function StatusBadge({ status }: { status: string }) {
       className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-lg border ${style.bg} ${style.text}`}
     >
       {style.icon}
-      <span className="capitalize">{status?.replace(/_/g, " ") || "Unknown"}</span>
+      <span className="capitalize">
+        {status?.replace(/_/g, " ") || "Unknown"}
+      </span>
     </span>
   );
 }
@@ -111,7 +116,7 @@ function StatCard({
   value,
   icon: Icon,
   color,
-  delay = 0
+  delay = 0,
 }: {
   label: string;
   value: number;
@@ -125,7 +130,9 @@ function StatCard({
       style={{ animationDelay: `${delay}ms` }}
     >
       <div className="flex items-center gap-4">
-        <div className={`p-3 rounded-xl ${color} bg-opacity-20 flex items-center justify-center`}>
+        <div
+          className={`p-3 rounded-xl ${color} bg-opacity-20 flex items-center justify-center`}
+        >
           <Icon className={`w-6 h-6 text-gray-700 dark:text-white`} />
         </div>
         <div>
@@ -171,7 +178,6 @@ interface SubmissionFetched {
 }
 
 function StudentSubmissionsContent() {
-
   const router = useRouter();
   const searchParams = useSearchParams(); // Added useSearchParams
   const supabase = useMemo(() => createClient(), []);
@@ -180,7 +186,9 @@ function StudentSubmissionsContent() {
   const [user, setUser] = useState<User | null>(null);
   const [submissions, setSubmissions] = useState<Submission[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
-  const [viewingSubmission, setViewingSubmission] = useState<Submission | null>(null);
+  const [viewingSubmission, setViewingSubmission] = useState<Submission | null>(
+    null,
+  );
   const [loadingDetails, setLoadingDetails] = useState<boolean>(false);
   const [pdfLoading, setPdfLoading] = useState<boolean>(false);
   const [hasAutoOpened, setHasAutoOpened] = useState(false); // Track if we've already auto-opened
@@ -188,16 +196,23 @@ function StudentSubmissionsContent() {
   const [testCases, setTestCases] = useState<TestCase[]>([]);
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState<string>("");
-  const [requestingReattempt, setRequestingReattempt] = useState<number | null>(null);
+  const [requestingReattempt, setRequestingReattempt] = useState<number | null>(
+    null,
+  );
 
-  const [studentDetails, setStudentDetails] = useState<{ name: string; roll_number: string } | null>(null);
+  const [studentDetails, setStudentDetails] = useState<{
+    name: string;
+    roll_number: string;
+  } | null>(null);
 
   // Auth check & Fetch User Details
   useEffect(() => {
     mountedRef.current = true;
     const fetchUserAndDetails = async () => {
       try {
-        const { data: { user } } = await supabase.auth.getUser();
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
         if (!user) {
           router.push("/auth/login");
           return;
@@ -214,7 +229,7 @@ function StudentSubmissionsContent() {
         if (mountedRef.current) {
           setStudentDetails({
             name: userProfile?.name || user.email || "Student",
-            roll_number: userProfile?.roll_no || "N/A"
+            roll_number: userProfile?.roll_no || "N/A",
           });
         }
       } catch (err) {
@@ -223,7 +238,9 @@ function StudentSubmissionsContent() {
       }
     };
     fetchUserAndDetails();
-    return () => { mountedRef.current = false; };
+    return () => {
+      mountedRef.current = false;
+    };
   }, [router, supabase]);
 
   // Fetch submissions
@@ -235,7 +252,8 @@ function StudentSubmissionsContent() {
       try {
         const { data, error } = await supabase
           .from("submissions")
-          .select(`
+          .select(
+            `
             id,
             code,
             output,
@@ -246,14 +264,21 @@ function StudentSubmissionsContent() {
             marks_obtained,
             practicals ( title ),
             execution_details
-          `)
+          `,
+          )
           .eq("student_id", user.id)
           .order("created_at", { ascending: false });
 
         if (error) throw error;
 
         // Fetch attempt info from student_practicals
-        const practicalIds = [...new Set((data as unknown as any[]).map(s => s.practical_id).filter(Boolean))];
+        const practicalIds = [
+          ...new Set(
+            (data as unknown as any[])
+              .map((s) => s.practical_id)
+              .filter(Boolean),
+          ),
+        ];
         const { data: attemptData } = await supabase
           .from("student_practicals")
           .select("practical_id, attempt_count, max_attempts, is_locked")
@@ -261,7 +286,7 @@ function StudentSubmissionsContent() {
           .in("practical_id", practicalIds);
 
         const attemptMap = new Map(
-          (attemptData || []).map(a => [a.practical_id, a])
+          (attemptData || []).map((a) => [a.practical_id, a]),
         );
 
         const formatted: Submission[] = (data as unknown as any[]).map((s) => {
@@ -297,9 +322,11 @@ function StudentSubmissionsContent() {
   // Auto-open from query param
   useEffect(() => {
     if (!loading && submissions.length > 0 && !hasAutoOpened) {
-      const practicalIdParam = searchParams?.get('practicalId');
+      const practicalIdParam = searchParams?.get("practicalId");
       if (practicalIdParam) {
-        const targetSubmission = submissions.find(s => s.practical_id.toString() === practicalIdParam);
+        const targetSubmission = submissions.find(
+          (s) => s.practical_id.toString() === practicalIdParam,
+        );
         if (targetSubmission) {
           handleView(targetSubmission);
           setHasAutoOpened(true);
@@ -320,7 +347,8 @@ function StudentSubmissionsContent() {
       // 1. Fetch full fresh submission data (to ensure we have execution_details and output)
       const { data: fullSub, error: subError } = await supabase
         .from("submissions")
-        .select(`
+        .select(
+          `
           id,
           code,
           output,
@@ -331,7 +359,8 @@ function StudentSubmissionsContent() {
           marks_obtained,
           practicals ( title ),
           execution_details
-        `)
+        `,
+        )
         .eq("id", initialSubmission.id)
         .single();
 
@@ -363,7 +392,6 @@ function StudentSubmissionsContent() {
       };
 
       setViewingSubmission(freshSubmission);
-
     } catch (err) {
       console.error("Failed to fetch detailed submission:", err);
     } finally {
@@ -398,27 +426,43 @@ function StudentSubmissionsContent() {
 
   const getLanguageColor = (lang: string) => {
     switch (lang?.toLowerCase()) {
-      case "python": return "from-yellow-400 to-blue-500";
-      case "java": return "from-red-500 to-orange-500";
-      case "c": return "from-blue-500 to-cyan-500";
-      case "cpp": return "from-blue-600 to-blue-400";
-      case "javascript": return "from-yellow-300 to-yellow-500";
-      default: return "from-indigo-400 to-indigo-600";
+      case "python":
+        return "from-yellow-400 to-blue-500";
+      case "java":
+        return "from-red-500 to-orange-500";
+      case "c":
+        return "from-blue-500 to-cyan-500";
+      case "cpp":
+        return "from-blue-600 to-blue-400";
+      case "javascript":
+        return "from-yellow-300 to-yellow-500";
+      default:
+        return "from-indigo-400 to-indigo-600";
     }
   };
 
   // Stats calculation
-  const stats = useMemo(() => ({
-    total: submissions.length,
-    passed: submissions.filter(s => s.status?.toLowerCase() === "passed").length,
-    failed: submissions.filter(s => s.status?.toLowerCase() === "failed").length,
-    pending: submissions.filter(s => !["passed", "failed"].includes(s.status?.toLowerCase() || "")).length,
-  }), [submissions]);
+  const stats = useMemo(
+    () => ({
+      total: submissions.length,
+      passed: submissions.filter((s) => s.status?.toLowerCase() === "passed")
+        .length,
+      failed: submissions.filter((s) => s.status?.toLowerCase() === "failed")
+        .length,
+      pending: submissions.filter(
+        (s) => !["passed", "failed"].includes(s.status?.toLowerCase() || ""),
+      ).length,
+    }),
+    [submissions],
+  );
 
   // Filtering
-  const filteredSubmissions = submissions.filter(s => {
-    const matchesSearch = (s.practical_title || "").toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesFilter = filterStatus === "all" || (s.status || "").toLowerCase() === filterStatus;
+  const filteredSubmissions = submissions.filter((s) => {
+    const matchesSearch = (s.practical_title || "")
+      .toLowerCase()
+      .includes(searchQuery.toLowerCase());
+    const matchesFilter =
+      filterStatus === "all" || (s.status || "").toLowerCase() === filterStatus;
     return matchesSearch && matchesFilter;
   });
 
@@ -433,7 +477,6 @@ function StudentSubmissionsContent() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50/30 to-purple-50/30 dark:from-gray-950 dark:via-indigo-950/10 dark:to-purple-950/10">
       <div className="pt-24 pb-12 px-4 sm:px-6 lg:px-8 xl:px-12 w-full mx-auto space-y-8">
-
         {/* Header */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 animate-slideUp">
           <div className="flex items-center gap-3">
@@ -441,18 +484,46 @@ function StudentSubmissionsContent() {
               <FileText className="w-6 h-6 text-white" />
             </div>
             <div>
-              <h1 className="text-3xl font-bold text-gradient">My Submissions</h1>
-              <p className="text-sm text-gray-500 dark:text-gray-400">Track your coding journey</p>
+              <h1 className="text-3xl font-bold text-gradient">
+                My Submissions
+              </h1>
+              <p className="text-sm text-gray-500 dark:text-gray-400">
+                Track your coding journey
+              </p>
             </div>
           </div>
         </div>
 
         {/* Stats Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
-          <StatCard label="Total" value={stats.total} icon={ListFilter} color="bg-blue-100 dark:bg-blue-900/30" delay={100} />
-          <StatCard label="Passed" value={stats.passed} icon={CheckCircle2} color="bg-emerald-100 dark:bg-emerald-900/30" delay={200} />
-          <StatCard label="Failed" value={stats.failed} icon={AlertCircle} color="bg-red-100 dark:bg-red-900/30" delay={300} />
-          <StatCard label="Pending" value={stats.pending} icon={Clock} color="bg-amber-100 dark:bg-amber-900/30" delay={400} />
+          <StatCard
+            label="Total"
+            value={stats.total}
+            icon={ListFilter}
+            color="bg-blue-100 dark:bg-blue-900/30"
+            delay={100}
+          />
+          <StatCard
+            label="Passed"
+            value={stats.passed}
+            icon={CheckCircle2}
+            color="bg-emerald-100 dark:bg-emerald-900/30"
+            delay={200}
+          />
+          <StatCard
+            label="Failed"
+            value={stats.failed}
+            icon={AlertCircle}
+            color="bg-red-100 dark:bg-red-900/30"
+            delay={300}
+          />
+          <StatCard
+            label="Pending"
+            value={stats.pending}
+            icon={Clock}
+            color="bg-amber-100 dark:bg-amber-900/30"
+            delay={400}
+          />
         </div>
 
         {/* Filters & Content */}
@@ -461,24 +532,27 @@ function StudentSubmissionsContent() {
           <div className="p-4 border-b border-gray-100 dark:border-gray-800 flex flex-col sm:flex-row items-center justify-between gap-4 bg-white/40 dark:bg-gray-800/40">
             <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0 no-scrollbar w-full sm:w-auto">
               {[
-                { id: 'all', label: 'All Submissions', count: stats.total },
-                { id: 'passed', label: 'Passed', count: stats.passed },
-                { id: 'failed', label: 'Failed', count: stats.failed }
+                { id: "all", label: "All Submissions", count: stats.total },
+                { id: "passed", label: "Passed", count: stats.passed },
+                { id: "failed", label: "Failed", count: stats.failed },
               ].map((tab) => (
                 <button
                   key={tab.id}
                   onClick={() => setFilterStatus(tab.id)}
                   className={`
                     px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2
-                    ${filterStatus === tab.id
-                      ? "bg-white dark:bg-gray-800 text-indigo-600 dark:text-indigo-400 shadow-sm"
-                      : "text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800/50"
+                    ${
+                      filterStatus === tab.id
+                        ? "bg-white dark:bg-gray-800 text-indigo-600 dark:text-indigo-400 shadow-sm"
+                        : "text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800/50"
                     }
                   `}
                 >
                   {tab.label}
                   {tab.count !== undefined && (
-                    <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${filterStatus === tab.id ? 'bg-indigo-100 dark:bg-indigo-900/30' : 'bg-gray-200 dark:bg-gray-700'}`}>
+                    <span
+                      className={`text-[10px] px-1.5 py-0.5 rounded-full ${filterStatus === tab.id ? "bg-indigo-100 dark:bg-indigo-900/30" : "bg-gray-200 dark:bg-gray-700"}`}
+                    >
                       {tab.count}
                     </span>
                   )}
@@ -506,26 +580,42 @@ function StudentSubmissionsContent() {
                 <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-gray-100 dark:bg-gray-800 flex items-center justify-center opacity-50">
                   <FileCode className="w-8 h-8 text-gray-400" />
                 </div>
-                <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">No Results Found</h3>
-                <p className="text-gray-500 dark:text-gray-400">Try adjusting your filters or search query.</p>
+                <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
+                  No Results Found
+                </h3>
+                <p className="text-gray-500 dark:text-gray-400">
+                  Try adjusting your filters or search query.
+                </p>
               </div>
             ) : (
               filteredSubmissions.map((s) => (
                 <div
                   key={s.id}
                   className={`p-4 rounded-xl glass-card border-l-4 transition-all hover:shadow-sm
-                    ${s.status === 'passed' ? 'border-emerald-500 bg-emerald-50/20 dark:bg-emerald-900/10' :
-                      s.status === 'failed' ? 'border-red-500 bg-red-50/20 dark:bg-red-900/10' :
-                        'border-gray-200 dark:border-gray-700 hover:border-indigo-400'}
-                  `}>
+                    ${
+                      s.status === "passed"
+                        ? "border-emerald-500 bg-emerald-50/20 dark:bg-emerald-900/10"
+                        : s.status === "failed"
+                          ? "border-red-500 bg-red-50/20 dark:bg-red-900/10"
+                          : "border-gray-200 dark:border-gray-700 hover:border-indigo-400"
+                    }
+                  `}
+                >
                   <div className="flex flex-col md:flex-row items-start md:items-center gap-4">
                     {/* Dynamic Icon */}
-                    <div className={`w-12 h-12 rounded-xl flex items-center justify-center shadow-sm text-white bg-gradient-to-br
-                        ${s.language === 'python' ? 'from-yellow-400 to-yellow-600' :
-                        s.language === 'c' || s.language === 'cpp' ? 'from-blue-500 to-indigo-600' :
-                          s.language === 'java' ? 'from-orange-500 to-red-600' :
-                            'from-indigo-500 to-purple-600'}
-                      `}>
+                    <div
+                      className={`w-12 h-12 rounded-xl flex items-center justify-center shadow-sm text-white bg-gradient-to-br
+                        ${
+                          s.language === "python"
+                            ? "from-yellow-400 to-yellow-600"
+                            : s.language === "c" || s.language === "cpp"
+                              ? "from-blue-500 to-indigo-600"
+                              : s.language === "java"
+                                ? "from-orange-500 to-red-600"
+                                : "from-indigo-500 to-purple-600"
+                        }
+                      `}
+                    >
                       <Code2 className="w-6 h-6" />
                     </div>
 
@@ -554,43 +644,57 @@ function StudentSubmissionsContent() {
                     {/* Actions */}
                     <div className="flex items-center gap-2 w-full md:w-auto mt-2 md:mt-0">
                       {/* Request Re-attempt for Failed with NO attempts left */}
-                      {s.status === 'failed' && (s.is_locked || (s.attempt_count ?? 0) >= (s.max_attempts ?? 1)) && (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="flex-1 md:flex-none gap-2 text-purple-600 border-purple-200 hover:bg-purple-50 hover:text-purple-700 dark:text-purple-400 dark:border-purple-800 dark:hover:bg-purple-900/20"
-                          disabled={requestingReattempt === s.practical_id}
-                          onClick={async (e) => {
-                            e.stopPropagation();
-                            setRequestingReattempt(s.practical_id);
-                            try {
-                              const res = await fetch('/api/student/request-reattempt', {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ practicalId: s.practical_id, reason: 'Request for another attempt' })
-                              });
-                              const data = await res.json();
-                              if (data.success) {
-                                alert('Request submitted! Your faculty will review it.');
-                              } else {
-                                alert(data.error || 'Failed to submit request');
+                      {s.status === "failed" &&
+                        (s.is_locked ||
+                          (s.attempt_count ?? 0) >= (s.max_attempts ?? 1)) && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="flex-1 md:flex-none gap-2 text-purple-600 border-purple-200 hover:bg-purple-50 hover:text-purple-700 dark:text-purple-400 dark:border-purple-800 dark:hover:bg-purple-900/20"
+                            disabled={requestingReattempt === s.practical_id}
+                            onClick={async (e) => {
+                              e.stopPropagation();
+                              setRequestingReattempt(s.practical_id);
+                              try {
+                                const res = await fetch(
+                                  "/api/student/request-reattempt",
+                                  {
+                                    method: "POST",
+                                    headers: {
+                                      "Content-Type": "application/json",
+                                    },
+                                    body: JSON.stringify({
+                                      practicalId: s.practical_id,
+                                      reason: "Request for another attempt",
+                                    }),
+                                  },
+                                );
+                                const data = await res.json();
+                                if (data.success) {
+                                  alert(
+                                    "Request submitted! Your faculty will review it.",
+                                  );
+                                } else {
+                                  alert(
+                                    data.error || "Failed to submit request",
+                                  );
+                                }
+                              } catch (err) {
+                                console.error(err);
+                                alert("Failed to submit request");
+                              } finally {
+                                setRequestingReattempt(null);
                               }
-                            } catch (err) {
-                              console.error(err);
-                              alert('Failed to submit request');
-                            } finally {
-                              setRequestingReattempt(null);
-                            }
-                          }}
-                        >
-                          {requestingReattempt === s.practical_id ? (
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                          ) : (
-                            <RefreshCw className="w-4 h-4" />
-                          )}
-                          Request Re-attempt
-                        </Button>
-                      )}
+                            }}
+                          >
+                            {requestingReattempt === s.practical_id ? (
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : (
+                              <RefreshCw className="w-4 h-4" />
+                            )}
+                            Request Re-attempt
+                          </Button>
+                        )}
 
                       {/* View Button */}
                       <Button
@@ -614,7 +718,11 @@ function StudentSubmissionsContent() {
                         disabled={pdfLoading}
                         className="text-gray-500 hover:text-indigo-600 dark:text-gray-400 dark:hover:text-indigo-400"
                       >
-                        {pdfLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                        {pdfLoading ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <Download className="w-4 h-4" />
+                        )}
                       </Button>
                     </div>
                   </div>
@@ -626,141 +734,179 @@ function StudentSubmissionsContent() {
       </div>
 
       {/* Enhanced View Modal */}
-      {
-        viewingSubmission && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-sm animate-fadeIn">
-            <div className="glass-card-premium rounded-3xl w-full max-w-5xl max-h-[90vh] overflow-hidden flex flex-col animate-scaleIn">
-              {/* Modal Header */}
-              <div className="flex items-center justify-between p-6 border-b border-gray-100 dark:border-gray-800 bg-white/50 dark:bg-gray-900/50 backdrop-blur-sm">
-                <div className="flex items-center gap-4">
-                  <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${getLanguageColor(viewingSubmission.language)} text-white flex items-center justify-center font-bold shadow-lg`}>
-                    <Code2 className="w-6 h-6" />
-                  </div>
-                  <div>
-                    <h3 className="text-xl font-bold text-gray-900 dark:text-white">
-                      {viewingSubmission.practical_title}
-                    </h3>
-                    <div className="flex items-center gap-2 text-sm text-gray-500">
-                      <StatusBadge status={viewingSubmission.status} />
-                      {viewingSubmission.marks_obtained !== null && (
-                        <>
-                          <span>•</span>
-                          <span className="flex items-center gap-1 font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/20 px-2 py-0.5 rounded-md">
-                            <Sparkles className="w-3.5 h-3.5" />
-                            {viewingSubmission.marks_obtained}
-                          </span>
-                        </>
-                      )}
-                      <span>•</span>
-                      <span className="font-mono">{new Date(viewingSubmission.created_at).toLocaleString()}</span>
-                    </div>
+      {viewingSubmission && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-sm animate-fadeIn">
+          <div className="glass-card-premium rounded-3xl w-full max-w-5xl max-h-[90vh] overflow-hidden flex flex-col animate-scaleIn">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between p-6 border-b border-gray-100 dark:border-gray-800 bg-white/50 dark:bg-gray-900/50 backdrop-blur-sm">
+              <div className="flex items-center gap-4">
+                <div
+                  className={`w-12 h-12 rounded-xl bg-gradient-to-br ${getLanguageColor(viewingSubmission.language)} text-white flex items-center justify-center font-bold shadow-lg`}
+                >
+                  <Code2 className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-bold text-gray-900 dark:text-white">
+                    {viewingSubmission.practical_title}
+                  </h3>
+                  <div className="flex items-center gap-2 text-sm text-gray-500">
+                    <StatusBadge status={viewingSubmission.status} />
+                    {viewingSubmission.marks_obtained !== null && (
+                      <>
+                        <span>•</span>
+                        <span className="flex items-center gap-1 font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/20 px-2 py-0.5 rounded-md">
+                          <Sparkles className="w-3.5 h-3.5" />
+                          {viewingSubmission.marks_obtained}
+                        </span>
+                      </>
+                    )}
+                    <span>•</span>
+                    <span className="font-mono">
+                      {new Date(viewingSubmission.created_at).toLocaleString()}
+                    </span>
                   </div>
                 </div>
-                <Button variant="ghost" size="icon" onClick={() => setViewingSubmission(null)} className="rounded-full hover:bg-gray-100 dark:hover:bg-gray-800">
-                  <X className="w-5 h-5" />
-                </Button>
+              </div>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setViewingSubmission(null)}
+                className="rounded-full hover:bg-gray-100 dark:hover:bg-gray-800"
+              >
+                <X className="w-5 h-5" />
+              </Button>
+            </div>
+
+            <div className="flex-1 overflow-auto p-6 grid grid-cols-1 lg:grid-cols-2 gap-6 bg-gray-50/50 dark:bg-gray-950/50">
+              {/* Left: Code & Output */}
+              <div className="space-y-6">
+                <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 overflow-hidden shadow-sm">
+                  <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-900/50 flex items-center justify-between">
+                    <h4 className="font-semibold text-gray-700 dark:text-gray-200 flex items-center gap-2">
+                      <Code className="w-4 h-4 text-indigo-500" /> Submitted
+                      Code
+                    </h4>
+                    <span className="text-xs font-mono px-2 py-1 rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 uppercase">
+                      {viewingSubmission.language}
+                    </span>
+                  </div>
+                  <div className="p-0 overflow-auto max-h-[400px]">
+                    <pre className="p-4 text-xs sm:text-sm font-mono text-gray-800 dark:text-gray-200 whitespace-pre-wrap leading-relaxed">
+                      {viewingSubmission.code}
+                    </pre>
+                  </div>
+                </div>
+
+                <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 overflow-hidden shadow-sm">
+                  <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-900/50">
+                    <h4 className="font-semibold text-gray-700 dark:text-gray-200 flex items-center gap-2">
+                      <FileText className="w-4 h-4 text-purple-500" /> Standard
+                      Output
+                    </h4>
+                  </div>
+                  <div className="p-4 bg-gray-900 text-gray-300 font-mono text-xs sm:text-sm rounded-b-2xl max-h-[200px] overflow-auto whitespace-pre-wrap">
+                    {viewingSubmission.output || (
+                      <span className="opacity-50">No output</span>
+                    )}
+                  </div>
+                </div>
               </div>
 
-              <div className="flex-1 overflow-auto p-6 grid grid-cols-1 lg:grid-cols-2 gap-6 bg-gray-50/50 dark:bg-gray-950/50">
-                {/* Left: Code & Output */}
-                <div className="space-y-6">
-                  <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 overflow-hidden shadow-sm">
-                    <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-900/50 flex items-center justify-between">
-                      <h4 className="font-semibold text-gray-700 dark:text-gray-200 flex items-center gap-2">
-                        <Code className="w-4 h-4 text-indigo-500" /> Submitted Code
-                      </h4>
-                      <span className="text-xs font-mono px-2 py-1 rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 uppercase">
-                        {viewingSubmission.language}
-                      </span>
-                    </div>
-                    <div className="p-0 overflow-auto max-h-[400px]">
-                      <pre className="p-4 text-xs sm:text-sm font-mono text-gray-800 dark:text-gray-200 whitespace-pre-wrap leading-relaxed">
-                        {viewingSubmission.code}
-                      </pre>
-                    </div>
+              {/* Right: Test Results */}
+              <div className="space-y-6">
+                <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 overflow-hidden shadow-sm">
+                  <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-900/50 flex items-center justify-between">
+                    <h4 className="font-semibold text-gray-700 dark:text-gray-200 flex items-center gap-2">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-500" /> Test
+                      Results
+                    </h4>
                   </div>
-
-                  <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 overflow-hidden shadow-sm">
-                    <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-900/50">
-                      <h4 className="font-semibold text-gray-700 dark:text-gray-200 flex items-center gap-2">
-                        <FileText className="w-4 h-4 text-purple-500" /> Standard Output
-                      </h4>
-                    </div>
-                    <div className="p-4 bg-gray-900 text-gray-300 font-mono text-xs sm:text-sm rounded-b-2xl max-h-[200px] overflow-auto whitespace-pre-wrap">
-                      {viewingSubmission.output || <span className="opacity-50">No output</span>}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Right: Test Results */}
-                <div className="space-y-6">
-                  <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 overflow-hidden shadow-sm">
-                    <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-900/50 flex items-center justify-between">
-                      <h4 className="font-semibold text-gray-700 dark:text-gray-200 flex items-center gap-2">
-                        <CheckCircle2 className="w-4 h-4 text-emerald-500" /> Test Results
-                      </h4>
-                    </div>
-                    <div className="p-4 space-y-3 max-h-[600px] overflow-auto">
-                      {loadingDetails ? (
-                        <div className="text-center py-8"><Loader2 className="w-8 h-8 animate-spin mx-auto text-gray-400" /></div>
-                      ) : viewingSubmission.testCaseResults?.length > 0 ? (
-                        viewingSubmission.testCaseResults.map((r, idx) => {
-                          const tc = testCases.find(t => t.id === r.test_case_id);
-                          return (
-                            <div key={idx} className="rounded-xl border border-gray-200 dark:border-gray-700 p-4 bg-gray-50/50 dark:bg-gray-900/50">
-                              <div className="flex items-center justify-between mb-3">
-                                <div className="flex items-center gap-3">
-                                  <span className="w-6 h-6 rounded-full flex items-center justify-center bg-gray-200 dark:bg-gray-700 text-xs font-bold text-gray-600 dark:text-gray-300 shadow-inner">
-                                    {idx + 1}
-                                  </span>
-                                  <span className="font-medium text-xs text-gray-500 dark:text-gray-400">
-                                    {tc?.is_hidden ? "Hidden" : "Public"}
-                                  </span>
-                                </div>
-                                <span className={`text-xs font-bold px-2 py-0.5 rounded ${r.status?.toLowerCase() === 'passed' ? 'text-emerald-600 bg-emerald-50 dark:bg-emerald-900/20' : 'text-red-600 bg-red-50 dark:bg-red-900/20'
-                                  }`}>
-                                  {r.status?.toUpperCase()}
+                  <div className="p-4 space-y-3 max-h-[600px] overflow-auto">
+                    {loadingDetails ? (
+                      <div className="text-center py-8">
+                        <Loader2 className="w-8 h-8 animate-spin mx-auto text-gray-400" />
+                      </div>
+                    ) : viewingSubmission.testCaseResults?.length > 0 ? (
+                      viewingSubmission.testCaseResults.map((r, idx) => {
+                        const tc = testCases.find(
+                          (t) => t.id === r.test_case_id,
+                        );
+                        return (
+                          <div
+                            key={idx}
+                            className="rounded-xl border border-gray-200 dark:border-gray-700 p-4 bg-gray-50/50 dark:bg-gray-900/50"
+                          >
+                            <div className="flex items-center justify-between mb-3">
+                              <div className="flex items-center gap-3">
+                                <span className="w-6 h-6 rounded-full flex items-center justify-center bg-gray-200 dark:bg-gray-700 text-xs font-bold text-gray-600 dark:text-gray-300 shadow-inner">
+                                  {idx + 1}
+                                </span>
+                                <span className="font-medium text-xs text-gray-500 dark:text-gray-400">
+                                  {tc?.is_hidden ? "Hidden" : "Public"}
                                 </span>
                               </div>
-                              <div className="grid grid-cols-2 gap-3 text-xs">
-                                <div>
-                                  <p className="text-gray-500 mb-1 font-medium">Input</p>
-                                  <div className="bg-white dark:bg-gray-950 p-2 rounded-lg border border-gray-200 dark:border-gray-700 font-mono truncate">{tc?.input || '—'}</div>
+                              <span
+                                className={`text-xs font-bold px-2 py-0.5 rounded ${
+                                  r.status?.toLowerCase() === "passed"
+                                    ? "text-emerald-600 bg-emerald-50 dark:bg-emerald-900/20"
+                                    : "text-red-600 bg-red-50 dark:bg-red-900/20"
+                                }`}
+                              >
+                                {r.status?.toUpperCase()}
+                              </span>
+                            </div>
+                            <div className="grid grid-cols-2 gap-3 text-xs">
+                              <div>
+                                <p className="text-gray-500 mb-1 font-medium">
+                                  Input
+                                </p>
+                                <div className="bg-white dark:bg-gray-950 p-2 rounded-lg border border-gray-200 dark:border-gray-700 font-mono truncate">
+                                  {tc?.input || "—"}
                                 </div>
-                                <div>
-                                  <p className="text-gray-500 mb-1 font-medium">Expected</p>
-                                  <div className="bg-white dark:bg-gray-950 p-2 rounded-lg border border-gray-200 dark:border-gray-700 font-mono truncate">{tc?.expected_output || '—'}</div>
+                              </div>
+                              <div>
+                                <p className="text-gray-500 mb-1 font-medium">
+                                  Expected
+                                </p>
+                                <div className="bg-white dark:bg-gray-950 p-2 rounded-lg border border-gray-200 dark:border-gray-700 font-mono truncate">
+                                  {tc?.expected_output || "—"}
                                 </div>
                               </div>
                             </div>
-                          );
-                        })
-                      ) : (
-                        <div className="text-center py-8 text-gray-500">No test results available</div>
-                      )}
-                    </div>
+                          </div>
+                        );
+                      })
+                    ) : (
+                      <div className="text-center py-8 text-gray-500">
+                        No test results available
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
             </div>
           </div>
-        )
-      }
-    </div >
+        </div>
+      )}
+    </div>
   );
 }
 
 // Wrapper component with Suspense boundary for useSearchParams
 export default function StudentSubmissions() {
   return (
-    <Suspense fallback={
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="flex flex-col items-center gap-4">
-          <div className="w-12 h-12 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin" />
-          <p className="text-gray-500 dark:text-gray-400">Loading submissions...</p>
+    <Suspense
+      fallback={
+        <div className="min-h-screen flex items-center justify-center">
+          <div className="flex flex-col items-center gap-4">
+            <div className="w-12 h-12 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+            <p className="text-gray-500 dark:text-gray-400">
+              Loading submissions...
+            </p>
+          </div>
         </div>
-      </div>
-    }>
+      }
+    >
       <StudentSubmissionsContent />
     </Suspense>
   );

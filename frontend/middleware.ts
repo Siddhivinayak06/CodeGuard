@@ -11,7 +11,7 @@ export async function middleware(request: NextRequest) {
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    { cookies: { get: (key) => request.cookies.get(key)?.value } }
+    { cookies: { get: (key) => request.cookies.get(key)?.value } },
   );
 
   // Step 3: Fetch user + role
@@ -48,12 +48,11 @@ export async function middleware(request: NextRequest) {
     path: pathname,
     userId: user?.id,
     role: role,
-    source: dbUser?.role ? 'db_users_table' : 'user_metadata_fallback',
-    redirectingToUnauthorized: (
+    source: dbUser?.role ? "db_users_table" : "user_metadata_fallback",
+    redirectingToUnauthorized:
       (pathname.startsWith("/dashboard/admin") && role !== "admin") ||
       (pathname.startsWith("/dashboard/faculty") && role !== "faculty") ||
-      (pathname.startsWith("/dashboard/student") && role !== "student")
-    )
+      (pathname.startsWith("/dashboard/student") && role !== "student"),
   });
 
   // Step 5: Role-based access control

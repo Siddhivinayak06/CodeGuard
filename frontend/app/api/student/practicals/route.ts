@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient as createServerClient } from "@/lib/supabase/server";
 import { supabaseAdmin } from "@/lib/supabase/service";
 
-export const dynamic = 'force-dynamic';
+export const dynamic = "force-dynamic";
 
 /** GET: get assigned practicals for the current student */
 export async function GET() {
@@ -10,9 +10,13 @@ export async function GET() {
     const supabaseServerClient = await createServerClient();
 
     // Get current user
-    const { data: userData, error: userErr } = await supabaseServerClient.auth.getUser();
+    const { data: userData, error: userErr } =
+      await supabaseServerClient.auth.getUser();
     if (userErr || !userData?.user) {
-      return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+      return NextResponse.json(
+        { success: false, error: "Unauthorized" },
+        { status: 401 },
+      );
     }
 
     const userId = userData.user.id;
@@ -25,13 +29,17 @@ export async function GET() {
       .single();
 
     if (roleError || userRole?.role !== "student") {
-      return NextResponse.json({ success: false, error: "Access denied: students only" }, { status: 403 });
+      return NextResponse.json(
+        { success: false, error: "Access denied: students only" },
+        { status: 403 },
+      );
     }
 
     // Fetch personalized practicals
     const { data, error } = await supabaseAdmin
       .from("student_practicals")
-      .select(`
+      .select(
+        `
         id,
         assigned_deadline,
         status,
@@ -50,7 +58,8 @@ export async function GET() {
             subject_code
           )
         )
-      `)
+      `,
+      )
       .eq("student_id", userId)
       .order("assigned_deadline", { ascending: true });
 
@@ -77,6 +86,9 @@ export async function GET() {
     return NextResponse.json({ success: true, data: practicals });
   } catch (err: any) {
     console.error("Error fetching student practicals:", err);
-    return NextResponse.json({ success: false, error: err.message ?? "Server error" }, { status: 500 });
+    return NextResponse.json(
+      { success: false, error: err.message ?? "Server error" },
+      { status: 500 },
+    );
   }
 }

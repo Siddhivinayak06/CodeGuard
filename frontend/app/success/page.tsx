@@ -1,27 +1,31 @@
-import { redirect } from "next/navigation"
-import { createClient } from "@/lib/supabase/server"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import Link from "next/link"
-import { GraduationCap, CheckCircle, User, Mail, Shield } from "lucide-react"
+import { redirect } from "next/navigation";
+import { createClient } from "@/lib/supabase/server";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import Link from "next/link";
+import { GraduationCap, CheckCircle, User, Mail, Shield } from "lucide-react";
 
 export default async function SuccessPage() {
-  const supabase = await createClient()
+  const supabase = await createClient();
 
-  const { data, error } = await supabase.auth.getUser()
+  const { data, error } = await supabase.auth.getUser();
   if (error || !data?.user) {
-    redirect("/auth/login")
+    redirect("/auth/login");
   }
 
   // Fetch user profile from our users table
-  const { data: profile } = await supabase.from("users").select("*").eq("uid", data.user.id).single()
+  const { data: profile } = await supabase
+    .from("users")
+    .select("*")
+    .eq("uid", data.user.id)
+    .single();
 
   const handleSignOut = async () => {
-    "use server"
-    const supabase = await createClient()
-    await supabase.auth.signOut()
-    redirect("/")
-  }
+    "use server";
+    const supabase = await createClient();
+    await supabase.auth.signOut();
+    redirect("/");
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
@@ -31,7 +35,9 @@ export default async function SuccessPage() {
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center gap-3">
               <GraduationCap className="h-8 w-8 text-blue-600" />
-              <h1 className="text-xl font-bold text-gray-900">Student Portal</h1>
+              <h1 className="text-xl font-bold text-gray-900">
+                Student Portal
+              </h1>
             </div>
             <form action={handleSignOut}>
               <Button variant="outline" type="submit">
@@ -48,8 +54,12 @@ export default async function SuccessPage() {
           <div className="flex justify-center mb-4">
             <CheckCircle className="h-16 w-16 text-green-600" />
           </div>
-          <h2 className="text-3xl font-bold text-gray-900 mb-2">Welcome to Your Account!</h2>
-          <p className="text-xl text-gray-600">You have successfully logged in to the Student Portal.</p>
+          <h2 className="text-3xl font-bold text-gray-900 mb-2">
+            Welcome to Your Account!
+          </h2>
+          <p className="text-xl text-gray-600">
+            You have successfully logged in to the Student Portal.
+          </p>
         </div>
 
         <div className="grid md:grid-cols-2 gap-6">
@@ -80,7 +90,9 @@ export default async function SuccessPage() {
                 <Shield className="h-4 w-4 text-gray-500" />
                 <div>
                   <p className="text-sm text-gray-500">Role</p>
-                  <p className="font-medium capitalize">{profile?.role || "student"}</p>
+                  <p className="font-medium capitalize">
+                    {profile?.role || "student"}
+                  </p>
                 </div>
               </div>
             </CardContent>
@@ -103,12 +115,16 @@ export default async function SuccessPage() {
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-gray-600">Account Created</span>
-                <span className="text-gray-900 font-medium">{new Date(data.user.created_at).toLocaleDateString()}</span>
+                <span className="text-gray-900 font-medium">
+                  {new Date(data.user.created_at).toLocaleDateString()}
+                </span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-gray-600">Last Sign In</span>
                 <span className="text-gray-900 font-medium">
-                  {data.user.last_sign_in_at ? new Date(data.user.last_sign_in_at).toLocaleDateString() : "First time"}
+                  {data.user.last_sign_in_at
+                    ? new Date(data.user.last_sign_in_at).toLocaleDateString()
+                    : "First time"}
                 </span>
               </div>
             </CardContent>
@@ -117,7 +133,9 @@ export default async function SuccessPage() {
 
         {/* Actions */}
         <div className="mt-8 text-center">
-          <p className="text-gray-600 mb-4">Your authentication system is working perfectly!</p>
+          <p className="text-gray-600 mb-4">
+            Your authentication system is working perfectly!
+          </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <Button asChild className="bg-blue-600 hover:bg-blue-700">
               <Link href="/">Back to Home</Link>
@@ -131,5 +149,5 @@ export default async function SuccessPage() {
         </div>
       </main>
     </div>
-  )
+  );
 }

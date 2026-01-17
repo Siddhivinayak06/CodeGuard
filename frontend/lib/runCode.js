@@ -24,18 +24,23 @@ module.exports = function runCode(code, lang = "python", stdinInput = "") {
         printf "%s" '${stdinInput.replace(/'/g, "'\\''")}' | timeout 5 python /tmp/${uniqueId}/code.py
       `;
 
-      docker = spawn("docker", [
-        "run",
-        "--rm",
-        "--network", "none",
-        "-m", "128m",
-        "--cpus=0.5",
-        "codeguard-python",
-        "sh",
-        "-c",
-        cmd,
-      ], { shell: false });
-
+      docker = spawn(
+        "docker",
+        [
+          "run",
+          "--rm",
+          "--network",
+          "none",
+          "-m",
+          "128m",
+          "--cpus=0.5",
+          "codeguard-python",
+          "sh",
+          "-c",
+          cmd,
+        ],
+        { shell: false },
+      );
     } else if (lang === "c") {
       const uniqueId = uuidv4();
       const escapedCode = code.replace(/\r/g, "");
@@ -47,19 +52,25 @@ module.exports = function runCode(code, lang = "python", stdinInput = "") {
         printf "%s" '${stdinInput.replace(/'/g, "'\\''")}' | timeout 5 /tmp/${uniqueId}/a.out
       `;
 
-      docker = spawn("docker", [
-        "run",
-        "--rm",
-        "--network", "none",
-        "-m", "128m",
-        "--cpus=0.5",
-        "-u", "0:0",
-        "gcc:latest",
-        "sh",
-        "-c",
-        cmd,
-      ], { shell: false });
-
+      docker = spawn(
+        "docker",
+        [
+          "run",
+          "--rm",
+          "--network",
+          "none",
+          "-m",
+          "128m",
+          "--cpus=0.5",
+          "-u",
+          "0:0",
+          "gcc:latest",
+          "sh",
+          "-c",
+          cmd,
+        ],
+        { shell: false },
+      );
     } else {
       return reject(new Error("Unsupported language"));
     }

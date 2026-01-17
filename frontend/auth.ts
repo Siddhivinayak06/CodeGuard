@@ -1,5 +1,5 @@
-import type { NextAuthOptions } from "next-auth"
-import AzureADProvider from "next-auth/providers/azure-ad"
+import type { NextAuthOptions } from "next-auth";
+import AzureADProvider from "next-auth/providers/azure-ad";
 
 export const authOptions: NextAuthOptions = {
   providers: [
@@ -14,4 +14,4 @@ export const authOptions: NextAuthOptions = {
     maxAge: 2 * 60 * 60, // 2 hours
   },
   secret: process.env.NEXTAUTH_SECRET,
-}
+};

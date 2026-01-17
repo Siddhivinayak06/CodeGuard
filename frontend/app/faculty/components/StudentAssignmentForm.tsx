@@ -7,49 +7,112 @@ import { createClient } from "@/lib/supabase/client";
 // Icons
 
 const SearchIcon = () => (
-  <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+  <svg
+    className="w-5 h-5 text-gray-400"
+    fill="none"
+    stroke="currentColor"
+    viewBox="0 0 24 24"
+  >
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth={2}
+      d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+    />
   </svg>
 );
 
 const CalendarIcon = () => (
-  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+  <svg
+    className="w-5 h-5"
+    fill="none"
+    stroke="currentColor"
+    viewBox="0 0 24 24"
+  >
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth={2}
+      d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+    />
   </svg>
 );
 
 const NotesIcon = () => (
-  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+  <svg
+    className="w-5 h-5"
+    fill="none"
+    stroke="currentColor"
+    viewBox="0 0 24 24"
+  >
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth={2}
+      d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+    />
   </svg>
 );
 
 const UsersIcon = () => (
-  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+  <svg
+    className="w-5 h-5"
+    fill="none"
+    stroke="currentColor"
+    viewBox="0 0 24 24"
+  >
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth={2}
+      d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"
+    />
   </svg>
 );
 
 const CheckIcon = () => (
   <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+    <path
+      fillRule="evenodd"
+      d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+      clipRule="evenodd"
+    />
   </svg>
 );
 
 const EmptyIcon = () => (
-  <svg className="w-12 h-12 text-gray-300 dark:text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+  <svg
+    className="w-12 h-12 text-gray-300 dark:text-gray-600"
+    fill="none"
+    stroke="currentColor"
+    viewBox="0 0 24 24"
+  >
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth={1.5}
+      d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"
+    />
   </svg>
 );
 
 const LoadingSpinner = () => (
   <svg className="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24">
-    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+    <circle
+      className="opacity-25"
+      cx="12"
+      cy="12"
+      r="10"
+      stroke="currentColor"
+      strokeWidth="4"
+    />
+    <path
+      className="opacity-75"
+      fill="currentColor"
+      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+    />
   </svg>
 );
-
-import { Student } from "../types";
 
 interface Props {
   practicalId: number;
@@ -57,11 +120,17 @@ interface Props {
   refresh: () => void;
 }
 
-export default function StudentAssignmentForm({ practicalId, close, refresh }: Props) {
+export default function StudentAssignmentForm({
+  practicalId,
+  close,
+  refresh,
+}: Props) {
   const supabase = useMemo(() => createClient(), []);
   const [students, setStudents] = useState<any[]>([]);
   const [selectedStudents, setSelectedStudents] = useState<any[]>([]);
-  const [deadline, setDeadline] = useState(new Date().toISOString().slice(0, 16));
+  const [deadline, setDeadline] = useState(
+    new Date().toISOString().slice(0, 16),
+  );
   const [notes, setNotes] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedSemester, setSelectedSemester] = useState<string>("");
@@ -99,22 +168,12 @@ export default function StudentAssignmentForm({ practicalId, close, refresh }: P
     setSelectedStudents((prev) =>
       prev.find((s) => s.uid === student.uid)
         ? prev.filter((s) => s.uid !== student.uid)
-        : [...prev, student]
+        : [...prev, student],
     );
   };
 
   const selectAll = () => {
     setSelectedStudents(filteredStudents);
-  };
-
-  const selectSemester = (semester: string) => {
-    if (!semester) {
-      setSelectedSemester("");
-      return;
-    }
-    setSelectedSemester(semester);
-    // Optional: Auto-select students when filtering by semester?
-    // Let's just filter for now, user can click "Select All"
   };
 
   const clearAll = () => {
@@ -123,21 +182,22 @@ export default function StudentAssignmentForm({ practicalId, close, refresh }: P
   };
 
   const semesters = useMemo(() => {
-    const sems = new Set(students.map(s => s.semester).filter(Boolean));
+    const sems = new Set(students.map((s) => s.semester).filter(Boolean));
     return Array.from(sems).sort();
   }, [students]);
 
-  const filteredStudents = students.filter(
-    (s) => {
-      const matchQuery = s.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (s.roll_no?.toLowerCase() || "").includes(searchQuery.toLowerCase()) ||
-        (s.email?.toLowerCase() || "").includes(searchQuery.toLowerCase());
+  const filteredStudents = students.filter((s) => {
+    const matchQuery =
+      s.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (s.roll_no?.toLowerCase() || "").includes(searchQuery.toLowerCase()) ||
+      (s.email?.toLowerCase() || "").includes(searchQuery.toLowerCase());
 
-      const matchSemester = selectedSemester ? s.semester === selectedSemester : true;
+    const matchSemester = selectedSemester
+      ? s.semester === selectedSemester
+      : true;
 
-      return matchQuery && matchSemester;
-    }
-  );
+    return matchQuery && matchSemester;
+  });
 
   const assign = async () => {
     if (selectedStudents.length === 0) return;
@@ -269,8 +329,10 @@ export default function StudentAssignmentForm({ practicalId, close, refresh }: P
               className="w-full h-full px-4 py-3 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all text-gray-900 dark:text-white appearance-none cursor-pointer"
             >
               <option value="">All Semesters</option>
-              {semesters.map(sem => (
-                <option key={sem} value={sem || ""}>{sem}</option>
+              {semesters.map((sem) => (
+                <option key={sem} value={sem || ""}>
+                  {sem}
+                </option>
               ))}
             </select>
           </div>
@@ -302,22 +364,38 @@ export default function StudentAssignmentForm({ practicalId, close, refresh }: P
             {fetchingStudents ? (
               <div className="flex flex-col items-center justify-center py-12">
                 <LoadingSpinner />
-                <p className="mt-3 text-sm text-gray-500 dark:text-gray-400">Loading students...</p>
+                <p className="mt-3 text-sm text-gray-500 dark:text-gray-400">
+                  Loading students...
+                </p>
               </div>
             ) : error ? (
               <div className="flex flex-col items-center justify-center py-12 px-4">
                 <div className="p-3 bg-red-50 dark:bg-red-900/20 rounded-full">
-                  <svg className="w-8 h-8 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  <svg
+                    className="w-8 h-8 text-red-500"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                    />
                   </svg>
                 </div>
-                <p className="mt-3 text-sm font-medium text-red-600 dark:text-red-400">{error}</p>
+                <p className="mt-3 text-sm font-medium text-red-600 dark:text-red-400">
+                  {error}
+                </p>
               </div>
             ) : filteredStudents.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-12 px-4">
                 <EmptyIcon />
                 <p className="mt-3 text-sm font-medium text-gray-500 dark:text-gray-400">
-                  {searchQuery ? "No students match your search" : "No students found"}
+                  {searchQuery
+                    ? "No students match your search"
+                    : "No students found"}
                 </p>
                 {searchQuery && (
                   <button
@@ -331,7 +409,9 @@ export default function StudentAssignmentForm({ practicalId, close, refresh }: P
             ) : (
               <div className="divide-y divide-gray-100 dark:divide-gray-700">
                 {filteredStudents.map((student) => {
-                  const isSelected = selectedStudents.some((s) => s.uid === student.uid);
+                  const isSelected = selectedStudents.some(
+                    (s) => s.uid === student.uid,
+                  );
                   return (
                     <div
                       key={student.uid}
@@ -339,17 +419,21 @@ export default function StudentAssignmentForm({ practicalId, close, refresh }: P
                       className={`
                         flex items-center gap-4 px-5 py-4 cursor-pointer transition-all
                         hover:bg-gray-50 dark:hover:bg-gray-700/50
-                        ${isSelected ? 'bg-blue-50 dark:bg-blue-900/20 border-l-4 border-blue-500' : ''}
+                        ${isSelected ? "bg-blue-50 dark:bg-blue-900/20 border-l-4 border-blue-500" : ""}
                       `}
                     >
                       {/* Checkbox */}
                       <div className="flex-shrink-0">
-                        <div className={`
+                        <div
+                          className={`
                           w-5 h-5 rounded border-2 flex items-center justify-center transition-all
-                          ${isSelected
-                            ? 'bg-blue-600 border-blue-600'
-                            : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800'}
-                        `}>
+                          ${
+                            isSelected
+                              ? "bg-blue-600 border-blue-600"
+                              : "border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800"
+                          }
+                        `}
+                        >
                           {isSelected && <CheckIcon />}
                         </div>
                       </div>
@@ -368,13 +452,25 @@ export default function StudentAssignmentForm({ practicalId, close, refresh }: P
                         </p>
                         <div className="flex items-center gap-2 mt-1 text-xs text-gray-500 dark:text-gray-400">
                           <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-gray-100 dark:bg-gray-700 rounded-full">
-                            <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                              <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
+                            <svg
+                              className="w-3 h-3"
+                              fill="currentColor"
+                              viewBox="0 0 20 20"
+                            >
+                              <path
+                                fillRule="evenodd"
+                                d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z"
+                                clipRule="evenodd"
+                              />
                             </svg>
                             {student.roll_no || "N/A"}
                           </span>
                           <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-gray-100 dark:bg-gray-700 rounded-full">
-                            <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                            <svg
+                              className="w-3 h-3"
+                              fill="currentColor"
+                              viewBox="0 0 20 20"
+                            >
                               <path d="M10.394 2.08a1 1 0 00-.788 0l-7 3a1 1 0 000 1.84L5.25 8.051a.999.999 0 01.356-.257l4-1.714a1 1 0 11.788 1.838L7.667 9.088l1.94.831a1 1 0 00.787 0l7-3a1 1 0 000-1.838l-7-3z" />
                             </svg>
                             Sem {student.semester || "N/A"}
@@ -426,7 +522,8 @@ export default function StudentAssignmentForm({ practicalId, close, refresh }: P
             <>
               <CheckIcon />
               <span>
-                Assign to {selectedStudents.length} Student{selectedStudents.length !== 1 ? "s" : ""}
+                Assign to {selectedStudents.length} Student
+                {selectedStudents.length !== 1 ? "s" : ""}
               </span>
             </>
           )}

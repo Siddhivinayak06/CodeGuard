@@ -1,7 +1,10 @@
 "use client";
 import { useEffect, useState, useRef } from "react";
 
-export default function useProctoring({ active = true, maxViolations = 3 } = {}) {
+export default function useProctoring({
+  active = true,
+  maxViolations = 3,
+} = {}) {
   const [violations, setViolations] = useState(0);
   const [locked, setLocked] = useState(false);
   const resizeTimeout = useRef(null);
