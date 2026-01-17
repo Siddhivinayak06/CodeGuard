@@ -14,6 +14,7 @@ import {
   Zap,
   CheckCircle,
 } from "lucide-react";
+import { getURL } from "@/lib/utils";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -337,6 +338,48 @@ export default function LoginPage() {
                         <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000" />
                       </>
                     )}
+                  </motion.button>
+
+                  <div className="relative my-6">
+                    <div className="absolute inset-0 flex items-center">
+                      <div className="w-full border-t border-gray-200 dark:border-gray-800" />
+                    </div>
+                    <div className="relative flex justify-center text-sm">
+                      <span className="px-2 bg-white dark:bg-gray-950 text-gray-500">
+                        Or continue with
+                      </span>
+                    </div>
+                  </div>
+
+                  <motion.button
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    type="button"
+                    onClick={async () => {
+                      const supabase = createClient();
+                      const { error } = await supabase.auth.signInWithOAuth({
+                        provider: "azure",
+                        options: {
+                          scopes: "email",
+                          redirectTo: `${getURL()}/auth/callback`,
+                        },
+                      });
+                      if (error) setError(error.message);
+                    }}
+                    disabled={isLoading}
+                    className="w-full py-3.5 px-6 rounded-xl bg-[#2F2F2F] hover:bg-[#1a1a1a] dark:bg-white dark:hover:bg-gray-100 text-white dark:text-gray-900 border border-transparent flex items-center justify-center gap-3 font-semibold transition-all shadow-lg"
+                  >
+                    <svg
+                      className="w-5 h-5"
+                      viewBox="0 0 21 21"
+                      xmlns="http://www.w3.org/2000/svg"
+                    >
+                      <rect x="1" y="1" width="9" height="9" fill="#F25022" />
+                      <rect x="1" y="11" width="9" height="9" fill="#00A4EF" />
+                      <rect x="11" y="1" width="9" height="9" fill="#7FBA00" />
+                      <rect x="11" y="11" width="9" height="9" fill="#FFB900" />
+                    </svg>
+                    <span>Sign in with Microsoft</span>
                   </motion.button>
                 </form>
 
