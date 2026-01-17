@@ -2,56 +2,68 @@ import { createServerClient } from "@supabase/ssr"
 import { NextResponse, type NextRequest } from "next/server"
 import { Database } from "@/lib/supabase/database.types"
 
+/**
+ * 🔒 TRUST BOUNDARY:
+ * - This Proxy is a network-level boundary.
+ * - Middleware does NOT protect APIs — all /api routes must self-verify.
+ * - Trusts ONLY JWT claims (no DB queries in Edge context).
+ * - Never rely on middleware for primary data access security.
+ * - Stateless, deterministic, and Edge-compliant.
+ */
+
 /* -------------------------------------------------------------------------- */
 /*                                CONFIGURATION                               */
 /* -------------------------------------------------------------------------- */
 
-const PUBLIC_ROUTES = ["/", "/auth/", "/api/", "/unauthorized", "/maintenance", "/lockdown"]
+const PUBLIC_ROUTES = ["/", "/auth", "/unauthorized", "/maintenance", "/lockdown"]
 
 const PROTECTED_ROOTS = ["/dashboard", "/admin", "/faculty", "/student", "/profile", "/Interactive"]
 
 const AUTH_REDIRECT = "/auth/login"
 
-const ROUTE_POLICIES: Record<string, string[]> = {
-  "/dashboard/admin": ["admin"],
-  "/admin": ["admin"],
-  "/dashboard/faculty": ["faculty"],
-  "/faculty": ["faculty"],
-  "/dashboard/student": ["student"],
-  "/student": ["student"],
-}
+// Ordered by specificity (longest paths first) to prevent prefix shadowing
+const ROUTE_POLICIES = [
+  { prefix: "/dashboard/admin", roles: ["admin"] },
+  { prefix: "/dashboard/faculty", roles: ["faculty"] },
+  { prefix: "/dashboard/student", roles: ["student"] },
+  { prefix: "/admin", roles: ["admin"] },
+  { prefix: "/faculty", roles: ["faculty"] },
+  { prefix: "/student", roles: ["student"] },
+]
 
 /* -------------------------------------------------------------------------- */
 /*                                PURE HELPERS                                */
 /* -------------------------------------------------------------------------- */
 
-const isPublicRoute = (pathname: string) =>
-  PUBLIC_ROUTES.some((route) => pathname === route || pathname.startsWith(route))
+const isPublicRoute = (path: string) =>
+  PUBLIC_ROUTES.some((route) => path === route || path.startsWith(route))
 
-const isProtectedRoute = (pathname: string) =>
-  PROTECTED_ROOTS.some((root) => pathname.startsWith(root))
+const isProtectedRoute = (path: string) =>
+  PROTECTED_ROOTS.some((root) => path.startsWith(root))
 
-const getInitialResponse = (request: NextRequest) =>
-  NextResponse.next({
-    request: {
-      headers: request.headers,
-    },
-  })
+const getInitialResponse = () => NextResponse.next()
+
+// Strategic logging
+const logAction = process.env.NODE_ENV === "production" ? console.warn : console.info
 
 /**
  * 🔐 Controlled Redirect Safety
- * Prevents Open-Redirect attacks by ensuring redirect paths are internal.
+ * Sanitizes and validates internal redirect paths (Defense-in-Depth).
  */
 const safeRedirect = (request: NextRequest, path: string, params?: Record<string, string>) => {
-  let finalPath = path
-
-  // If params has a 'redirect' key, validate it to prevent open-redirect
-  if (params?.redirect && !params.redirect.startsWith("/")) {
-    console.warn("[SECURITY] Blocked potential open-redirect attempt", { untrustedPath: params.redirect })
-    params.redirect = "/dashboard" // Fallback to safe path
+  if (params?.redirect) {
+    // Length + Structural Protection
+    if (
+      params.redirect.length > 2048 ||
+      params.redirect.includes("//") ||
+      !params.redirect.startsWith("/")
+    ) {
+      console.warn("[SECURITY] Blocked suspicious redirect attempt", { untrusted: params.redirect })
+      params.redirect = "/dashboard"
+    }
   }
 
-  const url = new URL(finalPath, request.url)
+  const url = new URL(path, request.url)
   if (params) {
     Object.entries(params).forEach(([key, value]) => url.searchParams.set(key, value))
   }
@@ -63,32 +75,54 @@ const safeRedirect = (request: NextRequest, path: string, params?: Record<string
 /* -------------------------------------------------------------------------- */
 
 export async function proxy(request: NextRequest) {
-  const { pathname } = request.nextUrl
-  let response = getInitialResponse(request)
+  /* 1. Normalization & Security Hardening */
+  const rawPath = request.nextUrl.pathname
+  let pathname = rawPath
 
-  /* 1. 🚨 Emergency Lockdown (Kill-Switch) */
+  try {
+    pathname = decodeURIComponent(rawPath).toLowerCase()
+  } catch {
+    console.warn("[SECURITY] Malformed URL encoding blocked", { rawPath })
+    return safeRedirect(request, "/unauthorized")
+  }
+
+  // Canonicalize path (remove trailing slashes)
+  pathname = pathname.replace(/\/+$/, "") || "/"
+
+  // Enforce Canonical Case/Structure
+  if (rawPath !== pathname && !isPublicRoute(pathname)) {
+    return safeRedirect(request, pathname)
+  }
+
+  let response = getInitialResponse()
+
+  /* 2. 🚨 Emergency Lockdown Hooks */
   if (process.env.AUTH_LOCKDOWN === "true" && pathname !== "/lockdown") {
     return safeRedirect(request, "/lockdown")
   }
 
-  /* 2. Fast Path: Public Routes */
+  if (process.env.FEATURE_FREEZE === "true" && pathname.startsWith("/dashboard")) {
+    return safeRedirect(request, "/maintenance")
+  }
+
+  /* 3. Public Fast-Path */
   if (isPublicRoute(pathname)) {
     return response
   }
 
-  /* 3. Environment Hardening */
+  /* 4. Environment Hardening */
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
   if (!supabaseUrl || !supabaseAnonKey) {
     if (process.env.NODE_ENV === "production") {
-      console.error("[Proxy] CRITICAL: Supabase environment variables missing in production")
-      throw new Error("Supabase environment variables missing")
+      console.error("[Proxy] CRITICAL: Environment variables missing")
+      throw new Error("Supabase credentials missing")
     }
     return response
   }
 
-  /* 4. Initialize Supabase Client (Edge-Compatible) */
+  /* 5. Client Initialization (Edge Optimized) */
   const supabase = createServerClient<Database>(supabaseUrl, supabaseAnonKey, {
     cookies: {
       getAll: () => request.cookies.getAll(),
@@ -99,58 +133,64 @@ export async function proxy(request: NextRequest) {
             httpOnly: true,
             secure: process.env.NODE_ENV === "production",
             sameSite: "lax",
-            maxAge: 60 * 60 * 2, // 2 hours
+            maxAge: 60 * 60 * 2, // 2h
           })
         })
       },
     },
   })
 
-  /* 5. 🚧 Graceful Degradation & Auth Enforcement */
+  /* 6. JWT Auth Verification (Stateless) */
   try {
     const { data: { user }, error: authError } = await supabase.auth.getUser()
 
     if (authError || !user) {
       if (isProtectedRoute(pathname)) {
-        console.info("[AUTH_BLOCKED] Unauthenticated access attempt", {
+        logAction("[AUTH_BLOCKED] Unauthenticated attempt", {
           path: pathname,
-          ip: request.headers.get("x-forwarded-for") || "unknown",
-          ua: request.headers.get("user-agent") || "none"
+          ip: request.headers.get("x-forwarded-for") || "unknown"
         })
         return safeRedirect(request, AUTH_REDIRECT, { redirect: pathname })
       }
       return response
     }
 
-    /* 6. Role-Based Access Control (Policies) */
-    const role = user.app_metadata?.role || user.user_metadata?.role || await (async () => {
-      const { data } = await supabase.from("users").select("role").eq("uid", user.id).single()
-      return data?.role
-    })()
+    /* 7. RBAC via JWT Claims (No DB Queries) */
+    const role = (user.app_metadata?.role as string) || (user.user_metadata?.role as string)
 
-    // Enforce isolation and policy
-    for (const [routePrefix, allowedRoles] of Object.entries(ROUTE_POLICIES)) {
-      if (pathname.startsWith(routePrefix)) {
-        if (!role || !allowedRoles.includes(role)) {
-          console.warn("[AUTH_BLOCKED] Unauthorized role", {
-            path: pathname,
-            userId: user.id,
-            role,
-            required: allowedRoles
-          })
-          return safeRedirect(request, "/unauthorized")
-        }
-        break
+    /**
+     * Future ABAC Attributes Hook:
+     * - department: user.app_metadata.department
+     * - tenant_id: user.app_metadata.org_id
+     */
+
+    // Find first matching policy (specificity sorted)
+    const matchingPolicy = ROUTE_POLICIES.find(p => pathname.startsWith(p.prefix))
+
+    // 🛡️ Safety Net: Deny if protected area has no mapped policy
+    if (isProtectedRoute(pathname) && !matchingPolicy) {
+      console.error("[SECURITY] Protected route missing specific policy", { pathname })
+      return safeRedirect(request, "/unauthorized")
+    }
+
+    // Role Enforcement
+    if (matchingPolicy) {
+      if (!role || !matchingPolicy.roles.includes(role)) {
+        logAction("[AUTH_BLOCKED] Unauthorized role", {
+          path: pathname,
+          userId: user.id,
+          role,
+          required: matchingPolicy.roles
+        })
+        return safeRedirect(request, "/unauthorized")
       }
     }
 
-    // Success audit trail
-    // console.debug("[AUTH_GRANTED]", { path: pathname, userId: user.id, role })
     return response
 
   } catch (error) {
-    /* 🛡️ Graceful Failure: If Supabase is down, don't crash the Edge runtime */
-    console.error("[Proxy] CRITICAL: Auth service failure", { error, path: pathname })
+    /* 🛡️ Graceful Degradation */
+    console.error("[Proxy] CRITICAL: Auth logic failure", { error, path: pathname })
     if (process.env.NODE_ENV === "production") {
       return safeRedirect(request, "/maintenance")
     }
@@ -164,9 +204,6 @@ export async function proxy(request: NextRequest) {
 
 export const config = {
   matcher: [
-    /*
-     * Exclude static files, images, and non-app routes
-     */
     "/((?!_next/static|_next/image|favicon.ico|api|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 }
