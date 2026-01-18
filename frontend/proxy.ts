@@ -190,6 +190,42 @@ export async function proxy(request: NextRequest) {
       return response
     }
 
+    // 🛡️ SINGLE SESSION ENFORCEMENT
+    if (isProtectedRoute(pathname)) {
+      const deviceSessionId = request.cookies.get("device_session_id")?.value;
+      const { data: { user: currentUser } } = await supabase.auth.getUser(); // Already fetched above as 'user'
+
+      if (user) {
+        // Fetch the active session ID from the users table
+        const { data: userData, error: userError } = await supabase
+          .from("users")
+          .select("active_session_id")
+          .eq("uid", user.id)
+          .single();
+
+        if (!userError && userData && userData.active_session_id) {
+          // If cookie is missing OR mismatch
+          if (!deviceSessionId || userData.active_session_id !== deviceSessionId) {
+            console.warn(`[Proxy] Session Invalid: DB=${userData.active_session_id} vs Cookie=${deviceSessionId}`);
+            logSecurityEvent("SESSION_INVALIDATED", { path: pathname, userId: user.id });
+
+            const redirectRes = safeRedirect(request, AUTH_REDIRECT, { params: { error: "Session Expired. You logged in on another device." } });
+
+            // CRITICAL: Delete BOTH the device session cookie AND the Supabase auth cookie
+            redirectRes.cookies.delete("device_session_id");
+
+            // Find and delete the auth token cookie dynamically
+            const authCookie = request.cookies.getAll().find(c => c.name.includes("auth-token"));
+            if (authCookie) {
+              redirectRes.cookies.delete(authCookie.name);
+            }
+
+            return redirectRes;
+          }
+        }
+      }
+    }
+
     // 🛡️ AUTHENTICATED REDIRECTS (e.g., /auth/login -> /dashboard)
     if (pathname.startsWith("/auth") || pathname === "/") {
       const role = (user.app_metadata?.role as string) || (user.user_metadata?.role as string) || "student"
