@@ -91,7 +91,9 @@ const injectSecurityHeaders = (response: NextResponse) => {
 /* -------------------------------------------------------------------------- */
 
 export async function proxy(request: NextRequest) {
+  console.log("[Proxy] Processing request:", request.nextUrl.pathname);
   const startTime = performance.now()
+
   const requestId = crypto.randomUUID()
 
   const logSecurityEvent = (event: string, data: Record<string, any>) => {
