@@ -58,7 +58,8 @@ const isProtectedRoute = (path: string) =>
  * 🔐 Controlled Redirect Safety
  * Sanitizes and validates internal redirect paths.
  */
-const safeRedirect = (request: NextRequest, path: string, params?: Record<string, string>) => {
+const safeRedirect = (request: NextRequest, path: string, options: { params?: Record<string, string>, cookiesToCopy?: NextResponse['cookies'] } = {}) => {
+  const { params, cookiesToCopy } = options
   if (params?.redirect) {
     if (params.redirect.length > 2048 || params.redirect.includes("//") || !params.redirect.startsWith("/")) {
       params.redirect = "/dashboard"
@@ -66,20 +67,32 @@ const safeRedirect = (request: NextRequest, path: string, params?: Record<string
   }
   const url = new URL(path, request.url)
   if (params) Object.entries(params).forEach(([key, value]) => url.searchParams.set(key, value))
-  return NextResponse.redirect(url)
+
+  const response = NextResponse.redirect(url)
+  if (cookiesToCopy) {
+    cookiesToCopy.getAll().forEach((cookie) => response.cookies.set(cookie))
+  }
+  return response
 }
 
 /**
  * 🛠️ Security Header Injection (WAF-lite)
  */
 const injectSecurityHeaders = (response: NextResponse) => {
+  const isProd = process.env.NODE_ENV === "production"
+
+  const csp = [
+    "frame-ancestors 'none'",
+    isProd ? "upgrade-insecure-requests" : ""
+  ].filter(Boolean).join("; ")
+
   const headers = {
     "Strict-Transport-Security": "max-age=31536000; includeSubDomains; preload",
     "X-Frame-Options": "DENY",
     "X-Content-Type-Options": "nosniff",
     "Referrer-Policy": "strict-origin-when-cross-origin",
     "X-Permitted-Cross-Domain-Policies": "none",
-    "Content-Security-Policy": "frame-ancestors 'none'; upgrade-insecure-requests;",
+    "Content-Security-Policy": csp,
     "Permissions-Policy": "camera=(), microphone=(), geolocation=(), interest-cohort=()",
   }
   Object.entries(headers).forEach(([key, value]) => response.headers.set(key, value))
@@ -91,7 +104,6 @@ const injectSecurityHeaders = (response: NextResponse) => {
 /* -------------------------------------------------------------------------- */
 
 export async function proxy(request: NextRequest) {
-  console.log("[Proxy] Processing request:", request.nextUrl.pathname);
   const startTime = performance.now()
 
   const requestId = crypto.randomUUID()
@@ -102,6 +114,7 @@ export async function proxy(request: NextRequest) {
   }
 
   /* 1. Normalization & Sanitization */
+
   const rawPath = request.nextUrl.pathname
   let pathname = rawPath
 
@@ -172,7 +185,7 @@ export async function proxy(request: NextRequest) {
     if (authError || !user) {
       if (isProtectedRoute(pathname)) {
         logSecurityEvent("AUTH_BLOCKED", { path: pathname, reason: "UNAUTHENTICATED" })
-        return safeRedirect(request, AUTH_REDIRECT, { redirect: pathname })
+        return safeRedirect(request, AUTH_REDIRECT, { params: { redirect: pathname }, cookiesToCopy: response.cookies })
       }
       return response
     }
@@ -181,7 +194,7 @@ export async function proxy(request: NextRequest) {
     if (pathname.startsWith("/auth") || pathname === "/") {
       const role = (user.app_metadata?.role as string) || (user.user_metadata?.role as string) || "student"
       const target = `/dashboard/${role}`
-      return safeRedirect(request, target)
+      return safeRedirect(request, target, { cookiesToCopy: response.cookies })
     }
 
     // 🛡️ PERMISSION CHECK (RBAC)
@@ -192,7 +205,7 @@ export async function proxy(request: NextRequest) {
 
       if (!matchingPolicy) {
         logSecurityEvent("POLICY_MISSING", { path: pathname, userId: user.id.slice(0, 8) })
-        return safeRedirect(request, "/unauthorized")
+        return safeRedirect(request, "/unauthorized", { cookiesToCopy: response.cookies })
       }
 
       if (!userPermissions.includes(matchingPolicy.permission)) {
@@ -200,7 +213,7 @@ export async function proxy(request: NextRequest) {
           path: pathname, reason: "PERMISSION_DENIED",
           userId: user.id.slice(0, 8), role, required: matchingPolicy.permission
         })
-        return safeRedirect(request, "/unauthorized")
+        return safeRedirect(request, "/unauthorized", { cookiesToCopy: response.cookies })
       }
     }
 

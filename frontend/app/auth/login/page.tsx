@@ -29,32 +29,25 @@ export default function LoginPage() {
     setIsLoading(true);
     setError(null);
 
-    const supabase = createClient();
+    const formData = new FormData();
+    formData.append("email", email);
+    formData.append("password", password);
 
     try {
-      const { error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
-      if (error) throw error;
+      const { login } = await import("@/app/auth/actions");
+      const result = await login(formData);
 
-      const { data: userData } = await supabase.auth.getUser();
-      const user = userData?.user;
-      if (!user) throw new Error("User not found after login.");
+      if (result.error) {
+        throw new Error(result.error);
+      }
 
-      setIsSuccess(true);
-      setIsLoading(false);
-
-      // Animation delay for success feedback
-      setTimeout(() => {
-        const role = user.user_metadata?.role;
-        const normalizedRole = role?.toLowerCase();
-
-        if (normalizedRole === "admin") router.push("/dashboard/admin");
-        else if (normalizedRole === "faculty")
-          router.push("/dashboard/faculty");
-        else router.push("/dashboard/student");
-      }, 1500);
+      if (result.success && result.redirectUrl) {
+        setIsSuccess(true);
+        setIsLoading(false);
+        // Use hard navigation to ensure cookies are sent to middleware
+        console.log("LOGIN SUCCESS. Cookies:", document.cookie);
+        window.location.href = result.redirectUrl;
+      }
     } catch (err: unknown) {
       const errorMessage =
         err instanceof Error ? err.message : "An error occurred during login";
