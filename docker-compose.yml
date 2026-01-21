@@ -5,6 +5,25 @@ networks:
     driver: bridge
 
 services:
+  # Secure Docker Socket Proxy
+  # Security: This service restricts access to the Docker API
+  docker-socket-proxy:
+    image: tecnativa/docker-socket-proxy:latest
+    container_name: docker-socket-proxy
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    environment:
+      # Whitelist only necessary operations
+      - CONTAINERS=1 # List, inspect
+      - POST=1 # Create containers
+      - EXEC=1 # Run commands
+      - IMAGES=1 # Pull/List images
+      - NETWORKS=0 # Prevent network manipulation
+      - VOLUMES=0 # Prevent volume manipulation
+      - INFO=1
+    networks:
+      - app_net
   redis:
     image: redis:alpine
     restart: unless-stopped
@@ -36,8 +55,10 @@ services:
       - WORKSPACE_DIR=/app/workspace
       - CORS_ORIGIN=${CORS_ORIGIN:-*}
       - DOCKER_API_VERSION=1.44
+      # Connect to proxy via TCP instead of mounting socket
+      - DOCKER_HOST=tcp://docker-socket-proxy:2375
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:rw
+      # - /var/run/docker.sock:/var/run/docker.sock:rw # REMOVED: Insecure
       - workspace_data:/app/workspace
     restart: unless-stopped
     networks:
@@ -93,6 +114,8 @@ services:
     depends_on:
       backend:
         condition: service_healthy
+      redis:
+        condition: service_started
     restart: unless-stopped
     networks:
       - app_net
