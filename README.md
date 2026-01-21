@@ -43,6 +43,21 @@
 
 ---
 
+## 🗄️ Database Setup (Supabase)
+
+CodeGuard relies on a robust PostgreSQL schema protected by **44 Row Level Security (RLS) policies**.
+
+1.  **Locate the Schema**: The initialization script is located at [`database/init_schema.sql`](database/init_schema.sql).
+2.  **Initialize Database**:
+    - Go to your **Supabase Dashboard** → **SQL Editor**.
+    - Copy & paste the contents of `database/init_schema.sql`.
+    - Click **Run**.
+3.  **Structure**:
+    - **Tables**: Users, Practicals, Submissions, Test Cases, Grades, etc.
+    - **Security**: Granular RLS policies ensure strict data isolation between Students, Faculty, and Admins.
+
+---
+
 ## 🛠️ Instant Setup (Docker Compose)
 
 The easiest way to run CodeGuard is using Docker Compose. This brings up the frontend, backend, Redis, and all language runtime environments automatically.
@@ -54,18 +69,32 @@ The easiest way to run CodeGuard is using Docker Compose. This brings up the fro
 ### 1. Configure Environment
 Create a `.env` file in the root directory:
 ```env
-# Core
+# --- Application ---
+# Frontend URL (for CORS)
+CORS_ORIGIN=http://localhost:3000
+# Backend API URL (used by Frontend)
 NEXT_PUBLIC_API_URL=http://localhost:5002
+
+# --- Supabase & Auth ---
 NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
 SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
+# JWT Secret for internal signing
+JWT_SECRET=super_secret_value
 
-# Docker Execution
+# --- AI Integration (Gemini) ---
+AI_API_KEY=your_gemini_api_key
+AI_PROVIDER=gemini
+AI_MODEL=gemini-1.5-flash
+
+# --- Infrastructure ---
+REDIS_URL=redis://redis:6379
+
+# --- Docker Execution Limits ---
 DOCKER_MEMORY_LIMIT=128m
 DOCKER_CPU_LIMIT=0.5
 DOCKER_POOL_SIZE_PYTHON=2
-DOCKER_POOL_SIZE_CPP=2
-EXECUTION_TIMEOUT=15 # Seconds before an infinite loop is killed
+EXECUTION_TIMEOUT=15
 ```
 
 ### 2. Launch

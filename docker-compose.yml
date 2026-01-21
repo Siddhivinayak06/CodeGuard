@@ -26,8 +26,8 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     image: ${BACKEND_IMAGE:-codeguard-backend}:${BACKEND_TAG:-latest}
-    ports:
-      - "${BACKEND_PORT:-5002}:5002"
+    # ports:
+    #   - "${BACKEND_PORT:-5002}:5002"
     env_file:
       - .env
     environment:
@@ -78,8 +78,8 @@ services:
         NEXT_PUBLIC_DEV_SUPABASE_REDIRECT_URL: ${NEXT_PUBLIC_DEV_SUPABASE_REDIRECT_URL}
         SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY}
     image: ${FRONTEND_IMAGE:-codeguard-frontend}:${FRONTEND_TAG:-latest}
-    ports:
-      - "${FRONTEND_PORT:-3000}:3000"
+    # ports:
+    #   - "${FRONTEND_PORT:-3000}:3000"
     env_file:
       - .env
     environment:

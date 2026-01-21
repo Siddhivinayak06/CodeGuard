@@ -53,13 +53,10 @@ export default function RegisterPage() {
     setIsLoading(true);
 
     try {
-      const { error: signUpError } = await supabase.auth.signUp({
+      const { data, error: signUpError } = await supabase.auth.signUp({
         email: formData.email,
         password: formData.password,
         options: {
-          emailRedirectTo:
-            process.env.NEXT_PUBLIC_DEV_SUPABASE_REDIRECT_URL ||
-            `${window.location.origin}/auth/verify-email`,
           data: {
             name: formData.name,
             role: formData.role,
@@ -69,7 +66,17 @@ export default function RegisterPage() {
 
       if (signUpError) throw signUpError;
 
-      router.push("/auth/verify-email");
+      // If "Confirm email" is disabled in Supabase, we get a session immediately.
+      if (data.session) {
+        // Redirect based on role
+        if (formData.role === "admin") router.push("/dashboard/admin");
+        else if (formData.role === "faculty") router.push("/dashboard/faculty");
+        else router.push("/dashboard/student");
+      } else {
+        // Fallback if Supabase still requires verification for some reason
+        // or if auto-confirm is NOT disabled.
+        setError("Please check your email to verify your account.");
+      }
     } catch (err: unknown) {
       setError(
         err instanceof Error ? err.message : "An unexpected error occurred",
@@ -357,11 +364,10 @@ export default function RegisterPage() {
                                   handleInputChange("role", option.value);
                                   setRoleMenuOpen(false);
                                 }}
-                                className={`w-full px-4 py-3 flex items-center gap-3 text-left hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-sm font-semibold ${
-                                  formData.role === option.value
+                                className={`w-full px-4 py-3 flex items-center gap-3 text-left hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-sm font-semibold ${formData.role === option.value
                                     ? "bg-indigo-50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-400"
                                     : "text-gray-700 dark:text-gray-300"
-                                }`}
+                                  }`}
                               >
                                 {option.icon}
                                 {option.label}

@@ -2,14 +2,6 @@ import { createServerClient } from "@supabase/ssr"
 import { NextResponse, type NextRequest } from "next/server"
 import { Database } from "@/lib/supabase/database.types"
 
-/**
- * 🔒 WORLD-CLASS SECURITY GATE (REFACTORED):
- * - This Proxy is a hardened network-level boundary.
- * - Enforces RFC 7519 JWT security and RFC 7231 header standards.
- * - Implements a Zero-Trust ABAC-Ready (Attribute-Based Access Control) engine.
- * - Injects Enterprise Security Headers (WAF-lite).
- * - Provides SIEM-ready structured telemetry and traceability.
- */
 
 /* -------------------------------------------------------------------------- */
 /*                                CONFIGURATION                               */
