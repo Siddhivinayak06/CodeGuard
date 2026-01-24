@@ -62,6 +62,14 @@ pnpm-debug.log*
 *.key
 
 # ----------------------
+# Supabase
+# ----------------------
+supabase/.temp/
+supabase/.branches/
+supabase/functions/*/deno.lock
+
+
+# ----------------------
 # OS & Editor files
 # ----------------------
 .DS_Store
