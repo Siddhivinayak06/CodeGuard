@@ -1,17 +1,16 @@
 import { NextResponse } from "next/server";
-import { createClient as createServerClient } from "@/lib/supabase/server";
-import { supabaseAdmin } from "@/lib/supabase/service";
+import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
 /** GET: get assigned practicals for the current student */
 export async function GET() {
   try {
-    const supabaseServerClient = await createServerClient();
+    const supabase = await createClient();
 
     // Get current user
     const { data: userData, error: userErr } =
-      await supabaseServerClient.auth.getUser();
+      await supabase.auth.getUser();
     if (userErr || !userData?.user) {
       return NextResponse.json(
         { success: false, error: "Unauthorized" },
@@ -22,7 +21,7 @@ export async function GET() {
     const userId = userData.user.id;
 
     // Verify user is a student
-    const { data: userRole, error: roleError } = await supabaseAdmin
+    const { data: userRole, error: roleError } = await supabase
       .from("users")
       .select("role")
       .eq("uid", userId)
@@ -36,7 +35,7 @@ export async function GET() {
     }
 
     // Fetch personalized practicals
-    const { data, error } = await supabaseAdmin
+    const { data, error } = await supabase
       .from("student_practicals")
       .select(
         `

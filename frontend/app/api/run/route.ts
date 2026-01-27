@@ -1,9 +1,10 @@
 // /app/api/run/route.ts
 import { NextResponse } from "next/server";
-import { supabaseAdmin } from "@/lib/supabase/service";
+import { createClient } from "@/lib/supabase/server";
 
 export async function POST(req: Request) {
   try {
+    const supabase = await createClient();
     const body = await req.json();
     const {
       code,
@@ -36,7 +37,7 @@ export async function POST(req: Request) {
     let levelId: string | null = null;
 
     if (level) {
-      const { data: levelData } = await supabaseAdmin
+      const { data: levelData } = await supabase
         .from("practical_levels")
         .select("id, max_marks")
         .eq("practical_id", pid)
@@ -44,13 +45,13 @@ export async function POST(req: Request) {
         .single();
 
       if (levelData) {
-        levelId = levelData.id;
+        levelId = String(levelData.id);
         maxMarks = levelData.max_marks || 10;
       }
     }
 
     // Fetch DB test cases (filtered by level if applicable)
-    let query = supabaseAdmin
+    let query = supabase
       .from("test_cases")
       .select("*")
       .eq("practical_id", pid)
@@ -60,7 +61,7 @@ export async function POST(req: Request) {
     // If levelId exists, only get test cases for that level.
     // If no levelId (single level mode), only get test cases where level_id IS NULL.
     if (levelId) {
-      query = query.eq("level_id", levelId);
+      query = query.eq("level_id", Number(levelId));
     } else {
       query = query.is("level_id", null);
     }
@@ -71,7 +72,7 @@ export async function POST(req: Request) {
     if (tcErr) console.error("Failed to fetch test cases:", tcErr);
 
     // Fetch reference code - Prefer matching language, otherwise fallback to primary
-    let { data: refsData } = await supabaseAdmin
+    let { data: refsData } = await supabase
       .from("reference_codes")
       .select("id, language, code, is_primary, created_at")
       .eq("practical_id", pid)
@@ -80,7 +81,7 @@ export async function POST(req: Request) {
 
     // If no language-specific match, fallback to primary/latest
     if (!refsData || refsData.length === 0) {
-      const { data: fallbackData } = await supabaseAdmin
+      const { data: fallbackData } = await supabase
         .from("reference_codes")
         .select("id, language, code, is_primary, created_at")
         .eq("practical_id", pid)
@@ -317,7 +318,7 @@ export async function POST(req: Request) {
       (r: any) => !String(r.test_case_id).startsWith("user-"),
     );
 
-    const { data: practicalData } = await supabaseAdmin
+    const { data: practicalData } = await supabase
       .from("practicals")
       .select("deadline")
       .eq("id", pid)
@@ -339,7 +340,7 @@ export async function POST(req: Request) {
       let shouldUpdate = true;
       let studentId = null;
       try {
-        const { data: currentSub } = await supabaseAdmin
+        const { data: currentSub } = await supabase
           .from("submissions")
           .select("marks_obtained, student_id")
           .eq("id", submissionId)
@@ -358,7 +359,7 @@ export async function POST(req: Request) {
       if (globalDeadline && studentId) {
         try {
           // Check for individual assignment deadline override
-          const { data: assignment } = await supabaseAdmin
+          const { data: assignment } = await supabase
             .from("student_practicals")
             .select("assigned_deadline")
             .eq("practical_id", pid)
@@ -387,7 +388,7 @@ export async function POST(req: Request) {
 
       // Re-check shouldUpdate with FINAL marks
       try {
-        const { data: currentSub } = await supabaseAdmin
+        const { data: currentSub } = await supabase
           .from("submissions")
           .select("marks_obtained")
           .eq("id", submissionId)
@@ -403,14 +404,14 @@ export async function POST(req: Request) {
       if (shouldUpdate) {
         try {
           // Update submission with new marks, status, latest code, and detailed execution results JSON
-          await supabaseAdmin
+          await supabase
             .from("submissions")
             .update({
               status: newStatus,
               marks_obtained: marksObtained,
               code,
               language: reqLangNorm || lang,
-              test_cases_passed: passed, // Save test cases passed count
+              test_cases_passed: String(passed), // Save test cases passed count
               output:
                 predefinedResults.length > 0 ? predefinedResults[0].stdout : "", // Save first test case output as summary
               execution_details: {

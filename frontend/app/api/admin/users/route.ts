@@ -1,22 +1,29 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient as createServerClient } from "@/lib/supabase/server";
+import { createClient } from "@/lib/supabase/server";
 import { supabaseAdmin } from "@/lib/supabase/service";
 
 export const dynamic = "force-dynamic";
 
 // Helper: check if current user is admin
-async function isAdminUsingCookieClient(): Promise<boolean> {
+async function isAdminUser(supabase: any): Promise<boolean> {
   try {
-    const supabase = await createServerClient();
-    const { data: userData } = await (supabase as any).auth.getUser();
-    if (!userData?.user) return false;
+    const { data: userData } = await supabase.auth.getUser();
+    if (!userData?.user) {
+      console.log("Admin Check: No auth user found");
+      return false;
+    }
 
     const user = userData.user;
-    const { data: row } = await supabaseAdmin
+    console.log("Admin Check: Auth user found:", user.id);
+
+    const { data: row, error } = await supabase
       .from("users")
       .select("role")
       .eq("uid", user.id)
       .maybeSingle();
+
+    if (error) console.error("Admin Check: DB error:", error);
+    console.log("Admin Check: DB row:", row);
 
     return row?.role === "admin";
   } catch (err) {
@@ -29,7 +36,8 @@ async function isAdminUsingCookieClient(): Promise<boolean> {
 // GET: list all users
 // ---------------------------
 export async function GET() {
-  const isAdmin = await isAdminUsingCookieClient();
+  const supabase = await createClient();
+  const isAdmin = await isAdminUser(supabase);
   if (!isAdmin)
     return NextResponse.json(
       { success: false, error: "Forbidden" },
@@ -63,7 +71,8 @@ export async function GET() {
 // POST: create new user(s) - supports single and bulk creation
 // ---------------------------
 export async function POST(req: NextRequest) {
-  const isAdmin = await isAdminUsingCookieClient();
+  const supabase = await createClient();
+  const isAdmin = await isAdminUser(supabase);
   if (!isAdmin)
     return NextResponse.json(
       { success: false, error: "Forbidden" },
@@ -112,6 +121,7 @@ async function handleSingleCreate(body: any) {
       email,
       password,
       user_metadata: { role, name },
+      email_confirm: true, // Auto-confirm for local dev
     });
   if (createErr) throw createErr;
 
@@ -127,13 +137,13 @@ async function handleSingleCreate(body: any) {
     uid,
     name: name ?? email.split("@")[0],
     email,
-    role,
+    role: role as "student" | "faculty" | "admin",
     roll_no,
     semester,
   };
   const { data: inserted, error: insertErr } = await supabaseAdmin
     .from("users")
-    .insert([profile])
+    .insert(profile)
     .select()
     .single();
   if (insertErr) throw insertErr;
@@ -185,6 +195,7 @@ async function handleBulkCreate(users: any[]) {
           email,
           password,
           user_metadata: { role, name },
+          email_confirm: true,
         });
 
       if (createErr) {
@@ -211,14 +222,14 @@ async function handleBulkCreate(users: any[]) {
         uid,
         name: name ?? email.split("@")[0],
         email,
-        role,
+        role: role as "student" | "faculty" | "admin",
         roll_no,
         semester,
       };
 
       const { data: inserted, error: insertErr } = await supabaseAdmin
         .from("users")
-        .insert([profile])
+        .insert(profile)
         .select()
         .single();
 
@@ -262,7 +273,3 @@ async function handleBulkCreate(users: any[]) {
     { status: 201 },
   );
 }
-
-// ---------------------------
-// PUT: update user by ID
-// ---------------------------

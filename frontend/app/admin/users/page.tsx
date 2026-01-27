@@ -139,6 +139,7 @@ export default function AdminUsers() {
     id: "",
     name: "",
     email: "",
+    password: "", // Add password field
     role: "student",
     roll_no: "",
     semester: "",
@@ -319,6 +320,11 @@ export default function AdminUsers() {
         email: form.email,
         role: form.role,
       };
+      // Only send password if it's provided (required for create, optional for update if logic allows, but here we enforce simplified logic)
+      if (!isEditing && form.password) {
+        payload.password = form.password;
+      }
+
       if (form.role === "student") {
         payload.roll_no = form.roll_no;
         payload.semester = form.semester;
@@ -424,6 +430,7 @@ export default function AdminUsers() {
                   id: "",
                   name: "",
                   email: "",
+                  password: "",
                   role: "student",
                   roll_no: "",
                   semester: "",
@@ -619,6 +626,7 @@ export default function AdminUsers() {
                               id: u.uid,
                               name: u.name ?? "",
                               email: u.email ?? "",
+                              password: "", // Reset password on edit
                               role: u.role ?? "student",
                               roll_no: u.roll_no ?? "",
                               semester: u.semester ?? "",
@@ -640,20 +648,22 @@ export default function AdminUsers() {
                         </button>
                       </div>
                     </div>
-                    {selectedRole === "student" && (u.roll_no || u.semester) && (
-                      <div className="mt-3 pt-3 border-t border-gray-100 dark:border-gray-700/50 flex flex-wrap gap-2">
-                        {u.roll_no && (
-                          <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded-lg">
-                            <Hash className="w-3 h-3" /> {u.roll_no}
-                          </span>
-                        )}
-                        {u.semester && (
-                          <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400 rounded-lg">
-                            <Calendar className="w-3 h-3" /> Sem {u.semester}
-                          </span>
-                        )}
-                      </div>
-                    )}
+                    {
+                      selectedRole === "student" && (u.roll_no || u.semester) && (
+                        <div className="mt-3 pt-3 border-t border-gray-100 dark:border-gray-700/50 flex flex-wrap gap-2">
+                          {u.roll_no && (
+                            <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded-lg">
+                              <Hash className="w-3 h-3" /> {u.roll_no}
+                            </span>
+                          )}
+                          {u.semester && (
+                            <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400 rounded-lg">
+                              <Calendar className="w-3 h-3" /> Sem {u.semester}
+                            </span>
+                          )}
+                        </div>
+                      )
+                    }
                   </div>
                 );
               })}
@@ -744,6 +754,7 @@ export default function AdminUsers() {
                                   id: u.uid,
                                   name: u.name ?? "",
                                   email: u.email ?? "",
+                                  password: "", // Reset password on edit
                                   role: u.role ?? "student",
                                   roll_no: u.roll_no ?? "",
                                   semester: u.semester ?? "",
@@ -778,320 +789,339 @@ export default function AdminUsers() {
       </div>
 
       {/* Modal */}
-      {open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div
-            className="absolute inset-0 bg-black/50 backdrop-blur-sm"
-            onClick={() => !busy && setOpen(false)}
-          />
-          <div className="relative w-full max-w-lg glass-card-premium rounded-3xl p-8 shadow-2xl animate-scaleIn">
-            <div className="flex items-center justify-between mb-6">
-              <div className="flex items-center gap-3">
-                <div className="p-2 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-500">
-                  <Users className="w-5 h-5 text-white" />
+      {
+        open && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div
+              className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+              onClick={() => !busy && setOpen(false)}
+            />
+            <div className="relative w-full max-w-lg glass-card-premium rounded-3xl p-8 shadow-2xl animate-scaleIn">
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-500">
+                    <Users className="w-5 h-5 text-white" />
+                  </div>
+                  <h3 className="text-xl font-bold text-gray-900 dark:text-white">
+                    {isEditing ? "Edit User" : "Add New User"}
+                  </h3>
                 </div>
-                <h3 className="text-xl font-bold text-gray-900 dark:text-white">
-                  {isEditing ? "Edit User" : "Add New User"}
-                </h3>
-              </div>
-              <button
-                onClick={() => setOpen(false)}
-                disabled={busy}
-                className="p-2 rounded-lg text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="space-y-4">
-              <div className="space-y-1.5">
-                <label className="text-xs font-medium text-gray-700 dark:text-gray-300">
-                  Full Name
-                </label>
-                <input
-                  className="input-premium"
-                  value={form.name}
-                  onChange={(e) => handleChange("name", e.target.value)}
-                  placeholder="Enter full name"
-                />
+                <button
+                  onClick={() => setOpen(false)}
+                  disabled={busy}
+                  className="p-2 rounded-lg text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
               </div>
 
-              <div className="space-y-1.5">
-                <label className="text-xs font-medium text-gray-700 dark:text-gray-300">
-                  Email *
-                </label>
-                <input
-                  className="input-premium"
-                  type="email"
-                  value={form.email}
-                  onChange={(e) => handleChange("email", e.target.value)}
-                  placeholder="Enter email"
-                  disabled={isEditing}
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-xs font-medium text-gray-700 dark:text-gray-300">
-                  Role
-                </label>
-                <div className="relative">
-                  <select
-                    className="input-premium appearance-none pr-10 cursor-pointer"
-                    value={form.role}
-                    onChange={(e) => handleChange("role", e.target.value)}
-                  >
-                    <option value="student">Student</option>
-                    <option value="faculty">Faculty</option>
-                    <option value="admin">Admin</option>
-                  </select>
-                  <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+              <div className="space-y-4">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-gray-700 dark:text-gray-300">
+                    Full Name
+                  </label>
+                  <input
+                    className="input-premium"
+                    value={form.name}
+                    onChange={(e) => handleChange("name", e.target.value)}
+                    placeholder="Enter full name"
+                  />
                 </div>
-              </div>
 
-              {form.role === "student" && (
-                <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-gray-700 dark:text-gray-300">
+                    Email *
+                  </label>
+                  <input
+                    className="input-premium"
+                    type="email"
+                    value={form.email}
+                    onChange={(e) => handleChange("email", e.target.value)}
+                    placeholder="Enter email"
+                    disabled={isEditing}
+                  />
+                </div>
+
+                {!isEditing && (
                   <div className="space-y-1.5">
                     <label className="text-xs font-medium text-gray-700 dark:text-gray-300">
-                      Roll No.
+                      Password *
                     </label>
                     <input
                       className="input-premium"
-                      value={form.roll_no}
-                      onChange={(e) => handleChange("roll_no", e.target.value)}
-                      placeholder="e.g., 2024001"
+                      type="password"
+                      value={form.password}
+                      onChange={(e) => handleChange("password", e.target.value)}
+                      placeholder="Enter password"
                     />
                   </div>
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-medium text-gray-700 dark:text-gray-300">
-                      Semester
+                )}
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-gray-700 dark:text-gray-300">
+                    Role
+                  </label>
+                  <div className="relative">
+                    <select
+                      className="input-premium appearance-none pr-10 cursor-pointer"
+                      value={form.role}
+                      onChange={(e) => handleChange("role", e.target.value)}
+                    >
+                      <option value="student">Student</option>
+                      <option value="faculty">Faculty</option>
+                      <option value="admin">Admin</option>
+                    </select>
+                    <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                  </div>
+                </div>
+
+                {form.role === "student" && (
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-medium text-gray-700 dark:text-gray-300">
+                        Roll No.
+                      </label>
+                      <input
+                        className="input-premium"
+                        value={form.roll_no}
+                        onChange={(e) => handleChange("roll_no", e.target.value)}
+                        placeholder="e.g., 2024001"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-medium text-gray-700 dark:text-gray-300">
+                        Semester
+                      </label>
+                      <input
+                        className="input-premium"
+                        value={form.semester}
+                        onChange={(e) => handleChange("semester", e.target.value)}
+                        placeholder="e.g., 1"
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex justify-end gap-3 mt-6">
+                <button
+                  onClick={() => setOpen(false)}
+                  className="px-5 py-2.5 rounded-xl bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 font-medium hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+                  disabled={busy}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => handleSave(form)}
+                  className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-medium shadow-lg shadow-indigo-500/25 hover:shadow-indigo-500/40 transition-all"
+                  disabled={busy}
+                >
+                  {busy ? "Saving..." : "Save"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )
+      }
+
+      {/* Bulk Add Modal */}
+      {
+        bulkOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div
+              className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+              onClick={() => !bulkProcessing && setBulkOpen(false)}
+            />
+            <div className="relative w-full max-w-3xl glass-card-premium rounded-3xl p-8 shadow-2xl animate-scaleIn max-h-[90vh] overflow-y-auto">
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-500">
+                    <Upload className="w-5 h-5 text-white" />
+                  </div>
+                  <h3 className="text-xl font-bold text-gray-900 dark:text-white">
+                    Bulk Add Users
+                  </h3>
+                </div>
+                <button
+                  onClick={() => setBulkOpen(false)}
+                  disabled={bulkProcessing}
+                  className="p-2 rounded-lg text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {bulkResults ? (
+                /* Results View */
+                <div className="space-y-4">
+                  <div className="flex items-center gap-4 p-4 rounded-xl bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-900/20 dark:to-purple-900/20">
+                    <div className="text-center">
+                      <p className="text-2xl font-bold text-gray-900 dark:text-white">{bulkResults.summary?.total || 0}</p>
+                      <p className="text-xs text-gray-500">Total</p>
+                    </div>
+                    <div className="text-center">
+                      <p className="text-2xl font-bold text-emerald-600">{bulkResults.summary?.success || 0}</p>
+                      <p className="text-xs text-gray-500">Success</p>
+                    </div>
+                    <div className="text-center">
+                      <p className="text-2xl font-bold text-red-600">{bulkResults.summary?.failed || 0}</p>
+                      <p className="text-xs text-gray-500">Failed</p>
+                    </div>
+                  </div>
+
+                  <div className="max-h-60 overflow-y-auto space-y-2">
+                    {bulkResults.results?.map((r: any, i: number) => (
+                      <div key={i} className={`flex items-center gap-3 p-3 rounded-lg ${r.success ? 'bg-emerald-50 dark:bg-emerald-900/20' : 'bg-red-50 dark:bg-red-900/20'}`}>
+                        {r.success ? <CheckCircle2 className="w-4 h-4 text-emerald-600" /> : <XCircle className="w-4 h-4 text-red-600" />}
+                        <span className="text-sm font-medium">{r.email}</span>
+                        {!r.success && <span className="text-xs text-red-600">{r.error}</span>}
+                      </div>
+                    ))}
+                  </div>
+
+                  <button
+                    onClick={() => {
+                      setBulkResults(null);
+                      setBulkOpen(false);
+                      loadUsers();
+                    }}
+                    className="w-full px-5 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-medium"
+                  >
+                    Done
+                  </button>
+                </div>
+              ) : (
+                /* Input View */
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                      Import CSV or Excel File
                     </label>
-                    <input
-                      className="input-premium"
-                      value={form.semester}
-                      onChange={(e) => handleChange("semester", e.target.value)}
-                      placeholder="e.g., 1"
-                    />
+                    <p className="text-xs text-gray-500 mb-3">
+                      File must have columns: name, email, password, role, roll_no, semester
+                    </p>
+
+                    {/* File Upload Area */}
+                    <label
+                      className="flex flex-col items-center justify-center w-full h-40 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-2xl cursor-pointer bg-gray-50 dark:bg-gray-800/50 hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-all"
+                      onDragOver={(e) => { e.preventDefault(); e.currentTarget.classList.add('border-indigo-500', 'bg-indigo-50', 'dark:bg-indigo-900/20'); }}
+                      onDragLeave={(e) => { e.preventDefault(); e.currentTarget.classList.remove('border-indigo-500', 'bg-indigo-50', 'dark:bg-indigo-900/20'); }}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        e.currentTarget.classList.remove('border-indigo-500', 'bg-indigo-50', 'dark:bg-indigo-900/20');
+                        const file = e.dataTransfer.files[0];
+                        if (file) handleFileUpload(file);
+                      }}
+                    >
+                      <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                        <div className="p-3 rounded-full bg-gradient-to-br from-indigo-500 to-purple-500 mb-3">
+                          <Upload className="w-6 h-6 text-white" />
+                        </div>
+                        <p className="mb-2 text-sm text-gray-700 dark:text-gray-300">
+                          <span className="font-semibold">Click to upload</span> or drag and drop
+                        </p>
+                        <p className="text-xs text-gray-500">CSV or Excel file (.csv, .xlsx)</p>
+                        {bulkCsv && (
+                          <p className="mt-2 text-xs font-medium text-indigo-600 dark:text-indigo-400">
+                            📄 {bulkCsv}
+                          </p>
+                        )}
+                      </div>
+                      <input
+                        type="file"
+                        className="hidden"
+                        accept=".csv,.xlsx,.xls"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) handleFileUpload(file);
+                        }}
+                      />
+                    </label>
+                  </div>
+
+                  {bulkUsers.length > 0 && (
+                    <div>
+                      <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        Preview ({bulkUsers.length} users)
+                      </p>
+                      <div className="max-h-48 overflow-y-auto rounded-xl border border-gray-200 dark:border-gray-700">
+                        <table className="w-full text-sm">
+                          <thead className="bg-gray-50 dark:bg-gray-800">
+                            <tr>
+                              <th className="px-3 py-2 text-left">Name</th>
+                              <th className="px-3 py-2 text-left">Email</th>
+                              <th className="px-3 py-2 text-left">Role</th>
+                              <th className="px-3 py-2 text-left">Status</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+                            {bulkUsers.map((u, i) => (
+                              <tr key={i}>
+                                <td className="px-3 py-2">{u.name || '-'}</td>
+                                <td className="px-3 py-2">{u.email || '-'}</td>
+                                <td className="px-3 py-2">
+                                  <span className={`px-2 py-0.5 text-xs rounded ${u.role === 'admin' ? 'bg-pink-100 text-pink-700' :
+                                    u.role === 'faculty' ? 'bg-purple-100 text-purple-700' :
+                                      'bg-blue-100 text-blue-700'
+                                    }`}>
+                                    {u.role}
+                                  </span>
+                                </td>
+                                <td className="px-3 py-2">
+                                  {u.email && u.password ? (
+                                    <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                                  ) : (
+                                    <XCircle className="w-4 h-4 text-red-500" />
+                                  )}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="flex justify-end gap-3">
+                    <button
+                      onClick={() => setBulkOpen(false)}
+                      className="px-5 py-2.5 rounded-xl bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 font-medium"
+                      disabled={bulkProcessing}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={async () => {
+                        if (bulkUsers.length === 0) return;
+                        setBulkProcessing(true);
+                        try {
+                          const res = await fetch('/api/admin/users', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ bulk: true, users: bulkUsers }),
+                          });
+                          const data = await res.json();
+                          setBulkResults(data);
+                        } catch (err) {
+                          console.error('Bulk add failed:', err);
+                          alert('Bulk add failed!');
+                        } finally {
+                          setBulkProcessing(false);
+                        }
+                      }}
+                      disabled={bulkProcessing || bulkUsers.length === 0}
+                      className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-medium shadow-lg disabled:opacity-50 flex items-center gap-2"
+                    >
+                      {bulkProcessing && <Loader2 className="w-4 h-4 animate-spin" />}
+                      {bulkProcessing ? 'Processing...' : `Create ${bulkUsers.length} Users`}
+                    </button>
                   </div>
                 </div>
               )}
             </div>
-
-            <div className="flex justify-end gap-3 mt-6">
-              <button
-                onClick={() => setOpen(false)}
-                className="px-5 py-2.5 rounded-xl bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 font-medium hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
-                disabled={busy}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => handleSave(form)}
-                className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-medium shadow-lg shadow-indigo-500/25 hover:shadow-indigo-500/40 transition-all"
-                disabled={busy}
-              >
-                {busy ? "Saving..." : "Save"}
-              </button>
-            </div>
           </div>
-        </div>
-      )}
-
-      {/* Bulk Add Modal */}
-      {bulkOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div
-            className="absolute inset-0 bg-black/50 backdrop-blur-sm"
-            onClick={() => !bulkProcessing && setBulkOpen(false)}
-          />
-          <div className="relative w-full max-w-3xl glass-card-premium rounded-3xl p-8 shadow-2xl animate-scaleIn max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between mb-6">
-              <div className="flex items-center gap-3">
-                <div className="p-2 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-500">
-                  <Upload className="w-5 h-5 text-white" />
-                </div>
-                <h3 className="text-xl font-bold text-gray-900 dark:text-white">
-                  Bulk Add Users
-                </h3>
-              </div>
-              <button
-                onClick={() => setBulkOpen(false)}
-                disabled={bulkProcessing}
-                className="p-2 rounded-lg text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            {bulkResults ? (
-              /* Results View */
-              <div className="space-y-4">
-                <div className="flex items-center gap-4 p-4 rounded-xl bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-900/20 dark:to-purple-900/20">
-                  <div className="text-center">
-                    <p className="text-2xl font-bold text-gray-900 dark:text-white">{bulkResults.summary?.total || 0}</p>
-                    <p className="text-xs text-gray-500">Total</p>
-                  </div>
-                  <div className="text-center">
-                    <p className="text-2xl font-bold text-emerald-600">{bulkResults.summary?.success || 0}</p>
-                    <p className="text-xs text-gray-500">Success</p>
-                  </div>
-                  <div className="text-center">
-                    <p className="text-2xl font-bold text-red-600">{bulkResults.summary?.failed || 0}</p>
-                    <p className="text-xs text-gray-500">Failed</p>
-                  </div>
-                </div>
-
-                <div className="max-h-60 overflow-y-auto space-y-2">
-                  {bulkResults.results?.map((r: any, i: number) => (
-                    <div key={i} className={`flex items-center gap-3 p-3 rounded-lg ${r.success ? 'bg-emerald-50 dark:bg-emerald-900/20' : 'bg-red-50 dark:bg-red-900/20'}`}>
-                      {r.success ? <CheckCircle2 className="w-4 h-4 text-emerald-600" /> : <XCircle className="w-4 h-4 text-red-600" />}
-                      <span className="text-sm font-medium">{r.email}</span>
-                      {!r.success && <span className="text-xs text-red-600">{r.error}</span>}
-                    </div>
-                  ))}
-                </div>
-
-                <button
-                  onClick={() => {
-                    setBulkResults(null);
-                    setBulkOpen(false);
-                    loadUsers();
-                  }}
-                  className="w-full px-5 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-medium"
-                >
-                  Done
-                </button>
-              </div>
-            ) : (
-              /* Input View */
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Import CSV or Excel File
-                  </label>
-                  <p className="text-xs text-gray-500 mb-3">
-                    File must have columns: name, email, password, role, roll_no, semester
-                  </p>
-
-                  {/* File Upload Area */}
-                  <label
-                    className="flex flex-col items-center justify-center w-full h-40 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-2xl cursor-pointer bg-gray-50 dark:bg-gray-800/50 hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-all"
-                    onDragOver={(e) => { e.preventDefault(); e.currentTarget.classList.add('border-indigo-500', 'bg-indigo-50', 'dark:bg-indigo-900/20'); }}
-                    onDragLeave={(e) => { e.preventDefault(); e.currentTarget.classList.remove('border-indigo-500', 'bg-indigo-50', 'dark:bg-indigo-900/20'); }}
-                    onDrop={(e) => {
-                      e.preventDefault();
-                      e.currentTarget.classList.remove('border-indigo-500', 'bg-indigo-50', 'dark:bg-indigo-900/20');
-                      const file = e.dataTransfer.files[0];
-                      if (file) handleFileUpload(file);
-                    }}
-                  >
-                    <div className="flex flex-col items-center justify-center pt-5 pb-6">
-                      <div className="p-3 rounded-full bg-gradient-to-br from-indigo-500 to-purple-500 mb-3">
-                        <Upload className="w-6 h-6 text-white" />
-                      </div>
-                      <p className="mb-2 text-sm text-gray-700 dark:text-gray-300">
-                        <span className="font-semibold">Click to upload</span> or drag and drop
-                      </p>
-                      <p className="text-xs text-gray-500">CSV or Excel file (.csv, .xlsx)</p>
-                      {bulkCsv && (
-                        <p className="mt-2 text-xs font-medium text-indigo-600 dark:text-indigo-400">
-                          📄 {bulkCsv}
-                        </p>
-                      )}
-                    </div>
-                    <input
-                      type="file"
-                      className="hidden"
-                      accept=".csv,.xlsx,.xls"
-                      onChange={(e) => {
-                        const file = e.target.files?.[0];
-                        if (file) handleFileUpload(file);
-                      }}
-                    />
-                  </label>
-                </div>
-
-                {bulkUsers.length > 0 && (
-                  <div>
-                    <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                      Preview ({bulkUsers.length} users)
-                    </p>
-                    <div className="max-h-48 overflow-y-auto rounded-xl border border-gray-200 dark:border-gray-700">
-                      <table className="w-full text-sm">
-                        <thead className="bg-gray-50 dark:bg-gray-800">
-                          <tr>
-                            <th className="px-3 py-2 text-left">Name</th>
-                            <th className="px-3 py-2 text-left">Email</th>
-                            <th className="px-3 py-2 text-left">Role</th>
-                            <th className="px-3 py-2 text-left">Status</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
-                          {bulkUsers.map((u, i) => (
-                            <tr key={i}>
-                              <td className="px-3 py-2">{u.name || '-'}</td>
-                              <td className="px-3 py-2">{u.email || '-'}</td>
-                              <td className="px-3 py-2">
-                                <span className={`px-2 py-0.5 text-xs rounded ${u.role === 'admin' ? 'bg-pink-100 text-pink-700' :
-                                  u.role === 'faculty' ? 'bg-purple-100 text-purple-700' :
-                                    'bg-blue-100 text-blue-700'
-                                  }`}>
-                                  {u.role}
-                                </span>
-                              </td>
-                              <td className="px-3 py-2">
-                                {u.email && u.password ? (
-                                  <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-                                ) : (
-                                  <XCircle className="w-4 h-4 text-red-500" />
-                                )}
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                )}
-
-                <div className="flex justify-end gap-3">
-                  <button
-                    onClick={() => setBulkOpen(false)}
-                    className="px-5 py-2.5 rounded-xl bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 font-medium"
-                    disabled={bulkProcessing}
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={async () => {
-                      if (bulkUsers.length === 0) return;
-                      setBulkProcessing(true);
-                      try {
-                        const res = await fetch('/api/admin/users', {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({ bulk: true, users: bulkUsers }),
-                        });
-                        const data = await res.json();
-                        setBulkResults(data);
-                      } catch (err) {
-                        console.error('Bulk add failed:', err);
-                        alert('Bulk add failed!');
-                      } finally {
-                        setBulkProcessing(false);
-                      }
-                    }}
-                    disabled={bulkProcessing || bulkUsers.length === 0}
-                    className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-medium shadow-lg disabled:opacity-50 flex items-center gap-2"
-                  >
-                    {bulkProcessing && <Loader2 className="w-4 h-4 animate-spin" />}
-                    {bulkProcessing ? 'Processing...' : `Create ${bulkUsers.length} Users`}
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-    </div>
+        )
+      }
+    </div >
   );
 }

@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { supabaseAdmin } from "@/lib/supabase/service";
 
 export async function POST(req: Request) {
   try {
@@ -26,14 +25,14 @@ export async function POST(req: Request) {
     }
 
     // Get student name
-    const { data: studentData } = await supabaseAdmin
+    const { data: studentData } = await supabase
       .from("users")
       .select("name")
       .eq("uid", user.id)
       .single();
 
     // Get practical details
-    const { data: practical } = await supabaseAdmin
+    const { data: practical } = await supabase
       .from("practicals")
       .select("title, subject_id, subjects(faculty_id)")
       .eq("id", practicalId)
@@ -56,7 +55,7 @@ export async function POST(req: Request) {
     }
 
     // Create notification for faculty (using existing allowed types)
-    const { error: notificationError } = await supabaseAdmin
+    const { error: notificationError } = await supabase
       .from("notifications")
       .insert({
         user_id: facultyId,

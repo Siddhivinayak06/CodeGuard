@@ -1,10 +1,12 @@
 import { NextResponse } from "next/server";
-import { supabaseAdmin } from "@/lib/supabase/service";
+import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(req: Request) {
   try {
+    const supabase = await createClient();
+
     const {
       student_id,
       practical_id,
@@ -23,7 +25,7 @@ export async function POST(req: Request) {
     }
 
     // Check if submission already exists
-    const { data: existingSubmission } = await supabaseAdmin
+    const { data: existingSubmission } = await supabase
       .from("submissions")
       .select("*")
       .eq("student_id", student_id)
@@ -57,7 +59,7 @@ export async function POST(req: Request) {
       }
 
       const { data: updatedSubmission, error: updateError } =
-        await supabaseAdmin
+        await supabase
           .from("submissions")
           .update(updateData)
           .eq("id", existingSubmission.id)
@@ -81,7 +83,7 @@ export async function POST(req: Request) {
     }
 
     // Insert new submission if none exists
-    const { data: submission, error } = await supabaseAdmin
+    const { data: submission, error } = await supabase
       .from("submissions")
       .insert({
         student_id,

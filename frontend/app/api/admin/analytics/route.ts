@@ -1,10 +1,12 @@
 import { NextResponse } from "next/server";
-import { supabaseAdmin } from "@/lib/supabase/service";
+import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
+    const supabase = await createClient();
+
     // Get basic counts
     const [
       studentsRes,
@@ -14,40 +16,40 @@ export async function GET() {
       practicalsRes,
       submissionsRes,
     ] = await Promise.all([
-      supabaseAdmin
+      supabase
         .from("users")
         .select("*", { count: "exact", head: true })
         .eq("role", "student"),
-      supabaseAdmin
+      supabase
         .from("users")
         .select("*", { count: "exact", head: true })
         .eq("role", "faculty"),
-      supabaseAdmin
+      supabase
         .from("users")
         .select("*", { count: "exact", head: true })
         .eq("role", "admin"),
-      supabaseAdmin
+      supabase
         .from("subjects")
         .select("*", { count: "exact", head: true }),
-      supabaseAdmin
+      supabase
         .from("practicals")
         .select("*", { count: "exact", head: true }),
-      supabaseAdmin
+      supabase
         .from("submissions")
         .select("*", { count: "exact", head: true }),
     ]);
 
     // Get submission status breakdown (using correct status values from schema: passed, failed, pending)
     const [passedRes, failedRes, pendingRes] = await Promise.all([
-      supabaseAdmin
+      supabase
         .from("submissions")
         .select("*", { count: "exact", head: true })
         .eq("status", "passed"),
-      supabaseAdmin
+      supabase
         .from("submissions")
         .select("*", { count: "exact", head: true })
         .eq("status", "failed"),
-      supabaseAdmin
+      supabase
         .from("submissions")
         .select("*", { count: "exact", head: true })
         .eq("status", "pending"),
@@ -60,7 +62,7 @@ export async function GET() {
     const sevenDaysAgo = new Date();
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
 
-    const { data: recentSubmissions } = await supabaseAdmin
+    const { data: recentSubmissions } = await supabase
       .from("submissions")
       .select("created_at, status")
       .gte("created_at", sevenDaysAgo.toISOString())
@@ -100,7 +102,7 @@ export async function GET() {
     }));
 
     // Get practicals with deadline info
-    const { data: practicalDeadlines } = await supabaseAdmin
+    const { data: practicalDeadlines } = await supabase
       .from("practicals")
       .select("id, title, deadline, subject_id")
       .not("deadline", "is", null)
@@ -119,12 +121,12 @@ export async function GET() {
       ) || [];
 
     // Get subjects with practical counts - using a simpler approach
-    const { data: allSubjects } = await supabaseAdmin
+    const { data: allSubjects } = await supabase
       .from("subjects")
       .select("id, subject_name, subject_code")
       .limit(10);
 
-    const { data: allPracticals } = await supabaseAdmin
+    const { data: allPracticals } = await supabase
       .from("practicals")
       .select("subject_id");
 
@@ -146,7 +148,7 @@ export async function GET() {
       })) || [];
 
     // Get top students by submissions - simpler query
-    const { data: allSubmissions } = await supabaseAdmin
+    const { data: allSubmissions } = await supabase
       .from("submissions")
       .select("student_id")
       .limit(500);
@@ -174,7 +176,7 @@ export async function GET() {
       count: number;
     }> = [];
     if (topStudentIds.length > 0) {
-      const { data: studentUsers } = await supabaseAdmin
+      const { data: studentUsers } = await supabase
         .from("users")
         .select("uid, name, email")
         .in("uid", topStudentIds);

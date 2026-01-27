@@ -66,6 +66,24 @@ export default function RegisterPage() {
 
       if (signUpError) throw signUpError;
 
+      // If user was created successfully, insert into users table
+      if (data.user) {
+        const { error: insertError } = await supabase
+          .from("users")
+          .insert({
+            uid: data.user.id,
+            email: formData.email,
+            name: formData.name,
+            role: formData.role as "student" | "faculty" | "admin",
+          });
+
+        if (insertError) {
+          console.error("Failed to create user profile:", insertError);
+          // Don't throw - auth user was created successfully
+          // The user can still use the app, profile can be fixed later
+        }
+      }
+
       // If "Confirm email" is disabled in Supabase, we get a session immediately.
       if (data.session) {
         // Redirect based on role
@@ -365,8 +383,8 @@ export default function RegisterPage() {
                                   setRoleMenuOpen(false);
                                 }}
                                 className={`w-full px-4 py-3 flex items-center gap-3 text-left hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-sm font-semibold ${formData.role === option.value
-                                    ? "bg-indigo-50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-400"
-                                    : "text-gray-700 dark:text-gray-300"
+                                  ? "bg-indigo-50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-400"
+                                  : "text-gray-700 dark:text-gray-300"
                                   }`}
                               >
                                 {option.icon}

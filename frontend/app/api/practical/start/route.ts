@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { supabaseAdmin } from "@/lib/supabase/service";
 
 export const dynamic = "force-dynamic";
 
@@ -32,7 +31,7 @@ export async function POST(req: Request) {
     // Note: We need to find the record linking student and practical.
     // Assuming student_practicals has practical_id.
 
-    const { data: spRecord, error: fetchError } = await supabaseAdmin
+    const { data: spRecord, error: fetchError } = await supabase
       .from("student_practicals")
       .select("id, attempt_count, max_attempts, is_locked, lock_reason")
       .eq("student_id", user.id)
@@ -41,7 +40,7 @@ export async function POST(req: Request) {
 
     if (fetchError || !spRecord) {
       // Check if student is allocated via schedule (Implicit Assignment)
-      const { data: allocation, error: allocError } = await supabaseAdmin
+      const { data: allocation, error: allocError } = await supabase
         .from("schedule_allocations")
         .select("id, schedule:schedules(practical_id, date)")
         .eq("student_id", user.id)
@@ -60,7 +59,7 @@ export async function POST(req: Request) {
       // 1. Get schedules for this practical
       // 2. Check if student is in those schedules.
 
-      const { data: schedules } = await supabaseAdmin
+      const { data: schedules } = await supabase
         .from("schedules")
         .select("id")
         .eq("practical_id", practicalId);
@@ -70,7 +69,7 @@ export async function POST(req: Request) {
       let isAllocated = false;
 
       if (scheduleIds.length > 0) {
-        const { count } = await supabaseAdmin
+        const { count } = await supabase
           .from("schedule_allocations")
           .select("*", { count: "exact", head: true })
           .eq("student_id", user.id)
@@ -86,7 +85,7 @@ export async function POST(req: Request) {
       }
 
       // Create the record
-      const { data: newRecord, error: createError } = await supabaseAdmin
+      const { data: newRecord, error: createError } = await supabase
         .from("student_practicals")
         .insert({
           student_id: user.id,
@@ -129,7 +128,7 @@ export async function POST(req: Request) {
     }
 
     // If Allowed: Increment Attempt Count
-    const { error: updateError } = await supabaseAdmin
+    const { error: updateError } = await supabase
       .from("student_practicals")
       .update({
         attempt_count: currentAttempts + 1,

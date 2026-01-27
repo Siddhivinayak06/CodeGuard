@@ -45,8 +45,8 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     image: ${BACKEND_IMAGE:-codeguard-backend}:${BACKEND_TAG:-latest}
-    # ports:
-    #   - "${BACKEND_PORT:-5002}:5002"
+    ports:
+      - "${BACKEND_PORT:-5002}:5002"
     env_file:
       - .env
     environment:
@@ -57,7 +57,9 @@ services:
       - DOCKER_API_VERSION=1.44
       # Connect to proxy via TCP instead of mounting socket
       - DOCKER_HOST=tcp://docker-socket-proxy:2375
+      - REDIS_URL=redis://redis:6379
     volumes:
+
       # - /var/run/docker.sock:/var/run/docker.sock:rw # REMOVED: Insecure
       - workspace_data:/app/workspace
     restart: unless-stopped
@@ -99,8 +101,8 @@ services:
         NEXT_PUBLIC_DEV_SUPABASE_REDIRECT_URL: ${NEXT_PUBLIC_DEV_SUPABASE_REDIRECT_URL}
         SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY}
     image: ${FRONTEND_IMAGE:-codeguard-frontend}:${FRONTEND_TAG:-latest}
-    # ports:
-    #   - "${FRONTEND_PORT:-3000}:3000"
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
     env_file:
       - .env
     environment:

@@ -1,14 +1,13 @@
 import { NextResponse } from "next/server";
-import { createClient as createServerClient } from "@/lib/supabase/server";
-import { supabaseAdmin } from "@/lib/supabase/service";
+import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
 /** Check if current user is faculty or admin */
-async function isFacultyOrAdmin(supabaseServerClient: any) {
+async function isFacultyOrAdmin(supabase: any) {
   try {
     const { data: userData, error: userErr } =
-      await supabaseServerClient.auth.getUser();
+      await supabase.auth.getUser();
     if (userErr) {
       console.error("Error getting user:", userErr);
       return false;
@@ -17,7 +16,7 @@ async function isFacultyOrAdmin(supabaseServerClient: any) {
     if (!user) return false;
 
     // Check users table for role
-    const { data: row, error } = await supabaseAdmin
+    const { data: row, error } = await supabase
       .from("users")
       .select("role")
       .eq("uid", user.id)
@@ -38,8 +37,8 @@ async function isFacultyOrAdmin(supabaseServerClient: any) {
 /** POST: assign a practical to specific students */
 export async function POST(request: Request) {
   try {
-    const supabaseServerClient = await createServerClient();
-    if (!(await isFacultyOrAdmin(supabaseServerClient))) {
+    const supabase = await createClient();
+    if (!(await isFacultyOrAdmin(supabase))) {
       return NextResponse.json(
         { success: false, error: "Forbidden: faculty/admin only" },
         { status: 403 },
@@ -65,7 +64,7 @@ export async function POST(request: Request) {
     }
 
     // Check if practical exists and user has access to it
-    const { data: practical, error: practicalError } = await supabaseAdmin
+    const { data: practical, error: practicalError } = await supabase
       .from("practicals")
       .select("id, title, subject_id, subjects(faculty_id)")
       .eq("id", practical_id)
@@ -79,11 +78,18 @@ export async function POST(request: Request) {
     }
 
     // Get current user
-    const { data: userData } = await supabaseServerClient.auth.getUser();
+    const { data: userData } = await supabase.auth.getUser();
     const userId = userData?.user?.id;
 
     // Check if user is faculty for this subject or admin
-    const { data: userRole } = await supabaseAdmin
+    if (!userId) {
+      return NextResponse.json(
+        { success: false, error: "Unauthorized" },
+        { status: 401 },
+      );
+    }
+
+    const { data: userRole } = await supabase
       .from("users")
       .select("role")
       .eq("uid", userId)
@@ -103,7 +109,7 @@ export async function POST(request: Request) {
     }
 
     // Validate student_ids exist and are students
-    const { data: validStudents, error: studentsError } = await supabaseAdmin
+    const { data: validStudents, error: studentsError } = await supabase
       .from("users")
       .select("uid")
       .in("uid", student_ids)
@@ -127,7 +133,7 @@ export async function POST(request: Request) {
     }
 
     // Check for existing assignments to avoid duplicates
-    const { data: existingAssignments } = await supabaseAdmin
+    const { data: existingAssignments } = await supabase
       .from("student_practicals")
       .select("student_id")
       .eq("practical_id", practical_id)
@@ -157,7 +163,7 @@ export async function POST(request: Request) {
       notes: notes || null,
     }));
 
-    const { data, error } = await supabaseAdmin
+    const { data, error } = await supabase
       .from("student_practicals")
       .insert(assignments)
       .select();
@@ -168,14 +174,14 @@ export async function POST(request: Request) {
     try {
       const notifications = newAssignments.map((student_id) => ({
         user_id: student_id,
-        type: "practical_assigned", // Corrected type to match frontend
+        type: "practical_assigned" as const,
         title: "New Practical Assigned",
         message: `You have been assigned practical: ${practical.title}`,
         link: `/editor?practicalId=${practical_id}`,
         metadata: { practical_id, subject_id: practical.subject_id },
       }));
 
-      await supabaseAdmin.from("notifications").insert(notifications);
+      await supabase.from("notifications").insert(notifications as any);
     } catch (notifyErr) {
       console.error("Error creating notifications:", notifyErr);
       // Don't fail the request if notifications fail
@@ -185,11 +191,10 @@ export async function POST(request: Request) {
       {
         success: true,
         data,
-        message: `Assigned practical to ${newAssignments.length} student(s)${
-          existingStudentIds.length > 0
-            ? ` (${existingStudentIds.length} were already assigned)`
-            : ""
-        }`,
+        message: `Assigned practical to ${newAssignments.length} student(s)${existingStudentIds.length > 0
+          ? ` (${existingStudentIds.length} were already assigned)`
+          : ""
+          }`,
       },
       { status: 201 },
     );
@@ -205,8 +210,8 @@ export async function POST(request: Request) {
 /** GET: get assignments for a practical */
 export async function GET(request: Request) {
   try {
-    const supabaseServerClient = await createServerClient();
-    if (!(await isFacultyOrAdmin(supabaseServerClient))) {
+    const supabase = await createClient();
+    if (!(await isFacultyOrAdmin(supabase))) {
       return NextResponse.json(
         { success: false, error: "Forbidden: faculty/admin only" },
         { status: 403 },
@@ -223,7 +228,7 @@ export async function GET(request: Request) {
       );
     }
 
-    const { data, error } = await supabaseAdmin
+    const { data, error } = await supabase
       .from("student_practicals")
       .select(
         `
@@ -239,7 +244,7 @@ export async function GET(request: Request) {
         )
       `,
       )
-      .eq("practical_id", practicalId)
+      .eq("practical_id", Number(practicalId))
       .order("assigned_at", { ascending: false });
 
     if (error) throw error;
@@ -268,8 +273,8 @@ export async function GET(request: Request) {
 /** DELETE: remove assignment */
 export async function DELETE(request: Request) {
   try {
-    const supabaseServerClient = await createServerClient();
-    if (!(await isFacultyOrAdmin(supabaseServerClient))) {
+    const supabase = await createClient();
+    if (!(await isFacultyOrAdmin(supabase))) {
       return NextResponse.json(
         { success: false, error: "Forbidden: faculty/admin only" },
         { status: 403 },
@@ -286,10 +291,10 @@ export async function DELETE(request: Request) {
       );
     }
 
-    const { data, error } = await supabaseAdmin
+    const { data, error } = await supabase
       .from("student_practicals")
       .delete()
-      .eq("id", assignmentId)
+      .eq("id", Number(assignmentId))
       .select();
 
     if (error) throw error;

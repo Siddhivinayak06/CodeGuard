@@ -1,12 +1,14 @@
 // app/api/admin/faculty/route.ts
 import { NextResponse } from "next/server";
-import { supabaseAdmin } from "@/lib/supabase/service";
+import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
-    const { data, error } = await supabaseAdmin
+    const supabase = await createClient();
+
+    const { data, error } = await supabase
       .from("users")
       .select("uid, name, email, role")
       .eq("role", "faculty")

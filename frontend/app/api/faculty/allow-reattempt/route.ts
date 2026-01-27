@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { supabaseAdmin } from "@/lib/supabase/service";
 
 export async function POST(req: Request) {
   try {
@@ -29,7 +28,7 @@ export async function POST(req: Request) {
     // Here we assume only faculty can access this route (middleware or check)
 
     // Find the record
-    const { data: record, error: findError } = await supabaseAdmin
+    const { data: record, error: findError } = await supabase
       .from("student_practicals")
       .select("id, max_attempts, attempt_count")
       .eq("student_id", studentId)
@@ -48,7 +47,7 @@ export async function POST(req: Request) {
     // And ensure is_locked is false.
     const newMax = (record.max_attempts || 1) + 1;
 
-    const { error: updateError } = await supabaseAdmin
+    const { error: updateError } = await supabase
       .from("student_practicals")
       .update({
         max_attempts: newMax,
@@ -62,7 +61,7 @@ export async function POST(req: Request) {
     if (updateError) throw updateError;
 
     // Log action
-    await supabaseAdmin.from("audit_logs").insert({
+    await supabase.from("audit_logs").insert({
       user_id: user.id,
       type: "system",
       action: "allow_reattempt",

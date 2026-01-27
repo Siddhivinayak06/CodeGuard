@@ -1,18 +1,13 @@
 // app/api/admin/subjects/route.ts
 import { NextResponse } from "next/server";
-import { createClient as createServerClient } from "@/lib/supabase/server";
-import { supabaseAdmin } from "@/lib/supabase/service";
+import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
 /** Check if current user is admin */
-async function isAdmin(
-  supabaseServerClient: Awaited<ReturnType<typeof createServerClient>>,
-) {
+async function isAdmin(supabase: any) {
   try {
-    const { data: userData, error: userErr } = await (
-      supabaseServerClient as any
-    ).auth.getUser();
+    const { data: userData, error: userErr } = await supabase.auth.getUser();
     if (userErr) {
       console.error("Error getting user:", userErr);
       return false;
@@ -26,7 +21,7 @@ async function isAdmin(
     if (metaRole === "admin") return true;
 
     // 2) fallback: check users table
-    const { data: row, error } = await supabaseAdmin
+    const { data: row, error } = await supabase
       .from("users")
       .select("role")
       .eq("uid", user.id)
@@ -47,7 +42,9 @@ async function isAdmin(
 /** GET: list all subjects with faculty names */
 export async function GET() {
   try {
-    const { data, error } = await supabaseAdmin
+    const supabase = await createClient();
+
+    const { data, error } = await supabase
       .from("subjects")
       .select(
         `
@@ -86,8 +83,8 @@ export async function GET() {
 /** POST: add a new subject */
 export async function POST(request: Request) {
   try {
-    const supabaseServerClient = await createServerClient();
-    if (!(await isAdmin(supabaseServerClient))) {
+    const supabase = await createClient();
+    if (!(await isAdmin(supabase))) {
       return NextResponse.json(
         { success: false, error: "Forbidden: admin only" },
         { status: 403 },
@@ -111,9 +108,9 @@ export async function POST(request: Request) {
     if (faculty_id) payload.faculty_id = faculty_id;
     if (semester) payload.semester = semester;
 
-    const { data, error } = await supabaseAdmin
+    const { data, error } = await supabase
       .from("subjects")
-      .insert([payload])
+      .insert(payload as any)
       .select();
     if (error) throw error;
 
@@ -130,8 +127,8 @@ export async function POST(request: Request) {
 /** PUT: update an existing subject */
 export async function PUT(request: Request) {
   try {
-    const supabaseServerClient = await createServerClient();
-    if (!(await isAdmin(supabaseServerClient))) {
+    const supabase = await createClient();
+    if (!(await isAdmin(supabase))) {
       return NextResponse.json(
         { success: false, error: "Forbidden: admin only" },
         { status: 403 },
@@ -154,7 +151,7 @@ export async function PUT(request: Request) {
     if (faculty_id !== undefined) updates.faculty_id = faculty_id;
     if (semester !== undefined) updates.semester = semester;
 
-    const { data, error } = await supabaseAdmin
+    const { data, error } = await supabase
       .from("subjects")
       .update(updates)
       .eq("id", id)
@@ -174,8 +171,8 @@ export async function PUT(request: Request) {
 /** DELETE: remove a subject by id */
 export async function DELETE(request: Request) {
   try {
-    const supabaseServerClient = await createServerClient();
-    if (!(await isAdmin(supabaseServerClient))) {
+    const supabase = await createClient();
+    if (!(await isAdmin(supabase))) {
       return NextResponse.json(
         { success: false, error: "Forbidden: admin only" },
         { status: 403 },
@@ -196,10 +193,10 @@ export async function DELETE(request: Request) {
       );
     }
 
-    const { data, error } = await supabaseAdmin
+    const { data, error } = await supabase
       .from("subjects")
       .delete()
-      .eq("id", id)
+      .eq("id", Number(id))
       .select();
     if (error) throw error;
 

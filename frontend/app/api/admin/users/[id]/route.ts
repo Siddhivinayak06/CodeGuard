@@ -1,18 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
+import { createClient } from "@/lib/supabase/server";
 import { supabaseAdmin } from "@/lib/supabase/service";
-import { createClient as createServerClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
 // Admin check helper
-async function isAdminUsingCookieClient(): Promise<boolean> {
+async function isAdminUser(supabase: any): Promise<boolean> {
   try {
-    const supabase = await createServerClient();
-    const { data: userData } = await (supabase as any).auth.getUser();
+    const { data: userData } = await supabase.auth.getUser();
     if (!userData?.user) return false;
 
     const user = userData.user;
-    const { data: row } = await supabaseAdmin
+    const { data: row } = await supabase
       .from("users")
       .select("role")
       .eq("uid", user.id)
@@ -31,7 +30,8 @@ export async function PUT(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const isAdmin = await isAdminUsingCookieClient();
+  const supabase = await createClient();
+  const isAdmin = await isAdminUser(supabase);
   if (!isAdmin)
     return NextResponse.json(
       { success: false, error: "Forbidden" },
@@ -75,7 +75,8 @@ export async function DELETE(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const isAdmin = await isAdminUsingCookieClient();
+  const supabase = await createClient();
+  const isAdmin = await isAdminUser(supabase);
   if (!isAdmin)
     return NextResponse.json(
       { success: false, error: "Forbidden" },
@@ -90,12 +91,15 @@ export async function DELETE(
         { status: 400 },
       );
 
-    // Delete user
+    // Delete user from users table
     const { error: delErr } = await supabaseAdmin
       .from("users")
       .delete()
       .eq("uid", id);
     if (delErr) throw delErr;
+
+    // Also delete from auth (optional - uncomment if needed)
+    // await supabaseAdmin.auth.admin.deleteUser(id);
 
     return NextResponse.json({ success: true, message: "User deleted" });
   } catch (err: any) {

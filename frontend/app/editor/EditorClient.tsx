@@ -678,7 +678,7 @@ int main() {
       console.error(err);
       alert(
         err?.response?.data?.error ||
-          "Error submitting practical. Please try again.",
+        "Error submitting practical. Please try again.",
       );
     } finally {
       setLoading(false);
@@ -1109,17 +1109,16 @@ int main() {
                 <div className="flex items-center gap-3 flex-wrap">
                   {/* Difficulty Badge */}
                   <span
-                    className={`inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1 rounded-md ${
-                      activeLevel === "easy"
+                    className={`inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1 rounded-md ${activeLevel === "easy"
                         ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400"
                         : activeLevel === "hard"
                           ? "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400"
                           : "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400"
-                    }`}
+                      }`}
                   >
                     {hasLevelsParam
                       ? activeLevel.charAt(0).toUpperCase() +
-                        activeLevel.slice(1)
+                      activeLevel.slice(1)
                       : "Medium"}
                   </span>
 
@@ -1158,15 +1157,14 @@ int main() {
                         <button
                           key={level.id}
                           onClick={() => setActiveLevel(level.level)}
-                          className={`px-4 py-1.5 rounded-md text-xs font-semibold transition-all duration-200 ${
-                            isActive
+                          className={`px-4 py-1.5 rounded-md text-xs font-semibold transition-all duration-200 ${isActive
                               ? level.level === "easy"
                                 ? "bg-emerald-500 text-white shadow-sm"
                                 : level.level === "hard"
                                   ? "bg-red-500 text-white shadow-sm"
                                   : "bg-amber-500 text-white shadow-sm"
                               : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200"
-                          }`}
+                            }`}
                           title={`${level.level.charAt(0).toUpperCase() + level.level.slice(1)} – ${level.max_marks} points`}
                         >
                           {level.level.charAt(0).toUpperCase() +
@@ -1201,7 +1199,7 @@ int main() {
                   <div className="text-gray-700 dark:text-gray-300 leading-relaxed text-[15px] whitespace-pre-wrap">
                     {hasLevelsParam && practicalLevels.length > 0
                       ? practicalLevels.find((l) => l.level === activeLevel)
-                          ?.description || problemStmt
+                        ?.description || problemStmt
                       : problemStmt}
                   </div>
                 </div>
@@ -1387,10 +1385,10 @@ int main() {
                     loading={loading}
                     locked={locked}
                     lang={lang}
-                    onLangChange={() => {}}
+                    onLangChange={() => { }}
                     showInputToggle={false}
                     showInput={false}
-                    setShowInput={() => {}}
+                    setShowInput={() => { }}
                     terminalRef={undefined}
                   />
                 </div>
@@ -1405,37 +1403,22 @@ int main() {
                   <div className="flex-shrink-0 flex border-b border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900">
                     <button
                       onClick={() => setShowUserTestCases(false)}
-                      className={`px-4 py-2.5 text-sm font-medium transition-all relative ${
-                        !showUserTestCases
+                      className={`px-4 py-2.5 text-sm font-medium transition-all relative ${!showUserTestCases
                           ? "text-indigo-600 dark:text-indigo-400 bg-white dark:bg-gray-800 border-b-2 border-indigo-500"
                           : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200"
-                      }`}
+                        }`}
                     >
                       Results
                     </button>
                     <button
                       onClick={() => setShowUserTestCases(true)}
-                      className={`px-4 py-2.5 text-sm font-medium transition-all relative ${
-                        showUserTestCases
+                      className={`px-4 py-2.5 text-sm font-medium transition-all relative ${showUserTestCases
                           ? "text-indigo-600 dark:text-indigo-400 bg-white dark:bg-gray-800 border-b-2 border-indigo-500"
                           : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200"
-                      }`}
+                        }`}
                     >
                       Custom Tests
                     </button>
-                    {/* Keyboard Hint */}
-                    <div className="ml-auto flex items-center pr-4">
-                      <span className="text-[10px] text-gray-400 dark:text-gray-500 hidden sm:block">
-                        <kbd className="px-1.5 py-0.5 bg-gray-100 dark:bg-gray-800 rounded text-[10px] border border-gray-200 dark:border-gray-700">
-                          Ctrl
-                        </kbd>
-                        <span className="mx-0.5">+</span>
-                        <kbd className="px-1.5 py-0.5 bg-gray-100 dark:bg-gray-800 rounded text-[10px] border border-gray-200 dark:border-gray-700">
-                          Enter
-                        </kbd>
-                        <span className="ml-1">Run</span>
-                      </span>
-                    </div>
                   </div>
 
                   {/* Tab Content */}

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { supabaseAdmin } from "@/lib/supabase/service";
+import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
@@ -8,6 +8,8 @@ const VALID_STATUSES = ["pending", "passed", "failed"];
 
 export async function POST(req: Request) {
   try {
+    const supabase = await createClient();
+
     const {
       submissionId,
       status,
@@ -32,7 +34,7 @@ export async function POST(req: Request) {
     }
 
     // Fetch existing submission to compare marks
-    const { data: existingSubmission, error: fetchError } = await supabaseAdmin
+    const { data: existingSubmission, error: fetchError } = await supabase
       .from("submissions")
       .select("*")
       .eq("id", submissionId)
@@ -73,7 +75,7 @@ export async function POST(req: Request) {
       );
     }
 
-    const { data, error } = await supabaseAdmin
+    const { data, error } = await supabase
       .from("submissions")
       .update(updateData)
       .eq("id", submissionId)

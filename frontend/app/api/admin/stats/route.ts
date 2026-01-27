@@ -1,24 +1,26 @@
 import { NextResponse } from "next/server";
-import { supabaseAdmin } from "@/lib/supabase/service";
+import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
+    const supabase = await createClient();
+
     const [studentsRes, facultyRes, subjectsRes, practicalsRes] =
       await Promise.all([
-        supabaseAdmin
+        supabase
           .from("users")
           .select("*", { count: "exact", head: true })
           .eq("role", "student"),
-        supabaseAdmin
+        supabase
           .from("users")
           .select("*", { count: "exact", head: true })
           .eq("role", "faculty"),
-        supabaseAdmin
+        supabase
           .from("subjects")
           .select("*", { count: "exact", head: true }),
-        supabaseAdmin
+        supabase
           .from("practicals")
           .select("*", { count: "exact", head: true }),
       ]);

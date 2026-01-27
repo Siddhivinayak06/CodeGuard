@@ -1,14 +1,13 @@
 import { NextResponse } from "next/server";
-import { createClient as createServerClient } from "@/lib/supabase/server";
-import { supabaseAdmin } from "@/lib/supabase/service";
+import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
 /** Check if current user is faculty or admin */
-async function isFacultyOrAdmin(supabaseServerClient: any) {
+async function isFacultyOrAdmin(supabase: any) {
   try {
     const { data: userData, error: userErr } =
-      await supabaseServerClient.auth.getUser();
+      await supabase.auth.getUser();
     if (userErr) {
       console.error("Error getting user:", userErr);
       return false;
@@ -17,7 +16,7 @@ async function isFacultyOrAdmin(supabaseServerClient: any) {
     if (!user) return false;
 
     // Check users table for role
-    const { data: row, error } = await supabaseAdmin
+    const { data: row, error } = await supabase
       .from("users")
       .select("role")
       .eq("uid", user.id)
@@ -38,7 +37,9 @@ async function isFacultyOrAdmin(supabaseServerClient: any) {
 /** GET: list all practicals with subject and faculty info */
 export async function GET() {
   try {
-    const { data, error } = await supabaseAdmin
+    const supabase = await createClient();
+
+    const { data, error } = await supabase
       .from("practicals")
       .select(
         `
@@ -85,8 +86,8 @@ export async function GET() {
 /** POST: create a new practical */
 export async function POST(request: Request) {
   try {
-    const supabaseServerClient = await createServerClient();
-    if (!(await isFacultyOrAdmin(supabaseServerClient))) {
+    const supabase = await createClient();
+    if (!(await isFacultyOrAdmin(supabase))) {
       return NextResponse.json(
         { success: false, error: "Forbidden: faculty/admin only" },
         { status: 403 },
@@ -116,9 +117,9 @@ export async function POST(request: Request) {
       max_marks: max_marks || 100,
     };
 
-    const { data, error } = await supabaseAdmin
+    const { data, error } = await supabase
       .from("practicals")
-      .insert([payload])
+      .insert(payload as any)
       .select();
     if (error) throw error;
 
@@ -135,8 +136,8 @@ export async function POST(request: Request) {
 /** PUT: update an existing practical */
 export async function PUT(request: Request) {
   try {
-    const supabaseServerClient = await createServerClient();
-    if (!(await isFacultyOrAdmin(supabaseServerClient))) {
+    const supabase = await createClient();
+    if (!(await isFacultyOrAdmin(supabase))) {
       return NextResponse.json(
         { success: false, error: "Forbidden: faculty/admin only" },
         { status: 403 },
@@ -169,7 +170,7 @@ export async function PUT(request: Request) {
     if (deadline !== undefined) updates.deadline = deadline;
     if (max_marks !== undefined) updates.max_marks = max_marks;
 
-    const { data, error } = await supabaseAdmin
+    const { data, error } = await supabase
       .from("practicals")
       .update(updates)
       .eq("id", id)
@@ -189,8 +190,8 @@ export async function PUT(request: Request) {
 /** DELETE: remove a practical by id */
 export async function DELETE(request: Request) {
   try {
-    const supabaseServerClient = await createServerClient();
-    if (!(await isFacultyOrAdmin(supabaseServerClient))) {
+    const supabase = await createClient();
+    if (!(await isFacultyOrAdmin(supabase))) {
       return NextResponse.json(
         { success: false, error: "Forbidden: faculty/admin only" },
         { status: 403 },
@@ -211,10 +212,10 @@ export async function DELETE(request: Request) {
       );
     }
 
-    const { data, error } = await supabaseAdmin
+    const { data, error } = await supabase
       .from("practicals")
       .delete()
-      .eq("id", id)
+      .eq("id", Number(id))
       .select();
     if (error) throw error;
 
