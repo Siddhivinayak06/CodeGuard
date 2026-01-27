@@ -4,7 +4,6 @@ import { useEffect, useState, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
-import { Skeleton } from "@/components/ui/skeleton";
 import StudentPracticalsSkeleton from "@/components/skeletons/StudentPracticalsSkeleton";
 import type { User } from "@supabase/supabase-js";
 import {
@@ -17,20 +16,21 @@ import {
   ArrowRight,
   Search,
   Sparkles,
-  Target,
   X,
   Loader2,
   Code2,
   FileText,
   RefreshCw,
   AlertTriangle,
+  Layout,
+  ChevronRight,
 } from "lucide-react";
-import { motion } from "framer-motion";
-import Link from "next/link";
+import { motion, AnimatePresence } from "framer-motion";
 import { Tables } from "@/lib/supabase/database.types";
+import { cn } from "@/lib/utils";
 
 // ============================================================================
-// ANIMATION VARIANTS (From Dashboard)
+// ANIMATION VARIANTS
 // ============================================================================
 
 const containerVariants = {
@@ -38,41 +38,28 @@ const containerVariants = {
   visible: {
     opacity: 1,
     transition: {
-      staggerChildren: 0.1,
-      delayChildren: 0.2,
+      staggerChildren: 0.05,
+      delayChildren: 0.1,
     },
   },
 } as const;
 
-const shellVariants = {
-  hidden: { opacity: 0 },
-  visible: {
-    opacity: 1,
-    transition: { duration: 0.3 },
-  },
-} as const;
-
-const revealVariants = {
+const itemVariants = {
   hidden: { y: 10, opacity: 0 },
   visible: {
     y: 0,
     opacity: 1,
     transition: {
-      type: "spring" as const,
+      type: "spring",
       stiffness: 260,
       damping: 30,
     },
   },
 } as const;
 
-const itemVariants = revealVariants;
-
 // ============================================================================
 // TYPES
 // ============================================================================
-
-type PracticalLevel = Tables<"practical_levels">;
-type Subject = Tables<"subjects">;
 
 interface Submission {
   id: number;
@@ -103,17 +90,6 @@ interface TestCaseResult {
   memory_used_kb: number;
 }
 
-interface PracticalWithRelations extends Tables<"practicals"> {
-  subjects: { subject_name: string; semester: number | string } | null;
-  practical_levels: {
-    id: number;
-    level: "easy" | "medium" | "hard";
-    title: string | null;
-    description: string | null;
-    max_marks: number;
-  }[];
-}
-
 interface FormattedPractical {
   id: number;
   subject_id: number | null;
@@ -131,6 +107,7 @@ interface FormattedPractical {
   | "submitted"
   | "pending";
   subject_name: string;
+  subject_code?: string;
   language: string | null;
   hasLevels: boolean;
   attempt_count?: number;
@@ -198,6 +175,7 @@ function getLanguageGradient(lang: string) {
     case "c":
       return "from-blue-400 via-blue-500 to-indigo-600";
     case "c++":
+    case "cpp":
       return "from-purple-500 via-violet-500 to-fuchsia-500";
     case "javascript":
       return "from-yellow-300 via-amber-400 to-orange-400";
@@ -341,13 +319,13 @@ function FilterTabs({
 }) {
   const filters: { key: FilterType; label: string; count: number }[] = [
     { key: "all", label: "All", count: counts.all },
-    { key: "pending", label: "Pending", count: counts.pending },
+    { key: "pending", label: "Time Left", count: counts.pending },
     { key: "overdue", label: "Overdue", count: counts.overdue },
     { key: "completed", label: "Completed", count: counts.completed },
   ];
 
   return (
-    <div className="flex p-1 space-x-1 bg-white/50 dark:bg-gray-800/50 backdrop-blur-md rounded-xl border border-gray-200/50 dark:border-gray-700/50">
+    <div className="flex p-1 space-x-1 bg-white/50 dark:bg-gray-800/50 backdrop-blur-md rounded-xl border border-gray-200/50 dark:border-gray-700/50 overflow-x-auto">
       {filters.map((f) => {
         const isActive = activeFilter === f.key;
         return (
@@ -355,7 +333,7 @@ function FilterTabs({
             key={f.key}
             onClick={() => onFilterChange(f.key)}
             className={`
-                            relative flex items-center gap-2 px-4 py-2 text-sm font-bold rounded-lg transition-all duration-200
+                            relative flex items-center gap-2 px-4 py-2 text-sm font-bold rounded-lg transition-all duration-200 whitespace-nowrap
                             ${isActive
                 ? "text-gray-900 dark:text-white"
                 : "text-gray-500 dark:text-gray-400 font-medium hover:text-gray-700 dark:hover:text-gray-200 hover:bg-white/40 dark:hover:bg-gray-700/40"
@@ -400,6 +378,7 @@ export default function StudentPracticals() {
   const [loading, setLoading] = useState<boolean>(true);
   const [activeFilter, setActiveFilter] = useState<FilterType>("all");
   const [searchQuery, setSearchQuery] = useState("");
+  const [selectedSubjectId, setSelectedSubjectId] = useState<number | "all">("all");
 
   // Result Modal State
   const [viewingSubmission, setViewingSubmission] = useState<Submission | null>(
@@ -447,210 +426,34 @@ export default function StudentPracticals() {
     const fetchPracticals = async (isBackground = false) => {
       if (!isBackground) setLoading(true);
       try {
-        // 1. Fetch Assignments
-        const { data: manualData } = await supabase
-          .from("student_practicals")
-          .select(
-            "practical_id, assigned_deadline, status, notes, is_locked, attempt_count, max_attempts",
-          )
-          .eq("student_id", user.id);
+        const res = await fetch("/api/student/practicals");
+        if (!res.ok) throw new Error("Failed to fetch practicals");
+        const json = await res.json();
 
-        const { data: batchData } = await supabase
-          .from("schedule_allocations")
-          .select("schedule:schedules (date, practical_id)")
-          .eq("student_id", user.id);
+        if (!json.success) throw new Error(json.error);
 
-        // 2. Collect IDs
-        const practicalIds = new Set<number>();
-        (manualData || []).forEach(
-          (item) => item.practical_id && practicalIds.add(item.practical_id),
-        );
-        (batchData || []).forEach(
-          (item: any) =>
-            item.schedule?.practical_id &&
-            practicalIds.add(item.schedule.practical_id),
-        );
+        const data: FormattedPractical[] = json.data;
 
-        if (practicalIds.size === 0) {
-          if (mountedRef.current) setPracticals([]);
-          return;
-        }
-
-        // 3. Details & Submissions
-        const { data: practicalsDetails } = await supabase
-          .from("practicals")
-          .select(
-            `id, title, description, language, subject_id, max_marks, subjects ( subject_name, semester ), practical_levels ( id, level, title, description, max_marks )`,
-          )
-          .in("id", Array.from(practicalIds));
-
-        // Fetch User Semester
-        const { data: userProfile } = await supabase
-          .from("users")
-          .select("semester")
-          .eq("uid", user.id)
-          .single();
-
-        const studentSemester = userProfile?.semester;
-
-        const { data: submissions } = await supabase
-          .from("submissions")
-          .select("practical_id, status, marks_obtained")
-          .eq("student_id", user.id)
-          .in("practical_id", Array.from(practicalIds));
-
-        // 4. Merge
-        const detailsMap = new Map(practicalsDetails?.map((p) => [p.id, p]));
-        const submissionMap = new Map(
-          submissions?.map((s) => [s.practical_id, s]),
-        );
-
-        const combinedPracticals: FormattedPractical[] = [];
-        const processedIds = new Set<number>();
-
-        // Helper to add practical
-        const addPractical = (
-          pid: number,
-          assignedMeta: any,
-          isBatch: boolean,
-        ) => {
-          if (processedIds.has(pid)) return;
-          const p = detailsMap.get(pid);
-          if (!p) return;
-
-          processedIds.add(pid);
-          const sub = submissionMap.get(pid);
-          const levels = p.practical_levels || [];
-
-          // Status Logic:
-          // Priority: 1. Submission Status (if passed) -> 2. Manual Status (if completed) -> 3. Submission Status -> 4. Assigned status -> 5. 'assigned'
-          let finalStatus = "assigned";
-          if (sub?.status === "passed") finalStatus = "passed";
-          else if (assignedMeta.status === "completed")
-            finalStatus = "completed";
-          else if (sub?.status) finalStatus = sub.status;
-          else if (assignedMeta.status) finalStatus = assignedMeta.status;
-
-          const subjectSemester = p.subjects?.semester;
-
-          // Filter by semester if both exist (and strictly match)
-          if (
-            studentSemester &&
-            subjectSemester &&
-            studentSemester !== subjectSemester
-          ) {
-            return;
-          }
-
-          combinedPracticals.push({
-            id: p.id,
-            practical_id: p.id,
-            title: p.title,
-            description: p.description,
-            language: p.language,
-            deadline: isBatch
-              ? assignedMeta.date
-              : assignedMeta.assigned_deadline,
-            subject_id: p.subject_id,
-            subject_name: p.subjects?.subject_name || "Unknown",
-            status: finalStatus as any,
-            notes: isBatch ? "" : assignedMeta.notes,
-            hasLevels: levels.length > 0,
-            levels: levels.sort((a, b) => {
-              const order = { easy: 0, medium: 1, hard: 2 };
-              return (order[a.level] || 0) - (order[b.level] || 0);
-            }),
-            is_locked:
-              !isBatch &&
-              (assignedMeta.is_locked ||
-                (assignedMeta.attempt_count || 0) >=
-                (assignedMeta.max_attempts || 1)),
-            attempt_count: isBatch ? 0 : assignedMeta.attempt_count || 0,
-            max_attempts: isBatch ? 1 : assignedMeta.max_attempts || 1,
-            marks_obtained: sub?.marks_obtained ?? undefined,
-            max_marks:
-              p.max_marks ||
-              levels.reduce(
-                (acc: number, l: any) => acc + (l.max_marks || 0),
-                0,
-              ) ||
-              100,
-          });
-        };
-
-        (manualData || []).forEach(
-          (sp) => sp.practical_id && addPractical(sp.practical_id, sp, false),
-        );
-        (batchData || []).forEach(
-          (item: any) =>
-            item.schedule?.practical_id &&
-            addPractical(item.schedule.practical_id, item.schedule, true),
-        );
-
-        combinedPracticals.sort((a, b) => {
+        // Sort functionality
+        data.sort((a, b) => {
           const getPriority = (p: FormattedPractical) => {
-            const isDone = ["passed", "completed"].includes(p.status);
-            const isFailed = p.status === "failed";
-            const canRetry =
-              isFailed &&
-              !p.is_locked &&
-              (p.attempt_count || 0) < (p.max_attempts || 1);
-            const isSubmitted = p.status === "submitted";
-
-            // Done (passed/completed) - Lowest priority
-            if (isDone) return 100;
-
-            // Failed without retry option - Low priority
-            if (isFailed && !canRetry) return 90;
-
-            // Submitted (under review) - Medium-low priority
-            if (isSubmitted) return 50;
-
-            // Calculate deadline-based priority
-            if (!p.deadline) {
-              // Failed with retry but no deadline - Medium priority
-              if (canRetry) return 15;
-              return 20; // Pending but no urgency
+            if (p.status === "passed" || p.status === "completed") return 100;
+            if (p.status === "failed") return 90;
+            if (p.deadline) {
+              const diff = new Date(p.deadline).getTime() - Date.now();
+              if (diff < 0) return -20;
+              return diff;
             }
-
-            const now = Date.now();
-            const due = new Date(p.deadline).getTime();
-            const diffHours = (due - now) / (1000 * 60 * 60);
-
-            // Failed with retry option - treat like pending
-            if (canRetry) {
-              if (diffHours < 0) return -15; // Overdue retry
-              if (diffHours < 72) return -5; // Urgent retry
-              return 5; // Normal retry
-            }
-
-            // Pending practicals - highest priority based on deadline
-            if (diffHours < 0) return -20; // Overdue (Highest)
-            if (diffHours < 24) return -18; // Due within 24 hours
-            if (diffHours < 72) return -10; // Urgent (< 3 days)
-
-            return 0; // Normal pending
+            return 0;
           };
-
-          const prioA = getPriority(a);
-          const prioB = getPriority(b);
-
-          if (prioA !== prioB) return prioA - prioB;
-
-          // Secondary sort: Deadline (earlier first)
-          const timeA =
-            a.deadline && typeof a.deadline === "string"
-              ? new Date(a.deadline).getTime()
-              : Infinity;
-          const timeB =
-            b.deadline && typeof b.deadline === "string"
-              ? new Date(b.deadline).getTime()
-              : Infinity;
-          return timeA - timeB;
+          return getPriority(a) - getPriority(b);
         });
 
-        if (!signal.aborted && mountedRef.current)
-          setPracticals(combinedPracticals);
+        if (!signal.aborted && mountedRef.current) {
+          setPracticals(data);
+          // Default to "all" to match faculty view habits and avoid confusion
+          // if (data.length > 0) { ... } // Removed forcing first subject
+        }
       } catch (err) {
         console.error("Fetch Error:", err);
       } finally {
@@ -660,18 +463,49 @@ export default function StudentPracticals() {
     };
 
     fetchPracticals();
-    // (Skipping detailed subscription setup for brevity, assuming standard refresh logic is fine or can be added back if needed)
-  }, [user?.id, supabase]);
 
-  // Derived Stats
+    // Optional: Set up interval for background refresh
+    // const interval = setInterval(() => fetchPracticals(true), 30000);
+    // return () => clearInterval(interval);
+
+    return () => controller.abort();
+  }, [user?.id]);
+
+  // Extract Subjects
+  const subjects = useMemo(() => {
+    const map = new Map<number, { id: number; name: string; code?: string; count: number }>();
+    practicals.forEach(p => {
+      // Robust check
+      if (p.subject_id !== null && p.subject_id !== undefined) {
+        const sid = Number(p.subject_id);
+        const existing = map.get(sid) || {
+          id: sid,
+          name: p.subject_name || "Unknown",
+          code: p.subject_code,
+          count: 0
+        };
+        existing.count++;
+        map.set(sid, existing);
+      }
+    });
+    return Array.from(map.values());
+  }, [practicals]);
+
+
+  // Derived Stats (Filtered)
   const stats = useMemo(() => {
+    // Filter practicals for stats based on selected subject
+    const relevantPracticals = selectedSubjectId === "all"
+      ? practicals
+      : practicals.filter(p => p.subject_id == selectedSubjectId);
+
     const doneStatuses = ["passed", "failed", "completed"];
-    const total = practicals.length;
-    const completed = practicals.filter((p) =>
+    const total = relevantPracticals.length;
+    const completed = relevantPracticals.filter((p) =>
       doneStatuses.includes(p.status),
     ).length;
     const pending = total - completed;
-    const overdue = practicals.filter(
+    const overdue = relevantPracticals.filter(
       (p) =>
         !doneStatuses.includes(p.status) &&
         p.deadline &&
@@ -679,12 +513,18 @@ export default function StudentPracticals() {
     ).length;
     const progress = total > 0 ? Math.round((completed / total) * 100) : 0;
     return { total, completed, pending, overdue, progress };
-  }, [practicals]);
+  }, [practicals, selectedSubjectId]);
 
   // Filtered Content
   const filteredPracticals = useMemo(() => {
-    const doneStatuses = ["passed", "failed", "completed"];
     let result = practicals;
+
+    // 1. Subject Filter (Robust)
+    if (selectedSubjectId !== "all") {
+      result = result.filter(p => p.subject_id == selectedSubjectId);
+    }
+
+    // 2. Search
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
       result = result.filter(
@@ -694,6 +534,9 @@ export default function StudentPracticals() {
           p.subject_name.toLowerCase().includes(q),
       );
     }
+
+    // 3. Status Tabs
+    const doneStatuses = ["passed", "failed", "completed"];
     switch (activeFilter) {
       case "pending":
         return result.filter((p) => !doneStatuses.includes(p.status));
@@ -709,9 +552,9 @@ export default function StudentPracticals() {
       default:
         return result;
     }
-  }, [practicals, activeFilter, searchQuery]);
+  }, [practicals, activeFilter, searchQuery, selectedSubjectId]);
 
-  // Handle View Result: Fetch latest submission + test cases
+  // Handle View Result, Start Practical, Navigate...
   const handleViewResult = async (
     practicalId: number,
     practicalTitle: string,
@@ -720,22 +563,9 @@ export default function StudentPracticals() {
     setLoadingDetails(true);
 
     try {
-      // 1. Fetch latest submission for this practical
       const { data: subData, error: subError } = await supabase
         .from("submissions")
-        .select(
-          `
-          id,
-          code,
-          output,
-          language,
-          status,
-          created_at,
-          practical_id,
-          marks_obtained,
-          execution_details
-        `,
-        )
+        .select(`id, code, output, language, status, created_at, practical_id, marks_obtained, execution_details`)
         .eq("student_id", user.id)
         .eq("practical_id", practicalId)
         .order("created_at", { ascending: false })
@@ -744,7 +574,6 @@ export default function StudentPracticals() {
 
       if (subError) throw subError;
 
-      // 2. Fetch Test Case Definitions
       const { data: testCasesData, error: tcError } = await supabase
         .from("test_cases")
         .select("*")
@@ -754,8 +583,6 @@ export default function StudentPracticals() {
       if (tcError) throw tcError;
 
       setTestCases(testCasesData || []);
-
-      // 3. Set Viewing Submission
       setViewingSubmission({
         id: subData.id,
         practical_id: subData.practical_id ?? 0,
@@ -775,24 +602,19 @@ export default function StudentPracticals() {
     }
   };
 
-  // Handle Start Practical with Attempt Check
   const handleStartPractical = (practical: FormattedPractical) => {
-    const remainingAttempts =
-      (practical.max_attempts || 1) - (practical.attempt_count || 0);
+    const remainingAttempts = (practical.max_attempts || 1) - (practical.attempt_count || 0);
 
-    // If no attempts remaining, block
     if (remainingAttempts <= 0) {
       alert("You have no remaining attempts for this practical.");
       return;
     }
 
-    // If only 1 attempt remaining, show warning
     if (remainingAttempts === 1) {
       setAttemptWarning({ show: true, practical });
       return;
     }
 
-    // Otherwise, navigate directly
     navigateToPractical(practical);
   };
 
@@ -804,615 +626,534 @@ export default function StudentPracticals() {
 
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50/30 to-purple-50/30 dark:from-gray-950 dark:via-indigo-950/10 dark:to-purple-950/10">
-      <div className="pt-24 pb-12 px-4 sm:px-6 lg:px-8 xl:px-12 w-full mx-auto">
-        {/* Header */}
-        <motion.div
-          variants={shellVariants}
-          initial="hidden"
-          animate="visible"
-          className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-8"
-        >
-          <div className="space-y-1">
-            <h1 className="text-3xl font-black text-gray-900 dark:text-white tracking-tight flex items-center gap-3">
-              My Practicals
-              <span className="px-3 py-1 rounded-full bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 text-sm font-bold">
-                {stats.total}
-              </span>
-            </h1>
-            <p className="text-gray-500 dark:text-gray-400 font-medium flex items-center gap-2">
-              <Sparkles className="w-4 h-4 text-amber-500" />
-              Track and conquer your assignments
-            </p>
-          </div>
-
-          {/* Search */}
-          {!loading && practicals.length > 0 && (
-            <div className="relative w-full md:w-80">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
-              <input
-                type="text"
-                placeholder="Search practicals..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-9 pr-4 py-2 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all text-sm font-medium placeholder:text-gray-400 h-10"
-              />
-            </div>
-          )}
-        </motion.div>
-
-        {/* Progress Overview */}
-        <motion.div
-          variants={containerVariants}
-          initial="hidden"
-          animate="visible"
-          className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8"
-        >
-          {/* Ring Stats */}
-          <motion.div
-            variants={itemVariants}
-            className="md:col-span-1 glass-card-premium rounded-2xl p-4 flex flex-col items-center justify-center text-center relative overflow-hidden min-h-[140px]"
-          >
-            <div className="absolute top-0 right-0 w-24 h-24 bg-indigo-500/10 rounded-full blur-2xl" />
-            <ProgressRing progress={stats.progress} size={80} strokeWidth={8} />
-            <div className="mt-2 text-center">
-              <h3 className="text-base font-bold text-gray-900 dark:text-white">
-                Completion
-              </h3>
-              <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">
-                {stats.completed}/{stats.total} Done
-              </p>
-            </div>
-          </motion.div>
-
-          {/* Pending & Overdue */}
-          <motion.div
-            variants={itemVariants}
-            className="md:col-span-3 grid grid-cols-1 sm:grid-cols-3 gap-4"
-          >
-            <div className="glass-card rounded-2xl p-4 flex flex-col items-center justify-center text-center hover-lift min-h-[140px] group transition-all duration-300">
-              <div className="w-12 h-12 rounded-2xl bg-amber-100/50 dark:bg-amber-900/20 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
-                <Clock className="w-6 h-6 text-amber-600 dark:text-amber-400" />
-              </div>
-              <h3 className="text-3xl font-black text-gray-900 dark:text-white">
-                {stats.pending}
-              </h3>
-              <p className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
-                Pending
-              </p>
-            </div>
-
-            <div className="glass-card rounded-2xl p-4 flex flex-col items-center justify-center text-center hover-lift min-h-[140px] group transition-all duration-300">
-              <div className="w-12 h-12 rounded-2xl bg-emerald-100/50 dark:bg-emerald-900/20 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
-                <CheckCircle2 className="w-6 h-6 text-emerald-600 dark:text-emerald-400" />
-              </div>
-              <h3 className="text-3xl font-black text-gray-900 dark:text-white">
-                {stats.completed}
-              </h3>
-              <p className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
-                Completed
-              </p>
-            </div>
-
-            <div
-              className={`rounded-2xl p-4 flex flex-col items-center justify-center text-center hover-lift min-h-[140px] border transition-all duration-300 group
-                            ${stats.overdue > 0
-                  ? "bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800 shadow-sm"
-                  : "glass-card"
-                }`}
-            >
-              <div
-                className={`w-12 h-12 rounded-2xl flex items-center justify-center mb-3 group-hover:scale-110 transition-transform ${stats.overdue > 0 ? "bg-red-100 dark:bg-red-900/40" : "bg-gray-100/50 dark:bg-gray-800"}`}
-              >
-                <AlertCircle
-                  className={`w-6 h-6 ${stats.overdue > 0 ? "text-red-600 dark:text-red-400" : "text-gray-500"}`}
-                />
-              </div>
-              <h3
-                className={`text-3xl font-black ${stats.overdue > 0 ? "text-red-700 dark:text-red-400" : "text-gray-900 dark:text-white"}`}
-              >
-                {stats.overdue}
-              </h3>
-              <p
-                className={`text-xs font-bold uppercase tracking-wide ${stats.overdue > 0 ? "text-red-600/80 dark:text-red-400/80" : "text-gray-500"}`}
-              >
-                Overdue
-              </p>
-            </div>
-          </motion.div>
-        </motion.div>
-
-        {/* Filters */}
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mb-6">
-          <FilterTabs
-            activeFilter={activeFilter}
-            onFilterChange={setActiveFilter}
-            counts={{
-              all: practicals.length,
-              pending: stats.pending,
-              overdue: stats.overdue,
-              completed: stats.completed,
-            }}
-          />
-        </div>
-
-        {/* Listing */}
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50/20 to-purple-50/20 dark:from-gray-950 dark:via-indigo-950/10 dark:to-purple-950/10">
+      <div className="pt-24 pb-12 px-4 sm:px-6 lg:px-8 max-w-[1600px] mx-auto">
         {loading ? (
           <StudentPracticalsSkeleton />
-        ) : filteredPracticals.length === 0 ? (
-          <div className="text-center py-16 bg-white/50 dark:bg-gray-800/20 rounded-3xl border border-dashed border-gray-300 dark:border-gray-700">
-            <FileCode className="w-16 h-16 text-gray-300 dark:text-gray-600 mx-auto mb-4" />
-            <h3 className="text-xl font-bold text-gray-900 dark:text-white">
-              No practicals found
-            </h3>
-            <p className="text-gray-500 dark:text-gray-400">
-              Try adjusting your filters or search query.
-            </p>
-          </div>
         ) : (
-          <motion.div
-            variants={containerVariants}
-            initial="hidden"
-            animate="visible"
-            className="flex flex-col gap-3"
-          >
-            {filteredPracticals.map((p) => {
-              const isDone = ["passed", "failed", "completed"].includes(
-                p.status,
-              );
-              const isSubmitted = p.status === "submitted";
-              const isUrgent =
-                !isDone &&
-                !isSubmitted &&
-                p.deadline &&
-                new Date(p.deadline).getTime() - Date.now() <
-                3 * 24 * 60 * 60 * 1000;
-              const timeInfo = p.deadline
-                ? formatTimeRemaining(p.deadline)
-                : null;
-              const cleanDescription =
-                p.description?.replace(/^Problem Statement:?\s*/i, "") ||
-                (p.hasLevels
-                  ? "Complete all levels to finish this challenge."
-                  : "No description available.");
-
-              // Deduplicate tags
-              const tags = [];
-              if (p.subject_name)
-                tags.push({ text: p.subject_name, type: "subject" });
-              // Only add language if it's different from subject name (case insensitive)
-              if (
-                p.language &&
-                p.language.toLowerCase() !== p.subject_name.toLowerCase()
-              ) {
-                tags.push({ text: p.language, type: "language" });
-              }
-              if (isSubmitted)
-                tags.push({ text: "Under Review", type: "status" });
-
-              return (
-                <motion.div
-                  variants={itemVariants}
-                  key={p.id}
-                  className={`
-                                        group relative glass-card rounded-2xl p-4 transition-all duration-300 hover:shadow-lg hover:-translate-y-0.5
-                                        flex flex-col md:flex-row items-start md:items-center gap-4 md:gap-6
-                                        ${isUrgent ? "border-red-200/60 dark:border-red-800/40 bg-red-50/30 dark:bg-red-900/10" : ""}
-                                    `}
-                >
-                  {/* Icon / Status */}
-                  <div
-                    className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${getLanguageGradient(p.language || "")} flex items-center justify-center shadow-lg shadow-indigo-500/10 flex-shrink-0 group-hover:scale-105 transition-transform`}
-                  >
-                    <Code className="w-7 h-7 text-white" />
-                  </div>
-                  {/* Urgent Dot Indicator */}
-                  {isUrgent && (
-                    <div className="absolute top-3 right-3 md:top-auto md:bottom-auto md:right-4 flex h-2 w-2 md:hidden">
-                      <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
-                    </div>
-                  )}
-
-                  <div className="flex-1 min-w-0">
-                    <div className="flex flex-wrap items-center gap-2 mb-1">
-                      <h4 className="text-lg font-bold text-gray-900 dark:text-white truncate pr-2">
-                        {p.title}
-                      </h4>
-                      {isUrgent && (
-                        <span className="px-2 py-0.5 rounded-full bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 text-xs font-bold whitespace-nowrap">
-                          Due Soon
-                        </span>
-                      )}
-                      {p.is_locked && (
-                        <span className="px-2 py-0.5 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 text-xs font-bold flex items-center gap-1">
-                          Locked
-                        </span>
-                      )}
-                    </div>
-
-                    <p className="text-sm text-gray-500 dark:text-gray-400 line-clamp-1 mb-3 font-medium">
-                      {cleanDescription}
-                    </p>
-
-                    <div className="flex flex-wrap items-center gap-3">
-                      {tags.map((tag, idx) => (
-                        <span
-                          key={idx}
-                          className={`text-xs px-2.5 py-1 rounded-lg font-semibold
-                           ${tag.type === "subject"
-                              ? "bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400"
-                              : tag.type === "language"
-                                ? "bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400"
-                                : "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300"
-                            }
-                         `}
-                        >
-                          {tag.text}
-                        </span>
-                      ))}
-                      {p.deadline && !isDone && !isSubmitted && (
-                        <span
-                          className={`text-xs px-2.5 py-1 rounded-lg font-bold flex items-center gap-1.5
-                            ${timeInfo?.urgency === "overdue"
-                              ? "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400"
-                              : timeInfo?.urgency === "urgent"
-                                ? "bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400"
-                                : "bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400"
-                            }
-                          `}
-                        >
-                          {timeInfo?.urgency === "overdue" ? (
-                            <AlertCircle className="w-3 h-3" />
-                          ) : (
-                            <Clock className="w-3 h-3" />
-                          )}
-                          {timeInfo?.text}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Action Button */}
-                  <div className="flex flex-col gap-2 w-full md:w-auto md:items-end mt-4 md:mt-0 pl-0 md:pl-4 border-t md:border-t-0 md:border-l border-gray-100 dark:border-gray-800 pt-4 md:pt-0">
-                    {/* Show remaining attempts for pending or failed practicals with attempts left */}
-                    {((!isDone && !isSubmitted) ||
-                      (p.status === "failed" && !p.is_locked)) &&
-                      (p.max_attempts || 1) > 1 && (
-                        <div
-                          className={`text-xs font-medium px-2 py-1 rounded-lg mb-1 ${(p.max_attempts || 1) - (p.attempt_count || 0) <= 1
-                            ? "bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400"
-                            : "bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400"
-                            }`}
-                        >
-                          {(p.max_attempts || 1) - (p.attempt_count || 0)}{" "}
-                          attempt
-                          {(p.max_attempts || 1) - (p.attempt_count || 0) !== 1
-                            ? "s"
-                            : ""}{" "}
-                          remaining
-                        </div>
-                      )}
-
-                    {/* Show Start/Continue for pending practicals */}
-                    {!isDone && !isSubmitted && p.status !== "failed" ? (
-                      <Button
-                        className="w-full md:w-auto shadow-sm"
-                        size="sm"
-                        variant={
-                          timeInfo?.urgency === "overdue"
-                            ? "destructive"
-                            : "outline"
-                        }
-                        onClick={() => handleStartPractical(p)}
-                        disabled={p.is_locked}
-                      >
-                        {p.is_locked ? (
-                          <>No Attempts Left</>
-                        ) : p.status === "in_progress" ? (
-                          <>
-                            Continue <ArrowRight className="ml-2 w-4 h-4" />
-                          </>
-                        ) : (
-                          <>
-                            Start Challenge{" "}
-                            <ArrowRight className="ml-2 w-4 h-4" />
-                          </>
-                        )}
-                      </Button>
-                    ) : (
-                      /* Show View Result for passed, failed, completed, and submitted */
-                      <div className="flex flex-col items-end gap-2 w-full md:w-auto">
-                        <div className="flex items-center gap-2">
-                          {p.marks_obtained !== undefined && (
-                            <span
-                              className={`text-sm font-bold px-2 py-0.5 rounded-md ${p.status === "passed" ||
-                                p.status === "completed"
-                                ? "text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20"
-                                : p.status === "failed"
-                                  ? "text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20"
-                                  : "text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/20"
-                                }`}
-                            >
-                              {p.marks_obtained}/{p.max_marks}
-                            </span>
-                          )}
-                          {/* Show attempts used */}
-                          {(p.status === "failed" || p.status === "passed") &&
-                            (p.max_attempts || 1) > 1 && (
-                              <span className="text-xs text-gray-500 dark:text-gray-400">
-                                {p.attempt_count}/{p.max_attempts} attempts
-                              </span>
-                            )}
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="text-gray-500 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleViewResult(p.id, p.title);
-                            }}
-                          >
-                            {isSubmitted ? "View Submission" : "View Result"}{" "}
-                            <ArrowRight className="ml-2 w-4 h-4" />
-                          </Button>
-                        </div>
-
-                        {/* Try Again button for failed practicals with attempts remaining */}
-                        {p.status === "failed" &&
-                          !p.is_locked &&
-                          (p.attempt_count || 0) < (p.max_attempts || 1) && (
-                            <Button
-                              className="w-full md:w-auto shadow-sm bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white"
-                              size="sm"
-                              onClick={() => handleStartPractical(p)}
-                            >
-                              Try Again <RefreshCw className="ml-2 w-4 h-4" />
-                            </Button>
-                          )}
-                      </div>
-                    )}
-                  </div>
-                </motion.div>
-              );
-            })}
-          </motion.div>
-        )}
-
-        {/* Enhanced View Modal */}
-        {viewingSubmission && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-sm animate-fadeIn">
-            <div className="glass-card-premium rounded-3xl w-full max-w-5xl max-h-[90vh] overflow-hidden flex flex-col animate-scaleIn">
-              {/* Modal Header */}
-              <div className="flex items-center justify-between p-6 border-b border-gray-100 dark:border-gray-800 bg-white/80 dark:bg-gray-900/80 backdrop-blur-md sticky top-0 z-10">
-                <div className="flex items-center gap-4">
-                  <div
-                    className={`w-12 h-12 rounded-2xl bg-gradient-to-br ${getLanguageColor(viewingSubmission.language)} text-white flex items-center justify-center font-bold shadow-lg shadow-indigo-500/20`}
-                  >
-                    <Code2 className="w-6 h-6" />
-                  </div>
-                  <div>
-                    <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-0.5">
-                      {viewingSubmission.practical_title}
-                    </h3>
-                    <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
-                      <StatusBadge status={viewingSubmission.status} />
-                      {viewingSubmission.marks_obtained !== undefined &&
-                        viewingSubmission.marks_obtained !== null && (
-                          <>
-                            <span className="text-gray-300 dark:text-gray-700">
-                              •
-                            </span>
-                            <span className="flex items-center gap-1 font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/20 px-2 py-0.5 rounded-md">
-                              <Sparkles className="w-3.5 h-3.5" />
-                              {viewingSubmission.marks_obtained}
-                            </span>
-                          </>
-                        )}
-                      <span className="text-gray-300 dark:text-gray-700">
-                        •
-                      </span>
-                      <span className="font-mono text-xs">
-                        {new Date(
-                          viewingSubmission.created_at,
-                        ).toLocaleString()}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => setViewingSubmission(null)}
-                  className="rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500 dark:text-gray-400 transition-colors"
-                >
-                  <X className="w-5 h-5" />
-                </Button>
-              </div>
-
-              <div className="flex-1 overflow-auto p-6 grid grid-cols-1 lg:grid-cols-2 gap-6 bg-gray-50/50 dark:bg-gray-950/50">
-                {/* Left: Code & Output */}
-                <div className="space-y-6">
-                  <div className="bg-white dark:bg-gray-900/50 rounded-2xl border border-gray-200 dark:border-gray-800 overflow-hidden shadow-sm">
-                    <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-800 bg-gray-50/80 dark:bg-gray-800/50 flex items-center justify-between">
-                      <h4 className="font-bold text-sm text-gray-700 dark:text-gray-200 flex items-center gap-2">
-                        <Code className="w-4 h-4 text-indigo-500" /> Submitted
-                        Code
-                      </h4>
-                      <span className="text-[10px] font-bold font-mono px-2 py-1 rounded-md bg-gray-200/50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 uppercase tracking-wider">
-                        {viewingSubmission.language}
-                      </span>
-                    </div>
-                    <div className="p-0 overflow-auto max-h-[400px]">
-                      <pre className="p-4 text-xs sm:text-sm font-mono text-gray-800 dark:text-gray-300 whitespace-pre-wrap leading-relaxed">
-                        {viewingSubmission.code}
-                      </pre>
-                    </div>
-                  </div>
-
-                  <div className="bg-white dark:bg-gray-900/50 rounded-2xl border border-gray-200 dark:border-gray-800 overflow-hidden shadow-sm">
-                    <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-800 bg-gray-50/80 dark:bg-gray-800/50">
-                      <h4 className="font-bold text-sm text-gray-700 dark:text-gray-200 flex items-center gap-2">
-                        <FileText className="w-4 h-4 text-purple-500" />{" "}
-                        Standard Output
-                      </h4>
-                    </div>
-                    <div className="p-4 bg-gray-900 dark:bg-black text-gray-100 dark:text-gray-300 font-mono text-xs sm:text-sm max-h-[200px] overflow-auto whitespace-pre-wrap">
-                      {viewingSubmission.output || (
-                        <span className="opacity-40 italic">
-                          No output generated.
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Right: Test Results */}
-                <div className="space-y-6">
-                  <div className="bg-white dark:bg-gray-900/50 rounded-2xl border border-gray-200 dark:border-gray-800 overflow-hidden shadow-sm h-full flex flex-col">
-                    <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-800 bg-gray-50/80 dark:bg-gray-800/50 flex items-center justify-between sticky top-0">
-                      <h4 className="font-bold text-sm text-gray-700 dark:text-gray-200 flex items-center gap-2">
-                        <CheckCircle2 className="w-4 h-4 text-emerald-500" />{" "}
-                        Test Results
-                      </h4>
-                      <span className="text-xs font-medium text-gray-500 dark:text-gray-400">
-                        {
-                          viewingSubmission.testCaseResults?.filter(
-                            (r) => r.status.toLowerCase() === "passed",
-                          ).length
-                        }
-                        /{viewingSubmission.testCaseResults?.length} Passed
-                      </span>
-                    </div>
-                    <div className="p-4 space-y-3 max-h-[600px] overflow-auto">
-                      {loadingDetails ? (
-                        <div className="text-center py-8">
-                          <Loader2 className="w-8 h-8 animate-spin mx-auto text-gray-400" />
-                        </div>
-                      ) : viewingSubmission.testCaseResults?.length > 0 ? (
-                        viewingSubmission.testCaseResults.map((r, idx) => {
-                          const tc = testCases.find(
-                            (t) => t.id === r.test_case_id,
-                          );
-                          return (
-                            <div
-                              key={idx}
-                              className="group rounded-xl border border-gray-200 dark:border-gray-800 p-4 bg-white dark:bg-gray-900/40 hover:border-indigo-500/30 dark:hover:border-indigo-500/30 transition-colors"
-                            >
-                              <div className="flex items-center justify-between mb-3">
-                                <div className="flex items-center gap-3">
-                                  <span className="w-6 h-6 rounded-lg flex items-center justify-center bg-gray-100 dark:bg-gray-800 text-xs font-bold text-gray-600 dark:text-gray-400">
-                                    {idx + 1}
-                                  </span>
-                                  <span className="font-bold text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide">
-                                    {tc?.is_hidden
-                                      ? "Hidden Case"
-                                      : "Public Case"}
-                                  </span>
-                                </div>
-                                <span
-                                  className={`text-[10px] font-black px-2 py-0.5 rounded uppercase tracking-wider ${r.status?.toLowerCase() === "passed"
-                                    ? "text-emerald-600 bg-emerald-50 dark:bg-emerald-900/20"
-                                    : "text-red-600 bg-red-50 dark:bg-red-900/20"
-                                    }`}
-                                >
-                                  {r.status}
-                                </span>
-                              </div>
-                              <div className="grid grid-cols-2 gap-4 text-xs">
-                                <div>
-                                  <p className="text-gray-400 dark:text-gray-500 mb-1.5 font-semibold uppercase tracking-wider text-[10px]">
-                                    Input
-                                  </p>
-                                  <div className="bg-gray-50 dark:bg-black p-2.5 rounded-lg border border-gray-100 dark:border-gray-800 font-mono text-gray-700 dark:text-gray-300 truncate">
-                                    {tc?.input || "—"}
-                                  </div>
-                                </div>
-                                <div>
-                                  <p className="text-gray-400 dark:text-gray-500 mb-1.5 font-semibold uppercase tracking-wider text-[10px]">
-                                    Expected
-                                  </p>
-                                  <div className="bg-gray-50 dark:bg-black p-2.5 rounded-lg border border-gray-100 dark:border-gray-800 font-mono text-gray-700 dark:text-gray-300 truncate">
-                                    {tc?.expected_output || "—"}
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                          );
-                        })
-                      ) : (
-                        <div className="text-center py-12 flex flex-col items-center justify-center">
-                          <div className="w-12 h-12 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center mb-3">
-                            <Code className="w-6 h-6 text-gray-400" />
-                          </div>
-                          <p className="text-gray-500 dark:text-gray-400 font-medium">
-                            No test results available for this submission.
-                          </p>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-        {/* Attempt Warning Modal */}
-        {attemptWarning.show && attemptWarning.practical && (
-          <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-sm animate-fadeIn">
-            <div className="glass-card-premium rounded-3xl w-full max-w-md p-6 animate-scaleIn">
-              <div className="flex items-center gap-4 mb-4">
-                <div className="w-14 h-14 rounded-2xl bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center">
-                  <AlertTriangle className="w-7 h-7 text-orange-600 dark:text-orange-400" />
-                </div>
+          <>
+            {/* Page Header */}
+            <motion.div
+              variants={containerVariants}
+              initial="hidden"
+              animate="visible"
+              className="mb-8"
+            >
+              <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
                 <div>
-                  <h3 className="text-xl font-bold text-gray-900 dark:text-white">
-                    Last Attempt Warning
-                  </h3>
-                  <p className="text-sm text-gray-500 dark:text-gray-400">
-                    This is your final attempt
+                  <h1 className="text-3xl font-black text-gray-900 dark:text-white tracking-tight">
+                    My Practicals
+                  </h1>
+                  <p className="text-gray-500 dark:text-gray-400 mt-1 font-medium">
+                    Manage your assignments subject-wise
                   </p>
                 </div>
+                {practicals.length > 0 && (
+                  <div className="relative w-full md:w-80">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+                    <input
+                      type="text"
+                      placeholder="Search practicals..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="w-full pl-9 pr-4 py-2 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all text-sm font-medium placeholder:text-gray-400 h-10 shadow-sm"
+                    />
+                  </div>
+                )}
+              </div>
+            </motion.div>
+
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-8">
+              {/* Mobile Subject Selector (Horizontal Scroll) */}
+              <div className="md:hidden col-span-1 overflow-x-auto pb-2 -mx-4 px-4 scrollbar-hide">
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => {
+                      setSelectedSubjectId("all");
+                      setActiveFilter("all");
+                    }}
+                    className={cn(
+                      "flex items-center gap-2 px-4 py-2 rounded-full whitespace-nowrap text-sm font-bold transition-all",
+                      selectedSubjectId === "all"
+                        ? "bg-indigo-600 text-white shadow-md shadow-indigo-500/20"
+                        : "bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-gray-700"
+                    )}
+                  >
+                    <BookOpen className="w-4 h-4" />
+                    All Subjects
+                    <span className={cn(
+                      "text-[10px] px-1.5 py-0.5 rounded-full ml-1",
+                      selectedSubjectId === "all" ? "bg-white/20" : "bg-gray-100 dark:bg-gray-700"
+                    )}>
+                      {practicals.length}
+                    </span>
+                  </button>
+                  {subjects.map(s => (
+                    <button
+                      key={s.id}
+                      onClick={() => {
+                        setSelectedSubjectId(s.id);
+                        setActiveFilter("all");
+                      }}
+                      className={cn(
+                        "flex items-center gap-2 px-4 py-2 rounded-full whitespace-nowrap text-sm font-bold transition-all",
+                        selectedSubjectId === s.id
+                          ? "bg-indigo-600 text-white shadow-md shadow-indigo-500/20"
+                          : "bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-gray-700"
+                      )}
+                    >
+                      {s.name}
+                      <span className={cn(
+                        "text-[10px] px-1.5 py-0.5 rounded-full ml-1",
+                        selectedSubjectId === s.id ? "bg-white/20" : "bg-gray-100 dark:bg-gray-700"
+                      )}>
+                        {s.count}
+                      </span>
+                    </button>
+                  ))}
+                </div>
               </div>
 
-              <div className="bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-xl p-4 mb-6">
-                <p className="text-sm text-orange-800 dark:text-orange-200">
-                  <strong>⚠️ Warning:</strong> You have only{" "}
-                  <strong>1 attempt</strong> remaining for
-                  <strong className="text-orange-600 dark:text-orange-300">
-                    {" "}
-                    "{attemptWarning.practical.title}"
-                  </strong>
-                  . Once you start, you must complete and submit your solution.
-                  Make sure you're ready before proceeding.
-                </p>
-              </div>
+              {/* Desktop Sidebar - Subjects */}
+              <motion.div
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ duration: 0.4 }}
+                className="hidden md:block md:col-span-3 lg:col-span-3 space-y-4"
+              >
+                <div className="bg-white/60 dark:bg-gray-900/40 backdrop-blur-xl rounded-2xl border border-white/20 dark:border-gray-800 shadow-sm overflow-hidden">
+                  <div className="p-4 border-b border-gray-200/50 dark:border-gray-800">
+                    <h2 className="text-sm font-bold text-gray-400 uppercase tracking-wider flex items-center gap-2">
+                      <BookOpen className="w-4 h-4" /> Subjects
+                    </h2>
+                  </div>
+                  <div className="p-2 space-y-1">
+                    <button
+                      onClick={() => {
+                        setSelectedSubjectId("all");
+                        setActiveFilter("all");
+                      }}
+                      className={cn(
+                        "w-full text-left px-4 py-3 rounded-xl transition-all duration-200 flex items-center justify-between group",
+                        selectedSubjectId === "all"
+                          ? "bg-indigo-600 text-white shadow-md shadow-indigo-500/20"
+                          : "hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-400"
+                      )}
+                    >
+                      <span className="font-semibold">All Subjects</span>
+                      <span className={cn(
+                        "text-xs font-bold px-2 py-0.5 rounded-md",
+                        selectedSubjectId === "all" ? "bg-white/20 text-white" : "bg-gray-100 dark:bg-gray-800 text-gray-500"
+                      )}>
+                        {practicals.length}
+                      </span>
+                    </button>
 
-              <div className="flex gap-3">
-                <Button
-                  variant="outline"
-                  className="flex-1"
-                  onClick={() =>
-                    setAttemptWarning({ show: false, practical: null })
-                  }
+                    {subjects.map(subject => (
+                      <button
+                        key={subject.id}
+                        onClick={() => {
+                          setSelectedSubjectId(subject.id);
+                          setActiveFilter("all");
+                        }}
+                        className={cn(
+                          "w-full text-left px-4 py-3 rounded-xl transition-all duration-200 flex items-center justify-between group",
+                          selectedSubjectId === subject.id
+                            ? "bg-indigo-600 text-white shadow-md shadow-indigo-500/20"
+                            : "hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-400"
+                        )}
+                      >
+                        <div>
+                          <div className="font-bold text-sm">{subject.name}</div>
+                          {subject.code && (
+                            <div className={cn("text-xs mt-0.5", selectedSubjectId === subject.id ? "text-indigo-200" : "text-gray-400")}>
+                              {subject.code}
+                            </div>
+                          )}
+                        </div>
+                        <span className={cn(
+                          "text-xs font-bold px-2 py-0.5 rounded-md",
+                          selectedSubjectId === subject.id ? "bg-white/20 text-white" : "bg-gray-100 dark:bg-gray-800 text-gray-500"
+                        )}>
+                          {subject.count}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </motion.div>
+
+              {/* Main Content */}
+              <div className="md:col-span-9 lg:col-span-9 space-y-6">
+                {/* Stats */}
+                <motion.div
+                  variants={containerVariants}
+                  initial="hidden"
+                  animate="visible"
+                  className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4"
                 >
-                  Cancel
-                </Button>
-                <Button
-                  className="flex-1 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white"
-                  onClick={() => {
-                    if (attemptWarning.practical) {
-                      navigateToPractical(attemptWarning.practical);
-                    }
-                    setAttemptWarning({ show: false, practical: null });
-                  }}
-                >
-                  I'm Ready, Start <ArrowRight className="ml-2 w-4 h-4" />
-                </Button>
+                  <div className="glass-card rounded-2xl p-4 flex items-center gap-4">
+                    <div className="h-12 w-12 rounded-full bg-indigo-50 dark:bg-indigo-900/20 flex items-center justify-center">
+                      <Layout className="w-6 h-6 text-indigo-600 dark:text-indigo-400" />
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-500 font-bold uppercase">Total</p>
+                      <p className="text-2xl font-black text-gray-900 dark:text-white">{stats.total}</p>
+                    </div>
+                  </div>
+
+                  <div className="glass-card rounded-2xl p-4 flex items-center gap-4">
+                    <div className="h-12 w-12 rounded-full bg-emerald-50 dark:bg-emerald-900/20 flex items-center justify-center">
+                      <CheckCircle2 className="w-6 h-6 text-emerald-600 dark:text-emerald-400" />
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-500 font-bold uppercase">Completed</p>
+                      <p className="text-2xl font-black text-gray-900 dark:text-white">{stats.completed}</p>
+                    </div>
+                  </div>
+
+                  <div className="glass-card rounded-2xl p-4 flex items-center gap-4">
+                    <div className="h-12 w-12 rounded-full bg-amber-50 dark:bg-amber-900/20 flex items-center justify-center">
+                      <Clock className="w-6 h-6 text-amber-600 dark:text-amber-400" />
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-500 font-bold uppercase">Pending</p>
+                      <p className="text-2xl font-black text-gray-900 dark:text-white">{stats.pending}</p>
+                    </div>
+                  </div>
+
+                  <div className="glass-card rounded-2xl p-4 flex items-center gap-4">
+                    <div className="h-12 w-12 rounded-full flex items-center justify-center relative">
+                      <ProgressRing progress={stats.progress} size={50} strokeWidth={4} showLabel={false} />
+                      <span className="absolute text-[10px] font-bold">{stats.progress}%</span>
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-500 font-bold uppercase">Progress</p>
+                      <p className="text-xs text-gray-400 font-medium">For selected subject</p>
+                    </div>
+                  </div>
+                </motion.div>
+
+                {/* Filters & List */}
+                <div className="flex flex-col gap-4">
+                  <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+                    <h2 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                      {selectedSubjectId === "all" ? "All Assignments" : subjects.find(s => s.id === selectedSubjectId)?.name || "Assignments"}
+                    </h2>
+                    <FilterTabs
+                      activeFilter={activeFilter}
+                      onFilterChange={setActiveFilter}
+                      counts={{
+                        all: relevantPracticalsCount(selectedSubjectId),
+                        pending: stats.pending,
+                        overdue: stats.overdue,
+                        completed: stats.completed,
+                      }}
+                    />
+                  </div>
+
+                  {filteredPracticals.length === 0 ? (
+                    <motion.div
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="text-center py-16 bg-white/50 dark:bg-gray-800/20 rounded-3xl border border-dashed border-gray-300 dark:border-gray-700"
+                    >
+                      <FileCode className="w-16 h-16 text-gray-300 dark:text-gray-600 mx-auto mb-4" />
+                      <h3 className="text-xl font-bold text-gray-900 dark:text-white">
+                        No practicals found
+                      </h3>
+                      <p className="text-gray-500 dark:text-gray-400 max-w-sm mx-auto mt-2">
+                        There are no assignments matching your current filters for this subject.
+                      </p>
+                    </motion.div>
+                  ) : (
+                    <motion.div
+                      key={selectedSubjectId} // Force fresh animation/state on subject change
+                      variants={containerVariants}
+                      initial="hidden"
+                      animate="visible"
+                      className="flex flex-col gap-3"
+                    >
+                      {filteredPracticals.map((p) => {
+                        const isDone = ["passed", "failed", "completed"].includes(p.status);
+                        const isSubmitted = p.status === "submitted";
+                        const isUrgent = !isDone && !isSubmitted && p.deadline && new Date(p.deadline).getTime() - Date.now() < 3 * 24 * 60 * 60 * 1000;
+                        const timeInfo = p.deadline ? formatTimeRemaining(p.deadline) : null;
+
+                        return (
+                          <motion.div
+                            variants={itemVariants}
+                            key={p.id}
+                            className={cn(
+                              "group relative glass-card rounded-2xl p-5 transition-all duration-300 hover:shadow-lg hover:-translate-y-0.5 border border-white/50 dark:border-gray-700/50",
+                              isUrgent ? "border-red-200/60 dark:border-red-800/40 bg-red-50/30 dark:bg-red-900/10" : ""
+                            )}
+                          >
+                            {/* Card Layout */}
+                            <div className="flex flex-col md:flex-row gap-5">
+                              {/* Icon */}
+                              <div className="flex-shrink-0">
+                                <div
+                                  className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${getLanguageGradient(p.language || "")} flex items-center justify-center shadow-lg shadow-indigo-500/10 group-hover:scale-105 transition-transform`}
+                                >
+                                  <Code className="w-7 h-7 text-white" />
+                                </div>
+                              </div>
+
+                              {/* Content */}
+                              <div className="flex-1 min-w-0 py-1">
+                                <div className="flex flex-wrap items-center gap-2 mb-1.5">
+                                  <h4 className="text-lg font-bold text-gray-900 dark:text-white truncate">
+                                    {p.title}
+                                  </h4>
+                                  {isUrgent && (
+                                    <span className="px-2 py-0.5 rounded-full bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 text-[10px] font-bold uppercase tracking-wide">
+                                      Due Soon
+                                    </span>
+                                  )}
+                                  {p.is_locked && (
+                                    <span className="px-2 py-0.5 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 text-[10px] font-bold uppercase tracking-wide">
+                                      Locked
+                                    </span>
+                                  )}
+                                  <span className={cn(
+                                    "px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide",
+                                    p.hasLevels ? "bg-purple-100 text-purple-600" : "bg-blue-100 text-blue-600"
+                                  )}>
+                                    {p.hasLevels ? "Multi-Level" : p.subject_name}
+                                  </span>
+                                </div>
+
+                                <p className="text-sm text-gray-500 dark:text-gray-400 line-clamp-2 mb-3 leading-relaxed">
+                                  {p.description?.replace(/^Problem Statement:?\s*/i, "") || "No description available."}
+                                </p>
+
+                                <div className="flex flex-wrap items-center gap-3">
+                                  {/* Language Tag */}
+                                  <span className="text-xs px-2 py-1 rounded-md bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 font-semibold border border-gray-200 dark:border-gray-700">
+                                    {p.language || "Any"}
+                                  </span>
+
+                                  {/* Deadline Tag */}
+                                  {p.deadline && !isDone && !isSubmitted && (
+                                    <span
+                                      className={`text-xs px-2 py-1 rounded-md font-bold flex items-center gap-1.5
+                                                                ${timeInfo?.urgency === "overdue"
+                                          ? "bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400"
+                                          : timeInfo?.urgency === "urgent"
+                                            ? "bg-orange-50 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400"
+                                            : "bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-400"
+                                        }
+                                                              `}
+                                    >
+                                      <Clock className="w-3 h-3" />
+                                      {timeInfo?.text}
+                                    </span>
+                                  )}
+
+                                  {/* Attempts Tag */}
+                                  {!isDone && (p.max_attempts || 1) > 1 && (
+                                    <span className={cn(
+                                      "text-xs px-2 py-1 rounded-md font-medium flex items-center gap-1",
+                                      (p.max_attempts || 1) - (p.attempt_count || 0) <= 1 ? "text-red-500" : "text-gray-500"
+                                    )}>
+                                      <Sparkles className="w-3 h-3" />
+                                      {(p.max_attempts || 1) - (p.attempt_count || 0)} attempts left
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+
+                              {/* Actions */}
+                              <div className="flex flex-col gap-3 justify-center md:items-end w-full md:w-auto pt-4 md:pt-0 border-t md:border-t-0 border-gray-100 dark:border-gray-800">
+                                {!isDone && !isSubmitted && p.status !== "failed" ? (
+                                  <Button
+                                    className="w-full md:w-32 shadow-md shadow-indigo-500/20"
+                                    size="sm"
+                                    variant={timeInfo?.urgency === "overdue" ? "destructive" : "default"}
+                                    onClick={() => handleStartPractical(p)}
+                                    disabled={p.is_locked}
+                                  >
+                                    {p.is_locked ? "Locked" : p.status === "in_progress" ? "Continue" : "Start"}
+                                    {!p.is_locked && <ArrowRight className="ml-2 w-4 h-4" />}
+                                  </Button>
+                                ) : (
+                                  <div className="flex flex-col items-end gap-2 text-right">
+                                    {p.marks_obtained !== undefined && (
+                                      <div className="text-sm font-bold flex flex-col items-end">
+                                        <span className="text-gray-400 text-[10px] uppercase">Score</span>
+                                        <span className={cn(
+                                          "text-lg",
+                                          p.status === "passed" ? "text-emerald-600" : "text-gray-700 dark:text-white"
+                                        )}>
+                                          {p.marks_obtained}/{p.max_marks}
+                                        </span>
+                                      </div>
+                                    )}
+
+                                    <Button
+                                      variant="secondary"
+                                      size="sm"
+                                      className="w-full md:w-auto"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleViewResult(p.id, p.title);
+                                      }}
+                                    >
+                                      {isSubmitted ? "Pending Review" : "View Result"}
+                                    </Button>
+
+                                    {p.status === "failed" && !p.is_locked && (p.attempt_count || 0) < (p.max_attempts || 1) && (
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={() => handleStartPractical(p)}
+                                        className="w-full md:w-auto text-orange-600 border-orange-200 hover:bg-orange-50"
+                                      >
+                                        Try Again
+                                      </Button>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </motion.div>
+                        );
+                      })}
+                    </motion.div>
+                  )}
+                </div>
               </div>
             </div>
-          </div>
+
+            <AnimatePresence>
+              {viewingSubmission && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-sm animate-fadeIn">
+                  <div className="glass-card-premium rounded-3xl w-full max-w-5xl max-h-[90vh] overflow-hidden flex flex-col animate-scaleIn">
+                    {/* Modal Header */}
+                    <div className="flex items-center justify-between p-6 border-b border-gray-100 dark:border-gray-800 bg-white/80 dark:bg-gray-900/80 backdrop-blur-md sticky top-0 z-10">
+                      <div className="flex items-center gap-4">
+                        <div
+                          className={`w-12 h-12 rounded-2xl bg-gradient-to-br ${getLanguageColor(viewingSubmission.language)} text-white flex items-center justify-center font-bold shadow-lg shadow-indigo-500/20`}
+                        >
+                          <Code2 className="w-6 h-6" />
+                        </div>
+                        <div>
+                          <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-0.5">
+                            {viewingSubmission.practical_title}
+                          </h3>
+                          <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
+                            <StatusBadge status={viewingSubmission.status} />
+                          </div>
+                        </div>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => setViewingSubmission(null)}
+                        className="rounded-full hover:bg-gray-100 dark:hover:bg-gray-800"
+                      >
+                        <X className="w-5 h-5" />
+                      </Button>
+                    </div>
+
+                    <div className="flex-1 overflow-auto p-6 grid grid-cols-1 lg:grid-cols-2 gap-6 bg-gray-50/50 dark:bg-gray-950/50">
+                      {/* Output Section */}
+                      <div className="space-y-6">
+                        <h4 className="font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                          <Code className="w-5 h-5 text-indigo-500" /> Submitted Code
+                        </h4>
+                        <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-4 font-mono text-xs overflow-auto max-h-[400px]">
+                          {viewingSubmission.code}
+                        </div>
+
+                        <h4 className="font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                          <FileText className="w-5 h-5 text-indigo-500" /> Output
+                        </h4>
+                        <div className="bg-gray-900 text-gray-100 rounded-xl p-4 font-mono text-xs overflow-auto max-h-[200px]">
+                          {viewingSubmission.output || "No output."}
+                        </div>
+                      </div>
+
+                      {/* Test Cases */}
+                      <div className="space-y-4">
+                        <h4 className="font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                          <CheckCircle2 className="w-5 h-5 text-emerald-500" /> Test Results
+                        </h4>
+                        <div className="space-y-3">
+                          {viewingSubmission.testCaseResults?.map((r, i) => (
+                            <div key={i} className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-4">
+                              <div className="flex items-center justify-between mb-2">
+                                <span className="text-xs font-bold uppercase text-gray-500">Test Case {i + 1}</span>
+                                <span className={cn(
+                                  "text-xs font-bold px-2 py-1 rounded",
+                                  r.status === "passed" ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700"
+                                )}>{r.status}</span>
+                              </div>
+                            </div>
+                          ))}
+                          {(!viewingSubmission.testCaseResults || viewingSubmission.testCaseResults.length === 0) && (
+                            <div className="text-gray-500 text-sm text-center py-4">No test cases recorded.</div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+              {attemptWarning.show && attemptWarning.practical && (
+                <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-sm animate-fadeIn">
+                  <div className="glass-card-premium rounded-3xl w-full max-w-md p-6 animate-scaleIn">
+                    <div className="flex items-center gap-4 mb-4">
+                      <div className="w-14 h-14 rounded-2xl bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center">
+                        <AlertTriangle className="w-7 h-7 text-orange-600 dark:text-orange-400" />
+                      </div>
+                      <div>
+                        <h3 className="text-xl font-bold text-gray-900 dark:text-white">
+                          Last Attempt Warning
+                        </h3>
+                      </div>
+                    </div>
+
+                    <p className="text-gray-600 dark:text-gray-300 mb-6">
+                      You have <strong>1 attempt</strong> remaining. Are you sure you want to start?
+                    </p>
+
+                    <div className="flex gap-3">
+                      <Button
+                        variant="outline"
+                        className="flex-1"
+                        onClick={() =>
+                          setAttemptWarning({ show: false, practical: null })
+                        }
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        className="flex-1 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white"
+                        onClick={() => {
+                          if (attemptWarning.practical) {
+                            navigateToPractical(attemptWarning.practical);
+                          }
+                          setAttemptWarning({ show: false, practical: null });
+                        }}
+                      >
+                        Start Now
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </AnimatePresence>
+          </>
         )}
       </div>
     </div>
   );
+
+  function relevantPracticalsCount(subjectId: number | "all") {
+    if (subjectId === "all") return practicals.length;
+    // Use loose equality to handle string/number match robustly
+    return practicals.filter(p => p.subject_id == subjectId).length;
+  }
 }

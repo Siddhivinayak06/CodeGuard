@@ -55,6 +55,13 @@ export async function GET() {
           subjects (
             subject_name,
             subject_code
+          ),
+          practical_levels (
+            id,
+            level,
+            title,
+            description,
+            max_marks
           )
         )
       `,
@@ -64,23 +71,54 @@ export async function GET() {
 
     if (error) throw error;
 
+    // Fetch submissions for marks & status override
+    const { data: submissions } = await supabase
+      .from("submissions")
+      .select("practical_id, status, marks_obtained")
+      .eq("student_id", userId);
+
+    const submissionMap = new Map(submissions?.map((s) => [s.practical_id, s]));
+
     // Map to desired format
-    const practicals = data.map((sp: any) => ({
-      id: sp.practicals.id,
-      assignment_id: sp.id,
-      title: sp.practicals.title,
-      description: sp.practicals.description,
-      language: sp.practicals.language,
-      max_marks: sp.practicals.max_marks,
-      assigned_deadline: sp.assigned_deadline,
-      status: sp.status,
-      notes: sp.notes,
-      assigned_at: sp.assigned_at,
-      completed_at: sp.completed_at,
-      subject_id: sp.practicals.subject_id,
-      subject_name: sp.practicals.subjects?.subject_name,
-      subject_code: sp.practicals.subjects?.subject_code,
-    }));
+    const practicals = data.map((sp: any) => {
+      const p = sp.practicals;
+      const sub = submissionMap.get(p.id);
+
+      // Determine final status
+      // Priority: Passed -> Completed (Manual) -> Submission Status -> Assigned Status
+      let finalStatus = sp.status;
+      if (sub?.status === "passed") finalStatus = "passed";
+      else if (sp.status === "completed") finalStatus = "completed";
+      else if (sub?.status) finalStatus = sub.status;
+
+      return {
+        id: p.id,
+        assignment_id: sp.id,
+        title: p.title,
+        description: p.description,
+        language: p.language,
+        max_marks: p.max_marks,
+        assigned_deadline: sp.assigned_deadline,
+        status: finalStatus,
+        notes: sp.notes,
+        assigned_at: sp.assigned_at,
+        completed_at: sp.completed_at,
+        subject_id: p.subject_id,
+        subject_name: p.subjects?.subject_name,
+        subject_code: p.subjects?.subject_code,
+        // Add levels
+        hasLevels: p.practical_levels && p.practical_levels.length > 0,
+        levels: p.practical_levels?.sort((a: any, b: any) => {
+          const order: Record<string, number> = { easy: 0, medium: 1, hard: 2 };
+          return (order[a.level] || 0) - (order[b.level] || 0);
+        }),
+        // Add meta
+        attempt_count: sp.attempt_count,
+        max_attempts: sp.max_attempts,
+        is_locked: sp.is_locked,
+        marks_obtained: sub?.marks_obtained ?? undefined,
+      };
+    });
 
     return NextResponse.json({ success: true, data: practicals });
   } catch (err: any) {
