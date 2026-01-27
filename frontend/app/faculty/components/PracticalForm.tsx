@@ -5,7 +5,7 @@ import dynamic from "next/dynamic";
 import { cpp } from "@codemirror/lang-cpp";
 import { python } from "@codemirror/lang-python";
 import { SupabaseClient } from "@supabase/supabase-js";
-import { Check as CheckIcon, Loader2 } from "lucide-react";
+import { Check as CheckIcon, Loader2, Plus, FileText, Trash2, ChevronLeft, ChevronRight } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 import { Practical, Subject, TestCase, Level, Student } from "../types";
@@ -180,12 +180,60 @@ export default function PracticalForm({
     batch: "",
   });
 
+  // ---------------------- Multi-Draft State ----------------------
+  interface DraftPractical {
+    id: string; // local draft ID
+    form: Practical;
+    testCases: TestCase[];
+    levels: Level[];
+    enableLevels: boolean;
+  }
+
+  const createEmptyDraft = (): DraftPractical => ({
+    id: `draft-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+    form: {
+      id: 0,
+      title: "",
+      subject_id: defaultSubjectId ? Number(defaultSubjectId) : (subjects[0]?.id ?? 0),
+      description: "",
+      language: "",
+      deadline: new Date().toISOString().slice(0, 16),
+      max_marks: 100,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      submitted: false,
+    },
+    testCases: [{
+      id: 0,
+      practical_id: null,
+      level_id: null,
+      created_at: "",
+      input: "",
+      expected_output: "",
+      is_hidden: false,
+      time_limit_ms: 2000,
+      memory_limit_kb: 65536,
+    }],
+    levels: JSON.parse(JSON.stringify(defaultLevels)),
+    enableLevels: false,
+  });
+
+  const [draftPracticals, setDraftPracticals] = useState<DraftPractical[]>([]);
+  const [activeDraftIndex, setActiveDraftIndex] = useState<number>(0);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+
   // Reset step when modal opens
   useEffect(() => {
     if (isOpen) {
       setStep(1);
+      // Initialize with one draft if creating new practicals (not editing)
+      if (!practical) {
+        const initialDraft = createEmptyDraft();
+        setDraftPracticals([initialDraft]);
+        setActiveDraftIndex(0);
+      }
     }
-  }, [isOpen]);
+  }, [isOpen, practical]);
 
   // set initial state when practical prop changes
   // set initial state when practical prop changes
@@ -401,22 +449,22 @@ export default function PracticalForm({
       prev.map((l) =>
         l.level === level
           ? {
-              ...l,
-              testCases: [
-                ...l.testCases,
-                {
-                  id: 0,
-                  practical_id: null,
-                  level_id: null,
-                  created_at: "",
-                  input: "",
-                  expected_output: "",
-                  is_hidden: false,
-                  time_limit_ms: 2000,
-                  memory_limit_kb: 65536,
-                },
-              ],
-            }
+            ...l,
+            testCases: [
+              ...l.testCases,
+              {
+                id: 0,
+                practical_id: null,
+                level_id: null,
+                created_at: "",
+                input: "",
+                expected_output: "",
+                is_hidden: false,
+                time_limit_ms: 2000,
+                memory_limit_kb: 65536,
+              },
+            ],
+          }
           : l,
       ),
     );
@@ -560,7 +608,7 @@ export default function PracticalForm({
       console.error("AI Generation Error:", err);
       alert(
         "Failed to generate test cases. Please try again. " +
-          (err.message || ""),
+        (err.message || ""),
       );
     } finally {
       setGeneratingTests(false);
@@ -744,6 +792,187 @@ export default function PracticalForm({
     return () => window.removeEventListener("keydown", onKey);
   }, [saving, handleSave]);
 
+  // ---------------------- Draft Management Functions ----------------------
+  // Sync current form state back to the active draft
+  const syncCurrentDraftState = useCallback(() => {
+    if (draftPracticals.length === 0 || practical) return; // Skip if editing existing or no drafts
+    setDraftPracticals(prev => {
+      const updated = [...prev];
+      if (updated[activeDraftIndex]) {
+        updated[activeDraftIndex] = {
+          ...updated[activeDraftIndex],
+          form: { ...form },
+          testCases: [...testCases],
+          levels: JSON.parse(JSON.stringify(levels)),
+          enableLevels,
+        };
+      }
+      return updated;
+    });
+  }, [activeDraftIndex, form, testCases, levels, enableLevels, draftPracticals.length, practical]);
+
+  // Add a new draft
+  const addDraft = useCallback(() => {
+    // First save current draft state
+    syncCurrentDraftState();
+    const newDraft = createEmptyDraft();
+    setDraftPracticals(prev => [...prev, newDraft]);
+    // Switch to the new draft
+    const newIndex = draftPracticals.length;
+    setActiveDraftIndex(newIndex);
+    // Load the new draft into form
+    setForm(newDraft.form);
+    setTestCases(newDraft.testCases);
+    setLevels(newDraft.levels);
+    setEnableLevels(newDraft.enableLevels);
+  }, [syncCurrentDraftState, draftPracticals.length]);
+
+  // Remove a draft
+  const removeDraft = useCallback((index: number) => {
+    if (draftPracticals.length <= 1) {
+      alert("You must have at least one practical.");
+      return;
+    }
+    setDraftPracticals(prev => prev.filter((_, i) => i !== index));
+    // Adjust active index if needed
+    if (index <= activeDraftIndex) {
+      const newIndex = Math.max(0, activeDraftIndex - 1);
+      setActiveDraftIndex(newIndex);
+      // Load the new active draft
+      const newActiveDraft = draftPracticals[newIndex === activeDraftIndex ? newIndex : index === 0 ? 0 : newIndex];
+      if (newActiveDraft) {
+        setForm(newActiveDraft.form);
+        setTestCases(newActiveDraft.testCases);
+        setLevels(newActiveDraft.levels);
+        setEnableLevels(newActiveDraft.enableLevels);
+      }
+    }
+  }, [draftPracticals, activeDraftIndex]);
+
+  // Switch to a different draft
+  const switchToDraft = useCallback((index: number) => {
+    if (index === activeDraftIndex) return;
+    // Save current draft state first
+    syncCurrentDraftState();
+    // Load the selected draft
+    const draft = draftPracticals[index];
+    if (draft) {
+      setActiveDraftIndex(index);
+      setForm(draft.form);
+      setTestCases(draft.testCases);
+      setLevels(draft.levels);
+      setEnableLevels(draft.enableLevels);
+    }
+  }, [activeDraftIndex, draftPracticals, syncCurrentDraftState]);
+
+  // Save all drafts at once
+  const saveAllDrafts = async () => {
+    // First sync current state
+    syncCurrentDraftState();
+
+    setSaving(true);
+    let successCount = 0;
+    let errorCount = 0;
+
+    // Get the latest drafts state
+    const draftsToSave = [...draftPracticals];
+    // Update with current form if it's the active draft
+    if (draftsToSave[activeDraftIndex]) {
+      draftsToSave[activeDraftIndex] = {
+        ...draftsToSave[activeDraftIndex],
+        form: { ...form },
+        testCases: [...testCases],
+        levels: JSON.parse(JSON.stringify(levels)),
+        enableLevels,
+      };
+    }
+
+    for (const draft of draftsToSave) {
+      try {
+        const payload = {
+          title: draft.form.title,
+          subject_id: draft.form.subject_id,
+          description: draft.enableLevels ? "" : draft.form.description,
+          language: draft.form.language,
+          deadline: draft.form.deadline,
+          max_marks: draft.enableLevels
+            ? draft.levels.reduce((sum, l) => sum + l.max_marks, 0)
+            : (draft.form.max_marks ?? 100),
+        };
+
+        const { data, error } = await supabase
+          .from("practicals")
+          .insert(payload)
+          .select()
+          .single();
+
+        if (error) throw error;
+        const practicalId = data.id;
+
+        if (draft.enableLevels) {
+          for (const level of draft.levels) {
+            const { data: levelData, error: levelErr } = await supabase
+              .from("practical_levels")
+              .insert({
+                practical_id: practicalId,
+                level: level.level,
+                title: level.title,
+                description: level.description,
+                max_marks: level.max_marks,
+              })
+              .select()
+              .single();
+
+            if (levelErr) throw levelErr;
+
+            if (levelData && level.testCases.length > 0) {
+              const tcData = level.testCases.map((tc) => ({
+                practical_id: practicalId,
+                level_id: levelData.id,
+                input: tc.input,
+                expected_output: tc.expected_output,
+                is_hidden: tc.is_hidden || false,
+                time_limit_ms: Number(tc.time_limit_ms) || 2000,
+                memory_limit_kb: Number(tc.memory_limit_kb) || 65536,
+              }));
+              const { error: tcErr } = await supabase.from("test_cases").insert(tcData);
+              if (tcErr) throw tcErr;
+            }
+          }
+        } else {
+          if (draft.testCases.length > 0) {
+            const insertData = draft.testCases.map((tc) => ({
+              practical_id: practicalId,
+              input: tc.input,
+              expected_output: tc.expected_output,
+              is_hidden: tc.is_hidden || false,
+              time_limit_ms: Number(tc.time_limit_ms) || 2000,
+              memory_limit_kb: Number(tc.memory_limit_kb) || 65536,
+            }));
+            const { error: tcErr } = await supabase.from("test_cases").insert(insertData);
+            if (tcErr) throw tcErr;
+          }
+        }
+        successCount++;
+      } catch (err: any) {
+        console.error(`Error saving draft "${draft.form.title}":`, err);
+        errorCount++;
+      }
+    }
+
+    setSaving(false);
+
+    if (errorCount === 0) {
+      alert(`Successfully created ${successCount} practical(s)!`);
+      onSaved();
+    } else {
+      alert(`Created ${successCount} practical(s), but ${errorCount} failed.`);
+    }
+  };
+
+  // Check if we're in multi-draft mode (creating new, not editing)
+  const isMultiDraftMode = !practical && draftPracticals.length > 0;
+
   // ---------------------- Render ----------------------
   return (
     <AnimatePresence>
@@ -838,139 +1067,343 @@ export default function PracticalForm({
               </div>
             </div>
 
-            {/* Main content container */}
-            <div className="w-full mx-auto px-4 xl:px-12 py-6">
-              {/* Progress indicator - only show if not single step */}
-              {!singleStep && (
-                <div className="mb-6">
-                  <div className="flex items-center justify-center gap-4">
-                    <div className="flex items-center gap-2">
-                      <div
-                        className={cx(
-                          "w-10 h-10 rounded-full flex items-center justify-center font-bold transition-all",
-                          step === 1
-                            ? "bg-gradient-to-br from-blue-600 to-purple-600 text-white shadow-lg"
-                            : "bg-emerald-600 text-white",
-                        )}
+            {/* Main content container with optional sidebar */}
+            <div className={cx(
+              "w-full mx-auto py-6 flex",
+              isMultiDraftMode && !sidebarCollapsed ? "pl-0" : "px-4 xl:px-12"
+            )}>
+              {/* Sidebar for multi-draft mode */}
+              {isMultiDraftMode && step === 1 && (
+                <motion.div
+                  initial={{ width: sidebarCollapsed ? 48 : 280 }}
+                  animate={{ width: sidebarCollapsed ? 48 : 280 }}
+                  transition={{ duration: 0.2 }}
+                  className="shrink-0 border-r border-gray-200 dark:border-gray-700 bg-white/50 dark:bg-gray-900/50 backdrop-blur-sm min-h-[calc(100vh-120px)] sticky top-[60px] self-start"
+                >
+                  {sidebarCollapsed ? (
+                    <div className="p-2 flex flex-col items-center gap-2">
+                      <button
+                        onClick={() => setSidebarCollapsed(false)}
+                        className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 transition-colors"
+                        title="Expand sidebar"
                       >
-                        {step === 1 ? "1" : <CheckIcon />}
+                        <ChevronRight className="w-5 h-5" />
+                      </button>
+                      <div className="w-8 h-px bg-gray-200 dark:bg-gray-700" />
+                      <button
+                        onClick={addDraft}
+                        className="p-2 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-500 text-white shadow-md hover:shadow-lg transition-all"
+                        title="Add practical"
+                      >
+                        <Plus className="w-4 h-4" />
+                      </button>
+                      <div className="flex flex-col gap-1 mt-2">
+                        {draftPracticals.map((_, idx) => (
+                          <button
+                            key={idx}
+                            onClick={() => switchToDraft(idx)}
+                            className={cx(
+                              "w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold transition-all",
+                              idx === activeDraftIndex
+                                ? "bg-indigo-100 dark:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400 ring-2 ring-indigo-500"
+                                : "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700"
+                            )}
+                          >
+                            {idx + 1}
+                          </button>
+                        ))}
                       </div>
-                      <span
-                        className={cx(
-                          "font-semibold",
-                          step === 1
-                            ? "text-gray-900 dark:text-white"
-                            : "text-gray-500 dark:text-gray-400",
-                        )}
-                      >
-                        Practical Details
-                      </span>
                     </div>
+                  ) : (
+                    <div className="p-4 h-full flex flex-col">
+                      {/* Sidebar Header */}
+                      <div className="flex items-center justify-between mb-4">
+                        <h3 className="font-bold text-gray-900 dark:text-white text-sm">
+                          Practicals ({draftPracticals.length})
+                        </h3>
+                        <button
+                          onClick={() => setSidebarCollapsed(true)}
+                          className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 transition-colors"
+                          title="Collapse sidebar"
+                        >
+                          <ChevronLeft className="w-4 h-4" />
+                        </button>
+                      </div>
 
-                    <div
-                      className={cx(
-                        "h-1 w-16 rounded-full",
-                        step === 2
-                          ? "bg-gradient-to-r from-blue-600 to-purple-600"
-                          : "bg-gray-200 dark:bg-gray-700",
+                      {/* Add New Button */}
+                      <button
+                        onClick={addDraft}
+                        className="w-full flex items-center gap-2 px-3 py-2.5 rounded-xl bg-gradient-to-r from-indigo-500 to-purple-500 text-white text-sm font-medium shadow-md hover:shadow-lg hover:-translate-y-0.5 transition-all mb-4"
+                      >
+                        <Plus className="w-4 h-4" />
+                        Add Practical
+                      </button>
+
+                      {/* Draft List */}
+                      <div className="flex-1 overflow-y-auto space-y-2 custom-scrollbar">
+                        {draftPracticals.map((draft, idx) => {
+                          const hasTitle = draft.form.title.trim() !== "";
+                          const hasDeadline = !!draft.form.deadline;
+                          const hasTestCases = draft.testCases.some(tc => tc.input.trim() !== "" || tc.expected_output.trim() !== "");
+                          const displayTitle = hasTitle ? draft.form.title : `Untitled ${idx + 1}`;
+                          const subjectName = subjects.find(s => s.id === draft.form.subject_id)?.subject_name || "No subject";
+
+                          // Calculate completion percentage
+                          const fields = [hasTitle, hasDeadline, hasTestCases];
+                          const completedFields = fields.filter(Boolean).length;
+                          const completionPercent = Math.round((completedFields / fields.length) * 100);
+                          const isComplete = completionPercent === 100;
+
+                          // SVG circle properties for progress ring
+                          const radius = 10;
+                          const circumference = 2 * Math.PI * radius;
+                          const strokeDashoffset = circumference - (completionPercent / 100) * circumference;
+
+                          return (
+                            <div
+                              key={draft.id}
+                              onClick={() => switchToDraft(idx)}
+                              className={cx(
+                                "group relative p-3 rounded-xl cursor-pointer transition-all",
+                                idx === activeDraftIndex
+                                  ? "bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-900/30 dark:to-purple-900/30 border-2 border-indigo-500 shadow-md"
+                                  : "bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 hover:border-indigo-300 dark:hover:border-indigo-700 hover:shadow-sm"
+                              )}
+                            >
+                              <div className="flex items-start gap-3">
+                                {/* Progress Ring */}
+                                <div className="relative shrink-0">
+                                  <svg width="28" height="28" className="transform -rotate-90">
+                                    <circle
+                                      cx="14"
+                                      cy="14"
+                                      r={radius}
+                                      fill="none"
+                                      stroke={idx === activeDraftIndex ? "rgba(99, 102, 241, 0.2)" : "rgba(156, 163, 175, 0.3)"}
+                                      strokeWidth="3"
+                                    />
+                                    <circle
+                                      cx="14"
+                                      cy="14"
+                                      r={radius}
+                                      fill="none"
+                                      stroke={isComplete ? "#10b981" : idx === activeDraftIndex ? "#6366f1" : "#9ca3af"}
+                                      strokeWidth="3"
+                                      strokeLinecap="round"
+                                      strokeDasharray={circumference}
+                                      strokeDashoffset={strokeDashoffset}
+                                      className="transition-all duration-500"
+                                    />
+                                  </svg>
+                                  <div className="absolute inset-0 flex items-center justify-center">
+                                    {isComplete ? (
+                                      <CheckIcon className="w-3 h-3 text-emerald-500" />
+                                    ) : (
+                                      <FileText className={cx(
+                                        "w-3 h-3",
+                                        idx === activeDraftIndex ? "text-indigo-500" : "text-gray-400"
+                                      )} />
+                                    )}
+                                  </div>
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <div className={cx(
+                                    "font-medium text-sm truncate",
+                                    idx === activeDraftIndex
+                                      ? "text-indigo-700 dark:text-indigo-300"
+                                      : hasTitle
+                                        ? "text-gray-900 dark:text-white"
+                                        : "text-gray-400 dark:text-gray-500 italic"
+                                  )}>
+                                    {displayTitle}
+                                  </div>
+                                  <div className="flex items-center gap-2 mt-0.5">
+                                    <span className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                                      {subjectName}
+                                    </span>
+                                    {!isComplete && (
+                                      <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 font-medium">
+                                        {completionPercent}%
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                                {draftPracticals.length > 1 && (
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      removeDraft(idx);
+                                    }}
+                                    className="opacity-0 group-hover:opacity-100 p-1 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/30 text-gray-400 hover:text-red-500 transition-all"
+                                    title="Remove practical"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      {/* Save All Button */}
+                      {draftPracticals.length > 1 && (
+                        <button
+                          onClick={saveAllDrafts}
+                          disabled={saving}
+                          className={cx(
+                            "w-full mt-4 flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-sm font-bold transition-all",
+                            saving
+                              ? "bg-gray-200 dark:bg-gray-700 text-gray-400 cursor-wait"
+                              : "bg-emerald-500 hover:bg-emerald-600 text-white shadow-md hover:shadow-lg"
+                          )}
+                        >
+                          {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckIcon className="w-4 h-4" />}
+                          Save All ({draftPracticals.length})
+                        </button>
                       )}
-                    />
-
-                    <div className="flex items-center gap-2">
-                      <div
-                        className={cx(
-                          "w-10 h-10 rounded-full flex items-center justify-center font-bold transition-all",
-                          step === 2
-                            ? "bg-gradient-to-br from-blue-600 to-purple-600 text-white shadow-lg"
-                            : "bg-gray-200 dark:bg-gray-700 text-gray-400",
-                        )}
-                      >
-                        2
-                      </div>
-                      <span
-                        className={cx(
-                          "font-semibold",
-                          step === 2
-                            ? "text-gray-900 dark:text-white"
-                            : "text-gray-500 dark:text-gray-400",
-                        )}
-                      >
-                        Assign to Students
-                      </span>
                     </div>
-                  </div>
-                </div>
+                  )}
+                </motion.div>
               )}
 
-              {/* ---------- STEP TRANSITIONS ---------- */}
-              <AnimatePresence mode="wait">
-                {step === 1 ? (
-                  <motion.div
-                    key="step1"
-                    initial={{ opacity: 0, x: -20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    exit={{ opacity: 0, x: 20 }}
-                    transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
-                    className="space-y-6"
-                  >
-                    {/* 1. Basic Information */}
-                    <BasicDetailsForm
-                      form={form}
-                      subjects={subjects}
-                      handleInput={handleInput}
-                      defaultSubjectId={defaultSubjectId}
-                      enableLevels={enableLevels}
-                      setEnableLevels={setEnableLevels}
-                      levels={levels}
-                    />
+              {/* Main Form Area */}
+              <div className={cx(
+                "flex-1",
+                isMultiDraftMode && step === 1 ? "px-4 xl:px-8" : ""
+              )}>
+                {/* Progress indicator - only show if not single step */}
+                {!singleStep && (
+                  <div className="mb-6">
+                    <div className="flex items-center justify-center gap-4">
+                      <div className="flex items-center gap-2">
+                        <div
+                          className={cx(
+                            "w-10 h-10 rounded-full flex items-center justify-center font-bold transition-all",
+                            step === 1
+                              ? "bg-gradient-to-br from-blue-600 to-purple-600 text-white shadow-lg"
+                              : "bg-emerald-600 text-white",
+                          )}
+                        >
+                          {step === 1 ? "1" : <CheckIcon />}
+                        </div>
+                        <span
+                          className={cx(
+                            "font-semibold",
+                            step === 1
+                              ? "text-gray-900 dark:text-white"
+                              : "text-gray-500 dark:text-gray-400",
+                          )}
+                        >
+                          Practical Details
+                        </span>
+                      </div>
 
-                    {/* Level Management (Tabs & Content) */}
-                    {enableLevels && (
-                      <LevelManager
-                        levels={levels}
-                        activeLevel={activeLevel}
-                        setActiveLevel={setActiveLevel}
-                        updateLevelField={updateLevelField}
-                        addLevelTestCase={addLevelTestCase}
-                        removeLevelTestCase={removeLevelTestCase}
-                        updateLevelTestCase={updateLevelTestCase}
-                        generateTestCases={generateTestCases}
-                        generatingTests={generatingTests}
-                        sampleCode={sampleCode}
-                        setSampleCode={setSampleCode}
-                        sampleLanguage={sampleLanguage || "c"}
+                      <div
+                        className={cx(
+                          "h-1 w-16 rounded-full",
+                          step === 2
+                            ? "bg-gradient-to-r from-blue-600 to-purple-600"
+                            : "bg-gray-200 dark:bg-gray-700",
+                        )}
                       />
-                    )}
 
-                    {/* Single Level Test Cases & Description */}
-                    {!enableLevels && (
-                      <SingleLevelTestCases
-                        form={form}
-                        handleInput={handleInput}
-                        sampleCode={sampleCode}
-                        setSampleCode={setSampleCode}
-                        sampleLanguage={sampleLanguage}
-                        setSampleLanguage={setSampleLanguage}
-                        getLanguageExtension={getLanguageExtension}
-                        testCases={testCases}
-                        handleTestCaseChange={handleTestCaseChange}
-                        addTestCase={addTestCase}
-                        removeTestCase={removeTestCase}
-                        generateTestCases={generateTestCases}
-                        generatingTests={generatingTests}
-                      />
-                    )}
-                  </motion.div>
-                ) : (
-                  <AssignStudentsStep
-                    students={students}
-                    selectedStudents={selectedStudents}
-                    setSelectedStudents={setSelectedStudents}
-                    filters={filters}
-                    setFilters={setFilters}
-                  />
+                      <div className="flex items-center gap-2">
+                        <div
+                          className={cx(
+                            "w-10 h-10 rounded-full flex items-center justify-center font-bold transition-all",
+                            step === 2
+                              ? "bg-gradient-to-br from-blue-600 to-purple-600 text-white shadow-lg"
+                              : "bg-gray-200 dark:bg-gray-700 text-gray-400",
+                          )}
+                        >
+                          2
+                        </div>
+                        <span
+                          className={cx(
+                            "font-semibold",
+                            step === 2
+                              ? "text-gray-900 dark:text-white"
+                              : "text-gray-500 dark:text-gray-400",
+                          )}
+                        >
+                          Assign to Students
+                        </span>
+                      </div>
+                    </div>
+                  </div>
                 )}
-              </AnimatePresence>
+
+                {/* ---------- STEP TRANSITIONS ---------- */}
+                <AnimatePresence mode="wait">
+                  {step === 1 ? (
+                    <motion.div
+                      key="step1"
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={{ opacity: 0, x: 20 }}
+                      transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+                      className="space-y-6"
+                    >
+                      {/* 1. Basic Information */}
+                      <BasicDetailsForm
+                        form={form}
+                        subjects={subjects}
+                        handleInput={handleInput}
+                        defaultSubjectId={defaultSubjectId}
+                        enableLevels={enableLevels}
+                        setEnableLevels={setEnableLevels}
+                        levels={levels}
+                      />
+
+                      {/* Level Management (Tabs & Content) */}
+                      {enableLevels && (
+                        <LevelManager
+                          levels={levels}
+                          activeLevel={activeLevel}
+                          setActiveLevel={setActiveLevel}
+                          updateLevelField={updateLevelField}
+                          addLevelTestCase={addLevelTestCase}
+                          removeLevelTestCase={removeLevelTestCase}
+                          updateLevelTestCase={updateLevelTestCase}
+                          generateTestCases={generateTestCases}
+                          generatingTests={generatingTests}
+                          sampleCode={sampleCode}
+                          setSampleCode={setSampleCode}
+                          sampleLanguage={sampleLanguage || "c"}
+                        />
+                      )}
+
+                      {/* Single Level Test Cases & Description */}
+                      {!enableLevels && (
+                        <SingleLevelTestCases
+                          form={form}
+                          handleInput={handleInput}
+                          sampleCode={sampleCode}
+                          setSampleCode={setSampleCode}
+                          sampleLanguage={sampleLanguage}
+                          setSampleLanguage={setSampleLanguage}
+                          getLanguageExtension={getLanguageExtension}
+                          testCases={testCases}
+                          handleTestCaseChange={handleTestCaseChange}
+                          addTestCase={addTestCase}
+                          removeTestCase={removeTestCase}
+                          generateTestCases={generateTestCases}
+                          generatingTests={generatingTests}
+                        />
+                      )}
+                    </motion.div>
+                  ) : (
+                    <AssignStudentsStep
+                      students={students}
+                      selectedStudents={selectedStudents}
+                      setSelectedStudents={setSelectedStudents}
+                      filters={filters}
+                      setFilters={setFilters}
+                    />
+                  )}
+                </AnimatePresence>
+              </div>
             </div>
           </motion.div>
         </motion.div>
