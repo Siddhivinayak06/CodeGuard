@@ -51,6 +51,7 @@ export async function GET() {
           description,
           language,
           max_marks,
+          practical_number,
           subject_id,
           subjects (
             subject_name,
@@ -94,11 +95,12 @@ export async function GET() {
       return {
         id: p.id,
         assignment_id: sp.id,
+        practical_number: p.practical_number,
         title: p.title,
         description: p.description,
         language: p.language,
         max_marks: p.max_marks,
-        assigned_deadline: sp.assigned_deadline,
+        deadline: sp.assigned_deadline,
         status: finalStatus,
         notes: sp.notes,
         assigned_at: sp.assigned_at,

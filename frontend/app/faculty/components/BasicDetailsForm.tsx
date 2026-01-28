@@ -111,25 +111,49 @@ export default function BasicDetailsForm({
         </div>
       </motion.div>
 
-      {/* Title Field */}
+      {/* Title & Practical No */}
       <motion.div
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.2 }}
-        className="mb-5"
+        className="flex gap-4 mb-5"
       >
-        <FormInput label="Practical Title" required>
-          <input
-            type="text"
-            name="title"
-            value={form.title}
-            onChange={handleInput}
-            onFocus={() => setFocusedField("title")}
-            onBlur={() => setFocusedField(null)}
-            placeholder="e.g., Binary Search Implementation"
-            className={getInputClass("title")}
-          />
-        </FormInput>
+        <div className="w-32 shrink-0">
+          <FormInput label="Practical No" required>
+            <input
+              type="number"
+              name="practical_number"
+              value={form.practical_number || ""}
+              onChange={handleInput}
+              onFocus={() => setFocusedField("practical_number")}
+              onBlur={() => setFocusedField(null)}
+              placeholder={(() => {
+                const selectedSubject = subjects.find(
+                  (s) => String(s.id) === String(form.subject_id)
+                );
+                return selectedSubject?.practical_count
+                  ? String(selectedSubject.practical_count + 1)
+                  : "1";
+              })()}
+              className={cx(getInputClass("practical_number"), "text-center font-bold")}
+              min={1}
+            />
+          </FormInput>
+        </div>
+        <div className="flex-1">
+          <FormInput label="Practical Title" required>
+            <input
+              type="text"
+              name="title"
+              value={form.title}
+              onChange={handleInput}
+              onFocus={() => setFocusedField("title")}
+              onBlur={() => setFocusedField(null)}
+              placeholder="e.g., Binary Search Implementation"
+              className={getInputClass("title")}
+            />
+          </FormInput>
+        </div>
       </motion.div>
 
       {/* Row 2: Subject, Language, Deadline */}
@@ -194,7 +218,7 @@ export default function BasicDetailsForm({
         className="flex flex-wrap items-end justify-between gap-4 pt-5 border-t border-gray-100 dark:border-gray-800"
       >
         <div className="w-36">
-          <FormInput label="Max Marks">
+          <FormInput label="Max Marks" required>
             <input
               type="number"
               name="max_marks"

@@ -24,6 +24,7 @@ import {
   AlertTriangle,
   Layout,
   ChevronRight,
+  List,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Tables } from "@/lib/supabase/database.types";
@@ -94,6 +95,7 @@ interface FormattedPractical {
   id: number;
   subject_id: number | null;
   practical_id: number;
+  practical_number?: number | null;
   title: string;
   description: string | null;
   deadline: string | null;
@@ -198,6 +200,24 @@ function getLanguageColor(lang: string) {
       return "from-yellow-300 to-yellow-500";
     default:
       return "from-indigo-400 to-indigo-600";
+  }
+}
+
+function getStatusGradient(status: string) {
+  switch (status?.toLowerCase()) {
+    case "passed":
+    case "completed":
+      return "from-emerald-400 to-green-600";
+    case "failed":
+      return "from-red-400 to-rose-600";
+    case "in_progress":
+    case "submitted":
+      return "from-blue-400 to-indigo-600";
+    case "overdue":
+      return "from-orange-400 to-red-500";
+    default:
+      // Pending / Assigned
+      return "from-blue-400 to-indigo-600";
   }
 }
 
@@ -379,6 +399,7 @@ export default function StudentPracticals() {
   const [activeFilter, setActiveFilter] = useState<FilterType>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedSubjectId, setSelectedSubjectId] = useState<number | "all">("all");
+  const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
 
   // Result Modal State
   const [viewingSubmission, setViewingSubmission] = useState<Submission | null>(
@@ -603,17 +624,17 @@ export default function StudentPracticals() {
   };
 
   const handleStartPractical = (practical: FormattedPractical) => {
-    // Check Deadline
-    if (practical.deadline && new Date(practical.deadline) < new Date()) {
-      setReattemptRequest({
-        show: true,
-        practical,
-        reason: "",
-        submitting: false,
-        success: false
-      });
-      return;
-    }
+    // Deadline check removed to allow late submissions
+    // if (practical.deadline && new Date(practical.deadline) < new Date()) {
+    //   setReattemptRequest({
+    //     show: true,
+    //     practical,
+    //     reason: "",
+    //     submitting: false,
+    //     success: false
+    //   });
+    //   return;
+    // }
 
     const remainingAttempts = (practical.max_attempts || 1) - (practical.attempt_count || 0);
 
@@ -688,587 +709,762 @@ export default function StudentPracticals() {
     }
   };
 
+  const groupedPracticals = useMemo(() => {
+    const groups: { [key: number]: FormattedPractical[] } = {};
+    const others: FormattedPractical[] = [];
+
+    // Sort practicals by ID/Number first
+    const sorted = [...filteredPracticals].sort((a, b) =>
+      (a.practical_number || a.id) - (b.practical_number || b.id)
+    );
+
+    sorted.forEach((p) => {
+      if (p.subject_id) {
+        if (!groups[p.subject_id]) groups[p.subject_id] = [];
+        groups[p.subject_id].push(p);
+      } else {
+        others.push(p);
+      }
+    });
+
+    return { groups, others };
+  }, [filteredPracticals]);
+
+  const renderPracticalCard = (p: FormattedPractical) => {
+    const isDone = ["passed", "failed", "completed"].includes(p.status);
+    const isSubmitted = p.status === "submitted";
+    const isUrgent =
+      !isDone &&
+      !isSubmitted &&
+      p.deadline &&
+      new Date(p.deadline).getTime() - Date.now() < 3 * 24 * 60 * 60 * 1000;
+    const timeInfo = p.deadline ? formatTimeRemaining(p.deadline) : null;
+
+    return (
+      <motion.div
+        variants={itemVariants}
+        key={p.id}
+        className={cn(
+          "group relative glass-card rounded-2xl p-5 transition-all duration-300 hover:shadow-xl hover:shadow-indigo-500/10 hover:-translate-y-1 border border-white/50 dark:border-gray-700/50 flex flex-col h-full bg-white/40 dark:bg-gray-900/40 backdrop-blur-md",
+          isUrgent
+            ? "border-l-4 border-l-red-500 dark:border-l-red-500 border-t-white/50 border-r-white/50 border-b-white/50"
+            : "hover:border-indigo-500/30 dark:hover:border-indigo-500/30",
+        )}
+      >
+        {/* Card Header & Icon */}
+        <div className="flex items-start justify-between gap-4 mb-4">
+          <div
+            className={`w-12 h-12 shrink-0 rounded-2xl bg-gradient-to-br ${getStatusGradient(
+              p.status,
+            )} flex items-center justify-center shadow-lg shadow-indigo-500/10 group-hover:scale-110 transition-transform duration-300`}
+          >
+            <span className="text-xl font-black text-white">
+              {p.practical_number ?? p.id}
+            </span>
+          </div>
+
+          <div className="flex flex-col items-end gap-1.5">
+            <div className="flex items-center gap-1.5">
+              {isUrgent && (
+                <span className="px-2 py-0.5 rounded-md bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-[10px] font-bold uppercase tracking-wider border border-red-100 dark:border-red-800/50">
+                  Due Soon
+                </span>
+              )}
+              {p.is_locked && (
+                <span className="px-2 py-0.5 rounded-md bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 text-[10px] font-bold uppercase tracking-wider border border-gray-200 dark:border-gray-700">
+                  Locked
+                </span>
+              )}
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className={cn(
+                "px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider border",
+                p.hasLevels
+                  ? "bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400 border-purple-100 dark:border-purple-800/50"
+                  : "bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 border-blue-100 dark:border-blue-800/50"
+              )}>
+                {p.hasLevels ? "Multi-Level" : p.subject_name}
+              </span>
+              <span className="px-2 py-0.5 rounded-md bg-gray-50 dark:bg-gray-800/50 text-gray-500 dark:text-gray-400 text-[10px] font-bold uppercase tracking-wider border border-gray-200 dark:border-gray-700">
+                {p.language || "Any"}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* Content */}
+        <div className="flex-1 mb-5">
+          <h4 className="text-lg font-bold text-gray-900 dark:text-white mb-2 line-clamp-1 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors" title={p.title}>
+            {p.title}
+          </h4>
+
+          {p.deadline && (
+            <div className="flex items-center gap-1.5 mb-3 text-xs font-medium text-gray-500 dark:text-gray-400">
+              <Clock className="w-3.5 h-3.5" />
+              <span className={cn(isUrgent ? "text-red-600 dark:text-red-400 font-bold" : "")}>
+                {new Date(p.deadline).toLocaleDateString(undefined, {
+                  month: "short",
+                  day: "numeric",
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })}
+              </span>
+            </div>
+          )}
+
+          <p className="text-sm text-gray-500 dark:text-gray-400 line-clamp-2 leading-relaxed">
+            {p.description?.replace(/^Problem Statement:?\s*/i, "") || "No description available."}
+          </p>
+        </div>
+
+        {/* Attempts Info */}
+        {(!isDone && (p.max_attempts || 1) > 1) && (
+          <div className="mb-4 pt-3 border-t border-gray-100 dark:border-gray-800/50">
+            <span className={cn(
+              "text-xs px-2 py-1 rounded-md font-medium flex items-center gap-1.5 w-fit",
+              (p.max_attempts || 1) - (p.attempt_count || 0) <= 1
+                ? "bg-red-50 text-red-600 dark:bg-red-900/20 dark:text-red-400"
+                : "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400"
+            )}>
+              <Sparkles className="w-3 h-3" />
+              {(p.max_attempts || 1) - (p.attempt_count || 0)} attempts left
+            </span>
+          </div>
+        )}
+
+        {/* Footer Actions */}
+        <div className="mt-auto pt-4 flex items-center justify-between border-t border-gray-100 dark:border-gray-800/50">
+          {!isDone && !isSubmitted && p.status !== "failed" ? (
+            <Button
+              className={cn(
+                "w-full group-hover:translate-x-1 transition-all duration-300 shadow-md",
+                isUrgent ? "bg-red-600 hover:bg-red-700 shadow-red-500/20" : "bg-indigo-600 hover:bg-indigo-700 shadow-indigo-500/20"
+              )}
+              size="sm"
+              onClick={() => handleStartPractical(p)}
+              disabled={
+                p.is_locked
+              }
+            >
+              <span className="flex items-center gap-2">
+                {p.is_locked
+                  ? "Locked"
+                  : !!p.deadline && new Date(p.deadline) < new Date()
+                    ? "Start (Overdue)"
+                    : p.status === "in_progress"
+                      ? "Continue Solving"
+                      : "Start Assessment"}
+                {!p.is_locked && (
+                  <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
+                )}
+              </span>
+            </Button>
+          ) : (
+            <div className="w-full flex items-center justify-between gap-3">
+              {p.marks_obtained !== undefined && (
+                <div className="flex flex-col">
+                  <span className="text-[10px] text-gray-400 uppercase font-bold tracking-wider">Score</span>
+                  <span className={cn("text-xl font-black leading-none", p.status === "passed" ? "text-emerald-600" : "text-gray-900 dark:text-white")}>
+                    {p.marks_obtained}/{p.max_marks}
+                  </span>
+                </div>
+              )}
+
+              <div className="flex gap-2 ml-auto">
+                {/* Try Again Button */}
+                {p.status === "failed" &&
+                  !p.is_locked &&
+                  (p.attempt_count || 0) < (p.max_attempts || 1) && (
+                    <Button
+                      size="icon"
+                      variant="outline"
+                      onClick={() => handleStartPractical(p)}
+                      className="w-9 h-9 text-orange-600 border-orange-200 hover:bg-orange-50 bg-orange-50/50"
+                      title="Try Again"
+                    >
+                      <RefreshCw className="w-4 h-4" />
+                    </Button>
+                  )}
+
+                {/* Request Reattempt - Only if attempts exhausted (not for deadlines anymore) */}
+                {p.status === "failed" &&
+                  ((p.attempt_count || 0) >= (p.max_attempts || 1)) && (
+                    <Button
+                      size="icon"
+                      variant="outline"
+                      onClick={() => handleRequestReattempt(p)}
+                      className="w-9 h-9 text-purple-600 border-purple-200 hover:bg-purple-50 bg-purple-50/50"
+                      title="Request Reattempt"
+                    >
+                      <AlertTriangle className="w-4 h-4" />
+                    </Button>
+                  )}
+
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  className="bg-gray-100 hover:bg-gray-200 text-gray-700 dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-gray-300"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleViewResult(p.id, p.title);
+                  }}
+                >
+                  {isSubmitted ? "View Submission" : "View Result"}
+                </Button>
+              </div>
+            </div>
+          )}
+        </div>
+      </motion.div>
+    );
+  };
+
+  const renderPracticalListItem = (p: FormattedPractical) => {
+    const isDone = ["passed", "failed", "completed"].includes(p.status);
+    const isSubmitted = p.status === "submitted";
+    const isUrgent =
+      !isDone &&
+      !isSubmitted &&
+      p.deadline &&
+      new Date(p.deadline).getTime() - Date.now() < 3 * 24 * 60 * 60 * 1000;
+
+    return (
+      <motion.div
+        variants={itemVariants}
+        key={p.id}
+        className={cn(
+          "group w-full glass-card rounded-xl p-4 transition-all duration-300 hover:bg-white/60 dark:hover:bg-gray-900/60 border border-white/50 dark:border-gray-700/50 flex flex-col md:flex-row items-start md:items-center gap-4 bg-white/40 dark:bg-gray-900/40 backdrop-blur-md",
+          isUrgent && "border-l-4 border-l-red-500 dark:border-l-red-500"
+        )}
+      >
+        <div className="flex items-center gap-4 flex-1 w-full min-w-0">
+          <div
+            className={`w-10 h-10 shrink-0 rounded-xl bg-gradient-to-br ${getStatusGradient(
+              p.status,
+            )} flex items-center justify-center shadow-md`}
+          >
+            <span className="text-sm font-black text-white">
+              {p.practical_number ?? p.id}
+            </span>
+          </div>
+
+          <div className="flex-1 min-w-0">
+            <div className="flex flex-wrap items-center gap-2 mb-1">
+              <h4 className="text-sm font-bold text-gray-900 dark:text-white truncate" title={p.title}>
+                {p.title}
+              </h4>
+              <div className="flex items-center gap-1.5">
+                {(p.is_locked) && (
+                  <span className="px-1.5 py-0.5 rounded text-[9px] bg-gray-100 text-gray-500 border border-gray-200 uppercase font-bold tracking-wider">Locked</span>
+                )}
+                {isUrgent && <span className="px-1.5 py-0.5 rounded text-[9px] bg-red-100 text-red-600 border border-red-200 uppercase font-bold tracking-wider">Urgent</span>}
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-3 text-xs text-gray-500 dark:text-gray-400">
+              <span className="flex items-center gap-1">
+                <Code2 className="w-3 h-3" />
+                {p.language || "Any"}
+              </span>
+              {p.deadline && (
+                <span className={cn("flex items-center gap-1", isUrgent ? "text-red-600 font-medium" : "")}>
+                  <Clock className="w-3 h-3" />
+                  {new Date(p.deadline).toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                </span>
+              )}
+              {(!isDone && (p.max_attempts || 1) > 1) && (
+                <span className="flex items-center gap-1">
+                  <Sparkles className="w-3 h-3 text-amber-500" />
+                  {(p.max_attempts || 1) - (p.attempt_count || 0)} attempts
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-3 w-full md:w-auto mt-2 md:mt-0 justify-end">
+          {isDone || isSubmitted || p.status === "failed" ? (
+            <div className="flex items-center gap-3">
+              {p.marks_obtained !== undefined && (
+                <div className="text-right">
+                  <div className="text-[10px] text-gray-400 uppercase font-bold">Score</div>
+                  <div className={cn("text-lg font-black leading-none", p.status === "passed" ? "text-emerald-600" : "text-gray-900 dark:text-white")}>
+                    {p.marks_obtained}/{p.max_marks}
+                  </div>
+                </div>
+              )}
+
+              <div className="flex gap-2">
+                {/* Reattempt Actions for Failed/Locked */}
+                {p.status === "failed" && !p.is_locked && (p.attempt_count || 0) < (p.max_attempts || 1) && (!p.deadline || new Date(p.deadline) >= new Date()) && (
+                  <Button size="icon" variant="outline" className="w-8 h-8 text-orange-600 border-orange-200 bg-orange-50/50" onClick={() => handleStartPractical(p)}>
+                    <RefreshCw className="w-3.5 h-3.5" />
+                  </Button>
+                )}
+                {p.status === "failed" && ((p.attempt_count || 0) >= (p.max_attempts || 1) || (!!p.deadline && new Date(p.deadline) < new Date())) && (
+                  <Button size="icon" variant="outline" className="w-8 h-8 text-purple-600 border-purple-200 bg-purple-50/50" onClick={() => handleRequestReattempt(p)}>
+                    <AlertTriangle className="w-3.5 h-3.5" />
+                  </Button>
+                )}
+
+                <Button variant="secondary" size="sm" className="h-8 text-xs" onClick={(e) => { e.stopPropagation(); handleViewResult(p.id, p.title); }}>
+                  {isSubmitted ? "View Submission" : "Result"}
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <Button
+              size="sm"
+              className={cn("h-8 text-xs px-4", isUrgent ? "bg-red-600 hover:bg-red-700" : "bg-indigo-600 hover:bg-indigo-700")}
+              onClick={() => handleStartPractical(p)}
+              disabled={p.is_locked}
+            >
+              {p.is_locked ? "Locked" : !!p.deadline && new Date(p.deadline) < new Date() ? "Start (Overdue)" : "Start"}
+              {!p.is_locked && <ArrowRight className="w-3 h-3 ml-1.5" />}
+            </Button>
+          )}
+        </div>
+      </motion.div>
+    );
+  };
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50/20 to-purple-50/20 dark:from-gray-950 dark:via-indigo-950/10 dark:to-purple-950/10">
-      <div className="pt-24 pb-12 px-4 sm:px-6 lg:px-8 max-w-[1600px] mx-auto">
-        {loading ? (
-          <StudentPracticalsSkeleton />
-        ) : (
-          <>
-            {/* Page Header */}
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50/30 to-purple-50/30 dark:from-gray-950 dark:via-indigo-950/10 dark:to-purple-950/10">
+      <div className="pt-24 pb-12 px-4 sm:px-6 lg:px-8 xl:px-12 w-full mx-auto space-y-8">
+
+        {/* Header Section */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div>
+            <h1 className="text-3xl font-black text-gray-900 dark:text-white tracking-tight">
+              My Practicals
+            </h1>
+            <p className="text-gray-500 dark:text-gray-400 mt-1">
+              Manage your assignments subject-wise
+            </p>
+          </div>
+          <div className="relative w-full md:w-64 group">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4 group-focus-within:text-indigo-500 transition-colors" />
+            <input
+              type="text"
+              placeholder="Search practicals..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-10 pr-4 py-2.5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all shadow-sm"
+            />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-8 items-start">
+
+          {/* Sidebar - Subjects */}
+          <motion.div
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.4 }}
+            className="hidden md:block md:col-span-3 lg:col-span-3 space-y-4 sticky top-24 z-20"
+          >
+            <div className="bg-white/60 dark:bg-gray-900/40 backdrop-blur-xl rounded-2xl border border-white/20 dark:border-gray-800 shadow-sm overflow-hidden flex flex-col max-h-[calc(100vh-140px)]">
+              <div className="p-4 border-b border-gray-200/50 dark:border-gray-800 flex-shrink-0">
+                <h2 className="text-xs font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2">
+                  <BookOpen className="w-3.5 h-3.5" /> Subjects
+                </h2>
+              </div>
+              <div className="p-2 space-y-1 overflow-y-auto custom-scrollbar flex-1">
+                <button
+                  onClick={() => {
+                    setSelectedSubjectId("all");
+                    setActiveFilter("all");
+                  }}
+                  className={cn(
+                    "w-full text-left px-4 py-3 rounded-xl transition-all duration-200 flex items-center justify-between group",
+                    selectedSubjectId === "all"
+                      ? "bg-indigo-50 dark:bg-indigo-500/10 text-indigo-700 dark:text-indigo-400 shadow-sm ring-1 ring-indigo-200 dark:ring-indigo-800"
+                      : "hover:bg-gray-50 dark:hover:bg-gray-800/50 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200"
+                  )}
+                >
+                  <span className="font-bold text-sm">All Subjects</span>
+                  <span className={cn(
+                    "text-[10px] font-bold px-2 py-0.5 rounded-full transition-colors",
+                    selectedSubjectId === "all"
+                      ? "bg-indigo-100 dark:bg-indigo-500/20 text-indigo-600 dark:text-indigo-300"
+                      : "bg-gray-100 dark:bg-gray-800 text-gray-400 group-hover:bg-gray-200 dark:group-hover:bg-gray-700"
+                  )}>
+                    {practicals.length}
+                  </span>
+                </button>
+
+                {subjects.map(subject => (
+                  <button
+                    key={subject.id}
+                    onClick={() => {
+                      setSelectedSubjectId(subject.id);
+                      setActiveFilter("all");
+                    }}
+                    className={cn(
+                      "w-full text-left px-4 py-3 rounded-xl transition-all duration-200 flex items-center justify-between group",
+                      selectedSubjectId === subject.id
+                        ? "bg-indigo-50 dark:bg-indigo-500/10 text-indigo-700 dark:text-indigo-400 shadow-sm ring-1 ring-indigo-200 dark:ring-indigo-800"
+                        : "hover:bg-gray-50 dark:hover:bg-gray-800/50 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200"
+                    )}
+                  >
+                    <div>
+                      <div className="font-bold text-sm">{subject.name}</div>
+                      {subject.code && (
+                        <div className={cn("text-[10px] uppercase font-bold mt-0.5 transition-colors",
+                          selectedSubjectId === subject.id ? "text-indigo-400 dark:text-indigo-300" : "text-gray-400 group-hover:text-gray-500"
+                        )}>
+                          {subject.code}
+                        </div>
+                      )}
+                    </div>
+                    <span className={cn(
+                      "text-[10px] font-bold px-2 py-0.5 rounded-full transition-colors",
+                      selectedSubjectId === subject.id
+                        ? "bg-indigo-100 dark:bg-indigo-500/20 text-indigo-600 dark:text-indigo-300"
+                        : "bg-gray-100 dark:bg-gray-800 text-gray-400 group-hover:bg-gray-200 dark:group-hover:bg-gray-700"
+                    )}>
+                      {subject.count}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </motion.div>
+
+          {/* Main Content */}
+          <div className="col-span-1 md:col-span-9 lg:col-span-9 space-y-6">
+            {/* Stats Check */}
             <motion.div
               variants={containerVariants}
               initial="hidden"
               animate="visible"
-              className="mb-8"
+              className="grid grid-cols-2 lg:grid-cols-4 gap-4"
             >
-              <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
-                <div>
-                  <h1 className="text-3xl font-black text-gray-900 dark:text-white tracking-tight">
-                    My Practicals
-                  </h1>
-                  <p className="text-gray-500 dark:text-gray-400 mt-1 font-medium">
-                    Manage your assignments subject-wise
-                  </p>
+              {/* Simplified Stats for cleaner look */}
+              <div className="glass-card rounded-2xl p-4 flex flex-col gap-1 items-start">
+                <p className="text-xs text-gray-400 font-bold uppercase">Total</p>
+                <div className="text-2xl font-black text-gray-900 dark:text-white flex items-center gap-2">
+                  {stats.total}
+                  <Layout className="w-5 h-5 text-indigo-500 opacity-50" />
                 </div>
-                {practicals.length > 0 && (
-                  <div className="relative w-full md:w-80">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
-                    <input
-                      type="text"
-                      placeholder="Search practicals..."
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      className="w-full pl-9 pr-4 py-2 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all text-sm font-medium placeholder:text-gray-400 h-10 shadow-sm"
-                    />
-                  </div>
-                )}
+              </div>
+              <div className="glass-card rounded-2xl p-4 flex flex-col gap-1 items-start">
+                <p className="text-xs text-gray-400 font-bold uppercase">Completed</p>
+                <div className="text-2xl font-black text-gray-900 dark:text-white flex items-center gap-2">
+                  {stats.completed}
+                  <CheckCircle2 className="w-5 h-5 text-emerald-500 opacity-50" />
+                </div>
+              </div>
+              <div className="glass-card rounded-2xl p-4 flex flex-col gap-1 items-start">
+                <p className="text-xs text-gray-400 font-bold uppercase">Pending</p>
+                <div className="text-2xl font-black text-gray-900 dark:text-white flex items-center gap-2">
+                  {stats.pending}
+                  <Clock className="w-5 h-5 text-amber-500 opacity-50" />
+                </div>
+              </div>
+              <div className="glass-card rounded-2xl p-4 flex items-center gap-4">
+                <div className="relative w-12 h-12 flex items-center justify-center">
+                  <ProgressRing progress={stats.progress} size={48} strokeWidth={4} showLabel={false} />
+                  <span className="absolute text-[10px] font-bold text-gray-700 dark:text-gray-300">{Math.round(stats.progress)}%</span>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500 font-bold uppercase">Progress</p>
+                  <p className="text-[10px] text-gray-400">Current Scope</p>
+                </div>
               </div>
             </motion.div>
 
-            <div className="grid grid-cols-1 md:grid-cols-12 gap-8">
-              {/* Mobile Subject Selector (Horizontal Scroll) */}
-              <div className="md:hidden col-span-1 overflow-x-auto pb-2 -mx-4 px-4 scrollbar-hide">
-                <div className="flex gap-2">
+            {/* Filters */}
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-4 sticky top-24 z-40 py-3 bg-gray-50 dark:bg-gray-950 shadow-md rounded-xl px-4 border border-gray-200 dark:border-gray-800">
+              <div className="flex items-center gap-4">
+                <h2 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                  <span className="w-1.5 h-6 bg-indigo-500 rounded-full"></span>
+                  {selectedSubjectId === "all" ? "Assignment Overview" : subjects.find(s => s.id === selectedSubjectId)?.name || "Assignments"}
+                </h2>
+                <div className="flex p-0.5 rounded-lg bg-gray-200 dark:bg-gray-800 border border-gray-300 dark:border-gray-700">
                   <button
-                    onClick={() => {
-                      setSelectedSubjectId("all");
-                      setActiveFilter("all");
-                    }}
+                    onClick={() => setViewMode("grid")}
                     className={cn(
-                      "flex items-center gap-2 px-4 py-2 rounded-full whitespace-nowrap text-sm font-bold transition-all",
-                      selectedSubjectId === "all"
-                        ? "bg-indigo-600 text-white shadow-md shadow-indigo-500/20"
-                        : "bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-gray-700"
+                      "p-1.5 rounded-md transition-all",
+                      viewMode === "grid"
+                        ? "bg-white dark:bg-gray-700 shadow-sm text-indigo-600 dark:text-indigo-400"
+                        : "text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
                     )}
+                    title="Grid View"
                   >
-                    <BookOpen className="w-4 h-4" />
-                    All Subjects
-                    <span className={cn(
-                      "text-[10px] px-1.5 py-0.5 rounded-full ml-1",
-                      selectedSubjectId === "all" ? "bg-white/20" : "bg-gray-100 dark:bg-gray-700"
-                    )}>
-                      {practicals.length}
-                    </span>
+                    <Layout className="w-4 h-4" />
                   </button>
-                  {subjects.map(s => (
-                    <button
-                      key={s.id}
-                      onClick={() => {
-                        setSelectedSubjectId(s.id);
-                        setActiveFilter("all");
-                      }}
-                      className={cn(
-                        "flex items-center gap-2 px-4 py-2 rounded-full whitespace-nowrap text-sm font-bold transition-all",
-                        selectedSubjectId === s.id
-                          ? "bg-indigo-600 text-white shadow-md shadow-indigo-500/20"
-                          : "bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-gray-700"
-                      )}
-                    >
-                      {s.name}
-                      <span className={cn(
-                        "text-[10px] px-1.5 py-0.5 rounded-full ml-1",
-                        selectedSubjectId === s.id ? "bg-white/20" : "bg-gray-100 dark:bg-gray-700"
-                      )}>
-                        {s.count}
-                      </span>
-                    </button>
-                  ))}
+                  <button
+                    onClick={() => setViewMode("list")}
+                    className={cn(
+                      "p-1.5 rounded-md transition-all",
+                      viewMode === "list"
+                        ? "bg-white dark:bg-gray-700 shadow-sm text-indigo-600 dark:text-indigo-400"
+                        : "text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                    )}
+                    title="List View"
+                  >
+                    <List className="w-4 h-4" />
+                  </button>
                 </div>
               </div>
-
-              {/* Desktop Sidebar - Subjects */}
-              <motion.div
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ duration: 0.4 }}
-                className="hidden md:block md:col-span-3 lg:col-span-3 space-y-4"
-              >
-                <div className="bg-white/60 dark:bg-gray-900/40 backdrop-blur-xl rounded-2xl border border-white/20 dark:border-gray-800 shadow-sm overflow-hidden">
-                  <div className="p-4 border-b border-gray-200/50 dark:border-gray-800">
-                    <h2 className="text-sm font-bold text-gray-400 uppercase tracking-wider flex items-center gap-2">
-                      <BookOpen className="w-4 h-4" /> Subjects
-                    </h2>
-                  </div>
-                  <div className="p-2 space-y-1">
-                    <button
-                      onClick={() => {
-                        setSelectedSubjectId("all");
-                        setActiveFilter("all");
-                      }}
-                      className={cn(
-                        "w-full text-left px-4 py-3 rounded-xl transition-all duration-200 flex items-center justify-between group",
-                        selectedSubjectId === "all"
-                          ? "bg-indigo-600 text-white shadow-md shadow-indigo-500/20"
-                          : "hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-400"
-                      )}
-                    >
-                      <span className="font-semibold">All Subjects</span>
-                      <span className={cn(
-                        "text-xs font-bold px-2 py-0.5 rounded-md",
-                        selectedSubjectId === "all" ? "bg-white/20 text-white" : "bg-gray-100 dark:bg-gray-800 text-gray-500"
-                      )}>
-                        {practicals.length}
-                      </span>
-                    </button>
-
-                    {subjects.map(subject => (
-                      <button
-                        key={subject.id}
-                        onClick={() => {
-                          setSelectedSubjectId(subject.id);
-                          setActiveFilter("all");
-                        }}
-                        className={cn(
-                          "w-full text-left px-4 py-3 rounded-xl transition-all duration-200 flex items-center justify-between group",
-                          selectedSubjectId === subject.id
-                            ? "bg-indigo-600 text-white shadow-md shadow-indigo-500/20"
-                            : "hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-400"
-                        )}
-                      >
-                        <div>
-                          <div className="font-bold text-sm">{subject.name}</div>
-                          {subject.code && (
-                            <div className={cn("text-xs mt-0.5", selectedSubjectId === subject.id ? "text-indigo-200" : "text-gray-400")}>
-                              {subject.code}
-                            </div>
-                          )}
-                        </div>
-                        <span className={cn(
-                          "text-xs font-bold px-2 py-0.5 rounded-md",
-                          selectedSubjectId === subject.id ? "bg-white/20 text-white" : "bg-gray-100 dark:bg-gray-800 text-gray-500"
-                        )}>
-                          {subject.count}
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </motion.div>
-
-              {/* Main Content */}
-              <div className="md:col-span-9 lg:col-span-9 space-y-6">
-                {/* Stats */}
-                <motion.div
-                  variants={containerVariants}
-                  initial="hidden"
-                  animate="visible"
-                  className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4"
-                >
-                  <div className="glass-card rounded-2xl p-4 flex items-center gap-4">
-                    <div className="h-12 w-12 rounded-full bg-indigo-50 dark:bg-indigo-900/20 flex items-center justify-center">
-                      <Layout className="w-6 h-6 text-indigo-600 dark:text-indigo-400" />
-                    </div>
-                    <div>
-                      <p className="text-xs text-gray-500 font-bold uppercase">Total</p>
-                      <p className="text-2xl font-black text-gray-900 dark:text-white">{stats.total}</p>
-                    </div>
-                  </div>
-
-                  <div className="glass-card rounded-2xl p-4 flex items-center gap-4">
-                    <div className="h-12 w-12 rounded-full bg-emerald-50 dark:bg-emerald-900/20 flex items-center justify-center">
-                      <CheckCircle2 className="w-6 h-6 text-emerald-600 dark:text-emerald-400" />
-                    </div>
-                    <div>
-                      <p className="text-xs text-gray-500 font-bold uppercase">Completed</p>
-                      <p className="text-2xl font-black text-gray-900 dark:text-white">{stats.completed}</p>
-                    </div>
-                  </div>
-
-                  <div className="glass-card rounded-2xl p-4 flex items-center gap-4">
-                    <div className="h-12 w-12 rounded-full bg-amber-50 dark:bg-amber-900/20 flex items-center justify-center">
-                      <Clock className="w-6 h-6 text-amber-600 dark:text-amber-400" />
-                    </div>
-                    <div>
-                      <p className="text-xs text-gray-500 font-bold uppercase">Pending</p>
-                      <p className="text-2xl font-black text-gray-900 dark:text-white">{stats.pending}</p>
-                    </div>
-                  </div>
-
-                  <div className="glass-card rounded-2xl p-4 flex items-center gap-4">
-                    <div className="h-12 w-12 rounded-full flex items-center justify-center relative">
-                      <ProgressRing progress={stats.progress} size={50} strokeWidth={4} showLabel={false} />
-                      <span className="absolute text-[10px] font-bold">{stats.progress}%</span>
-                    </div>
-                    <div>
-                      <p className="text-xs text-gray-500 font-bold uppercase">Progress</p>
-                      <p className="text-xs text-gray-400 font-medium">For selected subject</p>
-                    </div>
-                  </div>
-                </motion.div>
-
-                {/* Filters & List */}
-                <div className="flex flex-col gap-4">
-                  <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-                    <h2 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                      {selectedSubjectId === "all" ? "All Assignments" : subjects.find(s => s.id === selectedSubjectId)?.name || "Assignments"}
-                    </h2>
-                    <FilterTabs
-                      activeFilter={activeFilter}
-                      onFilterChange={setActiveFilter}
-                      counts={{
-                        all: stats.total,
-                        pending: stats.pending,
-                        overdue: stats.overdue,
-                        completed: stats.completed,
-                      }}
-                    />
-                  </div>
-
-                  {filteredPracticals.length === 0 ? (
-                    <motion.div
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      className="text-center py-16 bg-white/50 dark:bg-gray-800/20 rounded-3xl border border-dashed border-gray-300 dark:border-gray-700"
-                    >
-                      <FileCode className="w-16 h-16 text-gray-300 dark:text-gray-600 mx-auto mb-4" />
-                      <h3 className="text-xl font-bold text-gray-900 dark:text-white">
-                        No practicals found
-                      </h3>
-                      <p className="text-gray-500 dark:text-gray-400 max-w-sm mx-auto mt-2">
-                        There are no assignments matching your current filters for this subject.
-                      </p>
-                    </motion.div>
-                  ) : (
-                    <motion.div
-                      key={selectedSubjectId} // Force fresh animation/state on subject change
-                      variants={containerVariants}
-                      initial="hidden"
-                      animate="visible"
-                      className="flex flex-col gap-3"
-                    >
-                      {filteredPracticals.map((p) => {
-                        const isDone = ["passed", "failed", "completed"].includes(p.status);
-                        const isSubmitted = p.status === "submitted";
-                        const isUrgent = !isDone && !isSubmitted && p.deadline && new Date(p.deadline).getTime() - Date.now() < 3 * 24 * 60 * 60 * 1000;
-                        const timeInfo = p.deadline ? formatTimeRemaining(p.deadline) : null;
-
-                        return (
-                          <motion.div
-                            variants={itemVariants}
-                            key={p.id}
-                            className={cn(
-                              "group relative glass-card rounded-2xl p-5 transition-all duration-300 hover:shadow-lg hover:-translate-y-0.5 border border-white/50 dark:border-gray-700/50",
-                              isUrgent ? "border-red-200/60 dark:border-red-800/40 bg-red-50/30 dark:bg-red-900/10" : ""
-                            )}
-                          >
-                            {/* Card Layout */}
-                            <div className="flex flex-col md:flex-row gap-5">
-                              {/* Icon */}
-                              <div className="flex-shrink-0">
-                                <div
-                                  className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${getLanguageGradient(p.language || "")} flex items-center justify-center shadow-lg shadow-indigo-500/10 group-hover:scale-105 transition-transform`}
-                                >
-                                  <Code className="w-7 h-7 text-white" />
-                                </div>
-                              </div>
-
-                              {/* Content */}
-                              <div className="flex-1 min-w-0 py-1">
-                                <div className="flex flex-wrap items-center gap-2 mb-1.5">
-                                  <h4 className="text-lg font-bold text-gray-900 dark:text-white truncate">
-                                    {p.title}
-                                  </h4>
-                                  {isUrgent && (
-                                    <span className="px-2 py-0.5 rounded-full bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 text-[10px] font-bold uppercase tracking-wide">
-                                      Due Soon
-                                    </span>
-                                  )}
-                                  {p.is_locked && (
-                                    <span className="px-2 py-0.5 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 text-[10px] font-bold uppercase tracking-wide">
-                                      Locked
-                                    </span>
-                                  )}
-                                  <span className={cn(
-                                    "px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide",
-                                    p.hasLevels ? "bg-purple-100 text-purple-600" : "bg-blue-100 text-blue-600"
-                                  )}>
-                                    {p.hasLevels ? "Multi-Level" : p.subject_name}
-                                  </span>
-                                </div>
-
-                                <p className="text-sm text-gray-500 dark:text-gray-400 line-clamp-2 mb-3 leading-relaxed">
-                                  {p.description?.replace(/^Problem Statement:?\s*/i, "") || "No description available."}
-                                </p>
-
-                                <div className="flex flex-wrap items-center gap-3">
-                                  {/* Language Tag */}
-                                  <span className="text-xs px-2 py-1 rounded-md bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 font-semibold border border-gray-200 dark:border-gray-700">
-                                    {p.language || "Any"}
-                                  </span>
-
-                                  {/* Deadline Tag */}
-                                  {p.deadline && !isDone && !isSubmitted && (
-                                    <span
-                                      className={`text-xs px-2 py-1 rounded-md font-bold flex items-center gap-1.5
-                                                                ${timeInfo?.urgency === "overdue"
-                                          ? "bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400"
-                                          : timeInfo?.urgency === "urgent"
-                                            ? "bg-orange-50 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400"
-                                            : "bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-400"
-                                        }
-                                                              `}
-                                    >
-                                      <Clock className="w-3 h-3" />
-                                      {timeInfo?.text}
-                                    </span>
-                                  )}
-
-                                  {/* Attempts Tag */}
-                                  {!isDone && (p.max_attempts || 1) > 1 && (
-                                    <span className={cn(
-                                      "text-xs px-2 py-1 rounded-md font-medium flex items-center gap-1",
-                                      (p.max_attempts || 1) - (p.attempt_count || 0) <= 1 ? "text-red-500" : "text-gray-500"
-                                    )}>
-                                      <Sparkles className="w-3 h-3" />
-                                      {(p.max_attempts || 1) - (p.attempt_count || 0)} attempts left
-                                    </span>
-                                  )}
-                                </div>
-                              </div>
-
-                              {/* Actions */}
-                              <div className="flex flex-col gap-3 justify-center md:items-end w-full md:w-auto pt-4 md:pt-0 border-t md:border-t-0 border-gray-100 dark:border-gray-800">
-                                {!isDone && !isSubmitted && p.status !== "failed" ? (
-                                  <Button
-                                    className="w-full md:w-32 shadow-md shadow-indigo-500/20"
-                                    size="sm"
-                                    variant={timeInfo?.urgency === "overdue" ? "destructive" : "default"}
-                                    onClick={() => handleStartPractical(p)}
-                                    disabled={p.is_locked || (!!p.deadline && new Date(p.deadline) < new Date())}
-                                  >
-                                    {p.is_locked ? "Locked" : (!!p.deadline && new Date(p.deadline) < new Date()) ? "Deadline Passed" : p.status === "in_progress" ? "Continue" : "Start"}
-                                    {!p.is_locked && (!p.deadline || new Date(p.deadline) >= new Date()) && <ArrowRight className="ml-2 w-4 h-4" />}
-                                  </Button>
-                                ) : (
-                                  <div className="flex flex-col items-end gap-2 text-right">
-                                    {p.marks_obtained !== undefined && (
-                                      <div className="text-sm font-bold flex flex-col items-end">
-                                        <span className="text-gray-400 text-[10px] uppercase">Score</span>
-                                        <span className={cn(
-                                          "text-lg",
-                                          p.status === "passed" ? "text-emerald-600" : "text-gray-700 dark:text-white"
-                                        )}>
-                                          {p.marks_obtained}/{p.max_marks}
-                                        </span>
-                                      </div>
-                                    )}
-
-                                    <Button
-                                      variant="secondary"
-                                      size="sm"
-                                      className="w-full md:w-auto"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        handleViewResult(p.id, p.title);
-                                      }}
-                                    >
-                                      {isSubmitted ? "Pending Review" : "View Result"}
-                                    </Button>
-
-                                    {/* Try Again - only if attempts left AND deadline not passed */}
-                                    {p.status === "failed" && !p.is_locked && (p.attempt_count || 0) < (p.max_attempts || 1) && (!p.deadline || new Date(p.deadline) >= new Date()) && (
-                                      <Button
-                                        size="sm"
-                                        variant="outline"
-                                        onClick={() => handleStartPractical(p)}
-                                        className="w-full md:w-auto text-orange-600 border-orange-200 hover:bg-orange-50"
-                                      >
-                                        <RefreshCw className="w-3.5 h-3.5 mr-1.5" />
-                                        Try Again
-                                      </Button>
-                                    )}
-
-                                    {/* Request Reattempt - when failed AND (no attempts remaining OR deadline passed) */}
-                                    {p.status === "failed" && ((p.attempt_count || 0) >= (p.max_attempts || 1) || (!!p.deadline && new Date(p.deadline) < new Date())) && (
-                                      <Button
-                                        size="sm"
-                                        variant="outline"
-                                        onClick={() => handleRequestReattempt(p)}
-                                        className="w-full md:w-auto text-purple-600 border-purple-200 hover:bg-purple-50 dark:text-purple-400 dark:border-purple-800 dark:hover:bg-purple-900/20"
-                                      >
-                                        <AlertTriangle className="w-3.5 h-3.5 mr-1.5" />
-                                        Request Reattempt
-                                      </Button>
-                                    )}
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          </motion.div>
-                        );
-                      })}
-                    </motion.div>
-                  )}
-                </div>
-              </div>
+              <FilterTabs
+                activeFilter={activeFilter}
+                onFilterChange={setActiveFilter}
+                counts={{
+                  all: stats.total,
+                  pending: stats.pending,
+                  overdue: stats.overdue,
+                  completed: stats.completed,
+                }}
+              />
             </div>
 
-            <AnimatePresence>
-              {viewingSubmission && (
-                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-sm animate-fadeIn">
-                  <div className="glass-card-premium rounded-3xl w-full max-w-5xl max-h-[90vh] overflow-hidden flex flex-col animate-scaleIn">
-                    {/* Modal Header */}
-                    <div className="flex items-center justify-between p-6 border-b border-gray-100 dark:border-gray-800 bg-white/80 dark:bg-gray-900/80 backdrop-blur-md sticky top-0 z-10">
+            {/* Practicals Grid */}
+            {filteredPracticals.length === 0 ? (
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="text-center py-16 bg-white/50 dark:bg-gray-800/20 rounded-3xl border border-dashed border-gray-300 dark:border-gray-700"
+              >
+                <FileCode className="w-16 h-16 text-gray-300 dark:text-gray-600 mx-auto mb-4" />
+                <h3 className="text-xl font-bold text-gray-900 dark:text-white">
+                  No practicals found
+                </h3>
+                <p className="text-gray-500 dark:text-gray-400 max-w-sm mx-auto mt-2">
+                  Adjust your filters to see assignments.
+                </p>
+              </motion.div>
+            ) : (
+              <AnimatePresence mode="popLayout">
+                {Object.keys(groupedPracticals.groups).map((subjectId) => {
+                  const sId = Number(subjectId);
+                  const subject = subjects.find(s => s.id === sId) || { name: "Unknown Subject", code: "" };
+                  const practicals = groupedPracticals.groups[sId];
+
+                  // If subject filter is active, we don't need group headers if there's only one.
+                  // But if "All Subjects" is active, we definitely want headers.
+                  const showHeader = selectedSubjectId === "all";
+
+                  return (
+                    <motion.div
+                      key={subjectId}
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, scale: 0.95 }}
+                      className="space-y-4"
+                    >
+                      {showHeader && (
+                        <div className="flex items-center gap-3 pb-2 border-b border-gray-200 dark:border-gray-800 mt-6 first:mt-0">
+                          <div className="w-10 h-10 rounded-xl bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center text-indigo-600 dark:text-indigo-400">
+                            <BookOpen className="w-5 h-5" />
+                          </div>
+                          <div>
+                            <h3 className="text-lg font-bold text-gray-900 dark:text-white">
+                              {subject.name}
+                            </h3>
+                            <p className="text-xs text-gray-500 font-medium">
+                              {practicals.length} assignment{practicals.length !== 1 ? 's' : ''}
+                            </p>
+                          </div>
+                        </div>
+                      )}
+
+                      <div className={cn(
+                        "grid gap-4",
+                        viewMode === "grid"
+                          ? "grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5"
+                          : "grid-cols-1"
+                      )}>
+                        {practicals.map(viewMode === "grid" ? renderPracticalCard : renderPracticalListItem)}
+                      </div>
+                    </motion.div>
+                  )
+                })}
+
+                {/* Others / Uncategorized */}
+                {groupedPracticals.others.length > 0 && (
+                  <motion.div className="space-y-4">
+                    <h3 className="text-lg font-bold text-gray-500 uppercase tracking-wider mt-8">Uncategorized</h3>
+                    <div className={cn(
+                      "grid gap-4",
+                      viewMode === "grid"
+                        ? "grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5"
+                        : "grid-cols-1"
+                    )}>
+                      {groupedPracticals.others.map(viewMode === "grid" ? renderPracticalCard : renderPracticalListItem)}
                     </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            )}
+
+          </div>
+        </div>
+      </div>
+
+      <AnimatePresence>
+        {viewingSubmission && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-sm animate-fadeIn">
+            <div className="glass-card-premium rounded-3xl w-full max-w-5xl max-h-[90vh] overflow-hidden flex flex-col animate-scaleIn">
+              {/* Modal Header */}
+              <div className="flex items-center justify-between p-6 border-b border-gray-100 dark:border-gray-800 bg-white/80 dark:bg-gray-900/80 backdrop-blur-md sticky top-0 z-10">
+              </div>
+            </div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Reattempt Request Modal */}
+      <AnimatePresence>
+        {reattemptRequest.show && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-sm animate-fadeIn">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="glass-card-premium rounded-3xl w-full max-w-lg overflow-hidden flex flex-col shadow-2xl"
+            >
+              <div className="p-6 border-b border-gray-100 dark:border-gray-800 bg-gradient-to-r from-purple-50 to-indigo-50 dark:from-purple-900/20 dark:to-indigo-900/20">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-purple-500 to-indigo-600 text-white flex items-center justify-center font-bold shadow-lg shadow-purple-500/20">
+                    <RefreshCw className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-0.5">
+                      Request Reattempt
+                    </h3>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                      {reattemptRequest.practical?.title}
+                    </p>
                   </div>
                 </div>
-              )}
-            </AnimatePresence>
+              </div>
 
-            {/* Reattempt Request Modal */}
-            <AnimatePresence>
-              {reattemptRequest.show && (
-                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-sm animate-fadeIn">
-                  <motion.div
-                    initial={{ opacity: 0, scale: 0.95 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    exit={{ opacity: 0, scale: 0.95 }}
-                    className="glass-card-premium rounded-3xl w-full max-w-lg overflow-hidden flex flex-col shadow-2xl"
-                  >
-                    <div className="p-6 border-b border-gray-100 dark:border-gray-800 bg-gradient-to-r from-purple-50 to-indigo-50 dark:from-purple-900/20 dark:to-indigo-900/20">
-                      <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-purple-500 to-indigo-600 text-white flex items-center justify-center font-bold shadow-lg shadow-purple-500/20">
-                          <RefreshCw className="w-6 h-6" />
-                        </div>
-                        <div>
-                          <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-0.5">
-                            Request Reattempt
-                          </h3>
-                          <p className="text-sm text-gray-500 dark:text-gray-400">
-                            {reattemptRequest.practical?.title}
-                          </p>
-                        </div>
+              <div className="p-6 space-y-4">
+                {!reattemptRequest.success ? (
+                  <>
+                    <div className="p-4 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
+                      <div className="flex gap-3">
+                        <AlertCircle className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                        <p className="text-sm text-amber-800 dark:text-amber-200">
+                          {reattemptRequest.practical?.deadline && new Date(reattemptRequest.practical.deadline) < new Date()
+                            ? "The deadline for this practical has passed. You must request a reattempt or extension from your faculty to continue."
+                            : "You have used all your attempts for this practical. You can request an additional attempt from your faculty."
+                          }
+                        </p>
                       </div>
                     </div>
 
-                    <div className="p-6 space-y-4">
-                      {!reattemptRequest.success ? (
-                        <>
-                          <div className="p-4 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
-                            <div className="flex gap-3">
-                              <AlertCircle className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
-                              <p className="text-sm text-amber-800 dark:text-amber-200">
-                                {reattemptRequest.practical?.deadline && new Date(reattemptRequest.practical.deadline) < new Date()
-                                  ? "The deadline for this practical has passed. You must request a reattempt or extension from your faculty to continue."
-                                  : "You have used all your attempts for this practical. You can request an additional attempt from your faculty."
-                                }
-                              </p>
-                            </div>
-                          </div>
-
-                          <div className="space-y-2">
-                            <label className="text-sm font-bold text-gray-700 dark:text-gray-300">
-                              Reason for Reattempt <span className="text-red-500">*</span>
-                            </label>
-                            <textarea
-                              value={reattemptRequest.reason}
-                              onChange={(e) => setReattemptRequest(prev => ({ ...prev, reason: e.target.value }))}
-                              placeholder="Explain why you need another attempt..."
-                              className="w-full min-h-[100px] p-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 focus:ring-2 focus:ring-purple-500 focus:border-transparent text-sm resize-none"
-                            />
-                          </div>
-                        </>
-                      ) : (
-                        <div className="py-8 text-center space-y-3">
-                          <div className="w-16 h-16 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center mx-auto mb-4">
-                            <CheckCircle2 className="w-8 h-8 text-emerald-600 dark:text-emerald-400" />
-                          </div>
-                          <h4 className="text-xl font-bold text-gray-900 dark:text-white">
-                            Request Sent!
-                          </h4>
-                          <p className="text-gray-500 dark:text-gray-400 max-w-xs mx-auto">
-                            Your faculty will review your request. You'll be notified once it's approved.
-                          </p>
-                        </div>
-                      )}
+                    <div className="space-y-2">
+                      <label className="text-sm font-bold text-gray-700 dark:text-gray-300">
+                        Reason for Reattempt <span className="text-red-500">*</span>
+                      </label>
+                      <textarea
+                        value={reattemptRequest.reason}
+                        onChange={(e) => setReattemptRequest(prev => ({ ...prev, reason: e.target.value }))}
+                        placeholder="Explain why you need another attempt..."
+                        className="w-full min-h-[100px] p-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 focus:ring-2 focus:ring-purple-500 focus:border-transparent text-sm resize-none"
+                      />
                     </div>
-
-                    <div className="p-6 border-t border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-900/50 flex justify-end gap-3">
-                      {!reattemptRequest.success ? (
-                        <>
-                          <Button
-                            variant="ghost"
-                            onClick={() => setReattemptRequest(prev => ({ ...prev, show: false }))}
-                            className="bg-white dark:bg-gray-800"
-                          >
-                            Cancel
-                          </Button>
-                          <Button
-                            onClick={submitReattemptRequest}
-                            disabled={!reattemptRequest.reason.trim() || reattemptRequest.submitting}
-                            className="bg-purple-600 hover:bg-purple-700 text-white"
-                          >
-                            {reattemptRequest.submitting ? (
-                              <>
-                                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                                Sending...
-                              </>
-                            ) : (
-                              "Send Request"
-                            )}
-                          </Button>
-                        </>
-                      ) : (
-                        <Button
-                          className="w-full bg-emerald-600 hover:bg-emerald-700 text-white"
-                          onClick={() => setReattemptRequest(prev => ({ ...prev, show: false }))}
-                        >
-                          Close
-                        </Button>
-                      )}
+                  </>
+                ) : (
+                  <div className="py-8 text-center space-y-3">
+                    <div className="w-16 h-16 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center mx-auto mb-4">
+                      <CheckCircle2 className="w-8 h-8 text-emerald-600 dark:text-emerald-400" />
                     </div>
-                  </motion.div>
-                </div>
-              )}
-            </AnimatePresence>
-
-            {attemptWarning.show && attemptWarning.practical && (
-              <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-sm animate-fadeIn">
-                <div className="glass-card-premium rounded-3xl w-full max-w-md p-6 animate-scaleIn">
-                  <div className="flex items-center gap-4 mb-4">
-                    <div className="w-14 h-14 rounded-2xl bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center">
-                      <AlertTriangle className="w-7 h-7 text-orange-600 dark:text-orange-400" />
-                    </div>
-                    <div>
-                      <h3 className="text-xl font-bold text-gray-900 dark:text-white">
-                        Last Attempt Warning
-                      </h3>
-                    </div>
+                    <h4 className="text-xl font-bold text-gray-900 dark:text-white">
+                      Request Sent!
+                    </h4>
+                    <p className="text-gray-500 dark:text-gray-400 max-w-xs mx-auto">
+                      Your faculty will review your request. You'll be notified once it's approved.
+                    </p>
                   </div>
+                )}
+              </div>
 
-                  <p className="text-gray-600 dark:text-gray-300 mb-6">
-                    You have <strong>1 attempt</strong> remaining. Are you sure you want to start?
-                  </p>
-
-                  <div className="flex gap-3">
+              <div className="p-6 border-t border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-900/50 flex justify-end gap-3">
+                {!reattemptRequest.success ? (
+                  <>
                     <Button
-                      variant="outline"
-                      className="flex-1"
-                      onClick={() =>
-                        setAttemptWarning({ show: false, practical: null })
-                      }
+                      variant="ghost"
+                      onClick={() => setReattemptRequest(prev => ({ ...prev, show: false }))}
+                      className="bg-white dark:bg-gray-800"
                     >
                       Cancel
                     </Button>
                     <Button
-                      className="flex-1 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white"
-                      onClick={() => {
-                        if (attemptWarning.practical) {
-                          navigateToPractical(attemptWarning.practical);
-                        }
-                        setAttemptWarning({ show: false, practical: null });
-                      }}
+                      onClick={submitReattemptRequest}
+                      disabled={!reattemptRequest.reason.trim() || reattemptRequest.submitting}
+                      className="bg-purple-600 hover:bg-purple-700 text-white"
                     >
-                      Start Now
+                      {reattemptRequest.submitting ? (
+                        <>
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                          Sending...
+                        </>
+                      ) : (
+                        "Send Request"
+                      )}
                     </Button>
-                  </div>
-                </div>
+                  </>
+                ) : (
+                  <Button
+                    className="w-full bg-emerald-600 hover:bg-emerald-700 text-white"
+                    onClick={() => setReattemptRequest(prev => ({ ...prev, show: false }))}
+                  >
+                    Close
+                  </Button>
+                )}
               </div>
-            )}
-          </>
+            </motion.div>
+          </div>
         )}
-      </div>
+      </AnimatePresence>
+
+      {attemptWarning.show && attemptWarning.practical && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-sm animate-fadeIn">
+          <div className="glass-card-premium rounded-3xl w-full max-w-md p-6 animate-scaleIn">
+            <div className="flex items-center gap-4 mb-4">
+              <div className="w-14 h-14 rounded-2xl bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center">
+                <AlertTriangle className="w-7 h-7 text-orange-600 dark:text-orange-400" />
+              </div>
+              <div>
+                <h3 className="text-xl font-bold text-gray-900 dark:text-white">
+                  Last Attempt Warning
+                </h3>
+              </div>
+            </div>
+
+            <p className="text-gray-600 dark:text-gray-300 mb-6">
+              You have <strong>1 attempt</strong> remaining. Are you sure you want to start?
+            </p>
+
+            <div className="flex gap-3">
+              <Button
+                variant="outline"
+                className="flex-1"
+                onClick={() =>
+                  setAttemptWarning({ show: false, practical: null })
+                }
+              >
+                Cancel
+              </Button>
+              <Button
+                className="flex-1 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white"
+                onClick={() => {
+                  if (attemptWarning.practical) {
+                    navigateToPractical(attemptWarning.practical);
+                  }
+                  setAttemptWarning({ show: false, practical: null });
+                }}
+              >
+                Start Now
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

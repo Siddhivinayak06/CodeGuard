@@ -22,20 +22,20 @@ const CodeMirror = dynamic(() => import("@uiw/react-codemirror"), {
 
 interface LevelManagerProps {
   levels: Level[];
-  activeLevel: "easy" | "medium" | "hard";
-  setActiveLevel: (level: "easy" | "medium" | "hard") => void;
+  activeLevel: "easy" | "hard";
+  setActiveLevel: (level: "easy" | "hard") => void;
   updateLevelField: (
-    level: "easy" | "medium" | "hard",
+    level: "easy" | "hard",
     field: string,
     value: string | number | boolean,
   ) => void;
-  addLevelTestCase: (level: "easy" | "medium" | "hard") => void;
+  addLevelTestCase: (level: "easy" | "hard") => void;
   removeLevelTestCase: (
-    level: "easy" | "medium" | "hard",
+    level: "easy" | "hard",
     index: number,
   ) => void;
   updateLevelTestCase: (
-    level: "easy" | "medium" | "hard",
+    level: "easy" | "hard",
     index: number,
     field: keyof TestCase,
     value: string | number | boolean,
@@ -98,10 +98,9 @@ export default function LevelManager({
 
       {/* Level Tabs */}
       <div className="flex gap-2 mb-6">
-        {(["easy", "medium", "hard"] as const).map((lvl) => {
+        {(["easy", "hard"] as const).map((lvl) => {
           const levelInfo = {
             easy: { label: "Easy", color: "emerald" },
-            medium: { label: "Medium", color: "amber" },
             hard: { label: "Hard", color: "red" },
           }[lvl];
           const isActive = activeLevel === lvl;

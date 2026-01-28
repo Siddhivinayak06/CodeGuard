@@ -85,29 +85,6 @@ export default function PracticalForm({
       practical_id: 0,
       created_at: "",
       updated_at: "",
-      level: "medium",
-      title: "Medium",
-      description: "",
-      max_marks: 10,
-      testCases: [
-        {
-          id: 0,
-          practical_id: null,
-          level_id: null,
-          created_at: "",
-          input: "",
-          expected_output: "",
-          is_hidden: false,
-          time_limit_ms: 2000,
-          memory_limit_kb: 65536,
-        },
-      ],
-    },
-    {
-      id: 0,
-      practical_id: 0,
-      created_at: "",
-      updated_at: "",
       level: "hard",
       title: "Hard",
       description: "",
@@ -135,7 +112,8 @@ export default function PracticalForm({
     description: "",
     language: "",
     deadline: new Date().toISOString().slice(0, 16),
-    max_marks: 100,
+    max_marks: 10,
+    practical_number: undefined,
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
     submitted: false,
@@ -157,7 +135,7 @@ export default function PracticalForm({
 
   // Multi-level support
   const [levels, setLevels] = useState<Level[]>(defaultLevels);
-  const [activeLevel, setActiveLevel] = useState<"easy" | "medium" | "hard">(
+  const [activeLevel, setActiveLevel] = useState<"easy" | "hard">(
     "easy",
   );
   const [enableLevels, setEnableLevels] = useState(false);
@@ -198,7 +176,8 @@ export default function PracticalForm({
       description: "",
       language: "",
       deadline: new Date().toISOString().slice(0, 16),
-      max_marks: 100,
+      max_marks: 10,
+      practical_number: undefined,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
       submitted: false,
@@ -290,7 +269,8 @@ export default function PracticalForm({
         description: "",
         language: "",
         deadline: new Date().toISOString().slice(0, 16),
-        max_marks: 100,
+        max_marks: 10,
+        practical_number: undefined,
         subject_id: defaultSubjectId
           ? Number(defaultSubjectId)
           : (subjects[0]?.id ?? prev.subject_id),
@@ -397,7 +377,10 @@ export default function PracticalForm({
       | HTMLSelectElement;
     setForm((prev) => ({
       ...prev,
-      [name]: name === "max_marks" ? Number(value) : value,
+      [name]:
+        name === "max_marks" || name === "practical_number"
+          ? Number(value)
+          : value,
     }));
   };
 
@@ -623,10 +606,100 @@ export default function PracticalForm({
     [sampleLanguage],
   );
 
+  // Validate form data
+  const validateForm = useCallback(() => {
+    if (!form.practical_number) {
+      alert("Please enter a Practical Number");
+      return false;
+    }
+    if (!form.title.trim()) {
+      alert("Please enter a Practical Title");
+      return false;
+    }
+
+    if (!form.subject_id) {
+      alert("Please select a Subject");
+      return false;
+    }
+    if (!form.deadline) {
+      alert("Please set a Deadline");
+      return false;
+    }
+
+    if (enableLevels) {
+      if (levels.length === 0) {
+        alert("Please add at least one Level");
+        return false;
+      }
+      for (let i = 0; i < levels.length; i++) {
+        const lvl = levels[i];
+        if (!lvl.title?.trim()) {
+          alert(`Level ${i + 1} must have a title`);
+          return false;
+        }
+        if (!lvl.description?.trim()) {
+          alert(`Level ${i + 1} must have a description`);
+          return false;
+        }
+        if (lvl.max_marks <= 0) {
+          alert(`Level ${i + 1} must have max marks greater than 0`);
+          return false;
+        }
+        // Enforce at least one test case per level for strictness
+        if (lvl.testCases.length === 0) {
+          alert(`Level ${i + 1} must have at least one test case`);
+          return false;
+        }
+      }
+    } else {
+      if (!form.description?.trim()) {
+        alert("Please enter a Description");
+        return false;
+      }
+      if ((form.max_marks ?? 0) <= 0) {
+        alert("Max Marks must be greater than 0");
+        return false;
+      }
+      // Strict: Require at least one test case
+      if (testCases.length === 0) {
+        alert("Please add at least one test case");
+        return false;
+      }
+    }
+
+    return true;
+  }, [form, enableLevels, levels, testCases]);
+
   // Save practical (create/update)
   const handleSave = useCallback(async () => {
+    if (!validateForm()) return false;
+
     setSaving(true);
     try {
+      // Check for duplicate practical number in the same subject
+      if (form.subject_id && form.practical_number) {
+        let query = supabase
+          .from("practicals")
+          .select("id")
+          .eq("subject_id", form.subject_id)
+          .eq("practical_number", form.practical_number);
+
+        const practicalId = Number(form.id) || 0;
+        if (practicalId > 0) {
+          query = query.neq("id", practicalId);
+        }
+
+        const { data: existing, error: checkError } = await query;
+
+        if (checkError) throw checkError;
+
+        if (existing && existing.length > 0) {
+          alert(`Practical Number ${form.practical_number} already exists for this subject.`);
+          setSaving(false);
+          return false;
+        }
+      }
+
       let practicalId = Number(form.id) || 0;
       const payload = {
         title: form.title,
@@ -636,7 +709,8 @@ export default function PracticalForm({
         deadline: form.deadline,
         max_marks: enableLevels
           ? levels.reduce((sum, l) => sum + l.max_marks, 0)
-          : (form.max_marks ?? 100),
+          : (form.max_marks ?? 10),
+        practical_number: form.practical_number,
       };
 
       if (practicalId && practicalId > 0) {
@@ -897,7 +971,7 @@ export default function PracticalForm({
           deadline: draft.form.deadline,
           max_marks: draft.enableLevels
             ? draft.levels.reduce((sum, l) => sum + l.max_marks, 0)
-            : (draft.form.max_marks ?? 100),
+            : (draft.form.max_marks ?? 10),
         };
 
         const { data, error } = await supabase
@@ -1133,10 +1207,12 @@ export default function PracticalForm({
                       {/* Add New Button */}
                       <button
                         onClick={addDraft}
-                        className="w-full flex items-center gap-2 px-3 py-2.5 rounded-xl bg-gradient-to-r from-indigo-500 to-purple-500 text-white text-sm font-medium shadow-md hover:shadow-lg hover:-translate-y-0.5 transition-all mb-4"
+                        className="w-full group flex items-center justify-center gap-2 px-4 py-3 rounded-2xl bg-gradient-to-r from-indigo-600 to-purple-600 text-white text-sm font-bold shadow-lg shadow-indigo-500/20 hover:shadow-indigo-500/40 hover:-translate-y-0.5 transition-all duration-300 mb-6"
                       >
-                        <Plus className="w-4 h-4" />
-                        Add Practical
+                        <div className="p-1 rounded-lg bg-white/20 group-hover:bg-white/30 transition-colors">
+                          <Plus className="w-4 h-4" />
+                        </div>
+                        Add New Practical
                       </button>
 
                       {/* Draft List */}
@@ -1145,7 +1221,7 @@ export default function PracticalForm({
                           const hasTitle = draft.form.title.trim() !== "";
                           const hasDeadline = !!draft.form.deadline;
                           const hasTestCases = draft.testCases.some(tc => tc.input.trim() !== "" || tc.expected_output.trim() !== "");
-                          const displayTitle = hasTitle ? draft.form.title : `Untitled ${idx + 1}`;
+                          const displayTitle = hasTitle ? draft.form.title : `Practical ${idx + 1}`;
                           const subjectName = subjects.find(s => s.id === draft.form.subject_id)?.subject_name || "No subject";
 
                           // Calculate completion percentage
@@ -1164,10 +1240,10 @@ export default function PracticalForm({
                               key={draft.id}
                               onClick={() => switchToDraft(idx)}
                               className={cx(
-                                "group relative p-3 rounded-xl cursor-pointer transition-all",
+                                "group relative p-4 rounded-2xl cursor-pointer transition-all duration-200 border",
                                 idx === activeDraftIndex
-                                  ? "bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-900/30 dark:to-purple-900/30 border-2 border-indigo-500 shadow-md"
-                                  : "bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 hover:border-indigo-300 dark:hover:border-indigo-700 hover:shadow-sm"
+                                  ? "bg-white dark:bg-gray-800 border-indigo-500/50 shadow-lg shadow-indigo-500/10 ring-1 ring-indigo-500/20"
+                                  : "bg-transparent border-transparent hover:bg-gray-50 dark:hover:bg-gray-800/50 hover:border-gray-200 dark:hover:border-gray-700"
                               )}
                             >
                               <div className="flex items-start gap-3">
@@ -1208,25 +1284,27 @@ export default function PracticalForm({
                                 </div>
                                 <div className="flex-1 min-w-0">
                                   <div className={cx(
-                                    "font-medium text-sm truncate",
-                                    idx === activeDraftIndex
-                                      ? "text-indigo-700 dark:text-indigo-300"
-                                      : hasTitle
-                                        ? "text-gray-900 dark:text-white"
-                                        : "text-gray-400 dark:text-gray-500 italic"
+                                    "flex flex-col gap-0.5 min-w-0 font-medium transition-colors",
+                                    idx === activeDraftIndex ? "opacity-100" : "opacity-70 group-hover:opacity-100"
                                   )}>
-                                    {displayTitle}
+                                    <div className={cx(
+                                      "text-[10px] uppercase tracking-wider font-bold mb-0.5",
+                                      idx === activeDraftIndex
+                                        ? "text-indigo-600 dark:text-indigo-400"
+                                        : "text-gray-500 dark:text-gray-400"
+                                    )}>
+                                      Practical {draft.form.practical_number ?? idx + 1}
+                                    </div>
+                                    <div className={cx(
+                                      "truncate text-sm font-semibold",
+                                      idx === activeDraftIndex
+                                        ? "text-gray-900 dark:text-white"
+                                        : "text-gray-700 dark:text-gray-300"
+                                    )}>
+                                      {hasTitle ? draft.form.title : "Untitled Practical"}
+                                    </div>
                                   </div>
-                                  <div className="flex items-center gap-2 mt-0.5">
-                                    <span className="text-xs text-gray-500 dark:text-gray-400 truncate">
-                                      {subjectName}
-                                    </span>
-                                    {!isComplete && (
-                                      <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 font-medium">
-                                        {completionPercent}%
-                                      </span>
-                                    )}
-                                  </div>
+
                                 </div>
                                 {draftPracticals.length > 1 && (
                                   <button
@@ -1258,8 +1336,10 @@ export default function PracticalForm({
                               : "bg-emerald-500 hover:bg-emerald-600 text-white shadow-md hover:shadow-lg"
                           )}
                         >
-                          {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckIcon className="w-4 h-4" />}
-                          Save All ({draftPracticals.length})
+                          <span className="relative z-10 flex items-center gap-2">
+                            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckIcon className="w-4 h-4" />}
+                            Save All ({draftPracticals.length})
+                          </span>
                         </button>
                       )}
                     </div>
@@ -1406,8 +1486,9 @@ export default function PracticalForm({
               </div>
             </div>
           </motion.div>
-        </motion.div>
-      )}
-    </AnimatePresence>
+        </motion.div >
+      )
+      }
+    </AnimatePresence >
   );
 }

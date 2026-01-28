@@ -11,6 +11,7 @@ type Practical = {
   deadline: string; // ISO string
   max_marks?: number;
   created_at?: string;
+  practical_number?: number;
 };
 
 function cn(...parts: Array<string | false | null | undefined>) {
@@ -44,15 +45,15 @@ export default function PracticalCard({
 
   const deadlineLabel = isValidDate
     ? safeDeadline.toLocaleDateString("en-US", {
-        month: "short",
-        day: "numeric",
-        year: "numeric",
-      }) +
-      " • " +
-      safeDeadline.toLocaleTimeString("en-US", {
-        hour: "2-digit",
-        minute: "2-digit",
-      })
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    }) +
+    " • " +
+    safeDeadline.toLocaleTimeString("en-US", {
+      hour: "2-digit",
+      minute: "2-digit",
+    })
     : "No deadline";
 
   return (
@@ -65,6 +66,7 @@ export default function PracticalCard({
         <div className="flex-1 min-w-0 space-y-3">
           <div>
             <h3 className="font-semibold text-lg text-gray-900 dark:text-white mb-1.5 truncate">
+              {practical.practical_number ? <span className="mr-2 font-mono opacity-60">#{practical.practical_number}</span> : null}
               {practical.title}
             </h3>
 
