@@ -112,9 +112,10 @@ interface FormattedPractical {
   subject_code?: string;
   language: string | null;
   hasLevels: boolean;
-  attempt_count?: number;
-  max_attempts?: number;
-  is_locked?: boolean;
+  attempt_count: number;
+  max_attempts: number;
+  is_locked: boolean;
+  lock_reason?: string | null;
   marks_obtained?: number;
   max_marks?: number;
   notes?: string | null;
@@ -625,18 +626,10 @@ export default function StudentPracticals() {
 
   const handleStartPractical = (practical: FormattedPractical) => {
     // Deadline check removed to allow late submissions
-    // if (practical.deadline && new Date(practical.deadline) < new Date()) {
-    //   setReattemptRequest({
-    //     show: true,
-    //     practical,
-    //     reason: "",
-    //     submitting: false,
-    //     success: false
-    //   });
     //   return;
     // }
 
-    const remainingAttempts = (practical.max_attempts || 1) - (practical.attempt_count || 0);
+    const remainingAttempts = practical.max_attempts - practical.attempt_count;
 
     if (remainingAttempts <= 0) {
       alert("You have no remaining attempts for this practical.");
@@ -818,16 +811,16 @@ export default function StudentPracticals() {
         </div>
 
         {/* Attempts Info */}
-        {(!isDone && (p.max_attempts || 1) > 1) && (
+        {(!isDone && p.max_attempts > 1) && (
           <div className="mb-4 pt-3 border-t border-gray-100 dark:border-gray-800/50">
             <span className={cn(
               "text-xs px-2 py-1 rounded-md font-medium flex items-center gap-1.5 w-fit",
-              (p.max_attempts || 1) - (p.attempt_count || 0) <= 1
+              p.max_attempts - p.attempt_count <= 1
                 ? "bg-red-50 text-red-600 dark:bg-red-900/20 dark:text-red-400"
                 : "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400"
             )}>
               <Sparkles className="w-3 h-3" />
-              {(p.max_attempts || 1) - (p.attempt_count || 0)} attempts left
+              {p.max_attempts - p.attempt_count} attempts left
             </span>
           </div>
         )}
@@ -874,7 +867,7 @@ export default function StudentPracticals() {
                 {/* Try Again Button */}
                 {p.status === "failed" &&
                   !p.is_locked &&
-                  (p.attempt_count || 0) < (p.max_attempts || 1) && (
+                  p.attempt_count < p.max_attempts && (
                     <Button
                       size="icon"
                       variant="outline"
@@ -888,7 +881,7 @@ export default function StudentPracticals() {
 
                 {/* Request Reattempt - Only if attempts exhausted (not for deadlines anymore) */}
                 {p.status === "failed" &&
-                  ((p.attempt_count || 0) >= (p.max_attempts || 1)) && (
+                  (p.attempt_count >= p.max_attempts) && (
                     <Button
                       size="icon"
                       variant="outline"
@@ -972,10 +965,10 @@ export default function StudentPracticals() {
                   {new Date(p.deadline).toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                 </span>
               )}
-              {(!isDone && (p.max_attempts || 1) > 1) && (
+              {(!isDone && p.max_attempts > 1) && (
                 <span className="flex items-center gap-1">
                   <Sparkles className="w-3 h-3 text-amber-500" />
-                  {(p.max_attempts || 1) - (p.attempt_count || 0)} attempts
+                  {p.max_attempts - p.attempt_count} attempts
                 </span>
               )}
             </div>
@@ -996,12 +989,12 @@ export default function StudentPracticals() {
 
               <div className="flex gap-2">
                 {/* Reattempt Actions for Failed/Locked */}
-                {p.status === "failed" && !p.is_locked && (p.attempt_count || 0) < (p.max_attempts || 1) && (!p.deadline || new Date(p.deadline) >= new Date()) && (
+                {p.status === "failed" && !p.is_locked && p.attempt_count < p.max_attempts && (!p.deadline || new Date(p.deadline) >= new Date()) && (
                   <Button size="icon" variant="outline" className="w-8 h-8 text-orange-600 border-orange-200 bg-orange-50/50" onClick={() => handleStartPractical(p)}>
                     <RefreshCw className="w-3.5 h-3.5" />
                   </Button>
                 )}
-                {p.status === "failed" && ((p.attempt_count || 0) >= (p.max_attempts || 1) || (!!p.deadline && new Date(p.deadline) < new Date())) && (
+                {p.status === "failed" && (p.attempt_count >= p.max_attempts || (!!p.deadline && new Date(p.deadline) < new Date())) && (
                   <Button size="icon" variant="outline" className="w-8 h-8 text-purple-600 border-purple-200 bg-purple-50/50" onClick={() => handleRequestReattempt(p)}>
                     <AlertTriangle className="w-3.5 h-3.5" />
                   </Button>

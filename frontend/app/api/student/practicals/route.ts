@@ -45,6 +45,10 @@ export async function GET() {
         notes,
         assigned_at,
         completed_at,
+        attempt_count,
+        max_attempts,
+        is_locked,
+        lock_reason,
         practicals (
           id,
           title,
@@ -115,9 +119,10 @@ export async function GET() {
           return (order[a.level] || 0) - (order[b.level] || 0);
         }),
         // Add meta
-        attempt_count: sp.attempt_count,
-        max_attempts: sp.max_attempts,
-        is_locked: sp.is_locked,
+        attempt_count: sp.attempt_count ?? 0,
+        max_attempts: sp.max_attempts ?? 1,
+        is_locked: sp.is_locked ?? false,
+        lock_reason: sp.lock_reason,
         marks_obtained: sub?.marks_obtained ?? undefined,
       };
     });

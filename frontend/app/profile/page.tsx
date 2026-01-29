@@ -259,7 +259,7 @@ export default function ProfilePage() {
               </div>
             </div>
 
-            {/* Preferences Card */}
+            {/* Preferences Card
             <div className="glass-card rounded-3xl p-6">
               <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
                 <Bell className="w-5 h-5 text-indigo-500" />
@@ -303,8 +303,8 @@ export default function ProfilePage() {
                   </button>
                 </div>
               </div>
-            </div>
-          </div>
+            </div>*/}
+          </div> 
 
           {/* Edit Forms */}
           <div className="lg:col-span-2 space-y-6 animate-slideUp animation-delay-100">
