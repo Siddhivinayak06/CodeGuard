@@ -16,6 +16,11 @@
 - **📝 Advanced Editor** – Monaco-based rich text editor with glassmorphism UI, smart language switching, and smooth resizing capabilities.
 - **📶 Interactive Terminal** – WebSocket-based terminal facilitating real-time partial output streaming, infinite loop protection, and interactive input.
 
+### Student Experience
+- **🔄 Smart Reattempt System** – Automated handling of practical reattempts with integrated approval workflow for failed submissions.
+- **📱 Adaptive Navigation** – Mobile-optimized subject filtering and horizontal scroll views for efficient access on any device.
+- **📈 Real-time Progress** – Instant feedback on submissions with detailed test case analysis and execution metrics.
+
 ### AI & Intelligence
 - **🤖 Clinical AI Intelligence** – Integrated Gemini AI for smart error diagnostics, code explanation, and automated hints.
 
