@@ -47,12 +47,12 @@ export async function PUT(
       );
 
     const body = await req.json();
-    const { name, role, roll_no, semester } = body;
+    const { name, role, roll_no, semester, department, batch } = body;
 
     // Update users table
     const { data: updatedUser, error: updateErr } = await supabaseAdmin
       .from("users")
-      .update({ name, role, roll_no, semester })
+      .update({ name, role, roll_no, semester, department, batch })
       .eq("uid", id)
       .select()
       .single();

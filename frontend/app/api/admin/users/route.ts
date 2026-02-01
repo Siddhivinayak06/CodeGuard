@@ -100,7 +100,7 @@ export async function POST(req: NextRequest) {
 
 // Handle single user creation
 async function handleSingleCreate(body: any) {
-  const { email, password, name, role = "student", roll_no, semester } = body;
+  const { email, password, name, role = "student", roll_no, semester, department, batch } = body;
 
   if (!email || !password) {
     return NextResponse.json(
@@ -123,7 +123,16 @@ async function handleSingleCreate(body: any) {
       user_metadata: { role, name },
       email_confirm: true, // Auto-confirm for local dev
     });
-  if (createErr) throw createErr;
+  if (createErr) {
+    // Handle specific error for duplicate email
+    if (createErr.code === "email_exists" || createErr.message?.includes("already been registered")) {
+      return NextResponse.json(
+        { success: false, error: "A user with this email already exists" },
+        { status: 409 },
+      );
+    }
+    throw createErr;
+  }
 
   const uid = createData.user?.id;
   if (!uid)
@@ -132,7 +141,7 @@ async function handleSingleCreate(body: any) {
       { status: 500 },
     );
 
-  // Insert into users table
+  // Insert into users table (use upsert in case trigger already created the row)
   const profile = {
     uid,
     name: name ?? email.split("@")[0],
@@ -140,10 +149,12 @@ async function handleSingleCreate(body: any) {
     role: role as "student" | "faculty" | "admin",
     roll_no,
     semester,
+    department,
+    batch,
   };
   const { data: inserted, error: insertErr } = await supabaseAdmin
     .from("users")
-    .insert(profile)
+    .upsert(profile, { onConflict: "uid" })
     .select()
     .single();
   if (insertErr) throw insertErr;
@@ -167,7 +178,7 @@ async function handleBulkCreate(users: any[]) {
   }[] = [];
 
   for (const user of users) {
-    const { email, password, name, role = "student", roll_no, semester } = user;
+    const { email, password, name, role = "student", roll_no, semester, department, batch } = user;
 
     // Validate required fields
     if (!email || !password) {
@@ -217,7 +228,7 @@ async function handleBulkCreate(users: any[]) {
         continue;
       }
 
-      // Insert into users table
+      // Insert into users table (use upsert in case trigger already created the row)
       const profile = {
         uid,
         name: name ?? email.split("@")[0],
@@ -225,11 +236,13 @@ async function handleBulkCreate(users: any[]) {
         role: role as "student" | "faculty" | "admin",
         roll_no,
         semester,
+        department,
+        batch,
       };
 
       const { data: inserted, error: insertErr } = await supabaseAdmin
         .from("users")
-        .insert(profile)
+        .upsert(profile, { onConflict: "uid" })
         .select()
         .single();
 

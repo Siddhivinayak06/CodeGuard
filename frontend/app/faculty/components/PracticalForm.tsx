@@ -497,16 +497,33 @@ export default function PracticalForm({
 
     setGeneratingTests(true);
     try {
-      const prompt = `
-        Generate 3-5 diverse test cases (input and expected output) for a programming problem with this description:
-        "${sourceDescription}"
-        
-        ${sampleCode ? `Reference Code:\n${sampleCode}` : ""}
+      const prompt = `You are an expert test case generator. Analyze the following problem and code, then generate 3-5 diverse test cases.
 
-        Return ONLY a valid JSON array of objects with "input" and "expected_output" keys. 
-        Example: [{"input": "5", "expected_output": "120"}, {"input": "0", "expected_output": "1"}]
-        Do not include markdown formatting or explanations.
-      `;
+## Problem Description:
+${sourceDescription}
+
+${sampleCode ? `## Reference Code:
+\`\`\`
+${sampleCode}
+\`\`\`
+
+IMPORTANT: Study the reference code carefully to understand:
+1. What input format it expects (stdin format, data types, multiple inputs, etc.)
+2. What the code actually does with the input (the algorithm/logic)
+3. What output format it produces (stdout format)
+` : ""}
+
+## Your Task:
+Generate test cases that match EXACTLY what this specific code/problem expects.
+- Ensure inputs match the expected stdin format of the code
+- Ensure expected outputs match what the code would actually produce
+- Include edge cases (empty input, single element, boundary values, etc.)
+- Each test case should test different scenarios
+
+Return ONLY a valid JSON array:
+[{"input": "your input here", "expected_output": "expected output here"}, ...]
+
+Do not include markdown formatting, explanations, or any text outside the JSON array.`;
 
       const savedSettings = localStorage.getItem("ai_settings");
       const config = savedSettings ? JSON.parse(savedSettings) : {};
@@ -557,6 +574,13 @@ export default function PracticalForm({
         .replace(/```/g, "")
         .trim();
 
+      // Extract JSON array from response (AI might add extra text)
+      const jsonMatch = jsonStr.match(/\[[\s\S]*\]/);
+      if (!jsonMatch) {
+        throw new Error("No valid JSON array found in AI response");
+      }
+      jsonStr = jsonMatch[0];
+
       const newTests = JSON.parse(jsonStr);
       if (Array.isArray(newTests)) {
         const formattedTests = newTests.map((t: any) => ({
@@ -572,17 +596,33 @@ export default function PracticalForm({
         }));
 
         if (enableLevels) {
+          // Get existing inputs for this level
+          const existingInputs = new Set(
+            getCurrentLevel().testCases.map((tc) => tc.input.trim())
+          );
+          // Filter out duplicates
+          const uniqueTests = formattedTests.filter(
+            (tc) => !existingInputs.has(tc.input.trim())
+          );
           // Add to current level test cases
           setLevels((prev) =>
             prev.map((l) =>
               l.level === activeLevel
-                ? { ...l, testCases: [...l.testCases, ...formattedTests] }
+                ? { ...l, testCases: [...l.testCases, ...uniqueTests] }
                 : l,
             ),
           );
         } else {
+          // Get existing inputs
+          const existingInputs = new Set(
+            testCases.map((tc) => tc.input.trim())
+          );
+          // Filter out duplicates
+          const uniqueTests = formattedTests.filter(
+            (tc) => !existingInputs.has(tc.input.trim())
+          );
           // Add to global test cases
-          setTestCases((prev) => [...prev, ...formattedTests]);
+          setTestCases((prev) => [...prev, ...uniqueTests]);
         }
       } else {
         throw new Error("Invalid response format");

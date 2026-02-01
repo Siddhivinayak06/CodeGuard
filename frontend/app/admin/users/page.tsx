@@ -20,6 +20,8 @@ import {
   Calendar,
   Upload,
   FileText,
+  Building2,
+  Users2,
   CheckCircle2,
   XCircle,
   Loader2,
@@ -75,6 +77,12 @@ function SkeletonRow({
         <>
           <td className="px-5 py-4">
             <div className="h-4 w-20 bg-gray-200 dark:bg-gray-700 rounded" />
+          </td>
+          <td className="px-5 py-4">
+            <div className="h-4 w-16 bg-gray-200 dark:bg-gray-700 rounded" />
+          </td>
+          <td className="px-5 py-4">
+            <div className="h-4 w-24 bg-gray-200 dark:bg-gray-700 rounded" />
           </td>
           <td className="px-5 py-4">
             <div className="h-4 w-16 bg-gray-200 dark:bg-gray-700 rounded" />
@@ -143,6 +151,8 @@ export default function AdminUsers() {
     role: "student",
     roll_no: "",
     semester: "",
+    department: "",
+    batch: "",
   });
 
   // Bulk add state
@@ -248,14 +258,16 @@ export default function AdminUsers() {
 
       const parsed = lines.slice(startIndex).map(line => {
         const values = line.split(',').map(s => s.trim().replace(/^"|"$/g, ''));
-        const [name, email, password, role, roll_no, semester] = values;
+        const [name, email, password, role, roll_no, semester, department, batch] = values;
         return {
           name: name || '',
           email: email || '',
           password: password || '',
           role: role || 'student',
           roll_no: roll_no || '',
-          semester: semester || ''
+          semester: semester || '',
+          department: department || '',
+          batch: batch || '',
         };
       }).filter(u => u.email);
 
@@ -285,6 +297,8 @@ export default function AdminUsers() {
             role: String(row[3] || 'student'),
             roll_no: String(row[4] || ''),
             semester: String(row[5] || ''),
+            department: String(row[6] || ''),
+            batch: String(row[7] || ''),
           })).filter(u => u.email);
 
           setBulkUsers(parsed);
@@ -310,6 +324,12 @@ export default function AdminUsers() {
       return;
     }
 
+    // Password is required for new users
+    if (!isEditing && !form.password) {
+      alert("Password is required for new users!");
+      return;
+    }
+
     setBusy(true);
     try {
       const method = form.id ? "PUT" : "POST";
@@ -320,7 +340,7 @@ export default function AdminUsers() {
         email: form.email,
         role: form.role,
       };
-      // Only send password if it's provided (required for create, optional for update if logic allows, but here we enforce simplified logic)
+      // Only send password if it's provided (required for create)
       if (!isEditing && form.password) {
         payload.password = form.password;
       }
@@ -328,6 +348,8 @@ export default function AdminUsers() {
       if (form.role === "student") {
         payload.roll_no = form.roll_no;
         payload.semester = form.semester;
+        payload.department = form.department;
+        payload.batch = form.batch;
       }
 
       const res = await fetch(url, {
@@ -336,7 +358,17 @@ export default function AdminUsers() {
         body: JSON.stringify(payload),
       });
 
-      const data = await res.json();
+      // Safely parse JSON response
+      const text = await res.text();
+      let data: any = {};
+      if (text) {
+        try {
+          data = JSON.parse(text);
+        } catch {
+          console.error("Failed to parse response:", text);
+        }
+      }
+
       if (!res.ok) throw new Error(data.error || "Save failed");
 
       await loadUsers();
@@ -434,6 +466,8 @@ export default function AdminUsers() {
                   role: "student",
                   roll_no: "",
                   semester: "",
+                  department: "",
+                  batch: "",
                 });
                 setIsEditing(false);
                 setOpen(true);
@@ -555,6 +589,12 @@ export default function AdminUsers() {
                       <th className="px-5 py-3.5 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">
                         Semester
                       </th>
+                      <th className="px-5 py-3.5 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">
+                        Department
+                      </th>
+                      <th className="px-5 py-3.5 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">
+                        Batch
+                      </th>
                     </>
                   )}
                   <th className="px-5 py-3.5 text-right text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">
@@ -630,6 +670,8 @@ export default function AdminUsers() {
                               role: u.role ?? "student",
                               roll_no: u.roll_no ?? "",
                               semester: u.semester ?? "",
+                              department: u.department ?? "",
+                              batch: u.batch ?? "",
                             });
                             setIsEditing(true);
                             setOpen(true);
@@ -649,7 +691,7 @@ export default function AdminUsers() {
                       </div>
                     </div>
                     {
-                      selectedRole === "student" && (u.roll_no || u.semester) && (
+                      selectedRole === "student" && (u.roll_no || u.semester || u.department || u.batch) && (
                         <div className="mt-3 pt-3 border-t border-gray-100 dark:border-gray-700/50 flex flex-wrap gap-2">
                           {u.roll_no && (
                             <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded-lg">
@@ -659,6 +701,16 @@ export default function AdminUsers() {
                           {u.semester && (
                             <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400 rounded-lg">
                               <Calendar className="w-3 h-3" /> Sem {u.semester}
+                            </span>
+                          )}
+                          {u.department && (
+                            <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400 rounded-lg">
+                              <Building2 className="w-3 h-3" /> {u.department}
+                            </span>
+                          )}
+                          {u.batch && (
+                            <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 rounded-lg">
+                              <Users2 className="w-3 h-3" /> {u.batch}
                             </span>
                           )}
                         </div>
@@ -687,6 +739,12 @@ export default function AdminUsers() {
                         </th>
                         <th className="px-5 py-3.5 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">
                           Semester
+                        </th>
+                        <th className="px-5 py-3.5 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">
+                          Department
+                        </th>
+                        <th className="px-5 py-3.5 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">
+                          Batch
                         </th>
                       </>
                     )}
@@ -744,6 +802,26 @@ export default function AdminUsers() {
                                 <span className="text-gray-400 text-sm">—</span>
                               )}
                             </td>
+                            <td className="px-5 py-4">
+                              {u.department ? (
+                                <span className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400 rounded-lg">
+                                  <Building2 className="w-3 h-3" />
+                                  {u.department}
+                                </span>
+                              ) : (
+                                <span className="text-gray-400 text-sm">—</span>
+                              )}
+                            </td>
+                            <td className="px-5 py-4">
+                              {u.batch ? (
+                                <span className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 rounded-lg">
+                                  <Users2 className="w-3 h-3" />
+                                  {u.batch}
+                                </span>
+                              ) : (
+                                <span className="text-gray-400 text-sm">—</span>
+                              )}
+                            </td>
                           </>
                         )}
                         <td className="px-5 py-4">
@@ -758,6 +836,8 @@ export default function AdminUsers() {
                                   role: u.role ?? "student",
                                   roll_no: u.roll_no ?? "",
                                   semester: u.semester ?? "",
+                                  department: u.department ?? "",
+                                  batch: u.batch ?? "",
                                 });
                                 setIsEditing(true);
                                 setOpen(true);
@@ -876,28 +956,54 @@ export default function AdminUsers() {
                 </div>
 
                 {form.role === "student" && (
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-medium text-gray-700 dark:text-gray-300">
-                        Roll No.
-                      </label>
-                      <input
-                        className="input-premium"
-                        value={form.roll_no}
-                        onChange={(e) => handleChange("roll_no", e.target.value)}
-                        placeholder="e.g., 2024001"
-                      />
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-medium text-gray-700 dark:text-gray-300">
+                          Roll No.
+                        </label>
+                        <input
+                          className="input-premium"
+                          value={form.roll_no}
+                          onChange={(e) => handleChange("roll_no", e.target.value)}
+                          placeholder="e.g., 2024001"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-medium text-gray-700 dark:text-gray-300">
+                          Semester
+                        </label>
+                        <input
+                          className="input-premium"
+                          value={form.semester}
+                          onChange={(e) => handleChange("semester", e.target.value)}
+                          placeholder="e.g., 1"
+                        />
+                      </div>
                     </div>
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-medium text-gray-700 dark:text-gray-300">
-                        Semester
-                      </label>
-                      <input
-                        className="input-premium"
-                        value={form.semester}
-                        onChange={(e) => handleChange("semester", e.target.value)}
-                        placeholder="e.g., 1"
-                      />
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-medium text-gray-700 dark:text-gray-300">
+                          Department
+                        </label>
+                        <input
+                          className="input-premium"
+                          value={form.department}
+                          onChange={(e) => handleChange("department", e.target.value)}
+                          placeholder="e.g., Computer Science"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-medium text-gray-700 dark:text-gray-300">
+                          Batch
+                        </label>
+                        <input
+                          className="input-premium"
+                          value={form.batch}
+                          onChange={(e) => handleChange("batch", e.target.value)}
+                          placeholder="e.g., 2024-2028"
+                        />
+                      </div>
                     </div>
                   </div>
                 )}
@@ -998,7 +1104,7 @@ export default function AdminUsers() {
                       Import CSV or Excel File
                     </label>
                     <p className="text-xs text-gray-500 mb-3">
-                      File must have columns: name, email, password, role, roll_no, semester
+                      File must have columns: name, email, password, role, roll_no, semester, department, batch
                     </p>
 
                     {/* File Upload Area */}
@@ -1051,6 +1157,8 @@ export default function AdminUsers() {
                               <th className="px-3 py-2 text-left">Name</th>
                               <th className="px-3 py-2 text-left">Email</th>
                               <th className="px-3 py-2 text-left">Role</th>
+                              <th className="px-3 py-2 text-left">Dept</th>
+                              <th className="px-3 py-2 text-left">Batch</th>
                               <th className="px-3 py-2 text-left">Status</th>
                             </tr>
                           </thead>
@@ -1066,6 +1174,12 @@ export default function AdminUsers() {
                                     }`}>
                                     {u.role}
                                   </span>
+                                </td>
+                                <td className="px-3 py-2 text-xs text-gray-600 dark:text-gray-400">
+                                  {u.department || '-'}
+                                </td>
+                                <td className="px-3 py-2 text-xs text-gray-600 dark:text-gray-400">
+                                  {u.batch || '-'}
                                 </td>
                                 <td className="px-3 py-2">
                                   {u.email && u.password ? (

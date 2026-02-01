@@ -138,8 +138,13 @@ const chatWithOllamaStream = async (
       }
     }
   } catch (err) {
-    logger.error('Ollama error:', err.message);
-    throw new Error(`Ollama not reachable at ${baseUrl}`);
+    logger.error('Ollama error details:', {
+      message: err.message,
+      code: err.code,
+      status: err.response?.status,
+      statusText: err.response?.statusText
+    });
+    throw new Error(`Ollama request failed: ${err.message}`);
   }
 };
 
@@ -171,6 +176,7 @@ const chatStream = async (
 
   const systemPrompt = buildSystemPrompt(contextData);
   const provider = configOverrides?.provider || config.ai.provider || 'gemini';
+  logger.info(`AI Chat Request: Provider=${provider}`, { configOverrides });
 
   switch (provider) {
     case 'gemini':

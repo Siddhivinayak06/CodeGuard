@@ -238,15 +238,14 @@ export function AssistantPanel({ codeContext, onClose }: AssistantPanelProps) {
                     </div>
                   )}
                   <div
-                    className={`max-w-[80%] rounded-2xl px-4 py-2.5 text-sm transition-all ${
-                      msg.role === "user"
-                        ? "bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-lg shadow-blue-500/20"
-                        : "bg-gray-100 dark:bg-white/5 backdrop-blur-sm border border-gray-200 dark:border-white/10 text-gray-800 dark:text-gray-100"
-                    }`}
+                    className={`max-w-[80%] rounded-2xl px-4 py-2.5 text-sm transition-all ${msg.role === "user"
+                      ? "bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-lg shadow-blue-500/20"
+                      : "bg-gray-100 dark:bg-white/5 backdrop-blur-sm border border-gray-200 dark:border-white/10 text-gray-800 dark:text-gray-100"
+                      }`}
                   >
                     {msg.role === "user" ? (
                       msg.text
-                    ) : (
+                    ) : msg.text ? (
                       <div className="prose prose-sm max-w-none dark:prose-invert prose-p:text-gray-700 dark:prose-p:text-gray-200 prose-headings:text-gray-900 dark:prose-headings:text-white prose-strong:text-gray-900 dark:prose-strong:text-white prose-code:text-purple-600 dark:prose-code:text-purple-300">
                         <ReactMarkdown
                           {...md}
@@ -317,6 +316,21 @@ export function AssistantPanel({ codeContext, onClose }: AssistantPanelProps) {
                           {normalizeMarkdown(msg.text)}
                         </ReactMarkdown>
                       </div>
+                    ) : (
+                      <div className="flex items-center gap-1.5 py-0.5">
+                        <div
+                          className="w-2 h-2 bg-purple-500 dark:bg-purple-400 rounded-full animate-bounce"
+                          style={{ animationDelay: "0ms" }}
+                        />
+                        <div
+                          className="w-2 h-2 bg-purple-500 dark:bg-purple-400 rounded-full animate-bounce"
+                          style={{ animationDelay: "150ms" }}
+                        />
+                        <div
+                          className="w-2 h-2 bg-purple-500 dark:bg-purple-400 rounded-full animate-bounce"
+                          style={{ animationDelay: "300ms" }}
+                        />
+                      </div>
                     )}
                   </div>
                   {msg.role === "user" && (
@@ -328,33 +342,7 @@ export function AssistantPanel({ codeContext, onClose }: AssistantPanelProps) {
               ))}
             </AnimatePresence>
 
-            {loading && (
-              <motion.div
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="flex gap-3 justify-start"
-              >
-                <div className="flex-shrink-0 w-7 h-7 rounded-lg bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center shadow-lg shadow-purple-500/20">
-                  <Bot className="h-4 w-4 text-white" />
-                </div>
-                <div className="rounded-2xl bg-gray-100 dark:bg-white/5 backdrop-blur-sm border border-gray-200 dark:border-white/10 px-4 py-3">
-                  <div className="flex items-center gap-1.5">
-                    <div
-                      className="w-2 h-2 bg-purple-500 dark:bg-purple-400 rounded-full animate-bounce"
-                      style={{ animationDelay: "0ms" }}
-                    />
-                    <div
-                      className="w-2 h-2 bg-purple-500 dark:bg-purple-400 rounded-full animate-bounce"
-                      style={{ animationDelay: "150ms" }}
-                    />
-                    <div
-                      className="w-2 h-2 bg-purple-500 dark:bg-purple-400 rounded-full animate-bounce"
-                      style={{ animationDelay: "300ms" }}
-                    />
-                  </div>
-                </div>
-              </motion.div>
-            )}
+
           </div>
         </ScrollArea>
       </div>
