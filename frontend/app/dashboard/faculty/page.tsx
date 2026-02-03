@@ -244,22 +244,28 @@ export default function FacultyDashboardPage() {
 
       setLoading(false);
 
-      // 2. Fetch subjects for this faculty
+      // 2. Fetch subjects for this faculty via junction table
       setDataLoading(true);
-      const { data: subjData, error: subjErr } = await supabase
-        .from("subjects")
-        .select("*")
+      const { data: facultyBatches, error: fbErr } = await supabase
+        .from("subject_faculty_batches")
+        .select("subject_id")
         .eq("faculty_id", data.user.id);
 
-      if (!subjErr && subjData) {
-        setSubjects(subjData as Subject[]);
-      } else {
-        setSubjects([]);
-      }
+      const subjectIds = [...new Set((facultyBatches || []).map((fb) => fb.subject_id))];
 
-      // 3. Fetch practicals
-      const subjectIds = (subjData ?? []).map((s) => s.id);
       if (subjectIds.length > 0) {
+        const { data: subjData, error: subjErr } = await supabase
+          .from("subjects")
+          .select("*")
+          .in("id", subjectIds);
+
+        if (!subjErr && subjData) {
+          setSubjects(subjData as Subject[]);
+        } else {
+          setSubjects([]);
+        }
+
+        // 3. Fetch practicals using subjectIds from junction table
         const { data: pracData } = await supabase
           .from("practicals")
           .select("*")
@@ -288,6 +294,8 @@ export default function FacultyDashboardPage() {
             }
           }
         }
+      } else {
+        setSubjects([]);
       }
       setDataLoading(false);
     };

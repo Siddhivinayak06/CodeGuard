@@ -21,6 +21,8 @@ import {
   BarChart3,
   UserCog,
   ChevronRight,
+  ChevronDown,
+  Minus,
 } from "lucide-react";
 
 // Motion variants for consistent animations
@@ -48,12 +50,18 @@ const itemVariants = {
   },
 } as const;
 
+type FacultyBatch = {
+  batch: string;
+  faculty_id: string;
+  faculty_name?: string;
+};
+
 type Subject = {
   id: string;
   subject_code?: string;
   subject_name?: string;
-  faculty_name?: string;
-  semester?: number | null;
+  semester?: string | null;
+  faculty_batches?: FacultyBatch[];
 };
 
 // Stat Card Component
@@ -179,9 +187,13 @@ export default function AdminDashboard() {
     id: "",
     subject_code: "",
     subject_name: "",
-    faculty_name: "",
     semester: "",
+    faculty_batches: [] as { batch: string; faculty_id: string }[],
   });
+
+  // Faculty and batch data
+  const [facultyList, setFacultyList] = useState<{ uid: string; name: string }[]>([]);
+  const availableBatches = ["All", "1", "2", "3", "4"];
 
   // Auth check
   useEffect(() => {
@@ -268,14 +280,54 @@ export default function AdminDashboard() {
     loadData();
   }, [user]);
 
+  // Load faculty list
+  useEffect(() => {
+    const loadFaculty = async () => {
+      try {
+        const { data } = await supabase
+          .from("users")
+          .select("uid, name")
+          .eq("role", "faculty");
+        if (data) setFacultyList(data);
+      } catch (err) {
+        console.error("Failed to load faculty:", err);
+      }
+    };
+    loadFaculty();
+  }, [supabase]);
+
+  // Faculty batch helpers
+  const addFacultyBatch = () => {
+    setFormData((prev) => ({
+      ...prev,
+      faculty_batches: [...prev.faculty_batches, { batch: "All", faculty_id: "" }],
+    }));
+  };
+
+  const removeFacultyBatch = (index: number) => {
+    setFormData((prev) => ({
+      ...prev,
+      faculty_batches: prev.faculty_batches.filter((_, i) => i !== index),
+    }));
+  };
+
+  const updateFacultyBatch = (index: number, field: "batch" | "faculty_id", value: string) => {
+    setFormData((prev) => ({
+      ...prev,
+      faculty_batches: prev.faculty_batches.map((fb, i) =>
+        i === index ? { ...fb, [field]: value } : fb
+      ),
+    }));
+  };
+
   // Form helpers
   const openAddForm = () => {
     setFormData({
       id: "",
       subject_code: "",
       subject_name: "",
-      faculty_name: "",
       semester: "",
+      faculty_batches: [],
     });
     setIsEditing(false);
     setFormOpen(true);
@@ -286,8 +338,11 @@ export default function AdminDashboard() {
       id: s.id,
       subject_code: s.subject_code ?? "",
       subject_name: s.subject_name ?? "",
-      faculty_name: s.faculty_name ?? "",
-      semester: s.semester?.toString() ?? "",
+      semester: s.semester ?? "",
+      faculty_batches: s.faculty_batches?.map((fb) => ({
+        batch: fb.batch,
+        faculty_id: fb.faculty_id,
+      })) || [],
     });
     setIsEditing(true);
     setFormOpen(true);
@@ -306,8 +361,10 @@ export default function AdminDashboard() {
         id: formData.id || undefined,
         subject_code: formData.subject_code.trim(),
         subject_name: formData.subject_name.trim(),
-        faculty_name: formData.faculty_name?.trim() || undefined,
-        semester: formData.semester ? Number(formData.semester) : undefined,
+        semester: formData.semester || undefined,
+        faculty_batches: formData.faculty_batches.filter(
+          (fb) => fb.batch && fb.faculty_id
+        ),
       };
 
       if (!body.subject_code || !body.subject_name) {
@@ -562,7 +619,7 @@ export default function AdminDashboard() {
                     Subject
                   </th>
                   <th className="px-5 py-3.5 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">
-                    Faculty
+                    Faculty (Batch)
                   </th>
                   <th className="px-5 py-3.5 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">
                     Semester
@@ -605,30 +662,36 @@ export default function AdminDashboard() {
                         {s.subject_name ?? "—"}
                       </td>
                       <td className="px-5 py-4">
-                        <div className="flex items-center gap-3">
-                          <div
-                            className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white
-                              ${s.subject_name ? "bg-gradient-to-br " + (s.semester && s.semester % 2 === 0 ? "from-orange-400 to-pink-500" : "from-blue-400 to-indigo-500") : "bg-gray-400"}
-                            `}
-                          >
-                            {s.faculty_name
-                              ? s.faculty_name.charAt(0).toUpperCase()
-                              : "?"}
-                          </div>
-                          <span className="text-gray-700 dark:text-gray-300 font-medium text-sm">
-                            {s.faculty_name ?? "Not Assigned"}
-                          </span>
+                        <div className="flex flex-wrap gap-1.5">
+                          {s.faculty_batches && s.faculty_batches.length > 0 ? (
+                            s.faculty_batches.slice(0, 2).map((fb, idx) => (
+                              <span
+                                key={idx}
+                                className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400 rounded-lg"
+                              >
+                                {fb.faculty_name || "Unknown"}
+                                <span className="text-indigo-500/60">({fb.batch})</span>
+                              </span>
+                            ))
+                          ) : (
+                            <span className="text-gray-400 text-sm">Not Assigned</span>
+                          )}
+                          {s.faculty_batches && s.faculty_batches.length > 2 && (
+                            <span className="px-2 py-1 text-xs font-medium bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 rounded-lg">
+                              +{s.faculty_batches.length - 2} more
+                            </span>
+                          )}
                         </div>
                       </td>
                       <td className="px-5 py-4">
                         {s.semester ? (
                           <span
                             className={`inline-flex px-3 py-1 text-xs font-bold rounded-full
-                             ${s.semester === 1 || s.semester === 2
+                             ${s.semester === "1" || s.semester === "2"
                                 ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300"
-                                : s.semester === 3 || s.semester === 4
+                                : s.semester === "3" || s.semester === "4"
                                   ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300"
-                                  : s.semester === 5 || s.semester === 6
+                                  : s.semester === "5" || s.semester === "6"
                                     ? "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300"
                                     : "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300"
                               }
@@ -747,21 +810,73 @@ export default function AdminDashboard() {
                     required
                   />
                 </div>
-                <div className="space-y-1.5 sm:col-span-2">
-                  <label className="text-xs font-medium text-gray-700 dark:text-gray-300">
-                    Faculty Name (optional)
-                  </label>
-                  <input
-                    className="input-premium"
-                    placeholder="Enter faculty name"
-                    value={formData.faculty_name}
-                    onChange={(e) =>
-                      setFormData((f) => ({
-                        ...f,
-                        faculty_name: e.target.value,
-                      }))
-                    }
-                  />
+
+                {/* Faculty-Batch Assignments */}
+                <div className="space-y-3 sm:col-span-2">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-medium text-gray-700 dark:text-gray-300 flex items-center gap-2">
+                      <Users className="w-4 h-4 text-indigo-500" />
+                      Faculty Assignments by Batch
+                    </label>
+                    <button
+                      type="button"
+                      onClick={addFacultyBatch}
+                      className="text-xs px-3 py-1.5 rounded-lg bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400 hover:bg-indigo-200 dark:hover:bg-indigo-900/50 transition-colors flex items-center gap-1"
+                    >
+                      <Plus className="w-3 h-3" />
+                      Add Batch
+                    </button>
+                  </div>
+                  {formData.faculty_batches.length === 0 ? (
+                    <div className="p-4 rounded-xl border-2 border-dashed border-gray-200 dark:border-gray-700 text-center text-sm text-gray-500">
+                      No batch-faculty assignments yet. Click &quot;Add Batch&quot; to assign faculty.
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {formData.faculty_batches.map((fb, idx) => (
+                        <div
+                          key={idx}
+                          className="flex items-center gap-3 p-3 rounded-xl bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700"
+                        >
+                          <div className="flex-1 grid grid-cols-2 gap-3">
+                            <div className="relative">
+                              <select
+                                value={fb.batch}
+                                onChange={(e) => updateFacultyBatch(idx, "batch", e.target.value)}
+                                className="input-premium appearance-none pr-10 cursor-pointer text-sm"
+                              >
+                                <option value="">Select Batch</option>
+                                {availableBatches.map((b) => (
+                                  <option key={b} value={b}>{b}</option>
+                                ))}
+                              </select>
+                              <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                            </div>
+                            <div className="relative">
+                              <select
+                                value={fb.faculty_id}
+                                onChange={(e) => updateFacultyBatch(idx, "faculty_id", e.target.value)}
+                                className="input-premium appearance-none pr-10 cursor-pointer text-sm"
+                              >
+                                <option value="">Select Faculty</option>
+                                {facultyList.map((f) => (
+                                  <option key={f.uid} value={f.uid}>{f.name || f.uid}</option>
+                                ))}
+                              </select>
+                              <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => removeFacultyBatch(idx)}
+                            className="p-2 rounded-lg text-red-500 hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
 

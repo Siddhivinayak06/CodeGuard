@@ -101,9 +101,23 @@ export default function FacultySchedulePage() {
         setSchedules(sorted);
       }
 
-      // 2. Fetch subjects
-      const { data: subjectData } = await supabase.from("subjects").select("*");
-      if (subjectData) setSubjects(subjectData);
+      // 2. Fetch subjects assigned to this faculty via junction table
+      const { data: facultyBatches } = await supabase
+        .from("subject_faculty_batches")
+        .select("subject_id")
+        .eq("faculty_id", user.id);
+
+      const subjectIds = [...new Set((facultyBatches || []).map((fb) => fb.subject_id))];
+
+      if (subjectIds.length > 0) {
+        const { data: subjectData } = await supabase
+          .from("subjects")
+          .select("*")
+          .in("id", subjectIds);
+        if (subjectData) setSubjects(subjectData);
+      } else {
+        setSubjects([]);
+      }
 
       setLoading(false);
     };
@@ -240,13 +254,12 @@ export default function FacultySchedulePage() {
             return (
               <Card
                 key={schedule.id}
-                className={`relative overflow-hidden bg-white dark:bg-gray-900/50 border-gray-100 dark:border-gray-800 hover:shadow-lg transition-all ${
-                  !isConfigured && !isPast
+                className={`relative overflow-hidden bg-white dark:bg-gray-900/50 border-gray-100 dark:border-gray-800 hover:shadow-lg transition-all ${!isConfigured && !isPast
                     ? "ring-2 ring-orange-300 dark:ring-orange-700 border-orange-200 dark:border-orange-800"
                     : isToday
                       ? "ring-2 ring-indigo-300 dark:ring-indigo-700 border-indigo-200 dark:border-indigo-800"
                       : "hover:border-indigo-200 dark:hover:border-indigo-800/50"
-                }`}
+                  }`}
               >
                 <CardHeader className="pb-3">
                   <div className="flex justify-between items-start">
@@ -256,22 +269,20 @@ export default function FacultySchedulePage() {
                     </span>
                     {/* Status Badge */}
                     <span
-                      className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${
-                        isPast
+                      className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${isPast
                           ? "bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400"
                           : isConfigured
                             ? "bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400"
                             : "bg-orange-50 dark:bg-orange-900/20 text-orange-700 dark:text-orange-400"
-                      }`}
+                        }`}
                     >
                       <div
-                        className={`w-1.5 h-1.5 rounded-full ${
-                          isPast
+                        className={`w-1.5 h-1.5 rounded-full ${isPast
                             ? "bg-gray-400"
                             : isConfigured
                               ? "bg-emerald-500"
                               : "bg-orange-500 animate-pulse"
-                        }`}
+                          }`}
                       />
                       {isPast
                         ? "Completed"
@@ -311,13 +322,12 @@ export default function FacultySchedulePage() {
                   {/* Priority Indicator */}
                   {!isPast && (
                     <div
-                      className={`text-xs font-medium mb-4 ${
-                        isToday
+                      className={`text-xs font-medium mb-4 ${isToday
                           ? "text-indigo-600 dark:text-indigo-400"
                           : isUrgent
                             ? "text-orange-600 dark:text-orange-400"
                             : "text-gray-400 dark:text-gray-500"
-                      }`}
+                        }`}
                     >
                       {isToday
                         ? "📍 Today"

@@ -22,6 +22,7 @@ interface AssignStudentsStepProps {
   setFilters: React.Dispatch<
     React.SetStateAction<{ query: string; semester: string; batch: string }>
   >;
+  availableBatches?: string[]; // Batches assigned to the selected subject
 }
 
 export default function AssignStudentsStep({
@@ -30,11 +31,14 @@ export default function AssignStudentsStep({
   setSelectedStudents,
   filters,
   setFilters,
+  availableBatches,
 }: AssignStudentsStepProps) {
-  // Extract unique batches and sort them
-  const batches = Array.from(
-    new Set(students.map((s) => s.batch).filter((b): b is string => !!b)),
-  ).sort();
+  // Use provided available batches, or extract from students if not provided
+  const batches = availableBatches && availableBatches.length > 0
+    ? availableBatches.filter(b => b !== "All").sort()
+    : Array.from(
+      new Set(students.map((s) => s.batch).filter((b): b is string => !!b)),
+    ).sort();
 
   const filteredStudents = students.filter((s) => {
     const q = (filters.query || "").toLowerCase();
@@ -110,12 +114,18 @@ export default function AssignStudentsStep({
             }
             className="w-full px-4 py-3 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all text-gray-900 dark:text-white appearance-none cursor-pointer"
           >
-            <option value="">All Batches</option>
-            {batches.map((batch) => (
-              <option key={batch} value={batch}>
-                Batch {batch}
-              </option>
-            ))}
+            {batches.length === 1 ? (
+              <option value={batches[0]}>Batch {batches[0]}</option>
+            ) : (
+              <>
+                <option value="">All Batches ({batches.length})</option>
+                {batches.map((batch) => (
+                  <option key={batch} value={batch}>
+                    Batch {batch}
+                  </option>
+                ))}
+              </>
+            )}
           </select>
         </div>
       </div>

@@ -39,18 +39,24 @@ export default function AllPracticalsPage() {
       }
       setUser(userData.user);
 
-      // 2. Fetch subjects
-      const { data: subjData } = await supabase
-        .from("subjects")
-        .select("*")
+      // 2. Fetch subjects via junction table
+      const { data: facultyBatches } = await supabase
+        .from("subject_faculty_batches")
+        .select("subject_id")
         .eq("faculty_id", userData.user.id);
 
-      if (subjData) {
-        setSubjects(subjData as Subject[]);
-        const subjectIds = subjData.map((s) => s.id);
+      const subjectIds = [...new Set((facultyBatches || []).map((fb) => fb.subject_id))];
 
-        // 3. Fetch practicals
-        if (subjectIds.length > 0) {
+      if (subjectIds.length > 0) {
+        const { data: subjData } = await supabase
+          .from("subjects")
+          .select("*")
+          .in("id", subjectIds);
+
+        if (subjData) {
+          setSubjects(subjData as Subject[]);
+
+          // 3. Fetch practicals
           const { data: pracData } = await supabase
             .from("practicals")
             .select("*")

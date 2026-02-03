@@ -110,6 +110,7 @@ interface FormattedPractical {
   | "pending";
   subject_name: string;
   subject_code?: string;
+  subject_semester?: string | number | null;
   language: string | null;
   hasLevels: boolean;
   attempt_count: number;
@@ -401,6 +402,7 @@ export default function StudentPracticals() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedSubjectId, setSelectedSubjectId] = useState<number | "all">("all");
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
+  const [userSemester, setUserSemester] = useState<string | null>(null);
 
   // Result Modal State
   const [viewingSubmission, setViewingSubmission] = useState<Submission | null>(
@@ -428,7 +430,20 @@ export default function StudentPracticals() {
           router.push("/auth/login");
           return;
         }
-        if (mountedRef.current) setUser(user);
+
+        // Fetch extra user details (semester)
+        const { data: userDetails } = await supabase
+          .from("users")
+          .select("semester")
+          .eq("uid", user.id)
+          .single();
+
+        if (mountedRef.current) {
+          setUser(user);
+          if (userDetails?.semester) {
+            setUserSemester(String(userDetails.semester));
+          }
+        }
       } catch {
         router.push("/auth/login");
       }
@@ -493,10 +508,20 @@ export default function StudentPracticals() {
     return () => controller.abort();
   }, [user?.id]);
 
-  // Extract Subjects
+  // 0. Base Filter: Semester (Global)
+  // This ensures stats and sidebar counts reflect only the current semester practicals
+  const semesterFilteredPracticals = useMemo(() => {
+    let result = practicals;
+    if (userSemester) {
+      result = result.filter(p => !p.subject_semester || String(p.subject_semester) == String(userSemester));
+    }
+    return result;
+  }, [practicals, userSemester]);
+
+  // Extract Subjects (from semester-filtered list)
   const subjects = useMemo(() => {
     const map = new Map<number, { id: number; name: string; code?: string; count: number }>();
-    practicals.forEach(p => {
+    semesterFilteredPracticals.forEach(p => {
       // Robust check
       if (p.subject_id !== null && p.subject_id !== undefined) {
         const sid = Number(p.subject_id);
@@ -511,15 +536,15 @@ export default function StudentPracticals() {
       }
     });
     return Array.from(map.values());
-  }, [practicals]);
+  }, [semesterFilteredPracticals]);
 
 
   // Derived Stats (Filtered)
   const stats = useMemo(() => {
     // Filter practicals for stats based on selected subject
     const relevantPracticals = selectedSubjectId === "all"
-      ? practicals
-      : practicals.filter(p => p.subject_id == selectedSubjectId);
+      ? semesterFilteredPracticals
+      : semesterFilteredPracticals.filter(p => p.subject_id == selectedSubjectId);
 
     const doneStatuses = ["passed", "failed", "completed"];
     const total = relevantPracticals.length;
@@ -535,11 +560,11 @@ export default function StudentPracticals() {
     ).length;
     const progress = total > 0 ? Math.round((completed / total) * 100) : 0;
     return { total, completed, pending, overdue, progress };
-  }, [practicals, selectedSubjectId]);
+  }, [semesterFilteredPracticals, selectedSubjectId]);
 
-  // Filtered Content
+  // Filtered Content (Search, Subject, Tabs)
   const filteredPracticals = useMemo(() => {
-    let result = practicals;
+    let result = semesterFilteredPracticals;
 
     // 1. Subject Filter (Robust)
     if (selectedSubjectId !== "all") {
@@ -574,7 +599,7 @@ export default function StudentPracticals() {
       default:
         return result;
     }
-  }, [practicals, activeFilter, searchQuery, selectedSubjectId]);
+  }, [semesterFilteredPracticals, activeFilter, searchQuery, selectedSubjectId]);
 
   // Handle View Result, Start Practical, Navigate...
   const handleViewResult = async (

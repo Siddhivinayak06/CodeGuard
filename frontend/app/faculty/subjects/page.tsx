@@ -120,10 +120,30 @@ export default function FacultySubjects() {
           return;
         }
 
+        // First, get subject IDs assigned to this faculty via the junction table
+        const { data: facultySubjects, error: fbError } = await supabase
+          .from("subject_faculty_batches")
+          .select("subject_id")
+          .eq("faculty_id", user.id);
+
+        if (fbError) {
+          console.error("Error loading faculty subjects:", fbError?.message ?? fbError);
+          if (isMounted) setSubjects([]);
+          return;
+        }
+
+        const subjectIds = [...new Set((facultySubjects || []).map((fs) => fs.subject_id))];
+
+        if (subjectIds.length === 0) {
+          if (isMounted) setSubjects([]);
+          return;
+        }
+
+        // Then get the actual subject details
         const res = await supabase
           .from("subjects")
           .select(`id, subject_name, subject_code, practicals(id), semester`)
-          .eq("faculty_id", user.id)
+          .in("id", subjectIds)
           .order("subject_name", { ascending: true });
 
         // Supabase returns { data, error }
@@ -338,7 +358,7 @@ export default function FacultySubjects() {
               <input
                 aria-label="Search subjects"
                 placeholder="Search subjects..."
-                onChange={() => {}}
+                onChange={() => { }}
                 className="bg-transparent outline-none text-sm w-56"
               />
             </div>
@@ -446,11 +466,10 @@ export default function FacultySubjects() {
                       <button
                         key={s.id}
                         onClick={() => setSelected(s.id)}
-                        className={`w-full text-left flex items-center gap-3 p-3 rounded-xl transition-all ${
-                          selected === s.id
+                        className={`w-full text-left flex items-center gap-3 p-3 rounded-xl transition-all ${selected === s.id
                             ? "bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-900/30 dark:to-purple-900/30 border border-indigo-200 dark:border-indigo-800"
                             : "hover:bg-gray-50 dark:hover:bg-gray-800/50 border border-transparent"
-                        }`}
+                          }`}
                         aria-pressed={selected === s.id}
                       >
                         <div
@@ -575,11 +594,10 @@ export default function FacultySubjects() {
                                   `/faculty/submissions?practical=${p.id}`,
                                 )
                               }
-                              className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                                p.submission_count && p.submission_count > 0
+                              className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${p.submission_count && p.submission_count > 0
                                   ? "bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/40"
                                   : "bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700"
-                              }`}
+                                }`}
                             >
                               <BookOpen className="w-4 h-4" />
                               {p.submission_count || 0} Submissions
@@ -735,7 +753,7 @@ export default function FacultySubjects() {
                   </div>
                   <div className="p-4 space-y-3 max-h-[600px] overflow-auto">
                     {viewingPractical.testCases &&
-                    viewingPractical.testCases.length > 0 ? (
+                      viewingPractical.testCases.length > 0 ? (
                       viewingPractical.testCases.map((tc, idx) => (
                         <div
                           key={tc.id}

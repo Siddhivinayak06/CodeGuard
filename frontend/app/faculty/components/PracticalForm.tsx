@@ -200,6 +200,7 @@ export default function PracticalForm({
   const [draftPracticals, setDraftPracticals] = useState<DraftPractical[]>([]);
   const [activeDraftIndex, setActiveDraftIndex] = useState<number>(0);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [availableBatches, setAvailableBatches] = useState<string[]>([]);
 
   // Reset step when modal opens
   useEffect(() => {
@@ -294,24 +295,41 @@ export default function PracticalForm({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [practical, subjects, defaultSubjectId]);
 
-  // fetch students (with student_details) for assignment
+  // fetch students (with student_details) for assignment - filtered by selected subject's batches
   useEffect(() => {
     const fetchStudents = async () => {
       try {
-        const { data, error } = await supabase
+        // 1. Get current faculty user
+        const { data: { user: currentUser } } = await supabase.auth.getUser();
+        if (!currentUser) {
+          setStudents([]);
+          return;
+        }
+
+        // 2. Get batches assigned to the SELECTED SUBJECT for this faculty via junction table
+        const selectedSubjectId = form.subject_id;
+        const { data: subjectBatches } = await supabase
+          .from("subject_faculty_batches")
+          .select("batch")
+          .eq("faculty_id", currentUser.id)
+          .eq("subject_id", selectedSubjectId);
+
+        const assignedBatches = [...new Set((subjectBatches || []).map(fb => fb.batch))];
+        setAvailableBatches(assignedBatches);
+        const hasAllBatch = assignedBatches.includes("All");
+
+        // 3. Fetch students - filter by batch if not "All"
+        let query = supabase
           .from("users")
-          .select(
-            `
-            uid,
-            name,
-            email,
-            role,
-            roll_no,
-            semester,
-            batch
-          `,
-          )
+          .select(`uid, name, email, role, roll_no, semester, batch, department`)
           .eq("role", "student");
+
+        // If subject has specific batches (not "All"), filter students by those batches
+        if (!hasAllBatch && assignedBatches.length > 0) {
+          query = query.in("batch", assignedBatches);
+        }
+
+        const { data, error } = await query;
 
         if (error) {
           console.error("Failed to fetch students:", error);
@@ -363,7 +381,7 @@ export default function PracticalForm({
     };
 
     fetchStudents();
-  }, [supabase, practical]);
+  }, [supabase, practical, form.subject_id]);
 
   // ---------- handlers ----------
   const handleInput = (
@@ -1520,6 +1538,7 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
                       setSelectedStudents={setSelectedStudents}
                       filters={filters}
                       setFilters={setFilters}
+                      availableBatches={availableBatches}
                     />
                   )}
                 </AnimatePresence>

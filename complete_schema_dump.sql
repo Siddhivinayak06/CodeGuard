@@ -1,3 +1,5 @@
+Initialising login role...
+Dumping schemas from remote database...
 
 
 
@@ -355,7 +357,8 @@ CREATE TABLE IF NOT EXISTS "public"."practicals" (
     "max_marks" integer DEFAULT 100,
     "created_at" timestamp with time zone DEFAULT "now"(),
     "updated_at" timestamp with time zone DEFAULT "now"(),
-    "submitted" boolean DEFAULT false
+    "submitted" boolean DEFAULT false,
+    "practical_number" integer
 );
 
 
@@ -1269,7 +1272,15 @@ CREATE POLICY "Users can delete their own profile" ON "public"."users" FOR DELET
 
 
 
+CREATE POLICY "Users can insert their own profile" ON "public"."users" FOR INSERT TO "authenticated" WITH CHECK (("auth"."uid"() = "uid"));
+
+
+
 CREATE POLICY "Users can insert their own row" ON "public"."users" FOR INSERT WITH CHECK (("auth"."uid"() = "uid"));
+
+
+
+CREATE POLICY "Users can read their own profile" ON "public"."users" FOR SELECT TO "authenticated" USING (("auth"."uid"() = "uid"));
 
 
 

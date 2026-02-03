@@ -186,11 +186,11 @@ export interface Database {
           id: string;
           user_id: string;
           type:
-            | "practical_assigned"
-            | "submission_graded"
-            | "deadline_reminder"
-            | "announcement"
-            | "submission_received";
+          | "practical_assigned"
+          | "submission_graded"
+          | "deadline_reminder"
+          | "announcement"
+          | "submission_received";
           title: string;
           message: string | null;
           link: string | null;
@@ -202,11 +202,11 @@ export interface Database {
           id?: string;
           user_id: string;
           type:
-            | "practical_assigned"
-            | "submission_graded"
-            | "deadline_reminder"
-            | "announcement"
-            | "submission_received";
+          | "practical_assigned"
+          | "submission_graded"
+          | "deadline_reminder"
+          | "announcement"
+          | "submission_received";
           title: string;
           message?: string | null;
           link?: string | null;
@@ -218,11 +218,11 @@ export interface Database {
           id?: string;
           user_id?: string;
           type?:
-            | "practical_assigned"
-            | "submission_graded"
-            | "deadline_reminder"
-            | "announcement"
-            | "submission_received";
+          | "practical_assigned"
+          | "submission_graded"
+          | "deadline_reminder"
+          | "announcement"
+          | "submission_received";
           title?: string;
           message?: string | null;
           link?: string | null;
@@ -503,12 +503,50 @@ export interface Database {
           },
         ];
       };
+      subject_faculty_batches: {
+        Row: {
+          id: number;
+          subject_id: number;
+          batch: string;
+          faculty_id: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: number;
+          subject_id: number;
+          batch: string;
+          faculty_id: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: number;
+          subject_id?: number;
+          batch?: string;
+          faculty_id?: string;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "subject_faculty_batches_subject_id_fkey";
+            columns: ["subject_id"];
+            isOneToOne: false;
+            referencedRelation: "subjects";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "subject_faculty_batches_faculty_id_fkey";
+            columns: ["faculty_id"];
+            isOneToOne: false;
+            referencedRelation: "users";
+            referencedColumns: ["uid"];
+          },
+        ];
+      };
       subjects: {
         Row: {
           id: number;
           subject_name: string;
           subject_code: string;
-          faculty_id: string | null;
           semester: string | null;
           created_at: string;
         };
@@ -516,7 +554,6 @@ export interface Database {
           id?: number;
           subject_name: string;
           subject_code: string;
-          faculty_id?: string | null;
           semester?: string | null;
           created_at?: string;
         };
@@ -524,19 +561,10 @@ export interface Database {
           id?: number;
           subject_name?: string;
           subject_code?: string;
-          faculty_id?: string | null;
           semester?: string | null;
           created_at?: string;
         };
-        Relationships: [
-          {
-            foreignKeyName: "subjects_faculty_id_fkey";
-            columns: ["faculty_id"];
-            isOneToOne: false;
-            referencedRelation: "users";
-            referencedColumns: ["uid"];
-          },
-        ];
+        Relationships: [];
       };
       submissions: {
         Row: {
@@ -617,11 +645,11 @@ export interface Database {
           submission_id: number | null;
           test_case_id: number | null;
           status:
-            | "passed"
-            | "failed"
-            | "timeout"
-            | "runtime_error"
-            | "compile_error";
+          | "passed"
+          | "failed"
+          | "timeout"
+          | "runtime_error"
+          | "compile_error";
           execution_time_ms: number | null;
           memory_used_kb: number | null;
           stdout: string | null;
@@ -633,11 +661,11 @@ export interface Database {
           submission_id?: number | null;
           test_case_id?: number | null;
           status:
-            | "passed"
-            | "failed"
-            | "timeout"
-            | "runtime_error"
-            | "compile_error";
+          | "passed"
+          | "failed"
+          | "timeout"
+          | "runtime_error"
+          | "compile_error";
           execution_time_ms?: number | null;
           memory_used_kb?: number | null;
           stdout?: string | null;
@@ -649,11 +677,11 @@ export interface Database {
           submission_id?: number | null;
           test_case_id?: number | null;
           status?:
-            | "passed"
-            | "failed"
-            | "timeout"
-            | "runtime_error"
-            | "compile_error";
+          | "passed"
+          | "failed"
+          | "timeout"
+          | "runtime_error"
+          | "compile_error";
           execution_time_ms?: number | null;
           memory_used_kb?: number | null;
           stdout?: string | null;

@@ -39,35 +39,59 @@ async function isAdmin(supabase: any) {
   }
 }
 
-/** GET: list all subjects with faculty names */
+interface FacultyBatch {
+  batch: string;
+  faculty_id: string;
+}
+
+/** GET: list all subjects with batch-wise faculty assignments */
 export async function GET() {
   try {
     const supabase = await createClient();
 
-    const { data, error } = await supabase
+    // Get subjects
+    const { data: subjectsData, error: subjectsError } = await supabase
       .from("subjects")
-      .select(
-        `
-        id,
-        subject_name,
-        subject_code,
-        semester,
-        faculty_id,
-        users!faculty_id (name,email)
-      `,
-      )
+      .select(`id, subject_name, subject_code, semester`)
       .order("id", { ascending: true });
 
-    if (error) throw error;
+    if (subjectsError) throw subjectsError;
 
-    // Map faculty_name for frontend convenience
-    const subjects = data.map((s: any) => ({
+    // Get all batch-faculty assignments with faculty details
+    const { data: facultyBatches, error: fbError } = await supabase
+      .from("subject_faculty_batches")
+      .select(`
+        id,
+        subject_id,
+        batch,
+        faculty_id,
+        users!subject_faculty_batches_faculty_id_fkey (name, email)
+      `);
+
+    if (fbError) throw fbError;
+
+    // Group faculty batches by subject_id
+    const facultyBatchesBySubject: Record<number, any[]> = {};
+    for (const fb of facultyBatches || []) {
+      const subjectId = fb.subject_id;
+      if (!facultyBatchesBySubject[subjectId]) {
+        facultyBatchesBySubject[subjectId] = [];
+      }
+      facultyBatchesBySubject[subjectId].push({
+        id: fb.id,
+        batch: fb.batch,
+        faculty_id: fb.faculty_id,
+        faculty_name: (fb.users as any)?.name ?? (fb.users as any)?.email ?? null,
+      });
+    }
+
+    // Map subjects with their faculty batches
+    const subjects = (subjectsData || []).map((s: any) => ({
       id: s.id,
       subject_name: s.subject_name,
       subject_code: s.subject_code,
       semester: s.semester,
-      faculty_id: s.faculty_id,
-      faculty_name: s.users?.name ?? s.users?.email ?? null,
+      faculty_batches: facultyBatchesBySubject[s.id] || [],
     }));
 
     return NextResponse.json({ success: true, data: subjects });
@@ -80,7 +104,7 @@ export async function GET() {
   }
 }
 
-/** POST: add a new subject */
+/** POST: add a new subject with batch-wise faculty assignments */
 export async function POST(request: Request) {
   try {
     const supabase = await createClient();
@@ -92,7 +116,7 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json().catch(() => ({}));
-    const { subject_code, subject_name, faculty_id, semester } = body;
+    const { subject_code, subject_name, semester, faculty_batches } = body;
 
     if (!subject_code || !subject_name) {
       return NextResponse.json(
@@ -104,17 +128,33 @@ export async function POST(request: Request) {
       );
     }
 
-    const payload: Record<string, any> = { subject_code, subject_name };
-    if (faculty_id) payload.faculty_id = faculty_id;
-    if (semester) payload.semester = semester;
-
-    const { data, error } = await supabase
+    // Insert the subject
+    const { data: subjectData, error: subjectError } = await supabase
       .from("subjects")
-      .insert(payload as any)
-      .select();
-    if (error) throw error;
+      .insert({ subject_code, subject_name, semester } as any)
+      .select()
+      .single();
 
-    return NextResponse.json({ success: true, data }, { status: 201 });
+    if (subjectError) throw subjectError;
+
+    const subjectId = subjectData.id;
+
+    // Insert faculty-batch assignments if provided
+    if (faculty_batches && Array.isArray(faculty_batches) && faculty_batches.length > 0) {
+      const fbInserts = faculty_batches.map((fb: FacultyBatch) => ({
+        subject_id: subjectId,
+        batch: fb.batch,
+        faculty_id: fb.faculty_id,
+      }));
+
+      const { error: fbError } = await supabase
+        .from("subject_faculty_batches")
+        .insert(fbInserts);
+
+      if (fbError) throw fbError;
+    }
+
+    return NextResponse.json({ success: true, data: subjectData }, { status: 201 });
   } catch (err: any) {
     console.error("Error adding subject:", err);
     return NextResponse.json(
@@ -124,7 +164,7 @@ export async function POST(request: Request) {
   }
 }
 
-/** PUT: update an existing subject */
+/** PUT: update an existing subject and its batch-faculty assignments */
 export async function PUT(request: Request) {
   try {
     const supabase = await createClient();
@@ -136,7 +176,7 @@ export async function PUT(request: Request) {
     }
 
     const body = await request.json().catch(() => ({}));
-    const { id, subject_code, subject_name, faculty_id, semester } = body;
+    const { id, subject_code, subject_name, semester, faculty_batches } = body;
 
     if (!id) {
       return NextResponse.json(
@@ -145,20 +185,47 @@ export async function PUT(request: Request) {
       );
     }
 
+    // Update subject fields if provided
     const updates: Record<string, any> = {};
     if (subject_code !== undefined) updates.subject_code = subject_code;
     if (subject_name !== undefined) updates.subject_name = subject_name;
-    if (faculty_id !== undefined) updates.faculty_id = faculty_id;
     if (semester !== undefined) updates.semester = semester;
 
-    const { data, error } = await supabase
-      .from("subjects")
-      .update(updates)
-      .eq("id", id)
-      .select();
-    if (error) throw error;
+    if (Object.keys(updates).length > 0) {
+      const { error: updateError } = await supabase
+        .from("subjects")
+        .update(updates)
+        .eq("id", id);
+      if (updateError) throw updateError;
+    }
 
-    return NextResponse.json({ success: true, data });
+    // Update faculty-batch assignments if provided
+    if (faculty_batches !== undefined && Array.isArray(faculty_batches)) {
+      // Delete existing assignments for this subject
+      const { error: deleteError } = await supabase
+        .from("subject_faculty_batches")
+        .delete()
+        .eq("subject_id", id);
+
+      if (deleteError) throw deleteError;
+
+      // Insert new assignments
+      if (faculty_batches.length > 0) {
+        const fbInserts = faculty_batches.map((fb: FacultyBatch) => ({
+          subject_id: id,
+          batch: fb.batch,
+          faculty_id: fb.faculty_id,
+        }));
+
+        const { error: insertError } = await supabase
+          .from("subject_faculty_batches")
+          .insert(fbInserts);
+
+        if (insertError) throw insertError;
+      }
+    }
+
+    return NextResponse.json({ success: true });
   } catch (err: any) {
     console.error("Error updating subject:", err);
     return NextResponse.json(
@@ -168,7 +235,7 @@ export async function PUT(request: Request) {
   }
 }
 
-/** DELETE: remove a subject by id */
+/** DELETE: remove a subject by id (cascade will delete faculty_batches) */
 export async function DELETE(request: Request) {
   try {
     const supabase = await createClient();

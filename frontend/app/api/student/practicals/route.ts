@@ -59,7 +59,8 @@ export async function GET() {
           subject_id,
           subjects (
             subject_name,
-            subject_code
+            subject_code,
+            semester
           ),
           practical_levels (
             id,
@@ -112,6 +113,7 @@ export async function GET() {
         subject_id: p.subject_id,
         subject_name: p.subjects?.subject_name,
         subject_code: p.subjects?.subject_code,
+        subject_semester: p.subjects?.semester,
         // Add levels
         hasLevels: p.practical_levels && p.practical_levels.length > 0,
         levels: p.practical_levels?.sort((a: any, b: any) => {

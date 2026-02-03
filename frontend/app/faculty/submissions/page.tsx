@@ -247,21 +247,21 @@ function FacultySubmissionsContent() {
           return;
         }
 
-        // 1. Get subjects for this faculty
-        const { data: subjects } = await supabase
-          .from("subjects")
-          .select("id")
+        // 1. Get subjects for this faculty via junction table
+        const { data: facultyBatches } = await supabase
+          .from("subject_faculty_batches")
+          .select("subject_id")
           .eq("faculty_id", userData.user.id);
 
-        if (!subjects || subjects.length === 0) {
+        const subjectIds = [...new Set((facultyBatches || []).map((fb) => fb.subject_id))];
+
+        if (subjectIds.length === 0) {
           if (isMounted.current) {
             setSubmissions([]);
             if (!isSilent) setLoading(false);
           }
           return;
         }
-
-        const subjectIds = subjects.map((s) => s.id);
 
         // 2. Get practicals
         const { data: practicals } = await supabase
@@ -536,8 +536,8 @@ function FacultySubmissionsContent() {
                   key={status}
                   onClick={() => setFilterStatus(status)}
                   className={`px-4 py-2 rounded-xl text-sm font-medium transition-all whitespace-nowrap capitalize ${filterStatus === status
-                      ? "bg-indigo-600 text-white shadow-lg shadow-indigo-500/30"
-                      : "bg-white/50 dark:bg-gray-800/50 text-gray-600 dark:text-gray-300 hover:bg-white dark:hover:bg-gray-700"
+                    ? "bg-indigo-600 text-white shadow-lg shadow-indigo-500/30"
+                    : "bg-white/50 dark:bg-gray-800/50 text-gray-600 dark:text-gray-300 hover:bg-white dark:hover:bg-gray-700"
                     }`}
                 >
                   {status}
@@ -597,9 +597,9 @@ function FacultySubmissionsContent() {
                       >
                         <CheckCircle2
                           className={`mr-2 h-4 w-4 ${searchParams.get("practical") ===
-                              practical.id.toString()
-                              ? "opacity-100 text-indigo-500"
-                              : "opacity-0"
+                            practical.id.toString()
+                            ? "opacity-100 text-indigo-500"
+                            : "opacity-0"
                             }`}
                         />
                         <span className="truncate">{practical.title}</span>
@@ -996,8 +996,8 @@ function FacultySubmissionsContent() {
                                 </div>
                                 <span
                                   className={`text-xs font-bold px-2 py-0.5 rounded ${r.status?.toLowerCase() === "passed"
-                                      ? "text-emerald-600 bg-emerald-50 dark:bg-emerald-900/20"
-                                      : "text-red-600 bg-red-50 dark:bg-red-900/20"
+                                    ? "text-emerald-600 bg-emerald-50 dark:bg-emerald-900/20"
+                                    : "text-red-600 bg-red-50 dark:bg-red-900/20"
                                     }`}
                                 >
                                   {r.status?.toUpperCase()}

@@ -100,11 +100,19 @@ export async function POST(req: NextRequest) {
 
 // Handle single user creation
 async function handleSingleCreate(body: any) {
-  const { email, password, name, role = "student", roll_no, semester, department, batch } = body;
+  const { email, name, role = "student", roll_no, semester, department, batch } = body;
 
-  if (!email || !password) {
+  // Password is optional - generate a secure random one if not provided
+  // This is useful for Azure/OAuth users who won't use password login
+  let password = body.password;
+  if (!password) {
+    // Generate a secure random password (user won't need it for Azure login)
+    password = crypto.randomUUID() + "Aa1!"; // Meets most password requirements
+  }
+
+  if (!email) {
     return NextResponse.json(
-      { success: false, error: "Missing email or password" },
+      { success: false, error: "Email is required" },
       { status: 400 },
     );
   }
@@ -178,14 +186,20 @@ async function handleBulkCreate(users: any[]) {
   }[] = [];
 
   for (const user of users) {
-    const { email, password, name, role = "student", roll_no, semester, department, batch } = user;
+    const { email, name, role = "student", roll_no, semester, department, batch } = user;
+
+    // Password is optional - generate a secure random one if not provided
+    let password = user.password;
+    if (!password) {
+      password = crypto.randomUUID() + "Aa1!";
+    }
 
     // Validate required fields
-    if (!email || !password) {
+    if (!email) {
       results.push({
         email: email || "unknown",
         success: false,
-        error: "Missing email or password",
+        error: "Email is required",
       });
       continue;
     }

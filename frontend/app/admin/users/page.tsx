@@ -324,11 +324,7 @@ export default function AdminUsers() {
       return;
     }
 
-    // Password is required for new users
-    if (!isEditing && !form.password) {
-      alert("Password is required for new users!");
-      return;
-    }
+    // Password is now optional - backend will generate one for Azure/OAuth users
 
     setBusy(true);
     try {
@@ -925,14 +921,14 @@ export default function AdminUsers() {
                 {!isEditing && (
                   <div className="space-y-1.5">
                     <label className="text-xs font-medium text-gray-700 dark:text-gray-300">
-                      Password *
+                      Password <span className="text-gray-400 font-normal">(optional for Azure users)</span>
                     </label>
                     <input
                       className="input-premium"
                       type="password"
                       value={form.password}
                       onChange={(e) => handleChange("password", e.target.value)}
-                      placeholder="Enter password"
+                      placeholder="Leave empty for Azure-only login"
                     />
                   </div>
                 )}
@@ -997,12 +993,21 @@ export default function AdminUsers() {
                         <label className="text-xs font-medium text-gray-700 dark:text-gray-300">
                           Batch
                         </label>
-                        <input
-                          className="input-premium"
-                          value={form.batch}
-                          onChange={(e) => handleChange("batch", e.target.value)}
-                          placeholder="e.g., 2024-2028"
-                        />
+                        <div className="relative">
+                          <select
+                            className="input-premium appearance-none pr-10 cursor-pointer"
+                            value={form.batch}
+                            onChange={(e) => handleChange("batch", e.target.value)}
+                          >
+                            <option value="">Select Batch</option>
+                            <option value="All">All</option>
+                            <option value="1">1</option>
+                            <option value="2">2</option>
+                            <option value="3">3</option>
+                            <option value="4">4</option>
+                          </select>
+                          <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                        </div>
                       </div>
                     </div>
                   </div>

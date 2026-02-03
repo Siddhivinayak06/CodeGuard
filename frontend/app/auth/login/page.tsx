@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import { createClient } from "@/lib/supabase/client";
@@ -23,6 +23,21 @@ export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const router = useRouter();
+  const searchParams = useSearchParams();
+
+  // Handle URL error parameters (e.g., from OAuth callback)
+  useEffect(() => {
+    const errorParam = searchParams.get("error");
+    if (errorParam) {
+      const errorMessages: Record<string, string> = {
+        UserNotRegistered: "Your account is not registered in CodeGuard. Please contact your administrator to get access.",
+        AuthCodeError: "Authentication failed. Please try again.",
+        AuthError: "An authentication error occurred. Please try again.",
+      };
+      setError(errorMessages[errorParam] || `Authentication error: ${errorParam}`);
+    }
+  }, [searchParams]);
+
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();

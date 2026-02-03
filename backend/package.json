@@ -16,6 +16,7 @@
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
     "@lydell/node-pty": "^1.1.0",
+    "@supabase/supabase-js": "^2.94.0",
     "axios": "^1.13.2",
     "bcryptjs": "^3.0.3",
     "body-parser": "^2.2.1",

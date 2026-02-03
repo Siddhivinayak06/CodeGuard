@@ -11,19 +11,23 @@ import {
   Trash2,
   X,
   Search,
-  Filter,
   ChevronDown,
   Users,
-  GraduationCap,
 } from "lucide-react";
+
+type FacultyBatch = {
+  id?: number;
+  batch: string;
+  faculty_id: string;
+  faculty_name?: string;
+};
 
 type Subject = {
   id: string;
   subject_name: string;
   subject_code: string;
   semester?: string;
-  faculty_id?: string;
-  faculty_name?: string;
+  faculty_batches?: FacultyBatch[];
 };
 
 type Faculty = {
@@ -82,6 +86,7 @@ export default function AdminSubjects() {
   const [user, setUser] = useState<User | null>(null);
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [faculty, setFaculty] = useState<Faculty[]>([]);
+  const [availableBatches, setAvailableBatches] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [filterSemester, setFilterSemester] = useState<string>("all");
@@ -94,7 +99,7 @@ export default function AdminSubjects() {
     subject_name: "",
     subject_code: "",
     semester: "",
-    faculty_id: "",
+    faculty_batches: [] as { batch: string; faculty_id: string }[],
   });
 
   // Auth check
@@ -162,6 +167,13 @@ export default function AdminSubjects() {
 
       setSubjects(subjRes?.data ?? subjRes ?? []);
       setFaculty(facRes?.data ?? facRes ?? []);
+
+      // Get unique batches from users
+      const batchesFromData = (facRes?.data ?? facRes ?? [])
+        .map((f: any) => f.batch)
+        .filter((b: any) => b && typeof b === "string");
+      const allBatches = ["All", "1", "2", "3", "4", ...batchesFromData];
+      setAvailableBatches([...new Set(allBatches)].sort());
     } catch (err) {
       console.error("Fetch failed:", err);
     } finally {
@@ -173,8 +185,30 @@ export default function AdminSubjects() {
     fetchData();
   }, [user]);
 
-  const handleChange = (key: string, value: string) => {
+  const handleChange = (key: string, value: any) => {
     setForm((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const addFacultyBatch = () => {
+    setForm((prev) => ({
+      ...prev,
+      faculty_batches: [...prev.faculty_batches, { batch: "", faculty_id: "" }],
+    }));
+  };
+
+  const updateFacultyBatch = (index: number, field: "batch" | "faculty_id", value: string) => {
+    setForm((prev) => {
+      const updated = [...prev.faculty_batches];
+      updated[index] = { ...updated[index], [field]: value };
+      return { ...prev, faculty_batches: updated };
+    });
+  };
+
+  const removeFacultyBatch = (index: number) => {
+    setForm((prev) => ({
+      ...prev,
+      faculty_batches: prev.faculty_batches.filter((_, i) => i !== index),
+    }));
   };
 
   const handleSave = async () => {
@@ -182,6 +216,11 @@ export default function AdminSubjects() {
       alert("Subject name and code are required");
       return;
     }
+
+    // Validate faculty batches
+    const validBatches = form.faculty_batches.filter(
+      (fb) => fb.batch && fb.faculty_id
+    );
 
     setBusy(true);
     try {
@@ -192,7 +231,7 @@ export default function AdminSubjects() {
         subject_name: form.subject_name,
         subject_code: form.subject_code,
         semester: form.semester || undefined,
-        faculty_id: form.faculty_id || undefined,
+        faculty_batches: validBatches,
       };
 
       const token = await getAccessToken();
@@ -218,7 +257,7 @@ export default function AdminSubjects() {
         subject_name: "",
         subject_code: "",
         semester: "",
-        faculty_id: "",
+        faculty_batches: [],
       });
       setIsEditing(false);
       fetchData();
@@ -265,10 +304,11 @@ export default function AdminSubjects() {
 
   // Filter subjects
   const filteredSubjects = subjects.filter((s) => {
+    const facultyNames = s.faculty_batches?.map((fb) => fb.faculty_name).join(" ") || "";
     const matchesSearch =
       s.subject_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       s.subject_code?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      s.faculty_name?.toLowerCase().includes(searchTerm.toLowerCase());
+      facultyNames.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesSemester =
       filterSemester === "all" || s.semester === filterSemester;
     return matchesSearch && matchesSemester;
@@ -279,6 +319,21 @@ export default function AdminSubjects() {
     ...new Set(subjects.map((s) => s.semester).filter(Boolean)),
   ].sort();
 
+  const openEditModal = (s: Subject) => {
+    setForm({
+      id: s.id,
+      subject_name: s.subject_name,
+      subject_code: s.subject_code,
+      semester: s.semester || "",
+      faculty_batches:
+        s.faculty_batches?.map((fb) => ({
+          batch: fb.batch,
+          faculty_id: fb.faculty_id,
+        })) || [],
+    });
+    setIsEditing(true);
+    setOpen(true);
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50/30 to-purple-50/30 dark:from-gray-950 dark:via-indigo-950/10 dark:to-purple-950/10">
@@ -307,7 +362,7 @@ export default function AdminSubjects() {
                 subject_name: "",
                 subject_code: "",
                 semester: "",
-                faculty_id: "",
+                faculty_batches: [],
               });
               setIsEditing(false);
               setOpen(true);
@@ -324,10 +379,9 @@ export default function AdminSubjects() {
           className="glass-card-premium rounded-3xl overflow-hidden animate-slideUp"
           style={{ animationDelay: "100ms" }}
         >
-          {/* Consolidated Header with Search & Filter */}
+          {/* Header with Search & Filter */}
           <div className="px-6 py-4 border-b border-gray-200/50 dark:border-gray-700/50 bg-gradient-to-r from-indigo-50/50 to-purple-50/50 dark:from-indigo-900/20 dark:to-purple-900/20">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-              {/* Left: Count */}
               <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
                 <BookOpen className="w-4 h-4 text-indigo-500" />
                 <span className="font-medium">
@@ -337,7 +391,6 @@ export default function AdminSubjects() {
                 </span>
               </div>
 
-              {/* Right: Search & Filter */}
               <div className="flex flex-col sm:flex-row gap-3">
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -383,7 +436,7 @@ export default function AdminSubjects() {
                       Semester
                     </th>
                     <th className="px-5 py-3.5 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">
-                      Faculty
+                      Faculty Assignments
                     </th>
                     <th className="px-5 py-3.5 text-right text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">
                       Actions
@@ -428,7 +481,7 @@ export default function AdminSubjects() {
                       Semester
                     </th>
                     <th className="px-5 py-3.5 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">
-                      Faculty
+                      Faculty Assignments
                     </th>
                     <th className="px-5 py-3.5 text-right text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">
                       Actions
@@ -459,16 +512,28 @@ export default function AdminSubjects() {
                         )}
                       </td>
                       <td className="px-5 py-4">
-                        {s.faculty_name ? (
-                          <div className="flex items-center gap-3">
-                            <div
-                              className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white bg-gradient-to-br ${stringToColor(s.faculty_name)}`}
-                            >
-                              {s.faculty_name.charAt(0).toUpperCase()}
-                            </div>
-                            <span className="text-gray-700 dark:text-gray-300 text-sm font-medium">
-                              {s.faculty_name}
-                            </span>
+                        {s.faculty_batches && s.faculty_batches.length > 0 ? (
+                          <div className="flex flex-wrap gap-2">
+                            {s.faculty_batches.map((fb, idx) => (
+                              <div
+                                key={idx}
+                                className="flex items-center gap-2 px-2 py-1 bg-gray-100 dark:bg-gray-800 rounded-lg text-xs"
+                              >
+                                <span className="font-semibold text-indigo-600 dark:text-indigo-400">
+                                  {fb.batch}:
+                                </span>
+                                <div className="flex items-center gap-1.5">
+                                  <div
+                                    className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold text-white bg-gradient-to-br ${stringToColor(fb.faculty_name || "")}`}
+                                  >
+                                    {(fb.faculty_name || "?").charAt(0).toUpperCase()}
+                                  </div>
+                                  <span className="text-gray-700 dark:text-gray-300">
+                                    {fb.faculty_name || "Unknown"}
+                                  </span>
+                                </div>
+                              </div>
+                            ))}
                           </div>
                         ) : (
                           <span className="text-gray-400 text-sm">
@@ -479,17 +544,7 @@ export default function AdminSubjects() {
                       <td className="px-5 py-4">
                         <div className="flex items-center justify-end gap-3">
                           <button
-                            onClick={() => {
-                              setForm({
-                                id: s.id,
-                                subject_name: s.subject_name,
-                                subject_code: s.subject_code,
-                                semester: s.semester || "",
-                                faculty_id: s.faculty_id || "",
-                              });
-                              setIsEditing(true);
-                              setOpen(true);
-                            }}
+                            onClick={() => openEditModal(s)}
                             disabled={busy}
                             className="p-2.5 rounded-lg text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/30 transition-colors disabled:opacity-50"
                             title="Edit"
@@ -522,7 +577,7 @@ export default function AdminSubjects() {
             className="absolute inset-0 bg-black/50 backdrop-blur-sm"
             onClick={() => !busy && setOpen(false)}
           />
-          <div className="relative w-full max-w-lg glass-card-premium rounded-3xl p-8 shadow-2xl animate-scaleIn">
+          <div className="relative w-full max-w-2xl glass-card-premium rounded-3xl p-8 shadow-2xl animate-scaleIn max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-6">
               <div className="flex items-center gap-3">
                 <div className="p-2 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-500">
@@ -541,7 +596,7 @@ export default function AdminSubjects() {
               </button>
             </div>
 
-            <div className="space-y-4">
+            <div className="space-y-5">
               <div className="space-y-1.5">
                 <label className="text-xs font-medium text-gray-700 dark:text-gray-300">
                   Subject Name *
@@ -582,25 +637,81 @@ export default function AdminSubjects() {
                 </div>
               </div>
 
-              <div className="space-y-1.5">
-                <label className="text-xs font-medium text-gray-700 dark:text-gray-300">
-                  Assign Faculty
-                </label>
-                <div className="relative">
-                  <select
-                    className="input-premium appearance-none pr-10 cursor-pointer"
-                    value={form.faculty_id}
-                    onChange={(e) => handleChange("faculty_id", e.target.value)}
+              {/* Batch-wise Faculty Assignments */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-medium text-gray-700 dark:text-gray-300 flex items-center gap-2">
+                    <Users className="w-4 h-4 text-indigo-500" />
+                    Faculty Assignments by Batch
+                  </label>
+                  <button
+                    type="button"
+                    onClick={addFacultyBatch}
+                    className="text-xs px-3 py-1.5 rounded-lg bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400 hover:bg-indigo-200 dark:hover:bg-indigo-900/50 transition-colors flex items-center gap-1"
                   >
-                    <option value="">Select Faculty</option>
-                    {faculty.map((f) => (
-                      <option key={f.uid} value={f.uid}>
-                        {f.name || f.email}
-                      </option>
-                    ))}
-                  </select>
-                  <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                    <Plus className="w-3 h-3" />
+                    Add Batch
+                  </button>
                 </div>
+
+                {form.faculty_batches.length === 0 ? (
+                  <div className="p-4 rounded-xl border-2 border-dashed border-gray-200 dark:border-gray-700 text-center text-sm text-gray-500">
+                    No batch-faculty assignments yet. Click "Add Batch" to assign faculty.
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {form.faculty_batches.map((fb, index) => (
+                      <div
+                        key={index}
+                        className="flex items-center gap-3 p-3 rounded-xl bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700"
+                      >
+                        <div className="flex-1 grid grid-cols-2 gap-3">
+                          <div className="relative">
+                            <select
+                              value={fb.batch}
+                              onChange={(e) =>
+                                updateFacultyBatch(index, "batch", e.target.value)
+                              }
+                              className="input-premium appearance-none pr-10 cursor-pointer text-sm"
+                            >
+                              <option value="">Select Batch</option>
+                              {availableBatches.map((batch) => (
+                                <option key={batch} value={batch}>
+                                  {batch}
+                                </option>
+                              ))}
+                            </select>
+                            <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                          </div>
+                          <div className="relative">
+                            <select
+                              value={fb.faculty_id}
+                              onChange={(e) =>
+                                updateFacultyBatch(index, "faculty_id", e.target.value)
+                              }
+                              className="input-premium appearance-none pr-10 cursor-pointer text-sm"
+                            >
+                              <option value="">Select Faculty</option>
+                              {faculty.map((f) => (
+                                <option key={f.uid} value={f.uid}>
+                                  {f.name || f.email}
+                                </option>
+                              ))}
+                            </select>
+                            <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => removeFacultyBatch(index)}
+                          className="p-2 rounded-lg text-red-500 hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
 
