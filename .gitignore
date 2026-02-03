@@ -67,6 +67,8 @@ pnpm-debug.log*
 supabase/.temp/
 supabase/.branches/
 supabase/functions/*/deno.lock
+supabase/snippets/
+complete_schema_dump.sql
 
 
 # ----------------------
