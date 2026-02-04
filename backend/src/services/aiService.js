@@ -142,7 +142,7 @@ const chatWithOllamaStream = async (
       message: err.message,
       code: err.code,
       status: err.response?.status,
-      statusText: err.response?.statusText
+      statusText: err.response?.statusText,
     });
     throw new Error(`Ollama request failed: ${err.message}`);
   }
