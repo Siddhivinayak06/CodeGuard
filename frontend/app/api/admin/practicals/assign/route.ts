@@ -46,6 +46,7 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json().catch(() => ({}));
+    console.log("[Assign Debug] Received body:", body);
     const { practical_id, student_ids, assigned_deadline, notes } = body;
 
     if (
@@ -54,6 +55,7 @@ export async function POST(request: Request) {
       !Array.isArray(student_ids) ||
       student_ids.length === 0
     ) {
+      console.log("[Assign Debug] Missing fields. practical_id:", practical_id, "students:", student_ids);
       return NextResponse.json(
         {
           success: false,
@@ -63,14 +65,16 @@ export async function POST(request: Request) {
       );
     }
 
-    // Check if practical exists and user has access to it
+    // Check if practical exists
+    console.log("[Assign Debug] Checking practical permission for ID:", practical_id);
     const { data: practical, error: practicalError } = await supabase
       .from("practicals")
-      .select("id, title, subject_id, subjects(faculty_id)")
+      .select("id, title, subject_id")
       .eq("id", practical_id)
       .single<any>();
 
     if (practicalError || !practical) {
+      console.error("[Assign Debug] Practical query error:", practicalError);
       return NextResponse.json(
         { success: false, error: "Practical not found" },
         { status: 404 },
@@ -95,10 +99,23 @@ export async function POST(request: Request) {
       .eq("uid", userId)
       .single();
 
-    if (
-      userRole?.role !== "admin" &&
-      practical.subjects?.faculty_id !== userId
-    ) {
+    // Check if faculty teaches this subject via subject_faculty_batches junction table
+    let hasFacultyAccess = false;
+    if (userRole?.role === "admin") {
+      hasFacultyAccess = true;
+    } else if (userRole?.role === "faculty") {
+      const { data: facultySubject } = await supabase
+        .from("subject_faculty_batches")
+        .select("id")
+        .eq("faculty_id", userId)
+        .eq("subject_id", practical.subject_id)
+        .limit(1)
+        .maybeSingle();
+
+      hasFacultyAccess = !!facultySubject;
+    }
+
+    if (!hasFacultyAccess) {
       return NextResponse.json(
         {
           success: false,

@@ -315,6 +315,7 @@ export default function PracticalForm({
           .eq("subject_id", selectedSubjectId);
 
         const assignedBatches = [...new Set((subjectBatches || []).map(fb => fb.batch))];
+        console.log("[Debug] Assigned Batches for subject:", selectedSubjectId, assignedBatches);
         setAvailableBatches(assignedBatches);
         const hasAllBatch = assignedBatches.includes("All");
 
@@ -338,7 +339,10 @@ export default function PracticalForm({
           return;
         }
 
+        console.log("[Debug] Fetched students total:", data?.length);
+
         if (!data) {
+          console.log("[Debug] No data returned from users query");
           setStudents([]);
           return;
         }
@@ -1276,11 +1280,18 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
                       {/* Draft List */}
                       <div className="flex-1 overflow-y-auto space-y-2 custom-scrollbar">
                         {draftPracticals.map((draft, idx) => {
-                          const hasTitle = draft.form.title.trim() !== "";
-                          const hasDeadline = !!draft.form.deadline;
-                          const hasTestCases = draft.testCases.some(tc => tc.input.trim() !== "" || tc.expected_output.trim() !== "");
-                          const displayTitle = hasTitle ? draft.form.title : `Practical ${idx + 1}`;
-                          const subjectName = subjects.find(s => s.id === draft.form.subject_id)?.subject_name || "No subject";
+                          // Use live form state for active draft, otherwise use draft state
+                          const isActiveDraft = idx === activeDraftIndex;
+                          const currentTitle = isActiveDraft ? form.title : draft.form.title;
+                          const currentDeadline = isActiveDraft ? form.deadline : draft.form.deadline;
+                          const currentTestCases = isActiveDraft ? testCases : draft.testCases;
+                          const currentPracticalNumber = isActiveDraft ? form.practical_number : draft.form.practical_number;
+
+                          const hasTitle = currentTitle.trim() !== "";
+                          const hasDeadline = !!currentDeadline;
+                          const hasTestCases = currentTestCases.some(tc => tc.input.trim() !== "" || tc.expected_output.trim() !== "");
+                          const displayTitle = hasTitle ? currentTitle : `Practical ${idx + 1}`;
+                          const subjectName = subjects.find(s => s.id === (isActiveDraft ? form.subject_id : draft.form.subject_id))?.subject_name || "No subject";
 
                           // Calculate completion percentage
                           const fields = [hasTitle, hasDeadline, hasTestCases];
@@ -1351,7 +1362,7 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
                                         ? "text-indigo-600 dark:text-indigo-400"
                                         : "text-gray-500 dark:text-gray-400"
                                     )}>
-                                      Practical {draft.form.practical_number ?? idx + 1}
+                                      Practical {currentPracticalNumber ?? idx + 1}
                                     </div>
                                     <div className={cx(
                                       "truncate text-sm font-semibold",
@@ -1359,7 +1370,7 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
                                         ? "text-gray-900 dark:text-white"
                                         : "text-gray-700 dark:text-gray-300"
                                     )}>
-                                      {hasTitle ? draft.form.title : "Untitled Practical"}
+                                      {hasTitle ? currentTitle : "Untitled Practical"}
                                     </div>
                                   </div>
 

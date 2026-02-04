@@ -547,7 +547,7 @@ export default function AnalyticsPage() {
                       No upcoming deadlines
                     </p>
                     <Link
-                      href="/faculty/practicals"
+                      href="/dashboard/faculty/practicals"
                       className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/30 rounded-lg hover:bg-indigo-100 dark:hover:bg-indigo-900/50 transition-colors"
                     >
                       <Plus className="w-4 h-4" />
