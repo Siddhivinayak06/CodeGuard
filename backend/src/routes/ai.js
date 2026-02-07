@@ -248,17 +248,24 @@ ${text.slice(0, 100000)} {/* Limit text length to avoid token limits */}
           const practicals = JSON.parse(potentialJson);
           return res.json({ practicals });
         } catch (e) {
-          logger.error('Failed to parse AI response as JSON', { error: e.message, fullResponse });
+          logger.error('Failed to parse AI response as JSON', {
+            error: e.message,
+            fullResponse,
+          });
           // Debugging: Write failed response to file
           const fs = require('fs');
           fs.writeFileSync('debug_ai_response.log', fullResponse);
 
-          return res
-            .status(500)
-            .json({ error: 'Failed to parse AI response. The AI might have returned invalid JSON.', raw: fullResponse });
+          return res.status(500).json({
+            error:
+              'Failed to parse AI response. The AI might have returned invalid JSON.',
+            raw: fullResponse,
+          });
         }
       } else {
-        logger.error('Failed to find JSON array in AI response', { fullResponse });
+        logger.error('Failed to find JSON array in AI response', {
+          fullResponse,
+        });
         return res
           .status(500)
           .json({ error: 'Failed to parse AI response', raw: fullResponse });
