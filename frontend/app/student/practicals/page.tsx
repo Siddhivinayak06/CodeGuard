@@ -518,10 +518,86 @@ export default function StudentPracticals() {
     return result;
   }, [practicals, userSemester]);
 
+  // 0.5. Apply Sequential Locking
+  const sequencedPracticals = useMemo(() => {
+    // Group by subject to apply sequential logic PER SUBJECT
+    const groups = new Map<number, FormattedPractical[]>();
+    const others: FormattedPractical[] = [];
+
+    semesterFilteredPracticals.forEach((p) => {
+      if (p.subject_id) {
+        if (!groups.has(p.subject_id)) groups.set(p.subject_id, []);
+        groups.get(p.subject_id)!.push({ ...p }); // Clone to avoid mutation
+      } else {
+        others.push({ ...p });
+      }
+    });
+
+    const result: FormattedPractical[] = [];
+
+    // Process subject groups
+    groups.forEach((groupPracticals) => {
+      // Sort by practical number (ascending)
+      groupPracticals.sort(
+        (a, b) => (a.practical_number || a.id) - (b.practical_number || b.id)
+      );
+
+      let previousCompleted = true;
+      groupPracticals.forEach((p) => {
+        // If previous not completed, lock this one
+        if (!previousCompleted) {
+          p.is_locked = true;
+          p.lock_reason = "Previous practical not submitted";
+        } else if (p.is_locked && (p.max_attempts - p.attempt_count > 0)) {
+          // Sequentially valid + attempts remaining -> Ensure unlocked (fix for stuck state)
+          p.is_locked = false;
+          p.lock_reason = null;
+        }
+
+        // Check completion status for the *next* iteration
+        // "submitted", "completed", "passed", "failed" (assuming failed means attempt made)
+        const isDone = ["passed", "completed", "submitted", "failed"].includes(
+          p.status
+        );
+
+        if (!isDone) {
+          previousCompleted = false;
+        }
+      });
+      result.push(...groupPracticals);
+    });
+
+    // Handle 'others' (uncategorized) - assuming sequential logic applies if they have numbers
+    if (others.length > 0) {
+      others.sort(
+        (a, b) => (a.practical_number || a.id) - (b.practical_number || b.id)
+      );
+      let previousCompleted = true;
+      others.forEach((p) => {
+        // Remove early return on is_locked to allow progression if done/attempted
+
+        if (!previousCompleted) {
+          p.is_locked = true;
+          p.lock_reason = "Previous practical not submitted";
+        } else if (p.is_locked && (p.max_attempts - p.attempt_count > 0)) {
+          p.is_locked = false;
+          p.lock_reason = null;
+        }
+        const isDone = ["passed", "completed", "submitted", "failed"].includes(
+          p.status
+        );
+        if (!isDone) previousCompleted = false;
+      });
+      result.push(...others);
+    }
+
+    return result;
+  }, [semesterFilteredPracticals]);
+
   // Extract Subjects (from semester-filtered list)
   const subjects = useMemo(() => {
     const map = new Map<number, { id: number; name: string; code?: string; count: number }>();
-    semesterFilteredPracticals.forEach(p => {
+    sequencedPracticals.forEach(p => {
       // Robust check
       if (p.subject_id !== null && p.subject_id !== undefined) {
         const sid = Number(p.subject_id);
@@ -536,15 +612,15 @@ export default function StudentPracticals() {
       }
     });
     return Array.from(map.values());
-  }, [semesterFilteredPracticals]);
+  }, [sequencedPracticals]);
 
 
   // Derived Stats (Filtered)
   const stats = useMemo(() => {
     // Filter practicals for stats based on selected subject
     const relevantPracticals = selectedSubjectId === "all"
-      ? semesterFilteredPracticals
-      : semesterFilteredPracticals.filter(p => p.subject_id == selectedSubjectId);
+      ? sequencedPracticals
+      : sequencedPracticals.filter(p => p.subject_id == selectedSubjectId);
 
     const doneStatuses = ["passed", "failed", "completed"];
     const total = relevantPracticals.length;
@@ -560,11 +636,11 @@ export default function StudentPracticals() {
     ).length;
     const progress = total > 0 ? Math.round((completed / total) * 100) : 0;
     return { total, completed, pending, overdue, progress };
-  }, [semesterFilteredPracticals, selectedSubjectId]);
+  }, [sequencedPracticals, selectedSubjectId]);
 
   // Filtered Content (Search, Subject, Tabs)
   const filteredPracticals = useMemo(() => {
-    let result = semesterFilteredPracticals;
+    let result = sequencedPracticals;
 
     // 1. Subject Filter (Robust)
     if (selectedSubjectId !== "all") {
@@ -599,7 +675,7 @@ export default function StudentPracticals() {
       default:
         return result;
     }
-  }, [semesterFilteredPracticals, activeFilter, searchQuery, selectedSubjectId]);
+  }, [sequencedPracticals, activeFilter, searchQuery, selectedSubjectId]);
 
   // Handle View Result, Start Practical, Navigate...
   const handleViewResult = async (
@@ -650,6 +726,11 @@ export default function StudentPracticals() {
   };
 
   const handleStartPractical = (practical: FormattedPractical) => {
+    if (practical.is_locked) {
+      alert("This practical is locked. " + (practical.lock_reason || "Please complete the previous practical first."));
+      return;
+    }
+
     // Deadline check removed to allow late submissions
     //   return;
     // }

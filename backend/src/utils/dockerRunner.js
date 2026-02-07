@@ -125,7 +125,7 @@ module.exports = async function runBatchCode(
   batch = [],
   options = {}
 ) {
-  const CONCURRENCY_LIMIT = 1;
+  const CONCURRENCY_LIMIT = 5;
   const { earlyExit = true } = options;
   const uniqueId = uuidv4();
 

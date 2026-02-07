@@ -235,14 +235,14 @@ export function EditorToolbar({
             size="sm"
             onClick={onRun}
             disabled={locked || loading}
-            className="bg-blue-600 hover:bg-blue-700 text-white h-8 px-4"
+            className="bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-700 hover:to-blue-600 text-white h-9 px-5 shadow-lg shadow-blue-500/20 transition-all hover:scale-[1.02] active:scale-[0.98] rounded-lg font-semibold"
           >
             {loading ? (
               <Loader2 className="w-4 h-4 animate-spin mr-2" />
             ) : (
               <Play className="w-4 h-4 mr-2" />
             )}
-            Run
+            Run Code
           </Button>
 
           <Button
@@ -250,7 +250,7 @@ export function EditorToolbar({
             variant="outline"
             onClick={onDownload}
             disabled={locked || loading}
-            className="h-8"
+            className="h-9 px-4 border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300 transition-colors"
           >
             <Download className="w-4 h-4 mr-2" />
             Export
@@ -262,7 +262,7 @@ export function EditorToolbar({
               variant="outline"
               onClick={onReset}
               disabled={locked || loading}
-              className="h-8 text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/10 border-red-200 dark:border-red-900/30"
+              className="h-9 px-4 text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/10 border-red-200 dark:border-red-900/30 transition-colors"
             >
               <RotateCcw className="w-4 h-4 mr-2" />
               Reset
@@ -274,7 +274,7 @@ export function EditorToolbar({
               size="sm"
               onClick={onSubmit}
               disabled={locked || loading}
-              className="bg-green-600 hover:bg-green-700 text-white h-8"
+              className="bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-700 hover:to-emerald-600 text-white h-9 px-6 shadow-lg shadow-emerald-500/20 transition-all hover:scale-[1.02] active:scale-[0.98] rounded-lg font-bold tracking-wide"
             >
               Submit
             </Button>

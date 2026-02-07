@@ -106,11 +106,16 @@ const chatWithOllamaStream = async (
   abortSignal
 ) => {
   const baseUrl = configOverrides?.ollamaUrl || config.ai.ollamaUrl;
-  const model = configOverrides?.model || config.ai.model || 'mistral';
+  const model = configOverrides?.model || config.ai.model || 'qwen2.5-coder';
 
   const payload = {
     model,
     stream: true,
+    options: {
+      num_ctx: 4096,
+      num_thread: 8,
+      keep_alive: '30m',
+    },
     messages: [
       { role: 'system', content: systemPrompt },
       ...normalizeMessages(messages),

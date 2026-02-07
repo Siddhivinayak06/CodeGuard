@@ -95,7 +95,7 @@ const injectSecurityHeaders = (response: NextResponse) => {
 /*                               PROXY LOGIC                                  */
 /* -------------------------------------------------------------------------- */
 
-export async function proxy(request: NextRequest) {
+export async function middleware(request: NextRequest) {
   const startTime = performance.now()
 
   const requestId = crypto.randomUUID()

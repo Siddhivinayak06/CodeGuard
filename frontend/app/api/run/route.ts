@@ -370,17 +370,41 @@ export async function POST(req: Request) {
             ? new Date(assignment.assigned_deadline)
             : globalDeadline;
 
-          if (new Date() > effectiveDeadline) {
-            penalty = 1;
+          if (effectiveDeadline) {
+            const now = new Date();
+            const diffTime = now.getTime() - effectiveDeadline.getTime();
+            const diffDays = diffTime / (1000 * 3600 * 24);
+
+            if (diffDays > 14) {
+              penalty = 2;
+            } else if (diffDays > 0) {
+              penalty = 1;
+            }
           }
         } catch (e: any) {
           // Fallback to global deadline if assignment check fails
-          if (globalDeadline && new Date() > globalDeadline) {
-            penalty = 1;
+          if (globalDeadline) {
+            const now = new Date();
+            const diffTime = now.getTime() - globalDeadline.getTime();
+            const diffDays = diffTime / (1000 * 3600 * 24);
+
+            if (diffDays > 14) {
+              penalty = 2;
+            } else if (diffDays > 0) {
+              penalty = 1;
+            }
           }
         }
-      } else if (globalDeadline && new Date() > globalDeadline) {
-        penalty = 1;
+      } else if (globalDeadline) {
+        const now = new Date();
+        const diffTime = now.getTime() - globalDeadline.getTime();
+        const diffDays = diffTime / (1000 * 3600 * 24);
+
+        if (diffDays > 14) {
+          penalty = 2;
+        } else if (diffDays > 0) {
+          penalty = 1;
+        }
       }
 
       marksObtained = Math.max(0, baseMarks - penalty);

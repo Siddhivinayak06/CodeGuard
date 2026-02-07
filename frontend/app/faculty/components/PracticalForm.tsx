@@ -28,6 +28,7 @@ interface PracticalFormProps {
   defaultSubjectId?: number | string | null;
   onSaveStep1?: (id: number) => void;
   singleStep?: boolean; // If true, skip assignment step and save directly
+  initialDrafts?: any[];
 }
 
 // ---------------------- Small icons / helpers ----------------------
@@ -53,6 +54,7 @@ export default function PracticalForm({
   defaultSubjectId,
   onSaveStep1,
   singleStep = false,
+  initialDrafts,
 }: PracticalFormProps) {
   // Level type for multi-level practicals - now using shared type
 
@@ -65,7 +67,7 @@ export default function PracticalForm({
       level: "easy",
       title: "Easy",
       description: "",
-      max_marks: 5,
+      max_marks: 8,
       testCases: [
         {
           id: 0,
@@ -88,7 +90,7 @@ export default function PracticalForm({
       level: "hard",
       title: "Hard",
       description: "",
-      max_marks: 15,
+      max_marks: 2,
       testCases: [
         {
           id: 0,
@@ -140,6 +142,8 @@ export default function PracticalForm({
   );
   const [enableLevels, setEnableLevels] = useState(false);
 
+
+
   const [step, setStep] = useState<1 | 2>(1);
   const [students, setStudents] = useState<Student[]>([]);
   const [selectedStudents, setSelectedStudents] = useState<Student[]>([]);
@@ -157,6 +161,7 @@ export default function PracticalForm({
     semester: "",
     batch: "",
   });
+  const [savedPracticals, setSavedPracticals] = useState<{ id: number; deadline: string }[]>([]);
 
   // ---------------------- Multi-Draft State ----------------------
   interface DraftPractical {
@@ -165,6 +170,8 @@ export default function PracticalForm({
     testCases: TestCase[];
     levels: Level[];
     enableLevels: boolean;
+    sampleCode?: string;
+    sampleLanguage?: string;
   }
 
   const createEmptyDraft = (): DraftPractical => ({
@@ -195,6 +202,8 @@ export default function PracticalForm({
     }],
     levels: JSON.parse(JSON.stringify(defaultLevels)),
     enableLevels: false,
+    sampleCode: "",
+    sampleLanguage: "c",
   });
 
   const [draftPracticals, setDraftPracticals] = useState<DraftPractical[]>([]);
@@ -208,12 +217,97 @@ export default function PracticalForm({
       setStep(1);
       // Initialize with one draft if creating new practicals (not editing)
       if (!practical) {
-        const initialDraft = createEmptyDraft();
-        setDraftPracticals([initialDraft]);
-        setActiveDraftIndex(0);
+        if (initialDrafts && initialDrafts.length > 0) {
+          // Map imported drafts to DraftPractical format
+          const mappedDrafts = initialDrafts.map((d, idx) => {
+            const isMultilevel = d.enableLevels || false;
+
+            // Map imported levels to form levels structure
+            // We use defaultLevels as base and merge imported data
+            const mappedLevels = JSON.parse(JSON.stringify(defaultLevels)).map((defaultLevel: Level, levelIdx: number) => {
+              if (!d.levels || d.levels.length === 0) return defaultLevel;
+
+              // Map by index: 0 -> easy, 1 -> hard
+              // If we have more than 2 levels, they are ignored for now as the system only supports 2 fixed levels.
+              // If imported has only 1 level, it goes to "easy".
+              const importedLevel = d.levels[levelIdx];
+
+              if (!importedLevel) return defaultLevel;
+
+              return {
+                ...defaultLevel,
+                title: importedLevel.title || defaultLevel.title,
+                description: importedLevel.description || defaultLevel.description,
+                max_marks: Number(importedLevel.max_marks) || defaultLevel.max_marks, // Ensure number
+                testCases: importedLevel.testCases?.map((tc: any) => ({
+                  id: 0,
+                  practical_id: null,
+                  level_id: null,
+                  created_at: "",
+                  input: tc.input || "",
+                  expected_output: tc.expected_output || "",
+                  is_hidden: false,
+                  time_limit_ms: 2000,
+                  memory_limit_kb: 65536,
+                })) || [],
+                reference_code: importedLevel.reference_code || ""
+              };
+            });
+
+
+            return {
+              id: `imported-${Date.now()}-${idx}`,
+              form: {
+                id: 0,
+                title: d.title || "Untitled Practical",
+                subject_id: defaultSubjectId ? Number(defaultSubjectId) : (subjects[0]?.id ?? 0),
+                description: d.description || "",
+                language: d.language || "c", // Map language
+                deadline: d.deadline || new Date().toISOString().slice(0, 16), // Use imported deadline
+                max_marks: Number(d.max_marks) || 10,
+                practical_number: d.practical_number,
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
+                submitted: false,
+              },
+              testCases: d.testCases?.map((tc: any) => ({
+                id: 0,
+                practical_id: null,
+                level_id: null,
+                created_at: "",
+                input: tc.input || "",
+                expected_output: tc.expected_output || "",
+                is_hidden: false,
+                time_limit_ms: 2000,
+                memory_limit_kb: 65536,
+              })) || [],
+              levels: mappedLevels,
+              enableLevels: isMultilevel,
+              sampleCode: d.reference_code || "", // Map reference code
+              sampleLanguage: d.language || "c",
+            };
+          });
+          setDraftPracticals(mappedDrafts);
+          setActiveDraftIndex(0);
+
+          // Initial Load of the first draft
+          if (mappedDrafts.length > 0) {
+            const first = mappedDrafts[0];
+            setForm(first.form);
+            setTestCases(first.testCases);
+            setLevels(first.levels);
+            setEnableLevels(first.enableLevels);
+            if (first.sampleCode !== undefined) setSampleCode(first.sampleCode);
+            if (first.sampleLanguage !== undefined) setSampleLanguage(first.sampleLanguage);
+          }
+        } else {
+          const initialDraft = createEmptyDraft();
+          setDraftPracticals([initialDraft]);
+          setActiveDraftIndex(0);
+        }
       }
     }
-  }, [isOpen, practical]);
+  }, [isOpen, practical, initialDrafts, defaultSubjectId, subjects, setSampleCode, setSampleLanguage]);
 
   // set initial state when practical prop changes
   // set initial state when practical prop changes
@@ -661,10 +755,12 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
   };
 
   const getLanguageExtension = useCallback(
-    () =>
-      String(sampleLanguage || "").toLowerCase() === "python"
-        ? python()
-        : cpp(),
+    () => {
+      const lang = String(sampleLanguage || "").toLowerCase();
+      if (lang === "python") return python();
+      if (lang === "java") return cpp(); // Use C++ mode for Java
+      return cpp();
+    },
     [sampleLanguage],
   );
 
@@ -871,38 +967,210 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
     } finally {
       setSaving(false);
     }
-  }, [form, testCases, levels, enableLevels, supabase]);
+  }, [form, testCases, levels, enableLevels, supabase, validateForm, onSaveStep1]);
+
+  // Save ALL drafts (for bulk import mode)
+  const handleSaveAll = useCallback(async () => {
+    setSaving(true);
+    let successCount = 0;
+    let failCount = 0;
+    const savedData: { id: number; deadline: string }[] = [];
+
+    try {
+      // Save each draft sequentially
+      for (const draft of draftPracticals) {
+        try {
+          // Build payload from the draft's stored data
+          const draftEnableLevels = draft.enableLevels;
+          const draftLevels = draft.levels;
+          const draftTestCases = draft.testCases;
+          const draftForm = draft.form;
+
+          // Validate this draft
+          if (!draftForm.title?.trim()) {
+            console.warn(`Skipping draft without title: ${draft.id}`);
+            failCount++;
+            continue;
+          }
+          if (!draftForm.subject_id) {
+            console.warn(`Skipping draft without subject: ${draft.id}`);
+            failCount++;
+            continue;
+          }
+
+          // Check for duplicate practical number
+          if (draftForm.subject_id && draftForm.practical_number) {
+            const { data: existing } = await supabase
+              .from("practicals")
+              .select("id")
+              .eq("subject_id", draftForm.subject_id)
+              .eq("practical_number", draftForm.practical_number);
+
+            if (existing && existing.length > 0) {
+              console.warn(`Skipping draft with duplicate practical_number: ${draftForm.practical_number}`);
+              failCount++;
+              continue;
+            }
+          }
+
+          // Build payload
+          const payload = {
+            title: draftForm.title,
+            subject_id: draftForm.subject_id,
+            description: draftEnableLevels ? "" : draftForm.description,
+            language: draftForm.language,
+            deadline: draftForm.deadline,
+            max_marks: draftEnableLevels
+              ? draftLevels.reduce((sum, l) => sum + l.max_marks, 0)
+              : (draftForm.max_marks ?? 10),
+            practical_number: draftForm.practical_number,
+          };
+
+          // Insert practical
+          const { data: newPractical, error: insertErr } = await supabase
+            .from("practicals")
+            .insert(payload)
+            .select()
+            .single();
+
+          if (insertErr) throw insertErr;
+          const practicalId = newPractical.id;
+          savedData.push({
+            id: practicalId,
+            deadline: draftForm.deadline || new Date().toISOString()
+          });
+
+          if (draftEnableLevels) {
+            // Save levels with their test cases
+            for (const level of draftLevels) {
+              const { data: levelData, error: levelErr } = await supabase
+                .from("practical_levels")
+                .insert({
+                  practical_id: practicalId,
+                  level: level.level,
+                  title: level.title,
+                  description: level.description,
+                  max_marks: level.max_marks,
+                })
+                .select()
+                .single();
+
+              if (levelErr) throw levelErr;
+
+              if (levelData && level.testCases.length > 0) {
+                const tcData = level.testCases.map((tc) => ({
+                  practical_id: practicalId,
+                  level_id: levelData.id,
+                  input: tc.input,
+                  expected_output: tc.expected_output,
+                  is_hidden: tc.is_hidden || false,
+                  time_limit_ms: Number(tc.time_limit_ms) || 2000,
+                  memory_limit_kb: Number(tc.memory_limit_kb) || 65536,
+                }));
+                const { error: tcErr } = await supabase
+                  .from("test_cases")
+                  .insert(tcData);
+                if (tcErr) throw tcErr;
+              }
+            }
+          } else {
+            // Single-level test cases
+            if (draftTestCases.length > 0) {
+              const insertData = draftTestCases.map((tc) => ({
+                practical_id: practicalId,
+                input: tc.input,
+                expected_output: tc.expected_output,
+                is_hidden: tc.is_hidden || false,
+                time_limit_ms: Number(tc.time_limit_ms) || 2000,
+                memory_limit_kb: Number(tc.memory_limit_kb) || 65536,
+              }));
+              const { error: tcErr } = await supabase
+                .from("test_cases")
+                .insert(insertData);
+              if (tcErr) throw tcErr;
+            }
+          }
+
+          successCount++;
+        } catch (draftErr) {
+          console.error(`Error saving draft ${draft.id}:`, draftErr);
+          failCount++;
+        }
+      }
+
+      if (successCount > 0) {
+        alert(`Successfully saved ${successCount} practicals. ${failCount > 0 ? `${failCount} failed.` : ""}`);
+      } else {
+        alert(`Failed to save any practicals. ${failCount} errors.`);
+      }
+
+      return savedData;
+    } finally {
+      setSaving(false);
+    }
+  }, [draftPracticals, supabase]);
 
   // Assign practical to selected students
-  const assign = async () => {
-    if (!form.id && form.id !== 0) {
-      alert("Save the practical before assigning.");
+  const assign = async (specificItems?: { id: number; deadline?: string }[]) => {
+    // Determine which items to assign
+    const itemsToAssign = specificItems && specificItems.length > 0
+      ? specificItems
+      : savedPracticals.length > 0
+        ? savedPracticals
+        : (form.id ? [{ id: Number(form.id), deadline: form.deadline }] : []);
+
+    if (itemsToAssign.length === 0) {
+      alert("Save the practical(s) before assigning.");
       return;
     }
+
     if (selectedStudents.length === 0) {
       alert("Select at least one student to assign.");
       return;
     }
 
     setLoading(true);
-    try {
-      const response = await fetch("/api/admin/practicals/assign", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          practical_id: form.id,
-          student_ids: selectedStudents.map((s) => s.uid),
-          assigned_deadline: assignmentDeadline,
-          notes,
-        }),
-      });
+    let successCount = 0;
+    let failCount = 0;
 
-      const result = await response.json();
-      if (result.success) {
-        alert(result.message || "Assigned successfully");
+    try {
+      // Assign each practical sequentially
+      for (const item of itemsToAssign) {
+        // Use the specific deadline for this practical if available, otherwise fallback to global state
+        // If it's a bulk saved item, use its stored deadline. 
+        // If it's single mode (form.id), use assignmentDeadline state (which user might have edited in step 2)
+        const deadlineToUse = item.deadline || assignmentDeadline || new Date().toISOString();
+
+        try {
+          const response = await fetch("/api/admin/practicals/assign", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              practical_id: item.id,
+              student_ids: selectedStudents.map((s) => s.uid),
+              assigned_deadline: deadlineToUse,
+              notes,
+            }),
+          });
+
+          const result = await response.json();
+          if (result.success) {
+            successCount++;
+          } else {
+            console.error(`Failed to assign practical ${item.id}:`, result.error);
+            failCount++;
+          }
+        } catch (err) {
+          console.error(`Error assigning practical ${item.id}:`, err);
+          failCount++;
+        }
+      }
+
+      if (successCount > 0) {
+        alert(`Assigned ${successCount} practicals successfully. ${failCount > 0 ? `${failCount} failed.` : ""}`);
         onSaved();
       } else {
-        alert(result.error || "Failed to assign");
+        alert("Failed to assign practicals.");
       }
     } catch (err) {
       console.error("Assign error:", err);
@@ -929,23 +1197,25 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
   }, [saving, handleSave]);
 
   // ---------------------- Draft Management Functions ----------------------
-  // Sync current form state back to the active draft
+  // Update current draft state before switching or performing other actions
   const syncCurrentDraftState = useCallback(() => {
     if (draftPracticals.length === 0 || practical) return; // Skip if editing existing or no drafts
     setDraftPracticals(prev => {
-      const updated = [...prev];
-      if (updated[activeDraftIndex]) {
-        updated[activeDraftIndex] = {
-          ...updated[activeDraftIndex],
+      const copy = [...prev];
+      if (copy[activeDraftIndex]) {
+        copy[activeDraftIndex] = {
+          ...copy[activeDraftIndex],
           form: { ...form },
           testCases: [...testCases],
           levels: JSON.parse(JSON.stringify(levels)),
           enableLevels,
+          sampleCode, // Save current sample code
+          sampleLanguage, // Save current language
         };
       }
-      return updated;
+      return copy;
     });
-  }, [activeDraftIndex, form, testCases, levels, enableLevels, draftPracticals.length, practical]);
+  }, [activeDraftIndex, form, testCases, levels, enableLevels, sampleCode, sampleLanguage, draftPracticals.length, practical]);
 
   // Add a new draft
   const addDraft = useCallback(() => {
@@ -998,6 +1268,8 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
       setTestCases(draft.testCases);
       setLevels(draft.levels);
       setEnableLevels(draft.enableLevels);
+      if (draft.sampleCode !== undefined) setSampleCode(draft.sampleCode);
+      if (draft.sampleLanguage !== undefined) setSampleLanguage(draft.sampleLanguage);
     }
   }, [activeDraftIndex, draftPracticals, syncCurrentDraftState]);
 
@@ -1020,6 +1292,8 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
         testCases: [...testCases],
         levels: JSON.parse(JSON.stringify(levels)),
         enableLevels,
+        sampleCode,
+        sampleLanguage,
       };
     }
 
@@ -1166,18 +1440,20 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
                     whileTap={{ scale: 0.98 }}
                     onClick={async () => {
                       if (step === 1) {
-                        const success = await handleSave();
-                        if (success) {
-                          if (singleStep) {
-                            // Single step mode: save and close
-                            onSaved();
-                          } else {
-                            // Multi-step mode: go to assignment step
+                        if (isMultiDraftMode) {
+                          const savedData = await handleSaveAll();
+                          if (savedData.length > 0) {
+                            setSavedPracticals(savedData);
+                            setStep(2);
+                          }
+                        } else {
+                          const success = await handleSave();
+                          if (success) {
                             setStep(2);
                           }
                         }
                       } else {
-                        await assign();
+                        await assign(); // Will use savedPracticals or form.id
                       }
                     }}
                     disabled={saving || loading}
@@ -1392,25 +1668,6 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
                           );
                         })}
                       </div>
-
-                      {/* Save All Button */}
-                      {draftPracticals.length > 1 && (
-                        <button
-                          onClick={saveAllDrafts}
-                          disabled={saving}
-                          className={cx(
-                            "w-full mt-4 flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-sm font-bold transition-all",
-                            saving
-                              ? "bg-gray-200 dark:bg-gray-700 text-gray-400 cursor-wait"
-                              : "bg-emerald-500 hover:bg-emerald-600 text-white shadow-md hover:shadow-lg"
-                          )}
-                        >
-                          <span className="relative z-10 flex items-center gap-2">
-                            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckIcon className="w-4 h-4" />}
-                            Save All ({draftPracticals.length})
-                          </span>
-                        </button>
-                      )}
                     </div>
                   )}
                 </motion.div>

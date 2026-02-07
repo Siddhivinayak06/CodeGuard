@@ -3,22 +3,29 @@
 import { useEffect, useState, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { Skeleton } from "@/components/ui/skeleton";
 import StudentDashboardSkeleton from "@/components/skeletons/StudentDashboardSkeleton";
 import type { User } from "@supabase/supabase-js";
 import {
-  BookOpen,
-  CheckCircle2,
-  Clock,
-  TrendingUp,
   Code,
   FileText,
-  ChevronRight,
   ArrowUpRight,
   GraduationCap,
+  CheckCircle2,
+  Clock,
+  BookOpen,
 } from "lucide-react";
 import Link from "next/link";
 import { motion } from "framer-motion";
+import ProgressRing from "@/components/dashboard/ProgressRing";
+import WelcomeCard from "@/components/dashboard/student/WelcomeCard";
+import StatCard from "@/components/dashboard/student/StatCard";
+import SubjectProgressList from "@/components/dashboard/student/SubjectProgressList";
+import RecentSubmissionsList from "@/components/dashboard/student/RecentSubmissionsList";
+import {
+  StudentDetails,
+  ProgressData,
+  DashboardSubmission,
+} from "@/types/dashboard";
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -54,96 +61,6 @@ const revealVariants = {
 
 const itemVariants = revealVariants;
 
-// Progress Ring Component
-function ProgressRing({
-  progress,
-  size = 80,
-  strokeWidth = 8,
-  showLabel = true,
-}: {
-  progress: number;
-  size?: number;
-  strokeWidth?: number;
-  showLabel?: boolean;
-}) {
-  const radius = (size - strokeWidth) / 2;
-  const circumference = radius * 2 * Math.PI;
-
-  // Standardize progress to 0-100
-  const safeProgress = Math.min(100, Math.max(0, progress));
-
-  return (
-    <div className="relative" style={{ width: size, height: size }}>
-      <svg width={size} height={size} className="progress-ring -rotate-90">
-        <circle
-          className="stroke-gray-200 dark:stroke-gray-700"
-          fill="transparent"
-          strokeWidth={strokeWidth}
-          r={radius}
-          cx={size / 2}
-          cy={size / 2}
-        />
-        <motion.circle
-          className="progress-ring-circle"
-          stroke="url(#gradient)"
-          fill="transparent"
-          strokeWidth={strokeWidth}
-          strokeLinecap="round"
-          strokeDasharray={circumference}
-          initial={{ strokeDashoffset: circumference }}
-          animate={{
-            strokeDashoffset:
-              circumference - (safeProgress / 100) * circumference,
-          }}
-          transition={{ duration: 1.5, ease: "easeOut", delay: 0.5 }}
-          r={radius}
-          cx={size / 2}
-          cy={size / 2}
-        />
-        <defs>
-          <linearGradient id="gradient" x1="0%" y1="0%" x2="100%" y2="0%">
-            <stop offset="0%" stopColor="#6366f1" />
-            <stop offset="50%" stopColor="#8b5cf6" />
-            <stop offset="100%" stopColor="#ec4899" />
-          </linearGradient>
-        </defs>
-      </svg>
-      {showLabel && (
-        <div className="absolute inset-0 flex items-center justify-center">
-          <motion.span
-            initial={{ opacity: 0, scale: 0.5 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.5, delay: 0.8 }}
-            className="text-lg font-bold text-gray-900 dark:text-white"
-          >
-            {safeProgress}%
-          </motion.span>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// Status Badge
-function StatusBadge({ status }: { status: string }) {
-  const styles: Record<string, string> = {
-    submitted:
-      "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400",
-    graded:
-      "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400",
-    pending:
-      "bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400",
-    rejected: "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400",
-  };
-  return (
-    <span
-      className={`px-2.5 py-1 text-xs font-semibold rounded-lg ${styles[status.toLowerCase()] || styles.pending}`}
-    >
-      {status}
-    </span>
-  );
-}
-
 export default function StudentDashboard() {
   const router = useRouter();
   const mountedRef = useRef(true);
@@ -151,29 +68,11 @@ export default function StudentDashboard() {
 
   const [user, setUser] = useState<User | null>(null);
   const [userName, setUserName] = useState("");
-  const [studentDetails, setStudentDetails] = useState<{
-    semester: string | number;
-    name?: string;
-  } | null>(null);
-  const [progress, setProgress] = useState<
-    {
-      subject_id: string;
-      subject_name: string;
-      total_count: number;
-      passed_count: number;
-      failed_count: number;
-    }[]
-  >([]);
-  const [submissions, setSubmissions] = useState<
-    {
-      id: string;
-      practical_title: string;
-      language: string;
-      status: string;
-      marks_obtained: number | null;
-      created_at: string;
-    }[]
-  >([]);
+  const [studentDetails, setStudentDetails] = useState<StudentDetails | null>(
+    null,
+  );
+  const [progress, setProgress] = useState<ProgressData[]>([]);
+  const [submissions, setSubmissions] = useState<DashboardSubmission[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Stats
@@ -184,14 +83,6 @@ export default function StudentDashboard() {
     totalPracticals > 0
       ? Math.round((passedPracticals / totalPracticals) * 100)
       : 0;
-
-  // Greeting based on time
-  const getGreeting = () => {
-    const hour = new Date().getHours();
-    if (hour < 12) return "Good morning";
-    if (hour < 17) return "Good afternoon";
-    return "Good evening";
-  };
 
   // Auth check
   useEffect(() => {
@@ -461,32 +352,11 @@ export default function StudentDashboard() {
             className="grid grid-cols-1 md:grid-cols-4 gap-6"
           >
             {/* ===== WELCOME CARD - Large (2x1) ===== */}
-            <motion.div
-              variants={itemVariants}
-              className="md:col-span-2 glass-card-premium rounded-3xl p-8 relative overflow-hidden"
-            >
-              <div className="absolute top-0 right-0 w-64 h-64 bg-gradient-to-bl from-indigo-500/20 via-purple-500/10 to-transparent rounded-full blur-3xl" />
-              <div className="relative z-10">
-                <p className="text-gray-500 dark:text-gray-400 mb-1">
-                  {getGreeting()},
-                </p>
-                <h1 className="text-3xl sm:text-4xl font-bold text-gray-900 dark:text-white mb-4">
-                  {userName || "Student"} 👋
-                </h1>
-                <p className="text-gray-600 dark:text-gray-400 mb-6">
-                  {passedPracticals > 0
-                    ? `You've passed ${passedPracticals} practicals. Keep going!`
-                    : "Ready to start coding? Let's get productive today!"}
-                </p>
-                <Link
-                  href="/Interactive"
-                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-indigo-500 to-purple-600 text-white font-semibold shadow-lg shadow-indigo-500/25 hover:shadow-indigo-500/40 hover:-translate-y-0.5 transition-all"
-                >
-                  <Code className="w-4 h-4" />
-                  Open Editor
-                </Link>
-              </div>
-            </motion.div>
+            <WelcomeCard
+              userName={userName}
+              passedPracticals={passedPracticals}
+              itemVariants={itemVariants}
+            />
 
             {/* ===== OVERALL PROGRESS - Square ===== */}
             <motion.div
@@ -523,73 +393,41 @@ export default function StudentDashboard() {
               </p>
             </motion.div>
 
-            <motion.div
-              variants={itemVariants}
-              className="glass-card rounded-2xl p-5 flex items-center gap-4"
-            >
-              <div className="w-12 h-12 rounded-xl bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center">
-                <CheckCircle2 className="w-6 h-6 text-emerald-600 dark:text-emerald-400" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                  {loading ? "--" : passedPracticals}
-                </p>
-                <p className="text-xs text-gray-500 dark:text-gray-400">
-                  Passed
-                </p>
-              </div>
-            </motion.div>
+            <StatCard
+              label="Passed"
+              value={passedPracticals}
+              icon={CheckCircle2}
+              colorClass="text-emerald-600 dark:text-emerald-400"
+              itemVariants={itemVariants}
+              loading={loading}
+            />
 
-            <motion.div
-              variants={itemVariants}
-              className="glass-card rounded-2xl p-5 flex items-center gap-4"
-            >
-              <div className="w-12 h-12 rounded-xl bg-red-100 dark:bg-red-900/30 flex items-center justify-center">
-                <Clock className="w-6 h-6 text-red-600 dark:text-red-400" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                  {loading ? "--" : failedPracticals}
-                </p>
-                <p className="text-xs text-gray-500 dark:text-gray-400">
-                  Failed
-                </p>
-              </div>
-            </motion.div>
+            <StatCard
+              label="Failed"
+              value={failedPracticals}
+              icon={Clock}
+              colorClass="text-red-600 dark:text-red-400"
+              itemVariants={itemVariants}
+              loading={loading}
+            />
 
-            <motion.div
-              variants={itemVariants}
-              className="glass-card rounded-2xl p-5 flex items-center gap-4"
-            >
-              <div className="w-12 h-12 rounded-xl bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
-                <BookOpen className="w-6 h-6 text-blue-600 dark:text-blue-400" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                  {loading ? "--" : progress.length}
-                </p>
-                <p className="text-xs text-gray-500 dark:text-gray-400">
-                  Subjects
-                </p>
-              </div>
-            </motion.div>
+            <StatCard
+              label="Subjects"
+              value={progress.length}
+              icon={BookOpen}
+              colorClass="text-blue-600 dark:text-blue-400"
+              itemVariants={itemVariants}
+              loading={loading}
+            />
 
-            <motion.div
-              variants={itemVariants}
-              className="glass-card rounded-2xl p-5 flex items-center gap-4"
-            >
-              <div className="w-12 h-12 rounded-xl bg-pink-100 dark:bg-pink-900/30 flex items-center justify-center">
-                <FileText className="w-6 h-6 text-pink-600 dark:text-pink-400" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                  {loading ? "--" : submissions.length}
-                </p>
-                <p className="text-xs text-gray-500 dark:text-gray-400">
-                  Submissions
-                </p>
-              </div>
-            </motion.div>
+            <StatCard
+              label="Submissions"
+              value={submissions.length}
+              icon={FileText}
+              colorClass="text-pink-600 dark:text-pink-400"
+              itemVariants={itemVariants}
+              loading={loading}
+            />
 
             {/* ===== QUICK ACTIONS - Wide (2x1) ===== */}
             <motion.div
@@ -634,149 +472,18 @@ export default function StudentDashboard() {
             </motion.div>
 
             {/* ===== SUBJECT PROGRESS - Tall (spans remaining) ===== */}
-            <motion.div
-              variants={itemVariants}
-              className="md:col-span-2 glass-card rounded-3xl p-6"
-            >
-              <div className="flex items-center justify-between mb-5">
-                <div className="flex items-center gap-2">
-                  <TrendingUp className="w-5 h-5 text-indigo-500" />
-                  <h2 className="text-lg font-bold text-gray-900 dark:text-white">
-                    Subject Progress
-                  </h2>
-                </div>
-              </div>
-
-              {loading ? (
-                <div className="space-y-4">
-                  {[1, 2, 3].map((i) => (
-                    <div
-                      key={i}
-                      className="flex items-center gap-4 animate-pulse"
-                    >
-                      <div className="w-10 h-10 rounded-lg bg-gray-200 dark:bg-gray-700" />
-                      <div className="flex-1">
-                        <div className="h-4 w-32 bg-gray-200 dark:bg-gray-700 rounded mb-2" />
-                        <div className="h-2 w-full bg-gray-200 dark:bg-gray-700 rounded" />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : progress.length === 0 ? (
-                <div className="text-center py-8">
-                  <BookOpen className="w-12 h-12 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
-                  <p className="text-gray-500 dark:text-gray-400">
-                    No subjects found
-                  </p>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {progress.map((p) => {
-                    const percentage = Math.round(
-                      (p.passed_count / (p.total_count || 1)) * 100,
-                    );
-                    return (
-                      <div
-                        key={p.subject_id}
-                        className="flex items-center gap-4"
-                      >
-                        <div className="w-10 h-10 rounded-xl bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center flex-shrink-0">
-                          <BookOpen className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center justify-between mb-1">
-                            <span className="font-medium text-gray-900 dark:text-white truncate">
-                              {p.subject_name}
-                            </span>
-                            <span className="text-sm font-semibold text-indigo-600 dark:text-indigo-400">
-                              {percentage}%
-                            </span>
-                          </div>
-                          <div className="h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-                            <div
-                              className="h-full bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full transition-all duration-500"
-                              style={{ width: `${percentage}%` }}
-                            />
-                          </div>
-                          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                            {p.passed_count}/{p.total_count} passed
-                          </p>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </motion.div>
+            <SubjectProgressList
+              progress={progress}
+              loading={loading}
+              itemVariants={itemVariants}
+            />
 
             {/* ===== RECENT SUBMISSIONS - Wide (2x1) ===== */}
-            <motion.div
-              variants={itemVariants}
-              className="md:col-span-2 lg:col-span-4 glass-card rounded-3xl p-6"
-            >
-              <div className="flex items-center justify-between mb-5">
-                <div className="flex items-center gap-2">
-                  <FileText className="w-5 h-5 text-indigo-500" />
-                  <h2 className="text-lg font-bold text-gray-900 dark:text-white">
-                    Recent Submissions
-                  </h2>
-                </div>
-                <Link
-                  href="/student/submissions"
-                  className="text-sm font-medium text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 flex items-center gap-1"
-                >
-                  View All <ChevronRight className="w-4 h-4" />
-                </Link>
-              </div>
-
-              {loading ? (
-                <div className="space-y-3">
-                  {[1, 2, 3].map((i) => (
-                    <div
-                      key={i}
-                      className="flex items-center gap-4 p-4 rounded-xl bg-gray-50 dark:bg-gray-800/50 animate-pulse"
-                    >
-                      <div className="w-10 h-10 rounded-lg bg-gray-200 dark:bg-gray-700" />
-                      <div className="flex-1">
-                        <div className="h-4 w-40 bg-gray-200 dark:bg-gray-700 rounded mb-2" />
-                        <div className="h-3 w-24 bg-gray-200 dark:bg-gray-700 rounded" />
-                      </div>
-                      <div className="h-6 w-16 bg-gray-200 dark:bg-gray-700 rounded" />
-                    </div>
-                  ))}
-                </div>
-              ) : submissions.length === 0 ? (
-                <div className="text-center py-8">
-                  <FileText className="w-12 h-12 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
-                  <p className="text-gray-500 dark:text-gray-400">
-                    No submissions yet
-                  </p>
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                  {submissions.map((s) => (
-                    <div
-                      key={s.id}
-                      className="flex items-center gap-4 p-4 rounded-xl bg-gray-50 dark:bg-gray-800/50 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-                    >
-                      <div className="w-10 h-10 rounded-xl bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center flex-shrink-0">
-                        <Code className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <h4 className="font-medium text-gray-900 dark:text-white truncate">
-                          {s.practical_title}
-                        </h4>
-                        <p className="text-xs text-gray-500 dark:text-gray-400">
-                          {s.language} •{" "}
-                          {new Date(s.created_at).toLocaleDateString()}
-                        </p>
-                      </div>
-                      <StatusBadge status={s.status} />
-                    </div>
-                  ))}
-                </div>
-              )}
-            </motion.div>
+            <RecentSubmissionsList
+              submissions={submissions}
+              loading={loading}
+              itemVariants={itemVariants}
+            />
           </motion.div>
         )}
       </div>

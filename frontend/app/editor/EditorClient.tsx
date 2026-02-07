@@ -1093,7 +1093,7 @@ int main() {
       </div>
 
       {/* Main Content */}
-      <div className="flex-1 p-4 h-full">
+      <div className="flex-1 p-4 overflow-hidden min-h-0">
         <ResizablePanelGroup direction="horizontal" className="h-full gap-4">
           {/* LEFT: Problem Panel - Clean & Focused */}
           <ResizablePanel defaultSize={40} minSize={20}>
@@ -1110,10 +1110,10 @@ int main() {
                   {/* Difficulty Badge */}
                   <span
                     className={`inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1 rounded-md ${activeLevel === "easy"
-                        ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400"
-                        : activeLevel === "hard"
-                          ? "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400"
-                          : "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400"
+                      ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400"
+                      : activeLevel === "hard"
+                        ? "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400"
+                        : "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400"
                       }`}
                   >
                     {hasLevelsParam
@@ -1158,12 +1158,12 @@ int main() {
                           key={level.id}
                           onClick={() => setActiveLevel(level.level)}
                           className={`px-4 py-1.5 rounded-md text-xs font-semibold transition-all duration-200 ${isActive
-                              ? level.level === "easy"
-                                ? "bg-emerald-500 text-white shadow-sm"
-                                : level.level === "hard"
-                                  ? "bg-red-500 text-white shadow-sm"
-                                  : "bg-amber-500 text-white shadow-sm"
-                              : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200"
+                            ? level.level === "easy"
+                              ? "bg-emerald-500 text-white shadow-sm"
+                              : level.level === "hard"
+                                ? "bg-red-500 text-white shadow-sm"
+                                : "bg-amber-500 text-white shadow-sm"
+                            : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200"
                             }`}
                           title={`${level.level.charAt(0).toUpperCase() + level.level.slice(1)} – ${level.max_marks} points`}
                         >
@@ -1177,26 +1177,28 @@ int main() {
               </div>
 
               {/* Content */}
-              <div className="px-6 py-5 space-y-6">
+              <div className="px-6 py-6 space-y-8">
                 {/* Problem Statement */}
                 <div>
-                  <h2 className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3 flex items-center gap-2">
-                    <svg
-                      className="w-4 h-4 text-indigo-500"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                      />
-                    </svg>
+                  <h2 className="text-sm font-bold text-gray-900 dark:text-gray-100 uppercase tracking-widest mb-4 flex items-center gap-2">
+                    <span className="p-1.5 rounded-lg bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400">
+                      <svg
+                        className="w-4 h-4"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                        />
+                      </svg>
+                    </span>
                     Description
                   </h2>
-                  <div className="text-gray-700 dark:text-gray-300 leading-relaxed text-[15px] whitespace-pre-wrap">
+                  <div className="text-gray-700 dark:text-gray-300 leading-7 text-[15px] whitespace-pre-wrap font-sans">
                     {hasLevelsParam && practicalLevels.length > 0
                       ? practicalLevels.find((l) => l.level === activeLevel)
                         ?.description || problemStmt
@@ -1206,23 +1208,25 @@ int main() {
 
                 {/* Examples Section */}
                 <div>
-                  <h2 className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3 flex items-center gap-2">
-                    <svg
-                      className="w-4 h-4 text-emerald-500"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M13 10V3L4 14h7v7l9-11h-7z"
-                      />
-                    </svg>
+                  <h2 className="text-sm font-bold text-gray-900 dark:text-gray-100 uppercase tracking-widest mb-4 flex items-center gap-2">
+                    <span className="p-1.5 rounded-lg bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400">
+                      <svg
+                        className="w-4 h-4"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M13 10V3L4 14h7v7l9-11h-7z"
+                        />
+                      </svg>
+                    </span>
                     Examples
                   </h2>
-                  <div className="space-y-3">
+                  <div className="space-y-4">
                     {examplesFromDB && examplesFromDB.length > 0 ? (
                       examplesFromDB.map((ex, idx) => (
                         <motion.div
@@ -1230,30 +1234,30 @@ int main() {
                           initial={{ opacity: 0, y: 8 }}
                           animate={{ opacity: 1, y: 0 }}
                           transition={{ delay: idx * 0.08 }}
-                          className="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-4 border border-gray-200 dark:border-gray-700"
+                          className="bg-white dark:bg-gray-800/50 rounded-xl p-5 border border-gray-200 dark:border-gray-700 shadow-sm hover:shadow-md transition-shadow"
                         >
-                          <div className="flex items-center gap-2 mb-3">
-                            <span className="inline-flex items-center justify-center w-5 h-5 rounded bg-emerald-500 text-white text-[10px] font-bold">
+                          <div className="flex items-center gap-2 mb-4">
+                            <span className="inline-flex items-center justify-center w-6 h-6 rounded-lg bg-emerald-500 text-white text-xs font-bold shadow-sm shadow-emerald-500/20">
                               {idx + 1}
                             </span>
-                            <span className="text-sm font-semibold text-gray-800 dark:text-gray-200">
+                            <span className="text-sm font-bold text-gray-900 dark:text-gray-100">
                               Example {idx + 1}
                             </span>
                           </div>
-                          <div className="grid grid-cols-2 gap-3">
-                            <div>
-                              <div className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                              <div className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">
                                 Input
                               </div>
-                              <pre className="bg-white dark:bg-gray-900 text-sm font-mono p-3 rounded border border-gray-200 dark:border-gray-700 whitespace-pre-wrap text-gray-800 dark:text-gray-200">
+                              <pre className="bg-gray-50 dark:bg-gray-900/50 text-sm font-mono p-3 rounded-lg border border-gray-100 dark:border-gray-800 whitespace-pre-wrap text-gray-800 dark:text-gray-200">
                                 {ex.input}
                               </pre>
                             </div>
-                            <div>
-                              <div className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">
+                            <div className="space-y-2">
+                              <div className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">
                                 Output
                               </div>
-                              <pre className="bg-white dark:bg-gray-900 text-sm font-mono p-3 rounded border border-gray-200 dark:border-gray-700 whitespace-pre-wrap text-gray-800 dark:text-gray-200">
+                              <pre className="bg-gray-50 dark:bg-gray-900/50 text-sm font-mono p-3 rounded-lg border border-gray-100 dark:border-gray-800 whitespace-pre-wrap text-gray-800 dark:text-gray-200">
                                 {ex.output}
                               </pre>
                             </div>
@@ -1267,40 +1271,40 @@ int main() {
                           initial={{ opacity: 0, y: 8 }}
                           animate={{ opacity: 1, y: 0 }}
                           transition={{ delay: idx * 0.08 }}
-                          className="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-4 border border-gray-200 dark:border-gray-700"
+                          className="bg-white dark:bg-gray-800/50 rounded-xl p-5 border border-gray-200 dark:border-gray-700 shadow-sm hover:shadow-md transition-shadow"
                         >
-                          <div className="flex items-center gap-2 mb-3">
-                            <span className="inline-flex items-center justify-center w-5 h-5 rounded bg-emerald-500 text-white text-[10px] font-bold">
+                          <div className="flex items-center gap-2 mb-4">
+                            <span className="inline-flex items-center justify-center w-6 h-6 rounded-lg bg-emerald-500 text-white text-xs font-bold shadow-sm shadow-emerald-500/20">
                               {idx + 1}
                             </span>
-                            <span className="text-sm font-semibold text-gray-800 dark:text-gray-200">
+                            <span className="text-sm font-bold text-gray-900 dark:text-gray-100">
                               Example {idx + 1}
                             </span>
                           </div>
-                          <div className="grid grid-cols-2 gap-3">
-                            <div>
-                              <div className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                              <div className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">
                                 Input
                               </div>
-                              <pre className="bg-white dark:bg-gray-900 text-sm font-mono p-3 rounded border border-gray-200 dark:border-gray-700 whitespace-pre-wrap">
+                              <pre className="bg-gray-50 dark:bg-gray-900/50 text-sm font-mono p-3 rounded-lg border border-gray-100 dark:border-gray-800 whitespace-pre-wrap">
                                 {ex.input ?? ex.raw ?? "—"}
                               </pre>
                             </div>
-                            <div>
-                              <div className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">
+                            <div className="space-y-2">
+                              <div className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">
                                 Output
                               </div>
-                              <pre className="bg-white dark:bg-gray-900 text-sm font-mono p-3 rounded border border-gray-200 dark:border-gray-700 whitespace-pre-wrap">
+                              <pre className="bg-gray-50 dark:bg-gray-900/50 text-sm font-mono p-3 rounded-lg border border-gray-100 dark:border-gray-800 whitespace-pre-wrap">
                                 {ex.output ?? "—"}
                               </pre>
                             </div>
                           </div>
                           {ex.explanation && (
-                            <div className="mt-3 p-3 bg-blue-50 dark:bg-blue-900/20 rounded border border-blue-200 dark:border-blue-800">
-                              <div className="text-xs font-bold text-blue-600 dark:text-blue-400 mb-1">
-                                💡 Explanation
+                            <div className="mt-4 p-4 bg-blue-50/50 dark:bg-blue-900/10 rounded-lg border border-blue-100 dark:border-blue-800/30">
+                              <div className="text-xs font-bold text-blue-600 dark:text-blue-400 mb-1.5 flex items-center gap-1.5">
+                                <span className="text-base">💡</span> Explanation
                               </div>
-                              <div className="text-sm text-gray-700 dark:text-gray-300">
+                              <div className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
                                 {ex.explanation}
                               </div>
                             </div>
@@ -1308,7 +1312,7 @@ int main() {
                         </motion.div>
                       ))
                     ) : (
-                      <div className="text-sm text-gray-400 italic p-4 text-center bg-gray-50 dark:bg-gray-800/30 rounded-lg">
+                      <div className="text-sm text-gray-400 italic p-8 text-center bg-gray-50 dark:bg-gray-800/30 rounded-xl border border-dashed border-gray-200 dark:border-gray-700">
                         No examples available
                       </div>
                     )}
@@ -1316,46 +1320,49 @@ int main() {
                 </div>
 
                 {/* Constraints */}
-                <div className="bg-amber-50 dark:bg-amber-900/10 rounded-lg p-4 border border-amber-200 dark:border-amber-800/30">
-                  <h2 className="text-xs font-bold text-amber-700 dark:text-amber-400 uppercase tracking-wider mb-2 flex items-center gap-2">
-                    <svg
-                      className="w-4 h-4"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-                      />
-                    </svg>
+                <div className="bg-white dark:bg-gray-800/50 rounded-xl p-5 border border-amber-200 dark:border-amber-900/30 shadow-sm relative overflow-hidden">
+                  <div className="absolute top-0 right-0 w-20 h-20 bg-amber-500/5 rounded-bl-full pointer-events-none" />
+                  <h2 className="text-sm font-bold text-gray-900 dark:text-gray-100 uppercase tracking-widest mb-4 flex items-center gap-2 relative z-10">
+                    <span className="p-1.5 rounded-lg bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400">
+                      <svg
+                        className="w-4 h-4"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                        />
+                      </svg>
+                    </span>
                     Constraints
                   </h2>
                   {constraintSection ? (
-                    <div className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap">
+                    <div className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap leading-relaxed relative z-10">
                       {constraintSection.body}
                     </div>
                   ) : (
-                    <ul className="space-y-1 text-sm text-gray-700 dark:text-gray-300">
-                      <li className="flex items-center gap-2">
-                        <span className="text-amber-500">⏱</span>
-                        <span>
-                          Time limit:{" "}
-                          <code className="px-1.5 py-0.5 bg-white dark:bg-gray-800 rounded text-xs font-mono">
-                            2000ms
-                          </code>
+                    <ul className="space-y-3 text-sm text-gray-700 dark:text-gray-300 relative z-10">
+                      <li className="flex items-center gap-3">
+                        <span className="flex items-center justify-center w-8 h-8 rounded-lg bg-amber-100 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400">
+                          ⏱
                         </span>
+                        <div>
+                          <div className="text-xs font-bold text-gray-500 uppercase">Time limit</div>
+                          <code className="text-sm font-mono font-semibold">2000ms</code>
+                        </div>
                       </li>
-                      <li className="flex items-center gap-2">
-                        <span className="text-amber-500">💾</span>
-                        <span>
-                          Memory limit:{" "}
-                          <code className="px-1.5 py-0.5 bg-white dark:bg-gray-800 rounded text-xs font-mono">
-                            64MB
-                          </code>
+                      <li className="flex items-center gap-3">
+                        <span className="flex items-center justify-center w-8 h-8 rounded-lg bg-amber-100 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400">
+                          💾
                         </span>
+                        <div>
+                          <div className="text-xs font-bold text-gray-500 uppercase">Memory limit</div>
+                          <code className="text-sm font-mono font-semibold">64MB</code>
+                        </div>
                       </li>
                     </ul>
                   )}
@@ -1400,21 +1407,21 @@ int main() {
               <ResizablePanel defaultSize={35} minSize={20}>
                 <div className="h-full flex flex-col bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 overflow-hidden">
                   {/* Tab Headers */}
-                  <div className="flex-shrink-0 flex border-b border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900">
+                  <div className="flex-shrink-0 flex items-center px-4 py-2 border-b border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 gap-4">
                     <button
                       onClick={() => setShowUserTestCases(false)}
-                      className={`px-4 py-2.5 text-sm font-medium transition-all relative ${!showUserTestCases
-                          ? "text-indigo-600 dark:text-indigo-400 bg-white dark:bg-gray-800 border-b-2 border-indigo-500"
-                          : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200"
+                      className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${!showUserTestCases
+                        ? "bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-white"
+                        : "text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800/50"
                         }`}
                     >
-                      Results
+                      Test Results
                     </button>
                     <button
                       onClick={() => setShowUserTestCases(true)}
-                      className={`px-4 py-2.5 text-sm font-medium transition-all relative ${showUserTestCases
-                          ? "text-indigo-600 dark:text-indigo-400 bg-white dark:bg-gray-800 border-b-2 border-indigo-500"
-                          : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200"
+                      className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${showUserTestCases
+                        ? "bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-white"
+                        : "text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800/50"
                         }`}
                     >
                       Custom Tests
@@ -1422,32 +1429,40 @@ int main() {
                   </div>
 
                   {/* Tab Content */}
-                  <div className="flex-1 overflow-auto">
+                  <div className="flex-1 overflow-auto bg-gray-50/50 dark:bg-gray-950/50">
                     {/* Test Case Results Tab */}
                     {!showUserTestCases && (
                       <div className="h-full p-4">
                         {testCaseResults.length > 0 && (
-                          <div className="flex justify-between items-center mb-4">
+                          <div className="flex justify-between items-center mb-6 bg-white dark:bg-gray-900 p-4 rounded-xl border border-gray-100 dark:border-gray-800 shadow-sm">
                             <div className="flex items-center gap-3">
-                              <span
-                                className={`text-sm font-semibold ${passedCount === totalCount ? "text-emerald-600" : "text-gray-700 dark:text-gray-300"}`}
-                              >
-                                {passedCount === totalCount
-                                  ? "✓ All Passed"
-                                  : `${passedCount}/${totalCount} Passed`}
-                              </span>
+                              <div className={`w-10 h-10 rounded-full flex items-center justify-center ${passedCount === totalCount ? "bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400" : "bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400"}`}>
+                                {passedCount === totalCount ? (
+                                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                                ) : (
+                                  <span className="text-sm font-bold">{Math.round(passPercent)}%</span>
+                                )}
+                              </div>
+                              <div>
+                                <h3 className="text-sm font-bold text-gray-900 dark:text-white">
+                                  {passedCount === totalCount ? "All Test Cases Passed!" : "Some Test Cases Failed"}
+                                </h3>
+                                <p className="text-xs text-gray-500 dark:text-gray-400">
+                                  {passedCount} out of {totalCount} passed
+                                </p>
+                              </div>
                             </div>
                             {/* Progress bar */}
-                            <div className="w-40">
-                              <div className="bg-gray-200 dark:bg-gray-700 rounded-full h-1.5 overflow-hidden">
+                            <div className="w-32 hidden sm:block">
+                              <div className="bg-gray-100 dark:bg-gray-800 rounded-full h-2 overflow-hidden">
                                 <div
-                                  className="h-1.5 rounded-full transition-all duration-500"
+                                  className="h-full rounded-full transition-all duration-500"
                                   style={{
                                     width: `${passPercent}%`,
                                     backgroundColor:
                                       passPercent === 100
                                         ? "#10b981"
-                                        : "#6366f1",
+                                        : "#f59e0b",
                                   }}
                                 />
                               </div>
@@ -1457,9 +1472,9 @@ int main() {
 
                         {testCaseResults.length === 0 && (
                           <div className="h-full flex flex-col items-center justify-center text-center py-8">
-                            <div className="w-16 h-16 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center mb-4">
+                            <div className="w-20 h-20 rounded-2xl bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 flex items-center justify-center mb-4 shadow-sm">
                               <svg
-                                className="w-8 h-8 text-gray-400"
+                                className="w-10 h-10 text-gray-300 dark:text-gray-600"
                                 fill="none"
                                 stroke="currentColor"
                                 viewBox="0 0 24 24"
@@ -1478,106 +1493,128 @@ int main() {
                                 />
                               </svg>
                             </div>
-                            <p className="text-sm text-gray-500 dark:text-gray-400 font-medium">
-                              Run your code to evaluate
-                            </p>
-                            <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
-                              Results will appear here after execution
+                            <h3 className="text-sm font-bold text-gray-900 dark:text-white mb-1">
+                              Ready to Run
+                            </h3>
+                            <p className="text-xs text-gray-500 dark:text-gray-400 max-w-[200px]">
+                              Click the Run button to execute your code against test cases.
                             </p>
                           </div>
                         )}
 
-                        {testCaseResults.map((r, idx) => {
-                          const isExpanded = !!expandedCases[idx];
-                          const leftBorderClass =
-                            r.status === "passed"
-                              ? "border-l-4 border-green-500"
+                        <div className="space-y-3">
+                          {testCaseResults.map((r, idx) => {
+                            const isExpanded = !!expandedCases[idx];
+                            const statusColor = r.status === "passed"
+                              ? "text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20"
                               : r.status === "failed"
-                                ? "border-l-4 border-red-500"
-                                : "border-l-4 border-yellow-400";
+                                ? "text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20"
+                                : "text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20";
 
-                          return (
-                            <div
-                              key={idx}
-                              className={`mb-4 rounded-lg p-0 overflow-hidden shadow-sm ${leftBorderClass} bg-white/30 dark:bg-gray-800/30 border border-gray-200 dark:border-gray-700`}
-                            >
+                            const statusIcon = r.status === "passed"
+                              ? <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                              : <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>;
+
+                            return (
                               <div
-                                className={`flex items-center justify-between p-3 ${r.is_hidden ? "cursor-default" : "cursor-pointer"}`}
-                                onClick={() =>
-                                  !r.is_hidden &&
-                                  setExpandedCases((prev) => ({
-                                    ...prev,
-                                    [idx]: !prev[idx],
-                                  }))
-                                }
+                                key={idx}
+                                className={`rounded-xl overflow-hidden transition-all duration-200 border ${isExpanded ? "ring-1 ring-indigo-500/20 shadow-md bg-white dark:bg-gray-900 border-indigo-200 dark:border-indigo-800" : "bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 shadow-sm hover:border-gray-300 dark:hover:border-gray-600"}`}
                               >
-                                <div className="flex items-center gap-3">
-                                  <div
-                                    className={`w-10 h-10 flex items-center justify-center rounded-full bg-white/60 dark:bg-black/40 ${r.status === "passed" ? "text-green-600" : r.status === "failed" ? "text-red-600" : "text-yellow-600"} font-semibold`}
-                                  >
-                                    {idx + 1}
-                                  </div>
-                                  <div>
-                                    <div className="text-sm font-medium text-gray-800 dark:text-gray-100">
-                                      Case {idx + 1}{" "}
-                                      {r.is_hidden ? (
-                                        <span className="text-xs text-gray-500">
-                                          (hidden)
-                                        </span>
-                                      ) : null}
-                                    </div>
-                                  </div>
-                                </div>
-
-                                <div className="flex items-center gap-2">
-                                  <div
-                                    className={`text-sm font-semibold ${r.status === "passed" ? "text-green-600" : r.status === "failed" ? "text-red-600" : "text-yellow-600"}`}
-                                  >
-                                    {r.status.toUpperCase()}
-                                  </div>
-                                </div>
-                              </div>
-
-                              {isExpanded && !r.is_hidden && (
-                                <div className="p-3 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900">
-                                  <div className="grid grid-cols-2 gap-4">
-                                    <div>
-                                      <div className="text-xs text-gray-500 mb-1">
-                                        Input
-                                      </div>
-                                      <pre className="bg-white dark:bg-gray-800 p-3 rounded text-sm font-mono whitespace-pre-wrap">
-                                        {r.input}
-                                      </pre>
+                                <div
+                                  className={`flex items-center justify-between p-3 ${r.is_hidden ? "cursor-default" : "cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50"}`}
+                                  onClick={() =>
+                                    !r.is_hidden &&
+                                    setExpandedCases((prev) => ({
+                                      ...prev,
+                                      [idx]: !prev[idx],
+                                    }))
+                                  }
+                                >
+                                  <div className="flex items-center gap-3">
+                                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold ${statusColor}`}>
+                                      {idx + 1}
                                     </div>
                                     <div>
-                                      <div className="text-xs text-gray-500 mb-1">
-                                        Expected
+                                      <div className="flex items-center gap-2">
+                                        <div className="text-sm font-bold text-gray-900 dark:text-gray-100">
+                                          Test Case {idx + 1}
+                                        </div>
+                                        {r.is_hidden && (
+                                          <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-gray-100 dark:bg-gray-800 text-gray-500 uppercase tracking-wide">
+                                            Hidden
+                                          </span>
+                                        )}
                                       </div>
-                                      <pre className="bg-white dark:bg-gray-800 p-3 rounded text-sm font-mono whitespace-pre-wrap">
-                                        {r.expected || "—"}
-                                      </pre>
+                                      <div className="text-[10px] font-medium text-gray-500 dark:text-gray-400 capitalize">
+                                        {r.status.replace('_', ' ')} {r.time_ms ? `• ${r.time_ms}ms` : ''}
+                                      </div>
                                     </div>
                                   </div>
 
-                                  <div className="mt-3">
-                                    <div className="text-xs text-gray-500 mb-1">
-                                      Output
+                                  <div className="flex items-center gap-3">
+                                    <div
+                                      className={`flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider ${r.status === "passed" ? "text-emerald-600 dark:text-emerald-400" : r.status === "failed" ? "text-red-600 dark:text-red-400" : "text-amber-600 dark:text-amber-400"}`}
+                                    >
+                                      {statusIcon}
+                                      {r.status === "passed" ? "Passed" : "Failed"}
                                     </div>
-                                    <pre className="bg-white dark:bg-gray-800 p-3 rounded text-sm font-mono whitespace-pre-wrap">
-                                      {r.stdout}
-                                    </pre>
-
-                                    {r.error && (
-                                      <div className="mt-2 text-sm text-red-500">
-                                        <strong>Error:</strong> {r.error}
-                                      </div>
+                                    {!r.is_hidden && (
+                                      <svg
+                                        className={`w-4 h-4 text-gray-400 transition-transform ${isExpanded ? "rotate-180" : ""}`}
+                                        fill="none"
+                                        stroke="currentColor"
+                                        viewBox="0 0 24 24"
+                                      >
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                      </svg>
                                     )}
                                   </div>
                                 </div>
-                              )}
-                            </div>
-                          );
-                        })}
+
+                                {isExpanded && !r.is_hidden && (
+                                  <div className="p-4 border-t border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-900/50">
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                      <div>
+                                        <div className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1.5">
+                                          Input
+                                        </div>
+                                        <pre className="bg-white dark:bg-gray-950 p-3 rounded-lg border border-gray-200 dark:border-gray-800 text-xs font-mono whitespace-pre-wrap text-gray-700 dark:text-gray-300">
+                                          {r.input}
+                                        </pre>
+                                      </div>
+                                      <div>
+                                        <div className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1.5">
+                                          Expected Output
+                                        </div>
+                                        <pre className="bg-white dark:bg-gray-950 p-3 rounded-lg border border-gray-200 dark:border-gray-800 text-xs font-mono whitespace-pre-wrap text-gray-700 dark:text-gray-300">
+                                          {r.expected || "—"}
+                                        </pre>
+                                      </div>
+                                    </div>
+
+                                    <div className="mt-4">
+                                      <div className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1.5">
+                                        Your Output
+                                      </div>
+                                      <div className="relative">
+                                        <pre className={`p-3 rounded-lg border text-xs font-mono whitespace-pre-wrap ${r.error ? "bg-red-50 dark:bg-red-900/10 border-red-200 dark:border-red-900/30 text-red-700 dark:text-red-300" : "bg-white dark:bg-gray-950 border-gray-200 dark:border-gray-800 text-gray-700 dark:text-gray-300"}`}>
+                                          {r.stdout || r.error || (
+                                            <span className="italic text-gray-400">No output</span>
+                                          )}
+                                        </pre>
+                                        {r.status === "passed" && (
+                                          <div className="absolute top-2 right-2 text-emerald-500">
+                                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                                          </div>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
                       </div>
                     )}
 

@@ -14,6 +14,7 @@ import dynamic from "next/dynamic";
 import { cpp } from "@codemirror/lang-cpp";
 import { python } from "@codemirror/lang-python";
 import { oneDark } from "@codemirror/theme-one-dark";
+import { useTheme } from "next-themes";
 
 // dynamic to avoid SSR issues
 const CodeMirror = dynamic(() => import("@uiw/react-codemirror"), {
@@ -65,6 +66,7 @@ export default function LevelManager({
   setSampleCode,
   sampleLanguage,
 }: LevelManagerProps) {
+  const { theme } = useTheme();
   const getCurrentLevel = () => levels.find((l) => l.level === activeLevel)!;
 
   const getLanguageExtension = useCallback(
@@ -183,9 +185,39 @@ export default function LevelManager({
             />
           </div>
 
-          {/* Reference Code for this level context (simplified: using global sampleCode for now, but conceptually could be per level) */}
-          {/* Reusing logic from main form for code editor but wrapped inside level context if needed. 
-              Actually, the original implementation shared one sampleCode. We'll keep it simple. */}
+          {/* Reference Code - Styled like SingleLevelTestCases */}
+          <div className="glass-card-premium rounded-2xl p-5 shadow-sm">
+            <div className="flex items-center justify-between pb-3 border-b border-gray-200 dark:border-gray-700 mb-4">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-gradient-to-br from-pink-500 to-rose-500 rounded-xl text-white shadow-lg shadow-pink-500/25">
+                  <TestIcon size={18} />
+                </div>
+                <div>
+                  <h3 className="font-bold text-gray-900 dark:text-white">
+                    Reference Code
+                  </h3>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    Provide solution code for test validation
+                  </p>
+                </div>
+              </div>
+              <span className="text-xs px-3 py-1.5 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-700 dark:text-gray-300">
+                {String(sampleLanguage || "c").toUpperCase()}
+              </span>
+            </div>
+            <div className="rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700">
+              <CodeMirror
+                value={getCurrentLevel().reference_code || ""}
+                height="200px"
+                extensions={[getLanguageExtension()]}
+                theme={theme === "dark" ? oneDark : "light"}
+                onChange={(value) =>
+                  updateLevelField(activeLevel, "reference_code", value)
+                }
+                className="text-sm"
+              />
+            </div>
+          </div>
 
           {/* Test Cases for Level */}
           <TestCaseManager

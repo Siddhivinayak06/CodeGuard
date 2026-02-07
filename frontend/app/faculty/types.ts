@@ -8,4 +8,4 @@ export type Practical = Tables<"practicals"> & {
 };
 export type Subject = Tables<"subjects"> & { practical_count?: number };
 export type Student = Tables<"users">;
-export type Level = Tables<"practical_levels"> & { testCases: TestCase[] };
+export type Level = Tables<"practical_levels"> & { testCases: TestCase[]; reference_code?: string };

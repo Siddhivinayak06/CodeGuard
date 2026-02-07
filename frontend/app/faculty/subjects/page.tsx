@@ -36,6 +36,9 @@ import { Practical, Subject, TestCase } from "../types";
 const PracticalForm = dynamic(() => import("../components/PracticalForm"), {
   ssr: false,
 });
+const BulkImportModal = dynamic(() => import("../components/BulkImportModal"), {
+  ssr: false,
+});
 
 // interface removed
 
@@ -59,6 +62,8 @@ export default function FacultySubjects() {
   );
   const [sampleCode, setSampleCode] = useState<string>(""); // initial sample code
   const [sampleLanguage, setSampleLanguage] = useState<string>("c");
+  const [showBulkImport, setShowBulkImport] = useState(false);
+  const [importedPracticals, setImportedPracticals] = useState<any[]>([]);
 
   // View Modal state
   const [viewingPractical, setViewingPractical] = useState<Practical | null>(
@@ -292,6 +297,7 @@ export default function FacultySubjects() {
     setEditingPractical(null);
     setSampleCode("");
     setSampleLanguage("c");
+    setImportedPracticals([]);
     setShowPracticalModal(true);
   };
 
@@ -307,6 +313,7 @@ export default function FacultySubjects() {
       setEditingPractical(data as Practical);
 
       // optionally load sample code from your DB if you store it
+      setImportedPracticals([]);
       setShowPracticalModal(true);
     } catch (err) {
       console.error("Failed to fetch practical for edit:", err);
@@ -317,6 +324,7 @@ export default function FacultySubjects() {
   const handleModalClose = () => {
     setShowPracticalModal(false);
     setEditingPractical(null);
+    setImportedPracticals([]);
   };
 
   const handleSaved = () => {
@@ -324,7 +332,21 @@ export default function FacultySubjects() {
     setRefreshKey((k) => k + 1);
     // if a subject is selected, reload its practicals after a small delay (ensures DB write finished)
     if (selected) setTimeout(() => loadPracticals(selected), 400);
+    // Do not close modal automatically if there are more drafts, or if user wants to create more
+    // But for now, we close it as per original logic. User can re-open.
+    // If we support multi-save, we might want to keep it open.
+    // existing logic closes it.
     handleModalClose();
+  };
+
+  const handleBulkImport = async (importedPracticals: any[]) => {
+    if (!selected) return;
+
+    // OLD LOGIC: Create all practicals immediately
+    // NEW LOGIC: Load them into the PracticalForm as drafts
+    setImportedPracticals(importedPracticals);
+    setShowBulkImport(false);
+    setShowPracticalModal(true);
   };
 
   const totalPracticals = subjects.reduce(
@@ -362,6 +384,16 @@ export default function FacultySubjects() {
                 className="bg-transparent outline-none text-sm w-56"
               />
             </div>
+
+            {selected && (
+              <button
+                onClick={() => setShowBulkImport(true)}
+                className="inline-flex items-center gap-2 px-5 py-2.5 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 font-medium rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm transition-all"
+              >
+                <FileCheck size={18} />
+                Import from PDF
+              </button>
+            )}
 
             <button
               onClick={openNewPractical}
@@ -467,8 +499,8 @@ export default function FacultySubjects() {
                         key={s.id}
                         onClick={() => setSelected(s.id)}
                         className={`w-full text-left flex items-center gap-3 p-3 rounded-xl transition-all ${selected === s.id
-                            ? "bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-900/30 dark:to-purple-900/30 border border-indigo-200 dark:border-indigo-800"
-                            : "hover:bg-gray-50 dark:hover:bg-gray-800/50 border border-transparent"
+                          ? "bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-900/30 dark:to-purple-900/30 border border-indigo-200 dark:border-indigo-800"
+                          : "hover:bg-gray-50 dark:hover:bg-gray-800/50 border border-transparent"
                           }`}
                         aria-pressed={selected === s.id}
                       >
@@ -595,8 +627,8 @@ export default function FacultySubjects() {
                                 )
                               }
                               className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${p.submission_count && p.submission_count > 0
-                                  ? "bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/40"
-                                  : "bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700"
+                                ? "bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/40"
+                                : "bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700"
                                 }`}
                             >
                               <BookOpen className="w-4 h-4" />
@@ -653,6 +685,14 @@ export default function FacultySubjects() {
         onClose={handleModalClose}
         onSaved={handleSaved}
         defaultSubjectId={selected}
+        initialDrafts={importedPracticals}
+      />
+
+      <BulkImportModal
+        isOpen={showBulkImport}
+        onClose={() => setShowBulkImport(false)}
+        onImport={handleBulkImport}
+        subjectId={selected || ""}
       />
 
       {/* View Practical Modal */}
