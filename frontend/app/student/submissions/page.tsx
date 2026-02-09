@@ -175,7 +175,7 @@ function SkeletonRow() {
 // MAIN PAGE COMPONENT
 // ============================================================================
 
-export default function StudentSubmissionsPage() {
+function StudentSubmissionsPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const supabase = useMemo(() => createClient(), []);
@@ -779,5 +779,13 @@ export default function StudentSubmissionsPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function StudentSubmissionsPage() {
+  return (
+    <Suspense fallback={<div className="flex items-center justify-center min-h-screen">Loading...</div>}>
+      <StudentSubmissionsPageContent />
+    </Suspense>
   );
 }

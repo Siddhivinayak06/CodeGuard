@@ -4,6 +4,7 @@ import React, {
   useEffect,
   useState,
   useCallback,
+  Suspense,
 } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useSearchParams, useRouter } from "next/navigation";
@@ -94,7 +95,7 @@ interface TestCase {
   is_hidden: boolean;
 }
 
-function FacultySubmissionsContent() {
+function FacultySubmissionsContentInner() {
   const [supabase] = useState(() => createClient());
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -897,4 +898,10 @@ function FacultySubmissionsContent() {
   );
 }
 
-export default FacultySubmissionsContent;
+export default function FacultySubmissionsPage() {
+  return (
+    <Suspense fallback={<div className="flex items-center justify-center min-h-screen">Loading...</div>}>
+      <FacultySubmissionsContentInner />
+    </Suspense>
+  );
+}
