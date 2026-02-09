@@ -6,9 +6,40 @@ import { createClient } from "@/lib/supabase/client";
 import { Practical, Subject } from "../../../faculty/types";
 import PracticalList from "../../../faculty/components/PracticalList";
 import PracticalForm from "../../../faculty/components/PracticalForm";
-import { ArrowLeft, Plus } from "lucide-react";
+import { ArrowLeft, Plus, Book, CheckCircle, Clock, AlertTriangle } from "lucide-react";
 import PracticalsSkeleton from "@/components/skeletons/PracticalsSkeleton";
 import { motion } from "framer-motion";
+
+function StatCard({
+  label,
+  value,
+  icon: Icon,
+  color,
+}: {
+  label: string;
+  value: number | string;
+  icon: any;
+  color: "blue" | "green" | "orange" | "purple";
+}) {
+  const styles = {
+    blue: "bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400",
+    green: "bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400",
+    orange: "bg-orange-50 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400",
+    purple: "bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400",
+  };
+
+  return (
+    <div className="bg-white dark:bg-gray-900 p-6 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm flex items-center gap-4">
+      <div className={`p-3 rounded-xl ${styles[color]}`}>
+        <Icon className="w-6 h-6" />
+      </div>
+      <div>
+        <p className="text-sm font-medium text-gray-500 dark:text-gray-400">{label}</p>
+        <p className="text-2xl font-bold text-gray-900 dark:text-white mt-1">{value}</p>
+      </div>
+    </div>
+  );
+}
 
 export default function AllPracticalsPage() {
   const router = useRouter();
@@ -119,9 +150,25 @@ export default function AllPracticalsPage() {
     }
   };
 
+  const stats = useMemo(() => {
+    if (!practicals) return { total: 0, active: 0, dueSoon: 0, completed: 0 };
+    const now = Date.now();
+    return {
+      total: practicals.length,
+      active: practicals.filter(p => !p.deadline || new Date(p.deadline).getTime() > now).length,
+      dueSoon: practicals.filter(p => {
+        if (!p.deadline) return false;
+        const d = new Date(p.deadline).getTime();
+        const diff = d - now;
+        return diff > 0 && diff < 3 * 24 * 60 * 60 * 1000; // 3 days
+      }).length,
+      completed: practicals.filter(p => p.deadline && new Date(p.deadline).getTime() < now).length // Approximation for "Closed"
+    };
+  }, [practicals]);
+
   if (loading)
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50/30 to-purple-50/30 dark:from-gray-950 dark:via-indigo-950/10 dark:to-purple-950/10 transition-colors duration-500">
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-950 transition-colors duration-500">
         <main className="pt-24 pb-12 px-4 sm:px-6 lg:px-8 xl:px-12 w-full mx-auto max-w-7xl">
           <PracticalsSkeleton />
         </main>
@@ -129,9 +176,9 @@ export default function AllPracticalsPage() {
     );
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50/30 to-purple-50/30 dark:from-gray-950 dark:via-indigo-950/10 dark:to-purple-950/10">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
       <main className="pt-24 pb-12 px-4 sm:px-6 lg:px-8 xl:px-12 w-full mx-auto">
-        <div className="max-w-7xl mx-auto space-y-6">
+        <div className="max-w-7xl mx-auto space-y-8">
           {/* Header */}
           <motion.div
             initial={{ opacity: 0, y: -10 }}
@@ -157,11 +204,24 @@ export default function AllPracticalsPage() {
 
             <button
               onClick={openCreate}
-              className="inline-flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-medium rounded-xl shadow-lg shadow-indigo-500/25 hover:shadow-indigo-500/40 transition-all hover:-translate-y-0.5"
+              className="inline-flex items-center gap-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-xl shadow-lg shadow-indigo-500/20 transition-all hover:-translate-y-0.5"
             >
               <Plus size={20} />
               Create Practical
             </button>
+          </motion.div>
+
+          {/* Stats Grid */}
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.1 }}
+            className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4"
+          >
+            <StatCard label="Total Practicals" value={stats.total} icon={Book} color="blue" />
+            <StatCard label="Active Assignments" value={stats.active} icon={CheckCircle} color="green" />
+            <StatCard label="Due Soon" value={stats.dueSoon} icon={Clock} color="orange" />
+            <StatCard label="Closed/Past Due" value={stats.completed} icon={AlertTriangle} color="purple" />
           </motion.div>
 
           {/* List Component from shared */}

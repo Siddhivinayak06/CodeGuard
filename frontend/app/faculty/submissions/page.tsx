@@ -2,45 +2,70 @@
 
 import React, {
   useEffect,
-  useMemo,
   useState,
-  Suspense,
   useCallback,
-  useRef,
 } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useSearchParams, useRouter } from "next/navigation";
 import { generatePdfClient } from "@/lib/ClientPdf";
+import { generateSubjectReport } from "@/lib/SubjectReportPdf";
 import {
   CheckCircle2,
   XCircle,
   Clock,
-  AlertCircle,
-  Download,
-  Eye,
-  X,
-  Code2,
-  FileText,
-  ListFilter,
   Search as SearchIcon,
-  GraduationCap,
-  Filter,
+  LayoutGrid,
+  BarChart3,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { motion } from "framer-motion";
+import StatCard from "@/components/dashboard/student/StatCard";
+import SubmissionsSidebar from "./SubmissionsSidebar";
+import GradingSheet, { ViewingSubmission } from "./GradingSheet";
+import SubjectReportView from "./SubjectReportView";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-} from "@/components/ui/command";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
+  Sheet,
+  SheetContent,
+  SheetTrigger,
+} from "@/components/ui/sheet";
+import { Menu } from "lucide-react";
+import { toast } from "sonner";
 
-// TypeScript interfaces
+// Animation Variants
+const containerVariants = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: {
+      staggerChildren: 0.1,
+      delayChildren: 0.2,
+    },
+  },
+} as const;
+
+const shellVariants = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: { duration: 0.3 },
+  },
+} as const;
+
+const itemVariants = {
+  hidden: { y: 20, opacity: 0 },
+  visible: {
+    y: 0,
+    opacity: 1,
+    transition: {
+      type: "spring",
+      stiffness: 260,
+      damping: 20,
+    },
+  },
+} as const;
+
+// Interfaces (aligned with GradingSheet)
 interface Submission {
   id: number;
   submission_id: number;
@@ -54,12 +79,11 @@ interface Submission {
   status: string;
   marks_obtained: number | null;
   created_at: string;
-  updated_at: string;
   roll_no?: string;
   is_locked?: boolean;
   attempt_count?: number;
   max_attempts?: number;
-  testCaseResults?: TestCaseResult[];
+  testCaseResults?: any[];
 }
 
 interface TestCase {
@@ -70,1107 +94,807 @@ interface TestCase {
   is_hidden: boolean;
 }
 
-interface TestCaseResult {
-  id: number;
-  submission_id: number;
-  test_case_id: number;
-  status: string;
-  stdout: string;
-  stderr: string;
-  execution_time_ms: number;
-  memory_used_kb: number;
-}
-
-interface ViewingSubmission extends Submission {
-  testCaseResults: TestCaseResult[];
-}
-
-// small helper to render initials when no avatar
-const initials = (name?: string) =>
-  (name || "?")
-    .split(" ")
-    .map((s) => s[0])
-    .slice(0, 2)
-    .join("")
-    .toUpperCase();
-
-function StatusBadge({ status }: { status: string }) {
-  const styles: Record<
-    string,
-    { bg: string; text: string; icon: React.ReactNode }
-  > = {
-    passed: {
-      bg: "bg-emerald-100 dark:bg-emerald-900/30 border-emerald-200 dark:border-emerald-800",
-      text: "text-emerald-700 dark:text-emerald-400",
-      icon: <CheckCircle2 className="w-3.5 h-3.5" />,
-    },
-    failed: {
-      bg: "bg-red-100 dark:bg-red-900/30 border-red-200 dark:border-red-800",
-      text: "text-red-700 dark:text-red-400",
-      icon: <XCircle className="w-3.5 h-3.5" />,
-    },
-    compile_error: {
-      bg: "bg-orange-100 dark:bg-orange-900/30 border-orange-200 dark:border-orange-800",
-      text: "text-orange-700 dark:text-orange-400",
-      icon: <AlertCircle className="w-3.5 h-3.5" />,
-    },
-    runtime_error: {
-      bg: "bg-red-100 dark:bg-red-900/30 border-red-200 dark:border-red-800",
-      text: "text-red-700 dark:text-red-400",
-      icon: <AlertCircle className="w-3.5 h-3.5" />,
-    },
-    pending: {
-      bg: "bg-slate-100 dark:bg-slate-900/30 border-slate-200 dark:border-slate-700",
-      text: "text-slate-700 dark:text-slate-400",
-      icon: <Clock className="w-3.5 h-3.5" />,
-    },
-  };
-
-  const style = styles[status?.toLowerCase()] || styles.pending;
-
-  return (
-    <span
-      className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-lg border ${style.bg} ${style.text}`}
-    >
-      {style.icon}
-      <span className="capitalize">
-        {status?.replace(/_/g, " ") || "Unknown"}
-      </span>
-    </span>
-  );
-}
-
-function StatCard({
-  label,
-  value,
-  icon: Icon,
-  color,
-  delay = 0,
-}: {
-  label: string;
-  value: number;
-  icon: any;
-  color: string;
-  delay?: number;
-}) {
-  return (
-    <div
-      className="glass-card rounded-2xl p-5 hover-lift animate-slideUp group"
-      style={{ animationDelay: `${delay}ms` }}
-    >
-      <div className="flex items-center gap-4">
-        <div
-          className={`p-3 rounded-xl ${color} bg-opacity-20 flex items-center justify-center`}
-        >
-          <Icon className={`w-6 h-6 text-gray-700 dark:text-white`} />
-        </div>
-        <div>
-          <p className="text-2xl font-bold text-gray-900 dark:text-white mt-1">
-            {value}
-          </p>
-          <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">
-            {label}
-          </p>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 function FacultySubmissionsContent() {
-  // Ensure supabase client is stable across renders
   const [supabase] = useState(() => createClient());
-
   const searchParams = useSearchParams();
   const router = useRouter();
-  const [submissions, setSubmissions] = useState<Submission[]>([]);
-  const [allPracticals, setAllPracticals] = useState<
-    { id: number; title: string }[]
-  >([]);
-  const [loading, setLoading] = useState<boolean>(true);
-  const [viewingSubmission, setViewingSubmission] =
-    useState<ViewingSubmission | null>(null);
-  const [pdfLoadingId, setPdfLoadingId] = useState<number | null>(null);
-  const [testCases, setTestCases] = useState<TestCase[]>([]);
-  const [filterStatus, setFilterStatus] = useState<string>("all");
-  const [query, setQuery] = useState<string>(searchParams.get("q") || "");
-  const isMounted = useRef(true);
 
-  // Grading state
-  const [gradeMarks, setGradeMarks] = useState<string>("");
-  const [gradeStatus, setGradeStatus] = useState<string>("passed");
-  const [gradingLoading, setGradingLoading] = useState(false);
+  // Data State
+  const [subjects, setSubjects] = useState<any[]>([]); // Hierarchy
+  const [submissions, setSubmissions] = useState<Submission[]>([]);
+  const [, setTestCases] = useState<TestCase[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
+
+  // Selection State (Master-Detail)
+  const [selectedSubjectId, setSelectedSubjectId] = useState<number | null>(null);
+  const [selectedPracticalId, setSelectedPracticalId] = useState<number | null>(null);
+
+  // UI State
+  const [query, setQuery] = useState<string>("");
+  const [filterStatus, setFilterStatus] = useState<string>("all");
+  const [viewingSubmission, setViewingSubmission] = useState<ViewingSubmission | null>(null);
+  const [isSheetOpen, setIsSheetOpen] = useState(false);
+  const [, setPdfLoadingId] = useState<number | null>(null);
+
+  // Bulk Selection
+  const [selectedSubmissionIds, setSelectedSubmissionIds] = useState<Set<number>>(new Set());
+
+  // Inline Grading State
+  const [, setGradingLoadingId] = useState<number | null>(null);
+
+  // Report Generation State
+  const [reportLoading, setReportLoading] = useState(false);
+  const [bulkActionLoading, setBulkActionLoading] = useState(false);
+  const [isReportViewOpen, setIsReportViewOpen] = useState(false);
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+  const [reportData, setReportData] = useState<{
+    subjectName: string;
+    subjectCode: string;
+    practicalTitles: string[];
+    practicalDeadlines: string[];
+    students: {
+      student_name: string;
+      roll_no: string;
+      practicals: { title: string; marks: number | null }[];
+    }[];
+  } | null>(null);
+
+  const handleSelectSubject = (id: number | null) => {
+    setSelectedSubjectId(id);
+    setSelectedPracticalId(null);
+    // Clear URL params when changing subject (or selecting 'All')
+    router.replace('/faculty/submissions');
+  }
+
+  const handleSelectPractical = (id: number | null) => {
+    setSelectedPracticalId(id);
+    if (id) {
+      router.replace(`/faculty/submissions?practical=${id}`);
+    } else {
+      router.replace('/faculty/submissions');
+    }
+  }
+
+
+  // 1. Fetch Subjects Hierarchy (Sidebar Data)
+  useEffect(() => {
+    const fetchHierarchy = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      // Get subjects for faculty
+      const { data: facultyBatches } = await supabase
+        .from("subject_faculty_batches")
+        .select("subject_id")
+        .eq("faculty_id", user.id);
+
+      const subjectIds = [...new Set((facultyBatches || []).map((fb) => fb.subject_id))];
+
+      if (subjectIds.length === 0) return;
+
+      const { data: subjectsDataPlain } = await supabase
+        .from("subjects")
+        .select(`
+          id, 
+          subject_name, 
+          subject_code, 
+          practicals (id, title)
+        `)
+        .in("id", subjectIds)
+        .order("subject_name");
+
+      // Format for sidebar
+      const formatted = (subjectsDataPlain || []).map((s: any) => ({
+        ...s,
+        practicals: s.practicals || [],
+      }));
+
+      setSubjects(formatted);
+
+      // Handle URL params for initial selection
+      const paramPracticalId = searchParams.get("practical");
+      if (paramPracticalId) {
+        const pid = parseInt(paramPracticalId);
+        setSelectedPracticalId(pid);
+        // Find subject for this practical
+        const subj = formatted.find((s: any) => s.practicals.some((p: any) => p.id === pid));
+        if (subj) setSelectedSubjectId(subj.id);
+      }
+    };
+
+    fetchHierarchy();
+  }, [supabase, searchParams]);
+
+
+  // 2. Fetch Submissions based on Selection
+  const fetchSubmissions = useCallback(async () => {
+    setLoading(true);
+    try {
+      let queryBuilder = supabase
+        .from("submissions")
+        .select(`
+            id,
+            student_id,
+            practical_id,
+            code,
+            language,
+            status,
+            marks_obtained,
+            created_at,
+            output,
+            execution_details,
+            practicals ( title, subject_id )
+        `)
+        .order("created_at", { ascending: false });
+
+      if (selectedPracticalId) {
+        queryBuilder = queryBuilder.eq("practical_id", selectedPracticalId);
+      } else if (selectedSubjectId) {
+        // Find all practical IDs for this subject
+        const subject = subjects.find(s => s.id === selectedSubjectId);
+        if (subject) {
+          const pIds = subject.practicals.map((p: any) => p.id);
+          if (pIds.length > 0) {
+            queryBuilder = queryBuilder.in("practical_id", pIds);
+          } else {
+            setSubmissions([]);
+            setLoading(false);
+            return;
+          }
+        }
+      } else {
+        // "All Submissions" - maybe limit or filter by faculty's subjects
+        const allPracticalIds = subjects.flatMap(s => s.practicals.map((p: any) => p.id));
+        if (allPracticalIds.length > 0) {
+          queryBuilder = queryBuilder.in("practical_id", allPracticalIds);
+        } else {
+          setSubmissions([]);
+          setLoading(false);
+          return;
+        }
+      }
+
+      const { data, error } = await queryBuilder;
+      if (error) throw error;
+
+      // Enrich with Student Info (Name, Roll No)
+      const studentIds = [...new Set((data || []).map(s => s.student_id).filter((id): id is string => id !== null))];
+      const { data: students } = await supabase
+        .from("users")
+        .select("uid, name, roll_no")
+        .in("uid", studentIds);
+
+      const studentMap = new Map(students?.map(s => [s.uid, s]));
+
+      const formatted: Submission[] = (data || []).map((s: any) => ({
+        id: s.id,
+        submission_id: s.id,
+        student_id: s.student_id,
+        student_name: studentMap.get(s.student_id)?.name || "Unknown",
+        roll_no: studentMap.get(s.student_id)?.roll_no || "N/A",
+        practical_id: s.practical_id,
+        practical_title: s.practicals?.title || "Unknown",
+        code: s.code,
+        output: s.output,
+        language: s.language,
+        status: s.status,
+        marks_obtained: s.marks_obtained,
+        created_at: s.created_at,
+        testCaseResults: s.execution_details?.results || [],
+      }));
+
+      setSubmissions(formatted);
+    } catch (err) {
+      console.error("Error fetching submissions:", err);
+    } finally {
+      setLoading(false);
+    }
+  }, [supabase, selectedPracticalId, selectedSubjectId, subjects]);
 
   useEffect(() => {
-    isMounted.current = true;
-    return () => {
-      isMounted.current = false;
-    };
-  }, []);
+    if (subjects.length > 0) {
+      fetchSubmissions();
+    }
+  }, [fetchSubmissions, subjects.length]);
 
-  const fetchTestCaseResults = async (
-    submissionId: number | string,
-  ): Promise<TestCaseResult[]> => {
-    const { data, error } = await supabase
-      .from("test_case_results")
-      .select("*")
-      .eq("submission_id", Number(submissionId))
-      .order("test_case_id", { ascending: true });
-    if (error)
-      console.error(
-        "Failed to fetch test case results:",
-        error?.message ?? error,
-      );
-    return (data as unknown as TestCaseResult[]) ?? [];
-  };
-
-  const fetchTestCases = async (
-    practicalId: number | string,
-  ): Promise<TestCase[]> => {
-    const { data, error } = await supabase
+  // Fetch test cases when viewing a submission
+  const loadTestCases = async (practicalId: number) => {
+    const { data } = await supabase
       .from("test_cases")
       .select("*")
-      .eq("practical_id", Number(practicalId))
-      .order("id", { ascending: true });
-    if (error)
-      console.error("Failed to fetch test cases:", error?.message ?? error);
-    return (data as unknown as TestCase[]) ?? [];
+      .eq("practical_id", practicalId)
+      .order("id");
+    // Cast to our TestCase interface, filtering out any with null practical_id
+    const validTestCases: TestCase[] = (data || []).filter(
+      (tc): tc is typeof tc & { practical_id: number; is_hidden: boolean } =>
+        tc.practical_id !== null
+    ).map(tc => ({
+      id: tc.id,
+      practical_id: tc.practical_id,
+      input: tc.input,
+      expected_output: tc.expected_output,
+      is_hidden: tc.is_hidden ?? false,
+    }));
+    setTestCases(validTestCases);
   };
 
-  const fetchSubmissions = useCallback(
-    async (isSilent = false) => {
-      if (!isSilent) setLoading(true);
-      try {
-        const { data: userData } = await supabase.auth.getUser();
-        if (!userData.user) {
-          if (isMounted.current && !isSilent) setLoading(false);
-          return;
-        }
+  const handleOpenSheet = async (sub: Submission) => {
+    await loadTestCases(sub.practical_id);
+    setViewingSubmission({ ...sub, testCaseResults: sub.testCaseResults }); // cast to ViewingSubmission
+    setIsSheetOpen(true);
+  };
 
-        // 1. Get subjects for this faculty via junction table
-        const { data: facultyBatches } = await supabase
-          .from("subject_faculty_batches")
-          .select("subject_id")
-          .eq("faculty_id", userData.user.id);
 
-        const subjectIds = [...new Set((facultyBatches || []).map((fb) => fb.subject_id))];
 
-        if (subjectIds.length === 0) {
-          if (isMounted.current) {
-            setSubmissions([]);
-            if (!isSilent) setLoading(false);
-          }
-          return;
-        }
+  // Inline Grading logic
+  const handleInlineGrade = async (submissionId: number, marks: string) => {
+    const marksNum = parseInt(marks);
+    if (isNaN(marksNum) || marksNum < 0 || marksNum > 10) return;
 
-        // 2. Get practicals
-        const { data: practicals } = await supabase
-          .from("practicals")
-          .select("id, title")
-          .in("subject_id", subjectIds);
-
-        if (!practicals || practicals.length === 0) {
-          if (isMounted.current) {
-            setSubmissions([]);
-            if (!isSilent) setLoading(false);
-          }
-          return;
-        }
-
-        const practicalIds = practicals.map((p) => p.id);
-        const practicalMap = new Map(practicals.map((p) => [p.id, p.title]));
-
-        if (isMounted.current) {
-          setAllPracticals(practicals);
-        }
-
-        // 3. Get submissions
-        const { data: subs, error } = await supabase
-          .from("submissions")
-          .select(
-            `
-          id,
-          student_id,
-          practical_id,
-          code,
-          language,
-          status,
-          marks_obtained,
-          created_at,
-          output,
-          test_cases_passed,
-          execution_details
-        `,
-          )
-          .in("practical_id", practicalIds)
-          .order("created_at", { ascending: false });
-
-        if (error) throw error;
-
-        // 4. Fetch user details (including roll numbers)
-        const studentIds = Array.from(
-          new Set(
-            subs
-              ?.map((s) => s.student_id)
-              .filter((id): id is string => id !== null) || [],
-          ),
-        );
-        const { data: usersData } = await supabase
-          .from("users")
-          .select("uid, name, email, roll_no")
-          .in("uid", studentIds);
-
-        const userMap = new Map(usersData?.map((u) => [u.uid, u]) || []);
-        const rollNoMap = new Map(
-          usersData?.map((u) => [u.uid, u.roll_no]) || [],
-        );
-
-        // 6. Fetch Student Practicals (Lock status)
-
-        // 6. Fetch Student Practicals (Lock status)
-        // We fetch for all loaded students and practicals to check lock state
-        const { data: spData } = await supabase
-          .from("student_practicals")
-          .select(
-            "student_id, practical_id, is_locked, attempt_count, max_attempts",
-          )
-          .in("student_id", studentIds)
-          .in("practical_id", practicalIds);
-
-        const lockMap = new Map();
-        if (spData) {
-          spData.forEach((sp) => {
-            lockMap.set(`${sp.student_id}_${sp.practical_id}`, sp);
-          });
-        }
-
-        const formatted: Submission[] = (subs || []).map((s: any) => ({
-          id: s.id,
-          submission_id: s.id,
-          student_id: s.student_id,
-          student_name: userMap.get(s.student_id)?.name || "Unknown Student",
-          practical_id: s.practical_id,
-          practical_title:
-            practicalMap.get(s.practical_id) || "Unknown Practical",
-          code: s.code || "",
-          output: s.output || "",
-          language: s.language || "unknown",
-          status: s.status || "pending",
-          marks_obtained: s.marks_obtained,
-          created_at: s.created_at,
-          updated_at: s.created_at,
-          roll_no: rollNoMap.get(s.student_id) || "N/A",
-          is_locked:
-            lockMap.get(`${s.student_id}_${s.practical_id}`)?.is_locked ??
-            false,
-          attempt_count:
-            lockMap.get(`${s.student_id}_${s.practical_id}`)?.attempt_count ??
-            0,
-          max_attempts:
-            lockMap.get(`${s.student_id}_${s.practical_id}`)?.max_attempts ?? 1,
-          testCaseResults: (s.execution_details?.results ||
-            []) as unknown as TestCaseResult[],
-        }));
-
-        if (isMounted.current) {
-          setSubmissions(formatted);
-        }
-      } catch (err) {
-        console.error("Error fetching submissions:", err);
-      } finally {
-        if (isMounted.current && !isSilent) setLoading(false);
-      }
-    },
-    [supabase],
-  );
-
-  useEffect(() => {
-    fetchSubmissions();
-  }, [fetchSubmissions]);
-
-  // Handle PDF Download
-  const handleDownloadPdf = async (sub: Submission) => {
-    setPdfLoadingId(sub.submission_id);
+    setGradingLoadingId(submissionId);
     try {
-      await generatePdfClient({
-        studentName: sub.student_name,
-        rollNumber: sub.roll_no || sub.student_id,
-        practicalTitle: sub.practical_title,
-        code: sub.code,
-        language: sub.language,
-        submissionDate: new Date(sub.created_at).toLocaleDateString(),
-        status: sub.status,
-        marks: sub.marks_obtained ?? undefined,
-      });
+      const { error } = await supabase
+        .from("submissions")
+        .update({
+          marks_obtained: marksNum,
+          status: marksNum >= 5 ? 'passed' : 'failed'
+        })
+        .eq("id", submissionId);
+
+      if (error) throw error;
+      toast.success("Grade saved!");
+      fetchSubmissions(); // refresh
     } catch (e) {
-      console.error("PDF generation failed", e);
-      alert("Could not generate PDF");
+      toast.error("Failed to save grade");
     } finally {
-      setPdfLoadingId(null);
+      setGradingLoadingId(null);
+    }
+  }
+
+  const handleSheetSave = async (sid: number, marks: number, status: string) => {
+    const { error } = await supabase
+      .from("submissions")
+      .update({
+        marks_obtained: marks,
+        status: status as "passed" | "failed" | "pending" | "submitted"
+      })
+      .eq("id", sid);
+
+    if (!error) {
+      toast.success("Graded successfully");
+      fetchSubmissions();
+      // Optional: Move to next or close
+      // setIsSheetOpen(false);
+    }
+  }
+
+  // Generate Subject Report PDF
+  const handleDownloadSubjectReport = async () => {
+    if (!selectedSubjectId) return;
+
+    const subject = subjects.find(s => s.id === selectedSubjectId);
+    if (!subject) return;
+
+    setReportLoading(true);
+    try {
+      // 1. Get current faculty user
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("No user");
+
+      // 2. Get batches assigned to this faculty for this subject
+      const { data: facultyBatches } = await supabase
+        .from("subject_faculty_batches")
+        .select("batch")
+        .eq("subject_id", selectedSubjectId)
+        .eq("faculty_id", user.id);
+
+      const batches = [...new Set((facultyBatches || []).map(b => b.batch))];
+      const hasAllBatch = batches.includes("All");
+
+      // 3. Get all practicals for this subject
+      const practicalIds = subject.practicals.map((p: any) => p.id);
+      const practicalTitles = subject.practicals.map((p: any) => p.title);
+      // Fetch deadlines as well
+      const practicalDeadlines = subject.practicals.map((p: any) => p.deadline);
+
+      // 4. Fetch all submissions for these practicals
+      const { data: allSubmissions } = await supabase
+        .from("submissions")
+        .select("student_id, practical_id, marks_obtained")
+        .in("practical_id", practicalIds);
+
+      // Get unique student IDs from submissions
+      const submitterIds = [...new Set((allSubmissions || []).map(s => s.student_id).filter(id => id !== null))];
+
+      // 5. Fetch students (Both from batches AND from submissions to be safe)
+      const studentQuery = supabase
+        .from("users")
+        .select("uid, name, roll_no, batch")
+        .eq("role", "student");
+
+      const { data: allStudents } = await studentQuery; // Ensure variable usage if needed, but logic below handles it
+
+      // Filter in memory to avoid complex OR query
+      let students: any[] = [];
+
+      if (hasAllBatch) {
+        const { data } = await supabase.from("users").select("uid, name, roll_no").eq("role", "student");
+        students = data || [];
+      } else {
+        let batchStudents: any[] = [];
+        if (batches.length > 0) {
+          const { data } = await supabase.from("users").select("uid, name, roll_no").eq("role", "student").in("batch", batches);
+          batchStudents = data || [];
+        }
+
+        const missingSubmitters = submitterIds.filter(id => !batchStudents.some(s => s.uid === id));
+        let extraStudents: any[] = [];
+        if (missingSubmitters.length > 0) {
+          const { data } = await supabase.from("users").select("uid, name, roll_no").in("uid", missingSubmitters);
+          extraStudents = data || [];
+        }
+
+        students = [...batchStudents, ...extraStudents];
+        students = Array.from(new Map(students.map(s => [s.uid, s])).values());
+      }
+
+      students.sort((a, b) => (a.roll_no || "").localeCompare(b.roll_no || ""));
+
+      // 6. Build the report data structure
+      const reportStudents = students.map(student => {
+        const practicals = practicalIds.map((pid: number) => {
+          const submission = (allSubmissions || []).find(
+            s => s.student_id === student.uid && s.practical_id === pid
+          );
+          return {
+            title: subject.practicals.find((p: any) => p.id === pid)?.title || "",
+            marks: submission?.marks_obtained ?? null,
+          };
+        });
+
+        return {
+          student_name: student.name || "Unknown",
+          roll_no: student.roll_no || "N/A",
+          practicals,
+        };
+      });
+
+      setReportData({
+        subjectName: subject.subject_name,
+        subjectCode: subject.subject_code,
+        practicalTitles,
+        practicalDeadlines,
+        students: reportStudents,
+      });
+      setIsReportViewOpen(true);
+    } catch (error) {
+      console.error("Error generating report:", error);
+      toast.error("Failed to load report data");
+    } finally {
+      setReportLoading(false);
     }
   };
 
-  // Handle View Submission
-  const handleViewSubmission = async (sub: Submission) => {
-    // first fetch test cases for this practical
-    const tcs = await fetchTestCases(sub.practical_id);
-    setTestCases(tcs);
+  // Download PDF from report view
+  const handleDownloadReportPdf = async () => {
+    if (!reportData) return;
+    await generateSubjectReport({
+      ...reportData,
+      practicalDeadlines: reportData.practicalDeadlines
+    });
+    toast.success("Report downloaded!");
+  };
 
-    // If we have results from JSON, use them
-    if (sub.testCaseResults && sub.testCaseResults.length > 0) {
-      setViewingSubmission({
-        ...sub,
-        testCaseResults: sub.testCaseResults,
-      });
-    } else {
-      // Legacy fallback: fetch from table
-      const results = await fetchTestCaseResults(sub.submission_id);
-      setViewingSubmission({
-        ...sub,
-        testCaseResults: results,
-      });
+  // Bulk Actions
+  const handleBulkAction = async (action: 'pass' | 'reattempt') => {
+    if (selectedSubmissionIds.size === 0) return;
+
+    setBulkActionLoading(true);
+    try {
+      const updates = action === 'pass'
+        ? { status: 'passed' as const, marks_obtained: 10 }
+        : { status: 'pending' as const, marks_obtained: null };
+
+      const { error } = await supabase
+        .from("submissions")
+        .update(updates)
+        .in("id", Array.from(selectedSubmissionIds));
+
+      if (error) throw error;
+
+      toast.success(action === 'pass' ? "Marked as passed" : "Re-attempt granted");
+      setSelectedSubmissionIds(new Set());
+      fetchSubmissions();
+    } catch (error) {
+      console.error("Bulk action failed:", error);
+      toast.error("Failed to perform action");
+    } finally {
+      setBulkActionLoading(false);
     }
   };
 
+  // Filter Submissions locally
   const filteredSubmissions = submissions.filter((s) => {
-    const matchesQuery =
-      query === "" ||
-      s.student_name.toLowerCase().includes(query.toLowerCase()) ||
-      s.practical_title.toLowerCase().includes(query.toLowerCase());
-    const matchesStatus =
-      filterStatus === "all" || s.status.toLowerCase() === filterStatus;
-
-    // Allow filtering by practical ID via URL param
-    const practicalParam = searchParams.get("practical");
-    const matchesPractical =
-      !practicalParam || s.practical_id.toString() === practicalParam;
-
-    return matchesQuery && matchesStatus && matchesPractical;
+    const matchesQuery = s.student_name.toLowerCase().includes(query.toLowerCase()) ||
+      s.roll_no?.toLowerCase().includes(query.toLowerCase());
+    const matchesStatus = filterStatus === 'all' || s.status === filterStatus;
+    return matchesQuery && matchesStatus;
   });
 
-  const stats = useMemo(
-    () => ({
-      total: submissions.length,
-      passed: submissions.filter((s) => s.status?.toLowerCase() === "passed")
-        .length,
-      failed: submissions.filter((s) => s.status?.toLowerCase() === "failed")
-        .length,
-      pending: submissions.filter(
-        (s) => !["passed", "failed"].includes(s.status?.toLowerCase()),
-      ).length,
-    }),
-    [submissions],
-  );
+  const stats = {
+    total: submissions.length,
+    passed: submissions.filter(s => s.status === 'passed').length,
+    failed: submissions.filter(s => s.status === 'failed').length,
+    pending: submissions.filter(s => ['pending', 'submitted'].includes(s.status)).length,
+  };
+
+  // Bulk Actions
+  const handleSelectAll = (checked: boolean) => {
+    if (checked) {
+      setSelectedSubmissionIds(new Set(filteredSubmissions.map(s => s.id)));
+    } else {
+      setSelectedSubmissionIds(new Set());
+    }
+  }
+
+  const toggleSelection = (id: number) => {
+    const next = new Set(selectedSubmissionIds);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    setSelectedSubmissionIds(next);
+  }
+
+  // Next/Prev Logic for Sheet
+  const currentIndex = viewingSubmission
+    ? filteredSubmissions.findIndex(s => s.id === viewingSubmission.id)
+    : -1;
+  const hasNext = currentIndex >= 0 && currentIndex < filteredSubmissions.length - 1;
+  const hasPrev = currentIndex > 0;
+
+  const handleNext = () => {
+    if (hasNext) handleOpenSheet(filteredSubmissions[currentIndex + 1]);
+  }
+
+  const handlePrev = () => {
+    if (hasPrev) handleOpenSheet(filteredSubmissions[currentIndex - 1]);
+  }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50/30 to-purple-50/30 dark:from-gray-950 dark:via-indigo-950/10 dark:to-purple-950/10">
-      <main className="pt-24 pb-12 px-4 sm:px-6 lg:px-8 xl:px-12 w-full mx-auto space-y-8">
-        {/* Header Section */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 animate-slideUp">
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 shadow-lg shadow-indigo-500/25">
-              <GraduationCap className="w-6 h-6 text-white" />
-            </div>
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50/30 to-purple-50/30 dark:from-gray-950 dark:via-indigo-950/10 dark:to-purple-950/10 flex flex-col md:flex-row pt-16">
+      {/* Sidebar - Master View */}
+      <div className="w-full md:w-64 lg:w-72 flex-shrink-0 md:h-[calc(100vh-4rem)] md:sticky md:top-16 md:border-r border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 z-20 hidden md:block overflow-y-auto">
+        <SubmissionsSidebar
+          subjects={subjects}
+          selectedSubjectId={selectedSubjectId}
+          selectedPracticalId={selectedPracticalId}
+          onSelectSubject={handleSelectSubject}
+          onSelectPractical={handleSelectPractical}
+        />
+      </div>
+
+      {/* Mobile Sidebar Trigger */}
+      <div className="md:hidden p-4 bg-white/50 dark:bg-gray-900/20 backdrop-blur-sm border-b border-gray-100 dark:border-gray-800 flex items-center gap-3">
+        <Sheet open={isMobileSidebarOpen} onOpenChange={setIsMobileSidebarOpen}>
+          <SheetTrigger asChild>
+            <Button variant="ghost" size="icon" className="-ml-2">
+              <Menu className="w-5 h-5 text-gray-700 dark:text-gray-300" />
+            </Button>
+          </SheetTrigger>
+          <SheetContent side="left" className="p-0 w-80 border-r-0 bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl">
+            <SubmissionsSidebar
+              subjects={subjects}
+              selectedSubjectId={selectedSubjectId}
+              selectedPracticalId={selectedPracticalId}
+              onSelectSubject={(id) => {
+                handleSelectSubject(id);
+              }}
+              onSelectPractical={(id) => {
+                handleSelectPractical(id);
+                setIsMobileSidebarOpen(false); // Close on practical selection
+              }}
+              className="border-none bg-transparent"
+            />
+          </SheetContent>
+        </Sheet>
+        <h2 className="font-semibold text-gray-900 dark:text-white">faculty/submissions</h2>
+      </div>
+
+      {/* Main Content - Detail View */}
+      <div className="flex-1 min-w-0">
+        <main className="p-4 sm:p-6 lg:p-8 space-y-6 max-w-7xl mx-auto">
+
+          {/* Header */}
+          <motion.div
+            variants={shellVariants}
+            initial="hidden"
+            animate="visible"
+            className="flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+          >
             <div>
-              <h1 className="text-3xl font-bold text-gradient">
-                Student Submissions
+              <h1 className="text-3xl font-black text-gray-900 dark:text-white tracking-tight">
+                {selectedPracticalId
+                  ? subjects.flatMap(s => s.practicals).find((p: any) => p.id === selectedPracticalId)?.title
+                  : selectedSubjectId
+                    ? subjects.find(s => s.id === selectedSubjectId)?.subject_name
+                    : "All Submissions"
+                }
               </h1>
-              <p className="text-sm text-gray-500 dark:text-gray-400">
-                Review and grade student practical submissions
-              </p>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-3">
-            <div className="group relative">
-              <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4 group-focus-within:text-indigo-500 transition-colors" />
-              <input
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="Search students..."
-                className="pl-10 pr-4 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-white/60 dark:bg-gray-800/60 backdrop-blur-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all w-64 shadow-sm"
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* Stats Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
-          <StatCard
-            label="Total"
-            value={stats.total}
-            icon={ListFilter}
-            color="bg-blue-100 dark:bg-blue-900/30"
-            delay={100}
-          />
-          <StatCard
-            label="Passed"
-            value={stats.passed}
-            icon={CheckCircle2}
-            color="bg-emerald-100 dark:bg-emerald-900/30"
-            delay={200}
-          />
-          <StatCard
-            label="Failed"
-            value={stats.failed}
-            icon={XCircle}
-            color="bg-red-100 dark:bg-red-900/30"
-            delay={300}
-          />
-          <StatCard
-            label="Pending"
-            value={stats.pending}
-            icon={Clock}
-            color="bg-amber-100 dark:bg-amber-900/30"
-            delay={400}
-          />
-        </div>
-
-        {/* Main Content Area */}
-        <div className="glass-card-premium rounded-3xl overflow-hidden animate-slideUp animation-delay-500 flex flex-col min-h-[600px]">
-          {/* Toolbar */}
-          <div className="p-4 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between gap-4 bg-white/40 dark:bg-gray-800/40">
-            <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0 no-scrollbar">
-              {["all", "passed", "failed"].map((status) => (
-                <button
-                  key={status}
-                  onClick={() => setFilterStatus(status)}
-                  className={`px-4 py-2 rounded-xl text-sm font-medium transition-all whitespace-nowrap capitalize ${filterStatus === status
-                    ? "bg-indigo-600 text-white shadow-lg shadow-indigo-500/30"
-                    : "bg-white/50 dark:bg-gray-800/50 text-gray-600 dark:text-gray-300 hover:bg-white dark:hover:bg-gray-700"
-                    }`}
-                >
-                  {status}
-                </button>
-              ))}
+              <div className="flex items-center gap-2 text-sm text-gray-500 mt-1 font-medium">
+                {selectedSubjectId && <span className="text-indigo-600 dark:text-indigo-400 font-bold">
+                  {subjects.find(s => s.id === selectedSubjectId)?.subject_code}
+                </span>}
+                {selectedSubjectId && <span className="text-gray-300">•</span>}
+                <span>{filteredSubmissions.length} submissions found</span>
+              </div>
             </div>
 
-            <div className="text-sm text-gray-500 hidden sm:block font-medium">
-              Showing {filteredSubmissions.length} of {submissions.length}{" "}
-              results
-            </div>
-
-            {/* Practical Filter Controls */}
-            <Popover>
-              <PopoverTrigger asChild>
+            <div className="flex items-center gap-3">
+              {/* View Subject Report */}
+              {selectedSubjectId && (
                 <Button
-                  variant="outline"
-                  role="combobox"
-                  className={`w-[200px] justify-between border-gray-200 dark:border-gray-700 bg-white/50 dark:bg-gray-800/50 backdrop-blur-sm hover:bg-white dark:hover:bg-gray-800 ${searchParams.get("practical") ? "text-indigo-600 dark:text-indigo-400 border-indigo-200 dark:border-indigo-800 bg-indigo-50/50 dark:bg-indigo-900/20" : "text-gray-500"}`}
+                  size="sm"
+                  className="h-10 gap-2 bg-indigo-600 hover:bg-indigo-700 text-white shadow-lg shadow-indigo-500/20 hover:shadow-indigo-500/30 transition-all duration-300 font-semibold rounded-xl"
+                  onClick={handleDownloadSubjectReport}
+                  disabled={reportLoading}
                 >
-                  <span className="truncate">
-                    {searchParams.get("practical")
-                      ? allPracticals.find(
-                        (p) =>
-                          p.id.toString() === searchParams.get("practical"),
-                      )?.title
-                      : "Filter by Practical..."}
-                  </span>
-                  <Filter className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  <BarChart3 className="w-4 h-4" />
+                  {reportLoading ? "Loading..." : "View Report"}
                 </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-[200px] p-0 bg-white/95 dark:bg-gray-900/95 backdrop-blur-xl border-gray-200 dark:border-gray-700">
-                <Command>
-                  <CommandInput placeholder="Search practical..." />
-                  <CommandEmpty>No practical found.</CommandEmpty>
-                  <CommandGroup className="max-h-[300px] overflow-auto custom-scrollbar">
-                    <CommandItem
-                      value="all"
-                      onSelect={() => router.push("/faculty/submissions")}
-                      className="cursor-pointer"
-                    >
-                      <CheckCircle2
-                        className={`mr-2 h-4 w-4 ${!searchParams.get("practical") ? "opacity-100 text-indigo-500" : "opacity-0"}`}
-                      />
-                      All Practicals
-                    </CommandItem>
-                    {allPracticals.map((practical) => (
-                      <CommandItem
-                        key={practical.id}
-                        value={practical.title}
-                        onSelect={() => {
-                          router.push(
-                            `/faculty/submissions?practical=${practical.id}`,
-                          );
-                        }}
-                        className="cursor-pointer"
-                      >
-                        <CheckCircle2
-                          className={`mr-2 h-4 w-4 ${searchParams.get("practical") ===
-                            practical.id.toString()
-                            ? "opacity-100 text-indigo-500"
-                            : "opacity-0"
-                            }`}
-                        />
-                        <span className="truncate">{practical.title}</span>
-                      </CommandItem>
-                    ))}
-                  </CommandGroup>
-                </Command>
-              </PopoverContent>
-            </Popover>
-          </div>
+              )}
+              {/* Search */}
+              <div className="relative group">
+                <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 group-focus-within:text-indigo-500 transition-colors" />
+                <input
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder="Search students..."
+                  className="pl-10 pr-4 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-white/60 dark:bg-gray-900/60 backdrop-blur-md text-sm w-64 focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-400 outline-none shadow-sm hover:shadow transition-all duration-200"
+                />
+              </div>
+            </div>
+          </motion.div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[1000px]">
-              <thead className="bg-gray-50/50 dark:bg-gray-800/50">
-                <tr>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                    Student
-                  </th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                    Practical
-                  </th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                    State
-                  </th>
-                  <th className="px-6 py-4 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                    Marks
-                  </th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                    Submitted
-                  </th>
-                  <th className="px-6 py-4 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                    Actions
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100 dark:divide-gray-800/50">
-                {loading ? (
-                  Array.from({ length: 5 }).map((_, i) => (
-                    <tr key={i} className="animate-pulse">
-                      <td className="px-6 py-4">
-                        <div className="h-10 w-40 bg-gray-200 dark:bg-gray-700 rounded-lg"></div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="h-6 w-32 bg-gray-200 dark:bg-gray-700 rounded"></div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="h-6 w-24 bg-gray-200 dark:bg-gray-700 rounded"></div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="h-6 w-12 bg-gray-200 dark:bg-gray-700 rounded"></div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="h-6 w-20 bg-gray-200 dark:bg-gray-700 rounded"></div>
-                      </td>
-                      <td className="px-6 py-4"></td>
-                    </tr>
-                  ))
-                ) : filteredSubmissions.length === 0 ? (
+          {/* Stats Row */}
+          <motion.div
+            variants={containerVariants}
+            initial="hidden"
+            animate="visible"
+            className="grid grid-cols-2 md:grid-cols-4 gap-6"
+          >
+            <StatCard
+              label="Pending"
+              value={stats.pending}
+              icon={Clock}
+              colorClass="text-amber-600 dark:text-amber-400"
+              itemVariants={itemVariants}
+              loading={loading}
+            />
+            <StatCard
+              label="Passed"
+              value={stats.passed}
+              icon={CheckCircle2}
+              colorClass="text-emerald-600 dark:text-emerald-400"
+              itemVariants={itemVariants}
+              loading={loading}
+            />
+            <StatCard
+              label="Failed"
+              value={stats.failed}
+              icon={XCircle}
+              colorClass="text-red-600 dark:text-red-400"
+              itemVariants={itemVariants}
+              loading={loading}
+            />
+            <StatCard
+              label="Total"
+              value={stats.total}
+              icon={LayoutGrid}
+              colorClass="text-indigo-600 dark:text-indigo-400"
+              itemVariants={itemVariants}
+              loading={loading}
+            />
+          </motion.div>
+
+          {/* Submissions Table Card */}
+          <motion.div
+            variants={shellVariants}
+            initial="hidden"
+            animate="visible"
+            className="glass-card-premium rounded-3xl overflow-hidden flex flex-col min-h-[500px]"
+          >
+
+            {/* Filters Bar */}
+            <div className="p-4 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between gap-4 bg-white/40 dark:bg-gray-900/40 backdrop-blur-md">
+              <div className="flex items-center gap-2 overflow-x-auto no-scrollbar">
+                {['all', 'pending', 'passed', 'failed'].map(status => (
+                  <button
+                    key={status}
+                    onClick={() => setFilterStatus(status)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold capitalize transition-colors whitespace-nowrap ${filterStatus === status
+                      ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400'
+                      : 'text-gray-600 hover:bg-gray-100 dark:hover:bg-gray-800'
+                      }`}
+                  >
+                    {status}
+                  </button>
+                ))}
+              </div>
+              {/* Bulk Actions Toolbar (Visible when selected) */}
+              {selectedSubmissionIds.size > 0 && (
+                <div className="flex items-center gap-2 animate-in fade-in slide-in-from-bottom-2">
+                  <span className="text-xs font-medium text-gray-600 dark:text-gray-400 mr-2 hidden sm:inline">
+                    {selectedSubmissionIds.size} selected
+                  </span>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-8 text-xs bg-emerald-50 text-emerald-600 border-emerald-200 hover:bg-emerald-100 hover:text-emerald-700 hover:border-emerald-300 transition-colors"
+                    onClick={() => handleBulkAction('pass')}
+                    disabled={bulkActionLoading}
+                  >
+                    {bulkActionLoading ? "Processing..." : "Mark Passed"}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-8 text-xs text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700 hover:border-red-300 transition-colors"
+                    onClick={() => handleBulkAction('reattempt')}
+                    disabled={bulkActionLoading}
+                  >
+                    {bulkActionLoading ? "Processing..." : "Grant Re-attempt"}
+                  </Button>
+                </div>
+              )}
+            </div>
+
+            {/* Table */}
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm text-left">
+                <thead className="text-xs text-gray-500 uppercase bg-gray-50/50 dark:bg-gray-800/50 border-b border-gray-100 dark:border-gray-800">
                   <tr>
-                    <td colSpan={6} className="px-6 py-12 text-center">
-                      <div className="flex flex-col items-center justify-center text-gray-400 dark:text-gray-500">
-                        <ListFilter className="w-12 h-12 mb-3 opacity-20" />
-                        <p className="text-lg font-medium">
-                          No submissions found
-                        </p>
-                        <p className="text-sm">
-                          Try adjusting your filters or search query
-                        </p>
-                      </div>
-                    </td>
+                    <th className="px-4 py-3 w-[40px]">
+                      <Checkbox
+                        checked={filteredSubmissions.length > 0 && selectedSubmissionIds.size === filteredSubmissions.length}
+                        onCheckedChange={handleSelectAll}
+                      />
+                    </th>
+                    <th className="px-4 py-3">Student</th>
+                    {/* Conditionally hide Practical column if single practical selected */}
+                    {!selectedPracticalId && <th className="px-4 py-3">Practical</th>}
+                    <th className="px-4 py-3">Status</th>
+                    <th className="px-4 py-3 w-[120px]">Marks</th>
+                    <th className="px-4 py-3 text-right">Actions</th>
                   </tr>
-                ) : (
-                  filteredSubmissions.map((s) => {
-                    // Determine unified state
-                    const isPending =
-                      s.status === "pending" || s.status === "submitted";
-                    const isPassed = s.status === "passed";
-                    const isFailed = s.status === "failed";
-                    const attempts = s.attempt_count || 0;
-                    const max = s.max_attempts || 1;
-                    const isLocked = s.is_locked || attempts >= max;
-                    const hasRetry = isFailed && !isLocked;
-
-                    // Determine marks display
-                    const marksDisplay = () => {
-                      if (isPending || s.marks_obtained === null) {
-                        return (
-                          <span className="text-gray-400 font-mono">—</span>
-                        );
-                      }
-                      const marks = s.marks_obtained || 0;
-                      if (isPassed || marks >= 5) {
-                        return (
-                          <span className="font-bold text-emerald-600 dark:text-emerald-400">
-                            {marks}
-                          </span>
-                        );
-                      }
-                      return (
-                        <span className="font-bold text-red-600 dark:text-red-400">
-                          {marks}
-                        </span>
-                      );
-                    };
-
-                    // Format relative time
-                    const formatRelativeTime = (dateStr: string) => {
-                      const date = new Date(dateStr);
-                      const now = new Date();
-                      const diffMs = now.getTime() - date.getTime();
-                      const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
-                      const diffDays = Math.floor(diffHours / 24);
-
-                      if (diffHours < 1) return "Just now";
-                      if (diffHours < 24) return `${diffHours}h ago`;
-                      if (diffDays < 7) return `${diffDays}d ago`;
-                      return date.toLocaleDateString("en-US", {
-                        month: "short",
-                        day: "numeric",
-                      });
-                    };
-
-                    return (
-                      <tr
-                        key={s.submission_id}
-                        className={`group transition-colors border-b border-gray-50 dark:border-gray-800/50 ${isPending ? "bg-amber-50/30 hover:bg-amber-50/60 dark:bg-amber-900/5 dark:hover:bg-amber-900/10" : "hover:bg-indigo-50/50 dark:hover:bg-indigo-900/10"}`}
+                </thead>
+                <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
+                  {loading ? (
+                    <tr>
+                      <td colSpan={6} className="p-8 text-center text-gray-500">
+                        Loading...
+                      </td>
+                    </tr>
+                  ) : filteredSubmissions.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="p-8 text-center text-gray-500">
+                        No submissions found
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredSubmissions.map((sub) => (
+                      <motion.tr
+                        key={sub.id}
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        className="group hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors cursor-pointer"
+                        onClick={() => handleOpenSheet(sub)}
                       >
-                        {/* Student */}
-                        <td className="px-6 py-4">
+                        <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                          <Checkbox
+                            checked={selectedSubmissionIds.has(sub.id)}
+                            onCheckedChange={() => toggleSelection(sub.id)}
+                          />
+                        </td>
+                        <td className="px-4 py-3">
                           <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 text-white flex items-center justify-center font-bold text-sm shadow-md shadow-indigo-500/20">
-                              {initials(s.student_name)}
+                            <div className="w-8 h-8 rounded-full bg-indigo-100 dark:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400 flex items-center justify-center font-bold text-xs ring-2 ring-white dark:ring-gray-900">
+                              {/* Initials could be better */}
+                              {sub.student_name.slice(0, 2).toUpperCase()}
                             </div>
                             <div>
-                              <div className="font-semibold text-gray-900 dark:text-white">
-                                {s.student_name}
-                              </div>
-                              <div className="text-xs text-gray-600 dark:text-gray-400 font-mono">
-                                {s.roll_no || s.student_id}
-                              </div>
+                              <div className="font-medium text-gray-900 dark:text-white">{sub.student_name}</div>
+                              <div className="text-xs text-gray-500 font-mono">{sub.roll_no}</div>
                             </div>
                           </div>
                         </td>
-
-                        {/* Practical (with language tag, no ID) */}
-                        <td className="px-6 py-4">
-                          <div
-                            className="font-medium text-gray-800 dark:text-gray-200 max-w-[200px] truncate"
-                            title={s.practical_title}
+                        {!selectedPracticalId && (
+                          <td className="px-4 py-3 text-gray-600 dark:text-gray-300 max-w-[200px] truncate" title={sub.practical_title}>
+                            {sub.practical_title}
+                          </td>
+                        )}
+                        <td className="px-4 py-3">
+                          {/* Traffic Light Status Bar */}
+                          <div className="flex items-center gap-2">
+                            <div className={`w-1.5 h-8 rounded-full ${sub.status === 'passed' ? 'bg-emerald-500' :
+                              sub.status === 'failed' ? 'bg-red-500' :
+                                'bg-amber-400'
+                              }`} />
+                            <span className={`text-xs font-semibold px-2 py-0.5 rounded uppercase ${sub.status === 'passed' ? 'text-emerald-700 bg-emerald-50 dark:text-emerald-400 dark:bg-emerald-900/20' :
+                              sub.status === 'failed' ? 'text-red-700 bg-red-50 dark:text-red-400 dark:bg-red-900/20' :
+                                'text-amber-700 bg-amber-50 dark:text-amber-400 dark:bg-amber-900/20'
+                              }`}>
+                              {sub.status}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
+                          {/* Marks Input / Display */}
+                          {sub.status === 'passed' || sub.status === 'failed' ? (
+                            <span className="font-mono font-bold text-gray-900 dark:text-white">
+                              {sub.marks_obtained}/10
+                            </span>
+                          ) : (
+                            <input
+                              className="w-12 px-2 py-1 text-sm border border-gray-200 dark:border-gray-700 rounded bg-white dark:bg-gray-900 focus:ring-2 focus:ring-indigo-500 outline-none"
+                              placeholder="-"
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  handleInlineGrade(sub.id, e.currentTarget.value);
+                                }
+                              }}
+                            />
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="bg-indigo-50 text-indigo-600 hover:bg-indigo-100 dark:bg-indigo-900/20 dark:text-indigo-400 dark:hover:bg-indigo-900/40"
                           >
-                            {s.practical_title}
-                          </div>
-                          <span className="inline-block mt-1 text-[10px] font-bold tracking-wide text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 px-1.5 py-0.5 rounded uppercase">
-                            {s.language}
-                          </span>
+                            Grade
+                          </Button>
                         </td>
-
-                        {/* Unified State */}
-                        <td className="px-6 py-4">
-                          <div className="flex flex-col items-start gap-1">
-                            {isPending && (
-                              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-lg bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800">
-                                <Clock className="w-3.5 h-3.5" />
-                                Needs Grading
-                              </span>
-                            )}
-                            {isPassed && (
-                              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-lg bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800">
-                                <CheckCircle2 className="w-3.5 h-3.5" />
-                                Passed
-                              </span>
-                            )}
-                            {isFailed && (
-                              <>
-                                {hasRetry ? (
-                                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-lg bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400 border border-blue-200 dark:border-blue-800">
-                                    Retry Active
-                                  </span>
-                                ) : (
-                                  <>
-                                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-lg bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-800">
-                                      <XCircle className="w-3.5 h-3.5" />
-                                      Failed
-                                    </span>
-                                    <button
-                                      className="text-xs text-purple-600 dark:text-purple-400 hover:text-purple-800 dark:hover:text-purple-300 font-medium hover:underline ml-1"
-                                      onClick={async () => {
-                                        if (
-                                          !confirm(
-                                            `Grant extra attempt for ${s.student_name}?`,
-                                          )
-                                        )
-                                          return;
-                                        try {
-                                          const res = await fetch(
-                                            "/api/faculty/allow-reattempt",
-                                            {
-                                              method: "POST",
-                                              headers: {
-                                                "Content-Type":
-                                                  "application/json",
-                                              },
-                                              body: JSON.stringify({
-                                                studentId: s.student_id,
-                                                practicalId: s.practical_id,
-                                              }),
-                                            },
-                                          );
-                                          if (res.ok)
-                                            await fetchSubmissions(true);
-                                        } catch (e) {
-                                          console.error(e);
-                                        }
-                                      }}
-                                    >
-                                      Grant Re-attempt
-                                    </button>
-                                  </>
-                                )}
-                              </>
-                            )}
-                            {!isPending && !isPassed && !isFailed && (
-                              <span className="text-xs text-gray-500">
-                                Unknown
-                              </span>
-                            )}
-                          </div>
-                        </td>
-
-                        {/* Marks (Right-aligned) */}
-                        <td className="px-6 py-4 text-right tabular-nums">
-                          {marksDisplay()}
-                        </td>
-
-                        {/* Submitted (relative time) */}
-                        <td className="px-6 py-4 text-sm text-gray-500">
-                          {formatRelativeTime(s.created_at)}
-                        </td>
-
-                        {/* Context-Aware Actions */}
-                        <td className="px-6 py-4 text-right">
-                          <div className="flex items-center justify-end gap-2">
-                            {isPending ? (
-                              <Button
-                                size="sm"
-                                onClick={() => handleViewSubmission(s)}
-                                className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white shadow-lg shadow-indigo-500/25"
-                              >
-                                Grade Now
-                              </Button>
-                            ) : (
-                              <Button
-                                size="icon"
-                                variant="ghost"
-                                onClick={() => handleViewSubmission(s)}
-                                className="bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
-                                title="View Result"
-                              >
-                                <Eye className="w-4 h-4" />
-                              </Button>
-                            )}
-                            <Button
-                              size="icon"
-                              variant="ghost"
-                              onClick={() => handleDownloadPdf(s)}
-                              disabled={pdfLoadingId === s.submission_id}
-                              className="bg-purple-50 dark:bg-purple-900/20 text-purple-600 hover:bg-purple-100 dark:hover:bg-purple-900/40"
-                              title="Download PDF"
-                            >
-                              {pdfLoadingId === s.submission_id ? (
-                                <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
-                              ) : (
-                                <Download className="w-4 h-4" />
-                              )}
-                            </Button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </main>
-
-      {/* View Submission Modal */}
-      {viewingSubmission && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-sm animate-fadeIn">
-          <div className="glass-card-premium rounded-3xl w-full max-w-5xl max-h-[90vh] overflow-hidden flex flex-col animate-scaleIn">
-            {/* Modal Header */}
-            <div className="flex items-center justify-between p-6 border-b border-gray-100 dark:border-gray-800 bg-white/50 dark:bg-gray-900/50 backdrop-blur-sm">
-              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 text-white flex items-center justify-center font-bold text-lg shadow-lg">
-                  {initials(viewingSubmission.student_name)}
-                </div>
-                <div>
-                  <h3 className="text-xl font-bold text-gray-900 dark:text-white">
-                    {viewingSubmission.student_name}
-                  </h3>
-                  <div className="flex items-center gap-2 text-sm text-gray-500">
-                    <span className="font-mono">
-                      {viewingSubmission.student_id}
-                    </span>
-                    <span>•</span>
-                    <span className="text-indigo-600 dark:text-indigo-400 font-medium">
-                      {viewingSubmission.practical_title}
-                    </span>
-                  </div>
-                </div>
-              </div>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setViewingSubmission(null)}
-                className="rounded-full hover:bg-gray-100 dark:hover:bg-gray-800"
-              >
-                <X className="w-5 h-5" />
-              </Button>
-            </div>
-
-            {/* Modal Content */}
-            <div className="flex-1 overflow-auto p-6 grid grid-cols-1 lg:grid-cols-2 gap-6 bg-gray-50/50 dark:bg-gray-950/50">
-              {/* Left Column: Code & Output */}
-              <div className="space-y-6">
-                <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 overflow-hidden shadow-sm">
-                  <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-900/50 flex items-center justify-between">
-                    <h4 className="font-semibold text-gray-700 dark:text-gray-200 flex items-center gap-2">
-                      <Code2 className="w-4 h-4 text-indigo-500" /> Source Code
-                    </h4>
-                    <span className="text-xs font-mono px-2 py-1 rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 uppercase border border-gray-200 dark:border-gray-600">
-                      {viewingSubmission.language}
-                    </span>
-                  </div>
-                  <div className="p-0 overflow-auto max-h-[400px]">
-                    <pre className="p-4 text-xs sm:text-sm font-mono text-gray-800 dark:text-gray-200 whitespace-pre-wrap leading-relaxed">
-                      {viewingSubmission.code || (
-                        <span className="text-gray-400 italic">
-                          No code submitted
-                        </span>
-                      )}
-                    </pre>
-                  </div>
-                </div>
-
-                <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 overflow-hidden shadow-sm">
-                  <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-900/50">
-                    <h4 className="font-semibold text-gray-700 dark:text-gray-200 flex items-center gap-2">
-                      <FileText className="w-4 h-4 text-purple-500" /> Standard
-                      Output
-                    </h4>
-                  </div>
-                  <div className="p-4 bg-gray-900 text-gray-300 font-mono text-xs sm:text-sm rounded-b-2xl max-h-[200px] overflow-auto whitespace-pre-wrap">
-                    {viewingSubmission.output || (
-                      <span className="opacity-50">No output</span>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* Right Column: Test Cases & Status */}
-              <div className="space-y-6">
-                <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 overflow-hidden shadow-sm">
-                  <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-900/50 flex items-center justify-between">
-                    <h4 className="font-semibold text-gray-700 dark:text-gray-200 flex items-center gap-2">
-                      <CheckCircle2 className="w-4 h-4 text-emerald-500" /> Test
-                      Results
-                    </h4>
-                    <StatusBadge status={viewingSubmission.status} />
-                  </div>
-                  <div className="p-4 space-y-3 max-h-[600px] overflow-auto">
-                    {viewingSubmission.testCaseResults?.length ? (
-                      viewingSubmission.testCaseResults.map(
-                        (r: TestCaseResult, idx: number) => {
-                          const tc = testCases.find(
-                            (t: TestCase) => t.id === r.test_case_id,
-                          );
-                          return (
-                            <div
-                              key={idx}
-                              className="rounded-xl border border-gray-200 dark:border-gray-700 p-4 bg-gray-50/50 dark:bg-gray-900/50 transition-all hover:bg-white dark:hover:bg-gray-800 hover:shadow-md"
-                            >
-                              <div className="flex items-center justify-between mb-3">
-                                <div className="flex items-center gap-3">
-                                  <span className="w-6 h-6 rounded-full flex items-center justify-center bg-gray-200 dark:bg-gray-700 text-xs font-bold text-gray-600 dark:text-gray-300 shadow-inner">
-                                    {idx + 1}
-                                  </span>
-                                  <span className="font-medium text-sm text-gray-700 dark:text-gray-200">
-                                    {tc?.is_hidden
-                                      ? "Hidden Test Case"
-                                      : "Public Test Case"}
-                                  </span>
-                                </div>
-                                <span
-                                  className={`text-xs font-bold px-2 py-0.5 rounded ${r.status?.toLowerCase() === "passed"
-                                    ? "text-emerald-600 bg-emerald-50 dark:bg-emerald-900/20"
-                                    : "text-red-600 bg-red-50 dark:bg-red-900/20"
-                                    }`}
-                                >
-                                  {r.status?.toUpperCase()}
-                                </span>
-                              </div>
-
-                              <div className="grid grid-cols-2 gap-3 text-xs">
-                                <div>
-                                  <p className="text-gray-500 mb-1 font-medium">
-                                    Input
-                                  </p>
-                                  <div className="bg-white dark:bg-gray-950 p-2 rounded-lg border border-gray-200 dark:border-gray-700 font-mono truncate">
-                                    {tc?.input || "—"}
-                                  </div>
-                                </div>
-                                <div>
-                                  <p className="text-gray-500 mb-1 font-medium">
-                                    Expected
-                                  </p>
-                                  <div className="bg-white dark:bg-gray-950 p-2 rounded-lg border border-gray-200 dark:border-gray-700 font-mono truncate">
-                                    {tc?.expected_output || "—"}
-                                  </div>
-                                </div>
-                                <div className="col-span-2">
-                                  <p className="text-gray-500 mb-1 font-medium">
-                                    Actual Output
-                                  </p>
-                                  <div className="bg-white dark:bg-gray-950 p-2 rounded-lg border border-gray-200 dark:border-gray-700 font-mono whitespace-pre-wrap max-h-20 overflow-auto">
-                                    {r.stdout || (
-                                      <span className="text-gray-400 opacity-50">
-                                        No output
-                                      </span>
-                                    )}
-                                  </div>
-                                </div>
-                              </div>
-
-                              <div className="flex items-center gap-4 mt-3 pt-3 border-t border-gray-200 dark:border-gray-700 text-xs text-gray-500">
-                                <span className="flex items-center gap-1">
-                                  <Clock size={12} /> {r.execution_time_ms ?? 0}{" "}
-                                  ms
-                                </span>
-                                <span className="flex items-center gap-1">
-                                  <Clock size={12} /> {r.memory_used_kb ?? 0} KB
-                                </span>
-                              </div>
-                            </div>
-                          );
-                        },
-                      )
-                    ) : (
-                      <div className="flex flex-col items-center justify-center py-8 text-gray-500">
-                        <AlertCircle className="w-8 h-8 opacity-20 mb-2" />
-                        <p>No test case results available</p>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Modal Footer */}
-            <div className="p-4 border-t border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900">
-              {/* Manual Grading Section for Pending */}
-              {(viewingSubmission.status === "pending" ||
-                viewingSubmission.status === "submitted") && (
-                  <div className="mb-4 p-4 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
-                    <h4 className="text-sm font-semibold text-amber-800 dark:text-amber-300 mb-3 flex items-center gap-2">
-                      <Clock className="w-4 h-4" />
-                      Manual Grading
-                    </h4>
-                    <div className="flex items-center gap-4">
-                      <div className="flex-1">
-                        <label className="text-xs text-gray-600 dark:text-gray-400 mb-1 block">
-                          Marks
-                        </label>
-                        <input
-                          type="number"
-                          min="0"
-                          max="10"
-                          value={gradeMarks}
-                          onChange={(e) => setGradeMarks(e.target.value)}
-                          placeholder="0-10"
-                          className="w-full px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                        />
-                      </div>
-                      <div className="flex-1">
-                        <label className="text-xs text-gray-600 dark:text-gray-400 mb-1 block">
-                          Status
-                        </label>
-                        <select
-                          value={gradeStatus}
-                          onChange={(e) => setGradeStatus(e.target.value)}
-                          className="w-full px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                        >
-                          <option value="passed">Passed</option>
-                          <option value="failed">Failed</option>
-                        </select>
-                      </div>
-                      <div className="pt-5">
-                        <Button
-                          onClick={async () => {
-                            if (!gradeMarks) {
-                              alert("Please enter marks");
-                              return;
-                            }
-                            setGradingLoading(true);
-                            try {
-                              const { error } = await supabase
-                                .from("submissions")
-                                .update({
-                                  marks_obtained: parseInt(gradeMarks),
-                                  status: gradeStatus as "passed" | "failed",
-                                })
-                                .eq("id", viewingSubmission.id);
-                              if (error) throw error;
-                              await fetchSubmissions(true);
-                              setViewingSubmission(null);
-                              setGradeMarks("");
-                              setGradeStatus("passed");
-                            } catch (e) {
-                              console.error("Failed to grade:", e);
-                              alert("Failed to save grade");
-                            } finally {
-                              setGradingLoading(false);
-                            }
-                          }}
-                          disabled={gradingLoading}
-                          className="bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white shadow-lg"
-                        >
-                          {gradingLoading ? "Saving..." : "Save Grade"}
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-              <div className="flex justify-end gap-3">
-                <Button
-                  variant="outline"
-                  onClick={() => setViewingSubmission(null)}
-                >
-                  Close
-                </Button>
-                <Button
-                  onClick={() => handleDownloadPdf(viewingSubmission)}
-                  disabled={pdfLoadingId === viewingSubmission.submission_id}
-                  className="bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white shadow-lg shadow-indigo-500/20"
-                >
-                  {pdfLoadingId === viewingSubmission.submission_id ? (
-                    <>
-                      <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin mr-2" />{" "}
-                      Generating...
-                    </>
-                  ) : (
-                    <>
-                      <Download className="w-4 h-4 mr-2" /> Download Report
-                    </>
+                      </motion.tr>
+                    ))
                   )}
-                </Button>
-              </div>
+                </tbody>
+              </table>
             </div>
-          </div>
-        </div>
+
+            {/* Pagination / Footer can go here */}
+          </motion.div>
+        </main>
+      </div>
+
+      <Sheet open={isSheetOpen} onOpenChange={setIsSheetOpen}>
+        <SheetContent className="w-[90vw] sm:max-w-xl p-0 border-l border-gray-200 dark:border-gray-800">
+          {viewingSubmission && (
+            <GradingSheet
+              isOpen={isSheetOpen}
+              onClose={() => setIsSheetOpen(false)}
+              submission={viewingSubmission}
+              testCases={[]}
+              onSaveGrade={handleSheetSave}
+              onNext={hasNext ? handleNext : undefined}
+              onPrev={hasPrev ? handlePrev : undefined}
+              hasNext={hasNext}
+              hasPrev={hasPrev}
+            />
+          )}
+        </SheetContent>
+      </Sheet>
+
+      {/* Report Modal */}
+      {isReportViewOpen && reportData && (
+        <SubjectReportView
+          isOpen={isReportViewOpen}
+          onClose={() => setIsReportViewOpen(false)}
+          {...reportData}
+          onDownloadPdf={handleDownloadReportPdf}
+        />
       )}
+
     </div>
   );
 }
 
-export default function FacultySubmissionsPage() {
-  return (
-    <Suspense fallback={null}>
-      <FacultySubmissionsContent />
-    </Suspense>
-  );
-}
+export default FacultySubmissionsContent;

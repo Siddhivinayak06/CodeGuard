@@ -25,7 +25,18 @@ import {
   CheckCircle2,
   XCircle,
   Loader2,
+  Filter,
 } from "lucide-react";
+
+import { Button } from "@/components/ui/button";
+
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 type ApiUsersResponse = { success?: boolean; data?: any[] } | any[];
 
@@ -142,6 +153,9 @@ export default function AdminUsers() {
   const [selectedRole, setSelectedRole] = useState<
     "student" | "faculty" | "admin"
   >("student");
+
+  const [selectedDepartment, setSelectedDepartment] = useState<string>("all");
+  const [selectedBatch, setSelectedBatch] = useState<string>("all");
 
   const [form, setForm] = useState({
     id: "",
@@ -422,19 +436,44 @@ export default function AdminUsers() {
     usersByRole[r].push(u);
   });
 
-  // Filter by search
+  // Get unique departments and batches for students
+  const departments = useMemo(() => {
+    const depts = new Set<string>();
+    usersByRole.student.forEach(u => {
+      if (u.department) depts.add(u.department);
+    });
+    return Array.from(depts).sort();
+  }, [usersByRole.student]);
+
+  const batches = useMemo(() => {
+    const b = new Set<string>();
+    usersByRole.student.forEach(u => {
+      if (u.batch) b.add(u.batch);
+    });
+    return Array.from(b).sort();
+  }, [usersByRole.student]);
+
+  // Filter by search, department, and batch
   const filteredUsers = usersByRole[selectedRole].filter(
-    (u) =>
-      u.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      u.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      u.student_details?.roll_no
-        ?.toLowerCase()
-        .includes(searchTerm.toLowerCase()),
+    (u) => {
+      const matchesSearch = u.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        u.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        u.student_details?.roll_no
+          ?.toLowerCase()
+          .includes(searchTerm.toLowerCase());
+
+      if (selectedRole !== "student") return matchesSearch;
+
+      const matchesDepartment = selectedDepartment === "all" || u.department === selectedDepartment;
+      const matchesBatch = selectedBatch === "all" || u.batch === selectedBatch;
+
+      return matchesSearch && matchesDepartment && matchesBatch;
+    }
   );
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50/30 to-purple-50/30 dark:from-gray-950 dark:via-indigo-950/10 dark:to-purple-950/10">
-      <div className="pt-24 pb-12 px-4 sm:px-6 lg:px-8 xl:px-12 w-full mx-auto">
+      <div className="pt-24 pb-12 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
         {/* Header */}
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 mb-8 animate-slideUp">
           <div className="flex items-center gap-4">
@@ -487,239 +526,154 @@ export default function AdminUsers() {
             </button>
           </div>
         </div>
-      </div>
 
-      {/* Stats Cards */}
-      <div
-        className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6 animate-slideUp"
-        style={{ animationDelay: "100ms" }}
-      >
-        <StatCard
-          label="Students"
-          value={usersByRole.student.length}
-          icon={<GraduationCap className="w-6 h-6 text-white" />}
-          gradient="bg-gradient-to-br from-blue-500 to-cyan-500"
-        />
-        <StatCard
-          label="Faculty"
-          value={usersByRole.faculty.length}
-          icon={<UserCog className="w-6 h-6 text-white" />}
-          gradient="bg-gradient-to-br from-purple-500 to-pink-500"
-        />
-        <StatCard
-          label="Admins"
-          value={usersByRole.admin.length}
-          icon={<Shield className="w-6 h-6 text-white" />}
-          gradient="bg-gradient-to-br from-indigo-500 to-purple-500"
-        />
-      </div>
+        {/* Stats Cards */}
+        <div
+          className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6 animate-slideUp"
+          style={{ animationDelay: "100ms" }}
+        >
+          <StatCard
+            label="Total Users"
+            value={users.length}
+            icon={<Users className="w-6 h-6 text-white" />}
+            gradient="bg-gradient-to-br from-gray-800 to-gray-900 dark:from-gray-700 dark:to-gray-800"
+          />
+          <StatCard
+            label="Students"
+            value={usersByRole.student.length}
+            icon={<GraduationCap className="w-6 h-6 text-white" />}
+            gradient="bg-gradient-to-br from-blue-500 to-cyan-500"
+          />
+          <StatCard
+            label="Faculty"
+            value={usersByRole.faculty.length}
+            icon={<UserCog className="w-6 h-6 text-white" />}
+            gradient="bg-gradient-to-br from-pink-500 to-rose-500"
+          />
+          <StatCard
+            label="Admins"
+            value={usersByRole.admin.length}
+            icon={<Shield className="w-6 h-6 text-white" />}
+            gradient="bg-gradient-to-br from-indigo-500 to-purple-500"
+          />
+        </div>
 
-      {/* Role Tabs & Search */}
-      <div
-        className="glass-card rounded-2xl p-4 mb-6 animate-slideUp"
-        style={{ animationDelay: "150ms" }}
-      >
-        <div className="flex flex-col sm:flex-row gap-4 items-center justify-between">
-          {/* Role Tabs */}
-          <div className="flex items-center bg-gray-100 dark:bg-gray-800 rounded-xl p-1">
-            {(["student", "faculty", "admin"] as const).map((role) => (
-              <button
-                key={role}
-                onClick={() => setSelectedRole(role)}
-                className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-all ${selectedRole === role
-                  ? "bg-white dark:bg-gray-900 text-gray-900 dark:text-white shadow-sm"
-                  : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
-                  }`}
-              >
-                {role === "student" && <GraduationCap className="w-4 h-4" />}
-                {role === "faculty" && <UserCog className="w-4 h-4" />}
-                {role === "admin" && <Shield className="w-4 h-4" />}
-                {role.charAt(0).toUpperCase() + role.slice(1)}
-                <span
-                  className={`ml-1 px-2 py-0.5 text-xs rounded-full ${selectedRole === role
-                    ? "bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400"
-                    : "bg-gray-200 dark:bg-gray-700 text-gray-500"
+        {/* Role Tabs & Search */}
+        <div
+          className="glass-card rounded-2xl p-4 mb-6 animate-slideUp"
+          style={{ animationDelay: "150ms" }}
+        >
+          <div className="flex flex-col sm:flex-row gap-4 items-center justify-between">
+            {/* Role Tabs */}
+            <div className="flex items-center bg-gray-100 dark:bg-gray-800 rounded-xl p-1">
+              {(["student", "faculty", "admin"] as const).map((role) => (
+                <button
+                  key={role}
+                  onClick={() => setSelectedRole(role)}
+                  className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-all ${selectedRole === role
+                    ? "bg-white dark:bg-gray-900 text-gray-900 dark:text-white shadow-sm"
+                    : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
                     }`}
                 >
-                  {usersByRole[role].length}
-                </span>
-              </button>
-            ))}
-          </div>
-
-          {/* Search */}
-          <div className="relative w-full sm:w-64">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-            <input
-              type="text"
-              placeholder="Search users..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500 transition-all"
-            />
-          </div>
-        </div>
-      </div>
-
-      {/* Users Table */}
-      <div
-        className="glass-card-premium rounded-3xl overflow-hidden animate-slideUp"
-        style={{ animationDelay: "200ms" }}
-      >
-        {loading ? (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[600px]">
-              <thead className="bg-gray-50/70 dark:bg-gray-800/70">
-                <tr>
-                  <th className="px-5 py-3.5 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">
-                    User
-                  </th>
-                  <th className="px-5 py-3.5 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">
-                    Email
-                  </th>
-                  {selectedRole === "student" && (
-                    <>
-                      <th className="px-5 py-3.5 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">
-                        Roll No.
-                      </th>
-                      <th className="px-5 py-3.5 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">
-                        Semester
-                      </th>
-                      <th className="px-5 py-3.5 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">
-                        Department
-                      </th>
-                      <th className="px-5 py-3.5 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">
-                        Batch
-                      </th>
-                    </>
-                  )}
-                  <th className="px-5 py-3.5 text-right text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">
-                    Actions
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-200/50 dark:divide-gray-700/50">
-                {[1, 2, 3, 4, 5].map((i) => (
-                  <SkeletonRow
-                    key={i}
-                    showStudentCols={selectedRole === "student"}
-                  />
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ) : filteredUsers.length === 0 ? (
-          <div className="px-5 py-16 text-center">
-            <div className="w-20 h-20 mx-auto mb-4 rounded-2xl bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
-              <Users className="w-10 h-10 text-gray-400" />
-            </div>
-            <p className="text-gray-500 dark:text-gray-400 font-medium">
-              {searchTerm
-                ? "No users match your search"
-                : `No ${selectedRole}s found`}
-            </p>
-            <p className="text-sm text-gray-400 dark:text-gray-500 mt-1">
-              {searchTerm
-                ? "Try a different search term"
-                : `Add your first ${selectedRole} to get started`}
-            </p>
-          </div>
-        ) : (
-          <>
-            {/* Mobile Card View */}
-            <div className="block md:hidden space-y-3 p-4">
-              {filteredUsers.map((u) => {
-                const initials = (u.name || u.email || "U")
-                  .split(" ")
-                  .map((n: string) => n[0])
-                  .slice(0, 2)
-                  .join("")
-                  .toUpperCase();
-
-                return (
-                  <div
-                    key={u.uid}
-                    className={`p-4 rounded-2xl bg-white dark:bg-gray-800/50 border border-gray-100 dark:border-gray-700/50 shadow-sm hover:shadow-md transition-all ${highlightId === u.uid ? "ring-2 ring-emerald-500" : ""}`}
+                  {role === "student" && <GraduationCap className="w-4 h-4" />}
+                  {role === "faculty" && <UserCog className="w-4 h-4" />}
+                  {role === "admin" && <Shield className="w-4 h-4" />}
+                  {role.charAt(0).toUpperCase() + role.slice(1)}
+                  <span
+                    className={`ml-1 px-2 py-0.5 text-xs rounded-full ${selectedRole === role
+                      ? "bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400"
+                      : "bg-gray-200 dark:bg-gray-700 text-gray-500"
+                      }`}
                   >
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="flex items-center gap-3">
-                        <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 flex items-center justify-center text-white font-bold shadow-lg">
-                          {initials}
-                        </div>
-                        <div className="min-w-0">
-                          <h4 className="font-semibold text-gray-900 dark:text-white truncate">
-                            {u.name || "—"}
-                          </h4>
-                          <p className="text-sm text-gray-500 dark:text-gray-400 truncate">
-                            {u.email}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <button
-                          onClick={() => {
-                            setForm({
-                              id: u.uid,
-                              name: u.name ?? "",
-                              email: u.email ?? "",
-                              password: "", // Reset password on edit
-                              role: u.role ?? "student",
-                              roll_no: u.roll_no ?? "",
-                              semester: u.semester ?? "",
-                              department: u.department ?? "",
-                              batch: u.batch ?? "",
-                            });
-                            setIsEditing(true);
-                            setOpen(true);
-                          }}
-                          disabled={busy}
-                          className="p-2 rounded-lg text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/30 transition-colors disabled:opacity-50"
-                        >
-                          <Pencil className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => handleDelete(u.uid)}
-                          disabled={busy}
-                          className="p-2 rounded-lg text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors disabled:opacity-50"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </div>
-                    {
-                      selectedRole === "student" && (u.roll_no || u.semester || u.department || u.batch) && (
-                        <div className="mt-3 pt-3 border-t border-gray-100 dark:border-gray-700/50 flex flex-wrap gap-2">
-                          {u.roll_no && (
-                            <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded-lg">
-                              <Hash className="w-3 h-3" /> {u.roll_no}
-                            </span>
-                          )}
-                          {u.semester && (
-                            <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400 rounded-lg">
-                              <Calendar className="w-3 h-3" /> Sem {u.semester}
-                            </span>
-                          )}
-                          {u.department && (
-                            <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400 rounded-lg">
-                              <Building2 className="w-3 h-3" /> {u.department}
-                            </span>
-                          )}
-                          {u.batch && (
-                            <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 rounded-lg">
-                              <Users2 className="w-3 h-3" /> {u.batch}
-                            </span>
-                          )}
-                        </div>
-                      )
-                    }
-                  </div>
-                );
-              })}
+                    {usersByRole[role].length}
+                  </span>
+                </button>
+              ))}
             </div>
 
-            {/* Desktop Table View */}
-            <div className="hidden md:block overflow-x-auto">
-              <table className="w-full">
+            {/* Search */}
+            <div className="relative w-full sm:w-64">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Search users..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500 transition-all"
+              />
+            </div>
+          </div>
+
+          {/* Filters for Students */}
+          {selectedRole === "student" && (
+            <div className="mt-4 pt-4 border-t border-gray-100 dark:border-gray-800 animate-slideUp" style={{ animationDelay: "200ms" }}>
+              <div className="flex flex-col sm:flex-row gap-4 items-center">
+                <div className="flex items-center gap-2 text-sm text-gray-500 font-medium mr-2">
+                  <Filter className="w-4 h-4" />
+                  <span>Filters:</span>
+                </div>
+
+                <div className="w-full sm:w-48">
+                  <Select value={selectedDepartment} onValueChange={setSelectedDepartment}>
+                    <SelectTrigger className="bg-gray-50 dark:bg-gray-800/50 border-gray-200 dark:border-gray-700 rounded-xl h-9 text-sm">
+                      <div className="flex items-center gap-2">
+                        <Building2 className="w-3.5 h-3.5 text-gray-400" />
+                        <SelectValue placeholder="All Departments" />
+                      </div>
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Departments</SelectItem>
+                      {departments.map((dept) => (
+                        <SelectItem key={dept} value={dept}>{dept}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="w-full sm:w-48">
+                  <Select value={selectedBatch} onValueChange={setSelectedBatch}>
+                    <SelectTrigger className="bg-gray-50 dark:bg-gray-800/50 border-gray-200 dark:border-gray-700 rounded-xl h-9 text-sm">
+                      <div className="flex items-center gap-2">
+                        <Users2 className="w-3.5 h-3.5 text-gray-400" />
+                        <SelectValue placeholder="All Batches" />
+                      </div>
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Batches</SelectItem>
+                      {batches.map((batch) => (
+                        <SelectItem key={batch} value={batch}>{batch}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {(selectedDepartment !== "all" || selectedBatch !== "all") && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setSelectedDepartment("all");
+                      setSelectedBatch("all");
+                    }}
+                    className="text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/10 h-9"
+                  >
+                    <Trash2 className="w-3.5 h-3.5 mr-2" />
+                    Clear
+                  </Button>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Users Table */}
+        <div
+          className="glass-card-premium rounded-3xl overflow-hidden animate-slideUp"
+          style={{ animationDelay: "200ms" }}
+        >
+          {loading ? (
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[600px]">
                 <thead className="bg-gray-50/70 dark:bg-gray-800/70">
                   <tr>
                     <th className="px-5 py-3.5 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">
@@ -750,497 +704,650 @@ export default function AdminUsers() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200/50 dark:divide-gray-700/50">
-                  {filteredUsers.map((u) => {
-                    const initials = (u.name || u.email || "U")
-                      .split(" ")
-                      .map((n: string) => n[0])
-                      .slice(0, 2)
-                      .join("")
-                      .toUpperCase();
-
-                    return (
-                      <tr
-                        key={u.uid}
-                        className={`hover:bg-indigo-50/30 dark:hover:bg-indigo-900/10 transition-colors ${highlightId === u.uid ? "bg-emerald-50 dark:bg-emerald-900/20" : ""}`}
-                      >
-                        <td className="px-5 py-4">
-                          <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 flex items-center justify-center text-white text-sm font-bold shadow-lg">
-                              {initials}
-                            </div>
-                            <span className="font-medium text-gray-900 dark:text-white">
-                              {u.name || "—"}
-                            </span>
-                          </div>
-                        </td>
-                        <td className="px-5 py-4">
-                          <span className="text-sm text-gray-600 dark:text-gray-400 max-w-[200px] truncate block">
-                            {u.email}
-                          </span>
-                        </td>
-                        {selectedRole === "student" && (
-                          <>
-                            <td className="px-5 py-4">
-                              {u.roll_no ? (
-                                <span className="font-mono text-sm text-gray-700 dark:text-gray-300">
-                                  {u.roll_no}
-                                </span>
-                              ) : (
-                                <span className="text-gray-400 text-sm">—</span>
-                              )}
-                            </td>
-                            <td className="px-5 py-4">
-                              {u.semester ? (
-                                <span className="inline-flex px-2.5 py-1 text-xs font-semibold bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400 rounded-lg">
-                                  Sem {u.semester}
-                                </span>
-                              ) : (
-                                <span className="text-gray-400 text-sm">—</span>
-                              )}
-                            </td>
-                            <td className="px-5 py-4">
-                              {u.department ? (
-                                <span className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400 rounded-lg">
-                                  <Building2 className="w-3 h-3" />
-                                  {u.department}
-                                </span>
-                              ) : (
-                                <span className="text-gray-400 text-sm">—</span>
-                              )}
-                            </td>
-                            <td className="px-5 py-4">
-                              {u.batch ? (
-                                <span className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 rounded-lg">
-                                  <Users2 className="w-3 h-3" />
-                                  {u.batch}
-                                </span>
-                              ) : (
-                                <span className="text-gray-400 text-sm">—</span>
-                              )}
-                            </td>
-                          </>
-                        )}
-                        <td className="px-5 py-4">
-                          <div className="flex items-center justify-end gap-2">
-                            <button
-                              onClick={() => {
-                                setForm({
-                                  id: u.uid,
-                                  name: u.name ?? "",
-                                  email: u.email ?? "",
-                                  password: "", // Reset password on edit
-                                  role: u.role ?? "student",
-                                  roll_no: u.roll_no ?? "",
-                                  semester: u.semester ?? "",
-                                  department: u.department ?? "",
-                                  batch: u.batch ?? "",
-                                });
-                                setIsEditing(true);
-                                setOpen(true);
-                              }}
-                              disabled={busy}
-                              className="p-2 rounded-lg text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/30 transition-colors disabled:opacity-50"
-                              title="Edit"
-                            >
-                              <Pencil className="w-4 h-4" />
-                            </button>
-                            <button
-                              onClick={() => handleDelete(u.uid)}
-                              disabled={busy}
-                              className="p-2 rounded-lg text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors disabled:opacity-50"
-                              title="Delete"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
+                  {[1, 2, 3, 4, 5].map((i) => (
+                    <SkeletonRow
+                      key={i}
+                      showStudentCols={selectedRole === "student"}
+                    />
+                  ))}
                 </tbody>
               </table>
             </div>
-          </>
-        )}
-      </div>
+          ) : filteredUsers.length === 0 ? (
+            <div className="px-5 py-16 text-center">
+              <div className="w-20 h-20 mx-auto mb-4 rounded-2xl bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
+                <Users className="w-10 h-10 text-gray-400" />
+              </div>
+              <p className="text-gray-500 dark:text-gray-400 font-medium">
+                {searchTerm
+                  ? "No users match your search"
+                  : `No ${selectedRole}s found`}
+              </p>
+              <p className="text-sm text-gray-400 dark:text-gray-500 mt-1">
+                {searchTerm
+                  ? "Try a different search term"
+                  : `Add your first ${selectedRole} to get started`}
+              </p>
+            </div>
+          ) : (
+            <>
+              {/* Mobile Card View */}
+              <div className="block md:hidden space-y-3 p-4">
+                {filteredUsers.map((u) => {
+                  const initials = (u.name || u.email || "U")
+                    .split(" ")
+                    .map((n: string) => n[0])
+                    .slice(0, 2)
+                    .join("")
+                    .toUpperCase();
 
-      {/* Modal */}
-      {
-        open && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <div
-              className="absolute inset-0 bg-black/50 backdrop-blur-sm"
-              onClick={() => !busy && setOpen(false)}
-            />
-            <div className="relative w-full max-w-lg glass-card-premium rounded-3xl p-8 shadow-2xl animate-scaleIn">
-              <div className="flex items-center justify-between mb-6">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-500">
-                    <Users className="w-5 h-5 text-white" />
-                  </div>
-                  <h3 className="text-xl font-bold text-gray-900 dark:text-white">
-                    {isEditing ? "Edit User" : "Add New User"}
-                  </h3>
-                </div>
-                <button
-                  onClick={() => setOpen(false)}
-                  disabled={busy}
-                  className="p-2 rounded-lg text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-                >
-                  <X className="w-5 h-5" />
-                </button>
+                  return (
+                    <div
+                      key={u.uid}
+                      className={`p-4 rounded-2xl bg-white dark:bg-gray-800/50 border border-gray-100 dark:border-gray-700/50 shadow-sm hover:shadow-md transition-all ${highlightId === u.uid ? "ring-2 ring-emerald-500" : ""}`}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex items-center gap-3">
+                          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 flex items-center justify-center text-white font-bold shadow-lg">
+                            {initials}
+                          </div>
+                          <div className="min-w-0">
+                            <h4 className="font-semibold text-gray-900 dark:text-white truncate">
+                              {u.name || "—"}
+                            </h4>
+                            <p className="text-sm text-gray-500 dark:text-gray-400 truncate">
+                              {u.email}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <button
+                            onClick={() => {
+                              setForm({
+                                id: u.uid,
+                                name: u.name ?? "",
+                                email: u.email ?? "",
+                                password: "", // Reset password on edit
+                                role: u.role ?? "student",
+                                roll_no: u.roll_no ?? "",
+                                semester: u.semester ?? "",
+                                department: u.department ?? "",
+                                batch: u.batch ?? "",
+                              });
+                              setIsEditing(true);
+                              setOpen(true);
+                            }}
+                            disabled={busy}
+                            className="p-2 rounded-lg text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/30 transition-colors disabled:opacity-50"
+                          >
+                            <Pencil className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => handleDelete(u.uid)}
+                            disabled={busy}
+                            className="p-2 rounded-lg text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors disabled:opacity-50"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                      {
+                        selectedRole === "student" && (u.roll_no || u.semester || u.department || u.batch) && (
+                          <div className="mt-3 pt-3 border-t border-gray-100 dark:border-gray-700/50 flex flex-wrap gap-2">
+                            {u.roll_no && (
+                              <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded-lg">
+                                <Hash className="w-3 h-3" /> {u.roll_no}
+                              </span>
+                            )}
+                            {u.semester && (
+                              <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400 rounded-lg">
+                                <Calendar className="w-3 h-3" /> Sem {u.semester}
+                              </span>
+                            )}
+                            {u.department && (
+                              <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400 rounded-lg">
+                                <Building2 className="w-3 h-3" /> {u.department}
+                              </span>
+                            )}
+                            {u.batch && (
+                              <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 rounded-lg">
+                                <Users2 className="w-3 h-3" /> {u.batch}
+                              </span>
+                            )}
+                          </div>
+                        )
+                      }
+                    </div>
+                  );
+                })}
               </div>
 
-              <div className="space-y-4">
-                <div className="space-y-1.5">
-                  <label className="text-xs font-medium text-gray-700 dark:text-gray-300">
-                    Full Name
-                  </label>
-                  <input
-                    className="input-premium"
-                    value={form.name}
-                    onChange={(e) => handleChange("name", e.target.value)}
-                    placeholder="Enter full name"
-                  />
+              {/* Desktop Table View */}
+              <div className="hidden md:block overflow-x-auto">
+                <table className="w-full">
+                  <thead className="bg-gray-50/70 dark:bg-gray-800/70">
+                    <tr>
+                      <th className="px-5 py-3.5 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">
+                        User
+                      </th>
+                      <th className="px-5 py-3.5 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">
+                        Email
+                      </th>
+                      {selectedRole === "student" && (
+                        <>
+                          <th className="px-5 py-3.5 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">
+                            Roll No.
+                          </th>
+                          <th className="px-5 py-3.5 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">
+                            Semester
+                          </th>
+                          <th className="px-5 py-3.5 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">
+                            Department
+                          </th>
+                          <th className="px-5 py-3.5 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">
+                            Batch
+                          </th>
+                        </>
+                      )}
+                      <th className="px-5 py-3.5 text-right text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">
+                        Actions
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200/50 dark:divide-gray-700/50">
+                    {filteredUsers.map((u) => {
+                      const initials = (u.name || u.email || "U")
+                        .split(" ")
+                        .map((n: string) => n[0])
+                        .slice(0, 2)
+                        .join("")
+                        .toUpperCase();
+
+                      return (
+                        <tr
+                          key={u.uid}
+                          className={`hover:bg-indigo-50/30 dark:hover:bg-indigo-900/10 transition-colors ${highlightId === u.uid ? "bg-emerald-50 dark:bg-emerald-900/20" : ""}`}
+                        >
+                          <td className="px-5 py-4">
+                            <div className="flex items-center gap-3">
+                              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 flex items-center justify-center text-white text-sm font-bold shadow-lg">
+                                {initials}
+                              </div>
+                              <span className="font-medium text-gray-900 dark:text-white">
+                                {u.name || "—"}
+                              </span>
+                            </div>
+                          </td>
+                          <td className="px-5 py-4">
+                            <span className="text-sm text-gray-600 dark:text-gray-400 max-w-[200px] truncate block">
+                              {u.email}
+                            </span>
+                          </td>
+                          {selectedRole === "student" && (
+                            <>
+                              <td className="px-5 py-4">
+                                {u.roll_no ? (
+                                  <span className="font-mono text-sm text-gray-700 dark:text-gray-300">
+                                    {u.roll_no}
+                                  </span>
+                                ) : (
+                                  <span className="text-gray-400 text-sm">—</span>
+                                )}
+                              </td>
+                              <td className="px-5 py-4">
+                                {u.semester ? (
+                                  <span className="inline-flex px-2.5 py-1 text-xs font-semibold bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400 rounded-lg">
+                                    Sem {u.semester}
+                                  </span>
+                                ) : (
+                                  <span className="text-gray-400 text-sm">—</span>
+                                )}
+                              </td>
+                              <td className="px-5 py-4">
+                                {u.department ? (
+                                  <span className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400 rounded-lg">
+                                    <Building2 className="w-3 h-3" />
+                                    {u.department}
+                                  </span>
+                                ) : (
+                                  <span className="text-gray-400 text-sm">—</span>
+                                )}
+                              </td>
+                              <td className="px-5 py-4">
+                                {u.batch ? (
+                                  <span className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 rounded-lg">
+                                    <Users2 className="w-3 h-3" />
+                                    {u.batch}
+                                  </span>
+                                ) : (
+                                  <span className="text-gray-400 text-sm">—</span>
+                                )}
+                              </td>
+                            </>
+                          )}
+                          <td className="px-5 py-4">
+                            <div className="flex items-center justify-end gap-2">
+                              <button
+                                onClick={() => {
+                                  setForm({
+                                    id: u.uid,
+                                    name: u.name ?? "",
+                                    email: u.email ?? "",
+                                    password: "", // Reset password on edit
+                                    role: u.role ?? "student",
+                                    roll_no: u.roll_no ?? "",
+                                    semester: u.semester ?? "",
+                                    department: u.department ?? "",
+                                    batch: u.batch ?? "",
+                                  });
+                                  setIsEditing(true);
+                                  setOpen(true);
+                                }}
+                                disabled={busy}
+                                className="p-2 rounded-lg text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/30 transition-colors disabled:opacity-50"
+                                title="Edit"
+                              >
+                                <Pencil className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={() => handleDelete(u.uid)}
+                                disabled={busy}
+                                className="p-2 rounded-lg text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors disabled:opacity-50"
+                                title="Delete"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )
+          }
+        </div >
+
+        {/* Modal */}
+        {
+          open && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+              <div
+                className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+                onClick={() => !busy && setOpen(false)}
+              />
+              <div className="relative w-full max-w-lg glass-card-premium rounded-3xl p-8 shadow-2xl animate-scaleIn">
+                <div className="flex items-center justify-between mb-6">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-500">
+                      <Users className="w-5 h-5 text-white" />
+                    </div>
+                    <h3 className="text-xl font-bold text-gray-900 dark:text-white">
+                      {isEditing ? "Edit User" : "Add New User"}
+                    </h3>
+                  </div>
+                  <button
+                    onClick={() => setOpen(false)}
+                    disabled={busy}
+                    className="p-2 rounded-lg text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
                 </div>
 
-                <div className="space-y-1.5">
-                  <label className="text-xs font-medium text-gray-700 dark:text-gray-300">
-                    Email *
-                  </label>
-                  <input
-                    className="input-premium"
-                    type="email"
-                    value={form.email}
-                    onChange={(e) => handleChange("email", e.target.value)}
-                    placeholder="Enter email"
-                    disabled={isEditing}
-                  />
-                </div>
-
-                {!isEditing && (
+                <div className="space-y-4">
                   <div className="space-y-1.5">
                     <label className="text-xs font-medium text-gray-700 dark:text-gray-300">
-                      Password <span className="text-gray-400 font-normal">(optional for Azure users)</span>
+                      Full Name
                     </label>
                     <input
                       className="input-premium"
-                      type="password"
-                      value={form.password}
-                      onChange={(e) => handleChange("password", e.target.value)}
-                      placeholder="Leave empty for Azure-only login"
+                      value={form.name}
+                      onChange={(e) => handleChange("name", e.target.value)}
+                      placeholder="Enter full name"
                     />
                   </div>
-                )}
 
-                <div className="space-y-1.5">
-                  <label className="text-xs font-medium text-gray-700 dark:text-gray-300">
-                    Role
-                  </label>
-                  <div className="relative">
-                    <select
-                      className="input-premium appearance-none pr-10 cursor-pointer"
-                      value={form.role}
-                      onChange={(e) => handleChange("role", e.target.value)}
-                    >
-                      <option value="student">Student</option>
-                      <option value="faculty">Faculty</option>
-                      <option value="admin">Admin</option>
-                    </select>
-                    <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
-                  </div>
-                </div>
-
-                {form.role === "student" && (
-                  <div className="space-y-4">
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-1.5">
-                        <label className="text-xs font-medium text-gray-700 dark:text-gray-300">
-                          Roll No.
-                        </label>
-                        <input
-                          className="input-premium"
-                          value={form.roll_no}
-                          onChange={(e) => handleChange("roll_no", e.target.value)}
-                          placeholder="e.g., 2024001"
-                        />
-                      </div>
-                      <div className="space-y-1.5">
-                        <label className="text-xs font-medium text-gray-700 dark:text-gray-300">
-                          Semester
-                        </label>
-                        <input
-                          className="input-premium"
-                          value={form.semester}
-                          onChange={(e) => handleChange("semester", e.target.value)}
-                          placeholder="e.g., 1"
-                        />
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-1.5">
-                        <label className="text-xs font-medium text-gray-700 dark:text-gray-300">
-                          Department
-                        </label>
-                        <input
-                          className="input-premium"
-                          value={form.department}
-                          onChange={(e) => handleChange("department", e.target.value)}
-                          placeholder="e.g., Computer Science"
-                        />
-                      </div>
-                      <div className="space-y-1.5">
-                        <label className="text-xs font-medium text-gray-700 dark:text-gray-300">
-                          Batch
-                        </label>
-                        <div className="relative">
-                          <select
-                            className="input-premium appearance-none pr-10 cursor-pointer"
-                            value={form.batch}
-                            onChange={(e) => handleChange("batch", e.target.value)}
-                          >
-                            <option value="">Select Batch</option>
-                            <option value="All">All</option>
-                            <option value="1">1</option>
-                            <option value="2">2</option>
-                            <option value="3">3</option>
-                            <option value="4">4</option>
-                          </select>
-                          <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              <div className="flex justify-end gap-3 mt-6">
-                <button
-                  onClick={() => setOpen(false)}
-                  className="px-5 py-2.5 rounded-xl bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 font-medium hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
-                  disabled={busy}
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={() => handleSave(form)}
-                  className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-medium shadow-lg shadow-indigo-500/25 hover:shadow-indigo-500/40 transition-all"
-                  disabled={busy}
-                >
-                  {busy ? "Saving..." : "Save"}
-                </button>
-              </div>
-            </div>
-          </div>
-        )
-      }
-
-      {/* Bulk Add Modal */}
-      {
-        bulkOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <div
-              className="absolute inset-0 bg-black/50 backdrop-blur-sm"
-              onClick={() => !bulkProcessing && setBulkOpen(false)}
-            />
-            <div className="relative w-full max-w-3xl glass-card-premium rounded-3xl p-8 shadow-2xl animate-scaleIn max-h-[90vh] overflow-y-auto">
-              <div className="flex items-center justify-between mb-6">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-500">
-                    <Upload className="w-5 h-5 text-white" />
-                  </div>
-                  <h3 className="text-xl font-bold text-gray-900 dark:text-white">
-                    Bulk Add Users
-                  </h3>
-                </div>
-                <button
-                  onClick={() => setBulkOpen(false)}
-                  disabled={bulkProcessing}
-                  className="p-2 rounded-lg text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-
-              {bulkResults ? (
-                /* Results View */
-                <div className="space-y-4">
-                  <div className="flex items-center gap-4 p-4 rounded-xl bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-900/20 dark:to-purple-900/20">
-                    <div className="text-center">
-                      <p className="text-2xl font-bold text-gray-900 dark:text-white">{bulkResults.summary?.total || 0}</p>
-                      <p className="text-xs text-gray-500">Total</p>
-                    </div>
-                    <div className="text-center">
-                      <p className="text-2xl font-bold text-emerald-600">{bulkResults.summary?.success || 0}</p>
-                      <p className="text-xs text-gray-500">Success</p>
-                    </div>
-                    <div className="text-center">
-                      <p className="text-2xl font-bold text-red-600">{bulkResults.summary?.failed || 0}</p>
-                      <p className="text-xs text-gray-500">Failed</p>
-                    </div>
-                  </div>
-
-                  <div className="max-h-60 overflow-y-auto space-y-2">
-                    {bulkResults.results?.map((r: any, i: number) => (
-                      <div key={i} className={`flex items-center gap-3 p-3 rounded-lg ${r.success ? 'bg-emerald-50 dark:bg-emerald-900/20' : 'bg-red-50 dark:bg-red-900/20'}`}>
-                        {r.success ? <CheckCircle2 className="w-4 h-4 text-emerald-600" /> : <XCircle className="w-4 h-4 text-red-600" />}
-                        <span className="text-sm font-medium">{r.email}</span>
-                        {!r.success && <span className="text-xs text-red-600">{r.error}</span>}
-                      </div>
-                    ))}
-                  </div>
-
-                  <button
-                    onClick={() => {
-                      setBulkResults(null);
-                      setBulkOpen(false);
-                      loadUsers();
-                    }}
-                    className="w-full px-5 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-medium"
-                  >
-                    Done
-                  </button>
-                </div>
-              ) : (
-                /* Input View */
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                      Import CSV or Excel File
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-medium text-gray-700 dark:text-gray-300">
+                      Email *
                     </label>
-                    <p className="text-xs text-gray-500 mb-3">
-                      File must have columns: name, email, password, role, roll_no, semester, department, batch
-                    </p>
+                    <input
+                      className="input-premium"
+                      type="email"
+                      value={form.email}
+                      onChange={(e) => handleChange("email", e.target.value)}
+                      placeholder="Enter email"
+                      disabled={isEditing}
+                    />
+                  </div>
 
-                    {/* File Upload Area */}
-                    <label
-                      className="flex flex-col items-center justify-center w-full h-40 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-2xl cursor-pointer bg-gray-50 dark:bg-gray-800/50 hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-all"
-                      onDragOver={(e) => { e.preventDefault(); e.currentTarget.classList.add('border-indigo-500', 'bg-indigo-50', 'dark:bg-indigo-900/20'); }}
-                      onDragLeave={(e) => { e.preventDefault(); e.currentTarget.classList.remove('border-indigo-500', 'bg-indigo-50', 'dark:bg-indigo-900/20'); }}
-                      onDrop={(e) => {
-                        e.preventDefault();
-                        e.currentTarget.classList.remove('border-indigo-500', 'bg-indigo-50', 'dark:bg-indigo-900/20');
-                        const file = e.dataTransfer.files[0];
-                        if (file) handleFileUpload(file);
-                      }}
-                    >
-                      <div className="flex flex-col items-center justify-center pt-5 pb-6">
-                        <div className="p-3 rounded-full bg-gradient-to-br from-indigo-500 to-purple-500 mb-3">
-                          <Upload className="w-6 h-6 text-white" />
-                        </div>
-                        <p className="mb-2 text-sm text-gray-700 dark:text-gray-300">
-                          <span className="font-semibold">Click to upload</span> or drag and drop
-                        </p>
-                        <p className="text-xs text-gray-500">CSV or Excel file (.csv, .xlsx)</p>
-                        {bulkCsv && (
-                          <p className="mt-2 text-xs font-medium text-indigo-600 dark:text-indigo-400">
-                            📄 {bulkCsv}
-                          </p>
-                        )}
-                      </div>
+                  {!isEditing && (
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-medium text-gray-700 dark:text-gray-300">
+                        Password <span className="text-gray-400 font-normal">(optional for Azure users)</span>
+                      </label>
                       <input
-                        type="file"
-                        className="hidden"
-                        accept=".csv,.xlsx,.xls"
-                        onChange={(e) => {
-                          const file = e.target.files?.[0];
-                          if (file) handleFileUpload(file);
-                        }}
+                        className="input-premium"
+                        type="password"
+                        value={form.password}
+                        onChange={(e) => handleChange("password", e.target.value)}
+                        placeholder="Leave empty for Azure-only login"
                       />
-                    </label>
-                  </div>
-
-                  {bulkUsers.length > 0 && (
-                    <div>
-                      <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                        Preview ({bulkUsers.length} users)
-                      </p>
-                      <div className="max-h-48 overflow-y-auto rounded-xl border border-gray-200 dark:border-gray-700">
-                        <table className="w-full text-sm">
-                          <thead className="bg-gray-50 dark:bg-gray-800">
-                            <tr>
-                              <th className="px-3 py-2 text-left">Name</th>
-                              <th className="px-3 py-2 text-left">Email</th>
-                              <th className="px-3 py-2 text-left">Role</th>
-                              <th className="px-3 py-2 text-left">Dept</th>
-                              <th className="px-3 py-2 text-left">Batch</th>
-                              <th className="px-3 py-2 text-left">Status</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
-                            {bulkUsers.map((u, i) => (
-                              <tr key={i}>
-                                <td className="px-3 py-2">{u.name || '-'}</td>
-                                <td className="px-3 py-2">{u.email || '-'}</td>
-                                <td className="px-3 py-2">
-                                  <span className={`px-2 py-0.5 text-xs rounded ${u.role === 'admin' ? 'bg-pink-100 text-pink-700' :
-                                    u.role === 'faculty' ? 'bg-purple-100 text-purple-700' :
-                                      'bg-blue-100 text-blue-700'
-                                    }`}>
-                                    {u.role}
-                                  </span>
-                                </td>
-                                <td className="px-3 py-2 text-xs text-gray-600 dark:text-gray-400">
-                                  {u.department || '-'}
-                                </td>
-                                <td className="px-3 py-2 text-xs text-gray-600 dark:text-gray-400">
-                                  {u.batch || '-'}
-                                </td>
-                                <td className="px-3 py-2">
-                                  {u.email && u.password ? (
-                                    <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-                                  ) : (
-                                    <XCircle className="w-4 h-4 text-red-500" />
-                                  )}
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
                     </div>
                   )}
 
-                  <div className="flex justify-end gap-3">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-medium text-gray-700 dark:text-gray-300">
+                      Role
+                    </label>
+                    <div className="relative">
+                      <select
+                        className="input-premium appearance-none pr-10 cursor-pointer"
+                        value={form.role}
+                        onChange={(e) => handleChange("role", e.target.value)}
+                      >
+                        <option value="student">Student</option>
+                        <option value="faculty">Faculty</option>
+                        <option value="admin">Admin</option>
+                      </select>
+                      <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                    </div>
+                  </div>
+
+                  {form.role === "student" && (
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-1.5">
+                          <label className="text-xs font-medium text-gray-700 dark:text-gray-300">
+                            Roll No.
+                          </label>
+                          <input
+                            className="input-premium"
+                            value={form.roll_no}
+                            onChange={(e) => handleChange("roll_no", e.target.value)}
+                            placeholder="e.g., 2024001"
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <label className="text-xs font-medium text-gray-700 dark:text-gray-300">
+                            Semester
+                          </label>
+                          <input
+                            className="input-premium"
+                            value={form.semester}
+                            onChange={(e) => handleChange("semester", e.target.value)}
+                            placeholder="e.g., 1"
+                          />
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-1.5">
+                          <label className="text-xs font-medium text-gray-700 dark:text-gray-300">
+                            Department
+                          </label>
+                          <input
+                            className="input-premium"
+                            value={form.department}
+                            onChange={(e) => handleChange("department", e.target.value)}
+                            placeholder="e.g., Computer Science"
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <label className="text-xs font-medium text-gray-700 dark:text-gray-300">
+                            Batch
+                          </label>
+                          <div className="relative">
+                            <select
+                              className="input-premium appearance-none pr-10 cursor-pointer"
+                              value={form.batch}
+                              onChange={(e) => handleChange("batch", e.target.value)}
+                            >
+                              <option value="">Select Batch</option>
+                              <option value="All">All</option>
+                              <option value="1">1</option>
+                              <option value="2">2</option>
+                              <option value="3">3</option>
+                              <option value="4">4</option>
+                            </select>
+                            <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex justify-end gap-3 mt-6">
+                  <button
+                    onClick={() => setOpen(false)}
+                    className="px-5 py-2.5 rounded-xl bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 font-medium hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+                    disabled={busy}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={() => handleSave(form)}
+                    className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-medium shadow-lg shadow-indigo-500/25 hover:shadow-indigo-500/40 transition-all"
+                    disabled={busy}
+                  >
+                    {busy ? "Saving..." : "Save"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )
+        }
+
+        {/* Bulk Add Modal */}
+        {
+          bulkOpen && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+              <div
+                className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+                onClick={() => !bulkProcessing && setBulkOpen(false)}
+              />
+              <div className="relative w-full max-w-3xl glass-card-premium rounded-3xl p-8 shadow-2xl animate-scaleIn max-h-[90vh] overflow-y-auto">
+                <div className="flex items-center justify-between mb-6">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-500">
+                      <Upload className="w-5 h-5 text-white" />
+                    </div>
+                    <h3 className="text-xl font-bold text-gray-900 dark:text-white">
+                      Bulk Add Users
+                    </h3>
+                  </div>
+                  <button
+                    onClick={() => setBulkOpen(false)}
+                    disabled={bulkProcessing}
+                    className="p-2 rounded-lg text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                {bulkResults ? (
+                  /* Results View */
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-4 p-4 rounded-xl bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-900/20 dark:to-purple-900/20">
+                      <div className="text-center">
+                        <p className="text-2xl font-bold text-gray-900 dark:text-white">{bulkResults.summary?.total || 0}</p>
+                        <p className="text-xs text-gray-500">Total</p>
+                      </div>
+                      <div className="text-center">
+                        <p className="text-2xl font-bold text-emerald-600">{bulkResults.summary?.success || 0}</p>
+                        <p className="text-xs text-gray-500">Success</p>
+                      </div>
+                      <div className="text-center">
+                        <p className="text-2xl font-bold text-red-600">{bulkResults.summary?.failed || 0}</p>
+                        <p className="text-xs text-gray-500">Failed</p>
+                      </div>
+                    </div>
+
+                    <div className="max-h-60 overflow-y-auto space-y-2">
+                      {bulkResults.results?.map((r: any, i: number) => (
+                        <div key={i} className={`flex items-center gap-3 p-3 rounded-lg ${r.success ? 'bg-emerald-50 dark:bg-emerald-900/20' : 'bg-red-50 dark:bg-red-900/20'}`}>
+                          {r.success ? <CheckCircle2 className="w-4 h-4 text-emerald-600" /> : <XCircle className="w-4 h-4 text-red-600" />}
+                          <span className="text-sm font-medium">{r.email}</span>
+                          {!r.success && <span className="text-xs text-red-600">{r.error}</span>}
+                        </div>
+                      ))}
+                    </div>
+
                     <button
-                      onClick={() => setBulkOpen(false)}
-                      className="px-5 py-2.5 rounded-xl bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 font-medium"
-                      disabled={bulkProcessing}
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      onClick={async () => {
-                        if (bulkUsers.length === 0) return;
-                        setBulkProcessing(true);
-                        try {
-                          const res = await fetch('/api/admin/users', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ bulk: true, users: bulkUsers }),
-                          });
-                          const data = await res.json();
-                          setBulkResults(data);
-                        } catch (err) {
-                          console.error('Bulk add failed:', err);
-                          alert('Bulk add failed!');
-                        } finally {
-                          setBulkProcessing(false);
-                        }
+                      onClick={() => {
+                        setBulkResults(null);
+                        setBulkOpen(false);
+                        loadUsers();
                       }}
-                      disabled={bulkProcessing || bulkUsers.length === 0}
-                      className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-medium shadow-lg disabled:opacity-50 flex items-center gap-2"
+                      className="w-full px-5 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-medium"
                     >
-                      {bulkProcessing && <Loader2 className="w-4 h-4 animate-spin" />}
-                      {bulkProcessing ? 'Processing...' : `Create ${bulkUsers.length} Users`}
+                      Done
                     </button>
                   </div>
-                </div>
-              )}
+                ) : (
+                  /* Input View */
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        Import CSV or Excel File
+                      </label>
+                      <p className="text-xs text-gray-500 mb-3">
+                        File must have columns: name, email, password, role, roll_no, semester, department, batch
+                      </p>
+
+                      {/* File Upload Area */}
+                      <label
+                        className="flex flex-col items-center justify-center w-full h-40 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-2xl cursor-pointer bg-gray-50 dark:bg-gray-800/50 hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-all"
+                        onDragOver={(e) => { e.preventDefault(); e.currentTarget.classList.add('border-indigo-500', 'bg-indigo-50', 'dark:bg-indigo-900/20'); }}
+                        onDragLeave={(e) => { e.preventDefault(); e.currentTarget.classList.remove('border-indigo-500', 'bg-indigo-50', 'dark:bg-indigo-900/20'); }}
+                        onDrop={(e) => {
+                          e.preventDefault();
+                          e.currentTarget.classList.remove('border-indigo-500', 'bg-indigo-50', 'dark:bg-indigo-900/20');
+                          const file = e.dataTransfer.files[0];
+                          if (file) handleFileUpload(file);
+                        }}
+                      >
+                        <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                          <div className="p-3 rounded-full bg-gradient-to-br from-indigo-500 to-purple-500 mb-3">
+                            <Upload className="w-6 h-6 text-white" />
+                          </div>
+                          <p className="mb-2 text-sm text-gray-700 dark:text-gray-300">
+                            <span className="font-semibold">Click to upload</span> or drag and drop
+                          </p>
+                          <p className="text-xs text-gray-500">CSV or Excel file (.csv, .xlsx)</p>
+                          {bulkCsv && (
+                            <p className="mt-2 text-xs font-medium text-indigo-600 dark:text-indigo-400">
+                              📄 {bulkCsv}
+                            </p>
+                          )}
+                        </div>
+                        <input
+                          type="file"
+                          className="hidden"
+                          accept=".csv,.xlsx,.xls"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) handleFileUpload(file);
+                          }}
+                        />
+                      </label>
+                    </div>
+
+                    {bulkUsers.length > 0 && (
+                      <div>
+                        <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                          Preview ({bulkUsers.length} users)
+                        </p>
+                        <div className="max-h-48 overflow-y-auto rounded-xl border border-gray-200 dark:border-gray-700">
+                          <table className="w-full text-sm">
+                            <thead className="bg-gray-50 dark:bg-gray-800">
+                              <tr>
+                                <th className="px-3 py-2 text-left">Name</th>
+                                <th className="px-3 py-2 text-left">Email</th>
+                                <th className="px-3 py-2 text-left">Role</th>
+                                <th className="px-3 py-2 text-left">Dept</th>
+                                <th className="px-3 py-2 text-left">Batch</th>
+                                <th className="px-3 py-2 text-left">Status</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+                              {bulkUsers.map((u, i) => (
+                                <tr key={i}>
+                                  <td className="px-3 py-2">{u.name || '-'}</td>
+                                  <td className="px-3 py-2">{u.email || '-'}</td>
+                                  <td className="px-3 py-2">
+                                    <span className={`px-2 py-0.5 text-xs rounded ${u.role === 'admin' ? 'bg-pink-100 text-pink-700' :
+                                      u.role === 'faculty' ? 'bg-purple-100 text-purple-700' :
+                                        'bg-blue-100 text-blue-700'
+                                      }`}>
+                                      {u.role}
+                                    </span>
+                                  </td>
+                                  <td className="px-3 py-2 text-xs text-gray-600 dark:text-gray-400">
+                                    {u.department || '-'}
+                                  </td>
+                                  <td className="px-3 py-2 text-xs text-gray-600 dark:text-gray-400">
+                                    {u.batch || '-'}
+                                  </td>
+                                  <td className="px-3 py-2">
+                                    {u.email && u.password ? (
+                                      <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                                    ) : (
+                                      <XCircle className="w-4 h-4 text-red-500" />
+                                    )}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="flex justify-end gap-3">
+                      <button
+                        onClick={() => setBulkOpen(false)}
+                        className="px-5 py-2.5 rounded-xl bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 font-medium"
+                        disabled={bulkProcessing}
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        onClick={async () => {
+                          if (bulkUsers.length === 0) return;
+                          setBulkProcessing(true);
+                          try {
+                            const res = await fetch('/api/admin/users', {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ bulk: true, users: bulkUsers }),
+                            });
+                            const data = await res.json();
+                            setBulkResults(data);
+                          } catch (err) {
+                            console.error('Bulk add failed:', err);
+                            alert('Bulk add failed!');
+                          } finally {
+                            setBulkProcessing(false);
+                          }
+                        }}
+                        disabled={bulkProcessing || bulkUsers.length === 0}
+                        className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-medium shadow-lg disabled:opacity-50 flex items-center gap-2"
+                      >
+                        {bulkProcessing && <Loader2 className="w-4 h-4 animate-spin" />}
+                        {bulkProcessing ? 'Processing...' : `Create ${bulkUsers.length} Users`}
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
-        )
-      }
-    </div >
+          )
+        }
+      </div>
+    </div>
   );
 }

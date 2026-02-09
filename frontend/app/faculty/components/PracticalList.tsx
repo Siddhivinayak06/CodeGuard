@@ -132,24 +132,28 @@ function PracticalCard({
 
   const statusConfig = {
     closed: {
-      bg: "bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-700",
-      text: "text-gray-700 dark:text-gray-200",
-      badge: "bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200",
-      border: "border-gray-200 dark:border-gray-700",
+      bg: "bg-white dark:bg-gray-900 border-l-4 border-l-gray-400 dark:border-l-gray-600",
+      text: "text-gray-500 dark:text-gray-400 line-through decoration-gray-400/50",
+      badge: "bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 border-gray-200 dark:border-gray-700",
+      border: "border-gray-200 dark:border-gray-800",
+      iconColor: "text-gray-400",
+      indicator: "bg-gray-400"
     },
     due: {
-      bg: "bg-gradient-to-r from-orange-50 to-red-50 dark:from-orange-900/20 dark:to-red-900/20",
-      text: "text-orange-900 dark:text-orange-200",
-      badge:
-        "bg-orange-100 dark:bg-orange-900/40 text-orange-700 dark:text-orange-200 border border-orange-200 dark:border-orange-800",
-      border: "border-orange-200 dark:border-orange-800",
+      bg: "bg-white dark:bg-gray-900 border-l-4 border-l-amber-500",
+      text: "text-gray-900 dark:text-white",
+      badge: "bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-800",
+      border: "border-orange-100 dark:border-orange-900/30",
+      iconColor: "text-amber-500",
+      indicator: "bg-amber-500"
     },
     active: {
-      bg: "bg-gradient-to-br from-white to-blue-50/30 dark:from-gray-900 dark:to-blue-900/10",
+      bg: "bg-white dark:bg-gray-900 border-l-4 border-l-indigo-500",
       text: "text-gray-900 dark:text-white",
-      badge:
-        "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-200 border border-emerald-200 dark:border-emerald-800",
-      border: "border-gray-200 dark:border-gray-700",
+      badge: "bg-indigo-50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-400 border-indigo-200 dark:border-indigo-800",
+      border: "border-indigo-100 dark:border-indigo-900/30",
+      iconColor: "text-indigo-500",
+      indicator: "bg-indigo-500"
     },
   };
 
@@ -159,25 +163,18 @@ function PracticalCard({
     <article
       tabIndex={0}
       className={cn(
-        "group relative flex flex-col p-5 rounded-xl transition-all duration-300",
-        "border shadow-sm hover:shadow-xl",
-        "transform hover:-translate-y-1",
-        "focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2",
-        config.bg,
-        config.border,
+        "group relative flex flex-col p-6 rounded-xl transition-all duration-300",
+        "bg-white dark:bg-gray-900 border shadow-sm hover:shadow-lg hover:-translate-y-1",
+        config.bg, // Apply left border
+        "border-gray-100 dark:border-gray-800", // Default border
       )}
     >
-      {/* Status stripe */}
-      <div
-        className={cn(
-          "absolute top-0 left-0 right-0 h-1 rounded-t-xl",
-          status === "closed"
-            ? "bg-gray-400"
-            : status === "due"
-              ? "bg-gradient-to-r from-orange-500 to-red-500"
-              : "bg-gradient-to-r from-emerald-500 to-blue-500",
-        )}
-      />
+      {/* Background decoration */}
+      <div className="absolute top-0 right-0 p-6 opacity-5 dark:opacity-0 pointer-events-none group-hover:opacity-10 transition-opacity">
+        <svg className={cn("w-24 h-24 transform rotate-12", config.iconColor)} fill="currentColor" viewBox="0 0 24 24">
+          <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14H9v-2h2v2zm0-4H9V7h2v5z" />
+        </svg>
+      </div>
 
       <div className="flex items-start justify-between gap-4">
         <div className="flex-1 min-w-0">
@@ -245,10 +242,10 @@ function PracticalCard({
               <span className="font-medium">
                 {deadlineDate
                   ? deadlineDate.toLocaleDateString(undefined, {
-                      month: "short",
-                      day: "numeric",
-                      year: "numeric",
-                    })
+                    month: "short",
+                    day: "numeric",
+                    year: "numeric",
+                  })
                   : "No deadline"}
               </span>
               {deadlineDate && (
@@ -294,8 +291,8 @@ function PracticalCard({
           </div>
         </div>
 
-        {/* Right side */}
-        <div className="flex flex-col items-end gap-3">
+        {/* Right side - Actions & Marks */}
+        <div className="flex flex-col items-end gap-3 z-10">
           <ActionMenu
             onEdit={() => onEdit?.(practical)}
             onDelete={() => onDelete?.(practical.id)}
@@ -303,20 +300,14 @@ function PracticalCard({
             disabledAssign={isPast}
           />
 
-          <div className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-white/80 dark:bg-gray-800/80 border border-gray-200 dark:border-gray-700 backdrop-blur-sm">
-            <svg
-              className="w-4 h-4 text-amber-500"
-              fill="currentColor"
-              viewBox="0 0 20 20"
-            >
-              <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-            </svg>
-            <span className="text-sm font-bold text-gray-900 dark:text-white">
-              {practical.max_marks ?? "—"}
-            </span>
-            <span className="text-xs text-gray-500 dark:text-gray-400">
-              pts
-            </span>
+          <div className="flex flex-col items-end">
+            <div className="flex items-baseline gap-1">
+              <span className="text-2xl font-bold text-gray-900 dark:text-white tracking-tight">
+                {practical.max_marks ?? "—"}
+              </span>
+              <span className="text-xs font-semibold text-gray-500 uppercase">pts</span>
+            </div>
+            <span className="text-[10px] font-medium text-gray-400">Total Marks</span>
           </div>
         </div>
       </div>
@@ -536,92 +527,61 @@ export default function PracticalList({
 
   return (
     <div>
-      {/* Header */}
-      <div className="mb-6 space-y-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2 px-4 py-2 bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm">
-              <svg
-                className="w-5 h-5 text-blue-600 dark:text-blue-400"
-                fill="currentColor"
-                viewBox="0 0 20 20"
-              >
-                <path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z" />
-                <path
-                  fillRule="evenodd"
-                  d="M4 5a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v11a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm3 4a1 1 0 000 2h.01a1 1 0 100-2H7zm3 0a1 1 0 000 2h3a1 1 0 100-2h-3zm-3 4a1 1 0 100 2h.01a1 1 0 100-2H7zm3 0a1 1 0 100 2h3a1 1 0 100-2h-3z"
-                  clipRule="evenodd"
-                />
-              </svg>
-              <span className="text-sm font-semibold text-gray-900 dark:text-white">
-                {filteredPracticals.length}
-              </span>
-              <span className="text-sm text-gray-600 dark:text-gray-400">
-                practical{filteredPracticals.length !== 1 ? "s" : ""}
-              </span>
-            </div>
-          </div>
+      {/* Filters & Controls */}
+      <div className="mb-6 p-4 rounded-2xl bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 shadow-sm flex flex-col md:flex-row gap-4 items-center justify-between">
 
-          <div className="flex items-center gap-2 bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm rounded-lg border border-gray-200 dark:border-gray-700 p-1 shadow-sm">
+        {/* Search */}
+        <div className="relative flex-1 w-full">
+          <SearchIcon />
+          <input
+            type="text"
+            placeholder="Search practicals..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full pl-10 pr-4 py-2 bg-gray-50 dark:bg-gray-800 border-none rounded-xl focus:ring-2 focus:ring-indigo-500/20 text-sm font-medium transition-all"
+          />
+        </div>
+
+        {/* Filters */}
+        <div className="flex items-center gap-3 w-full md:w-auto overflow-x-auto pb-2 md:pb-0 scrollbar-hide">
+          {/* View Toggle */}
+          <div className="flex bg-gray-100 dark:bg-gray-800 p-1 rounded-lg shrink-0">
             <button
               onClick={() => setMode("list")}
               className={cn(
-                "flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-all duration-200",
-                mode === "list"
-                  ? "bg-blue-600 text-white shadow-md"
-                  : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200",
+                "p-1.5 rounded-md transition-all",
+                mode === "list" ? "bg-white dark:bg-gray-700 shadow-sm text-indigo-600" : "text-gray-400 hover:text-gray-600"
               )}
             >
               <ListIcon />
-              List
             </button>
             <button
               onClick={() => setMode("grid")}
               className={cn(
-                "flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-all duration-200",
-                mode === "grid"
-                  ? "bg-blue-600 text-white shadow-md"
-                  : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200",
+                "p-1.5 rounded-md transition-all",
+                mode === "grid" ? "bg-white dark:bg-gray-700 shadow-sm text-indigo-600" : "text-gray-400 hover:text-gray-600"
               )}
             >
               <GridIcon />
-              Grid
             </button>
           </div>
-        </div>
 
-        {/* Search Bar */}
-        <div className="relative">
-          <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-            <SearchIcon />
-          </div>
-          <input
-            type="text"
-            placeholder="Search practicals by title, description, or subject..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-12 pr-4 py-3 bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all text-gray-900 dark:text-white placeholder-gray-400"
-          />
-          {searchQuery && (
-            <button
-              onClick={() => setSearchQuery("")}
-              className="absolute inset-y-0 right-0 pr-4 flex items-center text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
-              title="Clear search"
+          {/* We could add Subject filter here if subjects are passed as props */}
+          {subjects && subjects.length > 0 && (
+            <select
+              className="bg-gray-50 dark:bg-gray-800 border-none rounded-lg text-sm font-medium py-2 pl-3 pr-8 focus:ring-2 focus:ring-indigo-500/20 cursor-pointer shrink-0"
+              onChange={(e) => {
+                // Implementing local filter logic for subject would require new state
+                // For now just a placeholder or could filter searchQuery if simple
+                setSearchQuery(e.target.value);
+              }}
+              value={subjects.some(s => s.subject_name === searchQuery) ? searchQuery : ""}
             >
-              <svg
-                className="w-5 h-5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M6 18L18 6M6 6l12 12"
-                />
-              </svg>
-            </button>
+              <option value="">All Subjects</option>
+              {subjects.map(s => (
+                <option key={s.id} value={s.subject_name}>{s.subject_name}</option>
+              ))}
+            </select>
           )}
         </div>
       </div>

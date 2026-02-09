@@ -40,111 +40,111 @@ services:
         max-size: "10m"
         max-file: "3"
 
-  backend:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-    image: ${BACKEND_IMAGE:-codeguard-backend}:${BACKEND_TAG:-latest}
-    ports:
-      - "${BACKEND_PORT:-5002}:5002"
-    env_file:
-      - .env
-    environment:
-      - NODE_ENV=${NODE_ENV:-production}
-      - PORT=5002
-      - WORKSPACE_DIR=/app/workspace
-      - CORS_ORIGIN=${CORS_ORIGIN:-*}
-      - DOCKER_API_VERSION=1.44
-      # Connect to proxy via TCP instead of mounting socket
-      - DOCKER_HOST=tcp://docker-socket-proxy:2375
-      - REDIS_URL=redis://redis:6379
-    volumes:
+  # backend:
+  #   build:
+  #     context: ./backend
+  #     dockerfile: Dockerfile
+  #   image: ${BACKEND_IMAGE:-codeguard-backend}:${BACKEND_TAG:-latest}
+  #   ports:
+  #     - "${BACKEND_PORT:-5002}:5002"
+  #   env_file:
+  #     - .env
+  #   environment:
+  #     - NODE_ENV=${NODE_ENV:-production}
+  #     - PORT=5002
+  #     - WORKSPACE_DIR=/app/workspace
+  #     - CORS_ORIGIN=${CORS_ORIGIN:-*}
+  #     - DOCKER_API_VERSION=1.44
+  #     # Connect to proxy via TCP instead of mounting socket
+  #     - DOCKER_HOST=tcp://docker-socket-proxy:2375
+  #     - REDIS_URL=redis://redis:6379
+  #   volumes:
 
-      # - /var/run/docker.sock:/var/run/docker.sock:rw # REMOVED: Insecure
-      - workspace_data:/app/workspace
-    restart: unless-stopped
-    networks:
-      - app_net
-    healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://localhost:5002/health || exit 1"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-      start_period: 10s
-    labels:
-      - "coolify.managed=true"
-      - "traefik.enable=true"
-      - "traefik.http.routers.backend.rule=Host(`${BACKEND_DOMAIN:-api.localhost}`)"
-      - "traefik.http.routers.backend.entrypoints=websecure"
-      - "traefik.http.routers.backend.tls=true"
-      - "traefik.http.routers.backend.tls.certresolver=letsencrypt"
-      - "traefik.http.services.backend.loadbalancer.server.port=5002"
-    deploy:
-      resources:
-        limits:
-          cpus: '1'
-          memory: 1024M
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
+  #     # - /var/run/docker.sock:/var/run/docker.sock:rw # REMOVED: Insecure
+  #     - workspace_data:/app/workspace
+  #   restart: unless-stopped
+  #   networks:
+  #     - app_net
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "curl -fsS http://localhost:5002/health || exit 1"]
+  #     interval: 30s
+  #     timeout: 5s
+  #     retries: 3
+  #     start_period: 10s
+  #   labels:
+  #     - "coolify.managed=true"
+  #     - "traefik.enable=true"
+  #     - "traefik.http.routers.backend.rule=Host(`${BACKEND_DOMAIN:-api.localhost}`)"
+  #     - "traefik.http.routers.backend.entrypoints=websecure"
+  #     - "traefik.http.routers.backend.tls=true"
+  #     - "traefik.http.routers.backend.tls.certresolver=letsencrypt"
+  #     - "traefik.http.services.backend.loadbalancer.server.port=5002"
+  #   deploy:
+  #     resources:
+  #       limits:
+  #         cpus: '1'
+  #         memory: 1024M
+  #   logging:
+  #     driver: "json-file"
+  #     options:
+  #       max-size: "10m"
+  #       max-file: "3"
 
-  frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-      args:
-        NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL}
-        NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY}
-        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
-        NEXT_PUBLIC_DEV_SUPABASE_REDIRECT_URL: ${NEXT_PUBLIC_DEV_SUPABASE_REDIRECT_URL}
-        SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY}
-    image: ${FRONTEND_IMAGE:-codeguard-frontend}:${FRONTEND_TAG:-latest}
-    ports:
-      - "${FRONTEND_PORT:-3000}:3000"
-    env_file:
-      - .env
-    environment:
-      - NEXT_PUBLIC_SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL}
-      - NEXT_PUBLIC_SUPABASE_ANON_KEY=${NEXT_PUBLIC_SUPABASE_ANON_KEY}
-      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://backend:5002}
-      - EXECUTE_URL=http://backend:5002/execute
-      - NEXT_PUBLIC_DEV_SUPABASE_REDIRECT_URL=${NEXT_PUBLIC_DEV_SUPABASE_REDIRECT_URL}
-      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
-      - NODE_ENV=${NODE_ENV:-production}
-    depends_on:
-      backend:
-        condition: service_healthy
-      redis:
-        condition: service_started
-    restart: unless-stopped
-    networks:
-      - app_net
-    healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://localhost:3000 || exit 1"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-      start_period: 15s
-    labels:
-      - "coolify.managed=true"
-      - "traefik.enable=true"
-      - "traefik.http.routers.frontend.rule=Host(`${FRONTEND_DOMAIN:-localhost}`)"
-      - "traefik.http.routers.frontend.entrypoints=websecure"
-      - "traefik.http.routers.frontend.tls=true"
-      - "traefik.http.routers.frontend.tls.certresolver=letsencrypt"
-      - "traefik.http.services.frontend.loadbalancer.server.port=3000"
-    deploy:
-      resources:
-        limits:
-          cpus: '1'
-          memory: 1024M
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
+  # frontend:
+  #   build:
+  #     context: ./frontend
+  #     dockerfile: Dockerfile
+  #     args:
+  #       NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL}
+  #       NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY}
+  #       NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
+  #       NEXT_PUBLIC_DEV_SUPABASE_REDIRECT_URL: ${NEXT_PUBLIC_DEV_SUPABASE_REDIRECT_URL}
+  #       SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY}
+  #   image: ${FRONTEND_IMAGE:-codeguard-frontend}:${FRONTEND_TAG:-latest}
+  #   ports:
+  #     - "${FRONTEND_PORT:-3000}:3000"
+  #   env_file:
+  #     - .env
+  #   environment:
+  #     - NEXT_PUBLIC_SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL}
+  #     - NEXT_PUBLIC_SUPABASE_ANON_KEY=${NEXT_PUBLIC_SUPABASE_ANON_KEY}
+  #     - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://backend:5002}
+  #     - EXECUTE_URL=http://backend:5002/execute
+  #     - NEXT_PUBLIC_DEV_SUPABASE_REDIRECT_URL=${NEXT_PUBLIC_DEV_SUPABASE_REDIRECT_URL}
+  #     - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
+  #     - NODE_ENV=${NODE_ENV:-production}
+  #   depends_on:
+  #     backend:
+  #       condition: service_healthy
+  #     redis:
+  #       condition: service_started
+  #   restart: unless-stopped
+  #   networks:
+  #     - app_net
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "curl -fsS http://localhost:3000 || exit 1"]
+  #     interval: 30s
+  #     timeout: 5s
+  #     retries: 3
+  #     start_period: 15s
+  #   labels:
+  #     - "coolify.managed=true"
+  #     - "traefik.enable=true"
+  #     - "traefik.http.routers.frontend.rule=Host(`${FRONTEND_DOMAIN:-localhost}`)"
+  #     - "traefik.http.routers.frontend.entrypoints=websecure"
+  #     - "traefik.http.routers.frontend.tls=true"
+  #     - "traefik.http.routers.frontend.tls.certresolver=letsencrypt"
+  #     - "traefik.http.services.frontend.loadbalancer.server.port=3000"
+  #   deploy:
+  #     resources:
+  #       limits:
+  #         cpus: '1'
+  #         memory: 1024M
+  #   logging:
+  #     driver: "json-file"
+  #     options:
+  #       max-size: "10m"
+  #       max-file: "3"
 
   python-runtime:
     build:

@@ -95,11 +95,14 @@ export default function BulkImportModal({
             }
 
             const formatted: GeneratedPractical[] = data.practicals.map((p: any, idx: number) => {
+                // Determine if multi-level based on API response flag OR if levels array exists and has items
+                const isMultilevel = p.enableLevels === true || (Array.isArray(p.levels) && p.levels.length > 0);
+
                 const levels = Array.isArray(p.levels) ? p.levels.map((l: any, lIdx: number) => ({
-                    level: lIdx === 0 ? "easy" : "hard", // Set first level to easy, others to hard as per instruction
-                    title: l.title || "",
+                    level: lIdx === 0 ? "easy" : "hard", // Default mapping: 0->easy, 1->hard. 
+                    title: l.title || `Task ${lIdx + 1}`,
                     description: l.description || "",
-                    max_marks: Number(l.max_marks) || 10,
+                    max_marks: Number(l.max_marks) || 5, // Default split marks
                     reference_code: l.reference_code || "",
                     testCases: Array.isArray(l.testCases) ? l.testCases.map((tc: any) => ({
                         input: String(tc.input || ""),
@@ -114,20 +117,13 @@ export default function BulkImportModal({
                     })) : []
                 })) : [];
 
-                // Strict logic: Mulit-level only if more than 1 (or at least 1? No, single task is single level).
-                // If AI returns levels array with > 1 item, it's multilevel.
-                // If AI returns levels array with 1 item, treat as single level for simplicity unless explicitly requested?
-                // User said "single task off the multi-level mode".
-                const isMultilevel = levels.length > 1;
-
-                // Fallback: If root description/code is empty but present in first level, use it.
-                // This handles cases where AI puts everything in "Task 1" even for single-level practicals.
+                // Fallback: If root description/code is empty but present in first level, use it for single level mode
                 const fallbackDescription = levels.length > 0 ? levels[0].description : "";
                 const fallbackCode = levels.length > 0 ? levels[0].reference_code : "";
 
                 // Calculate staggered deadline: 1 week gap per practical
                 const baseDate = new Date();
-                baseDate.setDate(baseDate.getDate() + 7 * (idx + 1)); // First practical is 1 week from now
+                baseDate.setDate(baseDate.getDate() + 7 * (idx + 1));
                 const deadline = baseDate.toISOString().slice(0, 16);
 
                 return {
@@ -138,7 +134,7 @@ export default function BulkImportModal({
                     enableLevels: isMultilevel,
                     language: p.language || "c",
                     reference_code: p.reference_code || fallbackCode || "",
-                    deadline: deadline, // Staggered deadline
+                    deadline: deadline,
                     testCases: Array.isArray(p.testCases) ? p.testCases.map((tc: any) => ({
                         input: String(tc.input || ""),
                         expected_output: String(tc.expected_output || ""),
