@@ -124,7 +124,7 @@ router.post(
       const OVERLAP = 1000;
       const chunks = [];
 
-      for (let i = 0; i < text.length; i += (CHUNK_SIZE - OVERLAP)) {
+      for (let i = 0; i < text.length; i += CHUNK_SIZE - OVERLAP) {
         chunks.push(text.slice(i, i + CHUNK_SIZE));
       }
 
@@ -138,7 +138,7 @@ router.post(
       if (!configOverrides.provider || configOverrides.provider === 'gemini') {
         try {
           configOverrides.apiKey = require('../config').ai.apiKey2;
-        } catch (e) {
+        } catch (_e) {
           // ignore if key2 missing
         }
       }
@@ -186,12 +186,14 @@ ${chunkText}
             fullResponse += chunk;
           });
 
-
           // Helper to attempt JSON repair
           const repairJson = (str) => {
             try {
               // 1. Extract from markdown if present
-              let cleaned = str.replace(/```json/g, '').replace(/```/g, '').trim();
+              let cleaned = str
+                .replace(/```json/g, '')
+                .replace(/```/g, '')
+                .trim();
 
               const first = cleaned.indexOf('{');
               const last = cleaned.lastIndexOf('}');
@@ -200,7 +202,11 @@ ${chunkText}
               }
 
               // Try parsing first
-              try { return JSON.parse(cleaned); } catch (e) { }
+              try {
+                return JSON.parse(cleaned);
+              } catch (_e) {
+                // Formatting failed, try fixing
+              }
 
               // 2. Fix common AI JSON errors
               // Escape unescaped newlines in strings
@@ -213,7 +219,7 @@ ${chunkText}
               cleaned = cleaned.replace(/\\([^"\\/bfnrtu])/g, '\\\\$1');
 
               return JSON.parse(cleaned);
-            } catch (e) {
+            } catch (_e) {
               return null;
             }
           };
@@ -223,7 +229,9 @@ ${chunkText}
             return parsed.practicals;
           }
 
-          logger.error(`Failed to parse AI response for chunk ${index}. Raw length: ${fullResponse.length}`);
+          logger.error(
+            `Failed to parse AI response for chunk ${index}. Raw length: ${fullResponse.length}`
+          );
           return [];
         } catch (e) {
           logger.error(`Error processing chunk ${index}:`, e);
@@ -246,26 +254,31 @@ ${chunkText}
       // 4. Merge and Deduplicate
       const practicalsMap = new Map();
 
-      results.forEach(p => {
+      results.forEach((p) => {
         // Key by practical number if available, else title
-        const key = p.practical_number ? `num-${p.practical_number}` : `title-${p.title?.trim()}`;
+        const key = p.practical_number
+          ? `num-${p.practical_number}`
+          : `title-${p.title?.trim()}`;
 
         if (!practicalsMap.has(key)) {
           practicalsMap.set(key, p);
         } else {
           // If exists, prefer the one with more information (e.g. levels or test cases)
           const existing = practicalsMap.get(key);
-          if ((p.levels?.length || 0) > (existing.levels?.length || 0) ||
-            (p.testCases?.length || 0) > (existing.testCases?.length || 0)) {
+          if (
+            (p.levels?.length || 0) > (existing.levels?.length || 0) ||
+            (p.testCases?.length || 0) > (existing.testCases?.length || 0)
+          ) {
             practicalsMap.set(key, p);
           }
         }
       });
 
-      const practicals = Array.from(practicalsMap.values()).sort((a, b) => a.practical_number - b.practical_number);
+      const practicals = Array.from(practicalsMap.values()).sort(
+        (a, b) => a.practical_number - b.practical_number
+      );
 
       return res.json({ practicals });
-
     } catch (err) {
       logger.error('Bulk Generation Error:', err);
       res.status(500).json({ error: err.message || 'Internal Server Error' });
