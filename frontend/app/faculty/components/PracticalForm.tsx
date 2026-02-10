@@ -349,6 +349,52 @@ export default function PracticalForm({
               window as unknown as { __assignedStudentIds: string[] }
             ).__assignedStudentIds = assignedIds;
           }
+
+          // load levels for existing practical
+          const { data: levelsData } = await supabase
+            .from("practical_levels")
+            .select("*")
+            .eq("practical_id", practical.id)
+            .order("id", { ascending: true });
+
+          if (levelsData && levelsData.length > 0) {
+            setEnableLevels(true);
+
+            // load reference codes too
+            const { data: refsData } = await supabase
+              .from("reference_codes")
+              .select("*")
+              .eq("practical_id", practical.id);
+
+            // Match with test cases and reference codes
+            const levelsWithTests = levelsData.map((l: any) => {
+              const levelRef = refsData?.find(r => r.practical_id === practical.id); // For now shared
+              return {
+                ...l,
+                reference_code: levelRef?.code || "",
+                testCases: (testData || []).filter((tc: any) => tc.level_id === l.id) as TestCase[],
+              };
+            });
+            setLevels(levelsWithTests);
+
+            if (refsData && refsData.length > 0) {
+              setSampleCode(refsData[0].code || "");
+              setSampleLanguage(refsData[0].language || "c");
+            }
+          } else {
+            setEnableLevels(false);
+            // Even if no levels, load reference code for single level
+            const { data: refsData } = await supabase
+              .from("reference_codes")
+              .select("*")
+              .eq("practical_id", practical.id)
+              .order("created_at", { ascending: false });
+
+            if (refsData && refsData.length > 0) {
+              setSampleCode(refsData[0].code || "");
+              setSampleLanguage(refsData[0].language || "c");
+            }
+          }
         } catch (e) {
           console.error("Failed to fetch practical data:", e);
         }
@@ -828,6 +874,59 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
     return true;
   }, [form, enableLevels, levels, testCases]);
 
+  const saveReferenceCode = async (pId: number, code: string, lang: string) => {
+    if (!pId || !code) return;
+    console.log(`[SaveRef] Saving code for practical ${pId} (lang: ${lang})`);
+    try {
+      const { data: userData } = await supabase.auth.getUser();
+      const userId = userData?.user?.id;
+
+      // Check for existing reference code for this practical + language
+      const { data: existing, error: fetchErr } = await supabase
+        .from("reference_codes")
+        .select("id")
+        .eq("practical_id", pId)
+        .eq("language", lang)
+        .maybeSingle();
+
+      if (fetchErr) throw fetchErr;
+
+      const payload = {
+        practical_id: pId,
+        code,
+        language: lang,
+        author: userId,
+        is_primary: true,
+        version: 1,
+        updated_at: new Date().toISOString(),
+      };
+
+      let resultError;
+      if (existing) {
+        const { error } = await supabase
+          .from("reference_codes")
+          .update(payload)
+          .eq("id", existing.id);
+        resultError = error;
+      } else {
+        const { error } = await supabase
+          .from("reference_codes")
+          .insert({
+            ...payload,
+            created_at: new Date().toISOString(),
+          });
+        resultError = error;
+      }
+
+      if (resultError) throw resultError;
+      console.log(`[SaveRef] Successfully saved code for practical ${pId}`);
+    } catch (err) {
+      console.error("Error saving reference code:", err);
+      // Re-throw so the main handleSave can catch it and possibly alert the user
+      throw err;
+    }
+  };
+
   // Save practical (create/update)
   const handleSave = useCallback(async () => {
     if (!validateForm()) return false;
@@ -917,6 +1016,11 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
 
           if (levelErr) throw levelErr;
 
+          // Save reference code for this level if present
+          if (level.reference_code) {
+            await saveReferenceCode(practicalId, level.reference_code, form.language || "c");
+          }
+
           // Insert test cases for this level
           if (levelData && level.testCases.length > 0) {
             const tcData = level.testCases.map((tc) => ({
@@ -950,6 +1054,11 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
             .insert(insertData);
           if (tcErr) throw tcErr;
         }
+
+        // Save reference code for single level
+        if (sampleCode) {
+          await saveReferenceCode(practicalId, sampleCode, sampleLanguage);
+        }
       }
 
       // update local form id
@@ -967,7 +1076,7 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
     } finally {
       setSaving(false);
     }
-  }, [form, testCases, levels, enableLevels, supabase, validateForm, onSaveStep1]);
+  }, [form, testCases, levels, enableLevels, sampleCode, sampleLanguage, supabase, validateForm, onSaveStep1]);
 
   // Save ALL drafts (for bulk import mode)
   const handleSaveAll = useCallback(async () => {
@@ -1057,6 +1166,11 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
 
               if (levelErr) throw levelErr;
 
+              // Save reference code for this level if present
+              if (level.reference_code) {
+                await saveReferenceCode(practicalId, level.reference_code, draftForm.language || "c");
+              }
+
               if (levelData && level.testCases.length > 0) {
                 const tcData = level.testCases.map((tc) => ({
                   practical_id: practicalId,
@@ -1088,6 +1202,11 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
                 .from("test_cases")
                 .insert(insertData);
               if (tcErr) throw tcErr;
+            }
+
+            // Save reference code for single level
+            if (draft.sampleCode) {
+              await saveReferenceCode(practicalId, draft.sampleCode, draft.sampleLanguage || draftForm.language || "c");
             }
           }
 
@@ -1335,6 +1454,11 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
 
             if (levelErr) throw levelErr;
 
+            // Save reference code for this level if present
+            if (level.reference_code) {
+              await saveReferenceCode(practicalId, level.reference_code, draft.form.language || "c");
+            }
+
             if (levelData && level.testCases.length > 0) {
               const tcData = level.testCases.map((tc) => ({
                 practical_id: practicalId,
@@ -1363,6 +1487,12 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
             if (tcErr) throw tcErr;
           }
         }
+
+        // Save reference code if available in draft
+        if (draft.sampleCode) {
+          await saveReferenceCode(practicalId, draft.sampleCode, draft.sampleLanguage || draft.form.language || "c");
+        }
+
         successCount++;
       } catch (err: any) {
         console.error(`Error saving draft "${draft.form.title}":`, err);

@@ -71,8 +71,10 @@ export async function POST(req: Request) {
 
     if (tcErr) console.error("Failed to fetch test cases:", tcErr);
 
-    // Fetch reference code - Prefer matching language, otherwise fallback to primary
-    let { data: refsData } = await supabase
+    // Fetch reference code - Use Admin client to bypass RLS if student is running
+    const { supabaseAdmin } = await import("@/lib/supabase/service");
+
+    let { data: refsData } = await supabaseAdmin
       .from("reference_codes")
       .select("id, language, code, is_primary, created_at")
       .eq("practical_id", pid)
@@ -81,7 +83,7 @@ export async function POST(req: Request) {
 
     // If no language-specific match, fallback to primary/latest
     if (!refsData || refsData.length === 0) {
-      const { data: fallbackData } = await supabase
+      const { data: fallbackData } = await supabaseAdmin
         .from("reference_codes")
         .select("id, language, code, is_primary, created_at")
         .eq("practical_id", pid)
@@ -95,6 +97,9 @@ export async function POST(req: Request) {
     const ref = refs[0] || null;
     const referenceCode = ref?.code ?? "";
     const referenceLang = (ref?.language ?? "").toLowerCase();
+
+    console.log(`[Debug] PracticalID: ${pid}, Lang: ${lang}`);
+    console.log(`[Debug] Reference Code Found: ${!!referenceCode}, RefLang: ${referenceLang}`);
 
     const normalizeLang = (l: string) => {
       const ll = l.toLowerCase();
@@ -178,6 +183,7 @@ export async function POST(req: Request) {
               ...u,
               expectedOutput: refMap.get(u.id) ?? "",
             }));
+            console.log(`[Debug] Generated expected outputs for ${batch.length} user test cases.`);
           } catch (e: any) {
             console.error(
               "Failed to run reference code for user test cases:",
