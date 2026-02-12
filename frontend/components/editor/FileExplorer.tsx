@@ -75,6 +75,7 @@ export function FileExplorer({
     y: number;
     fileName: string;
   } | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const contextMenuRef = useRef<HTMLDivElement>(null);
 
@@ -133,9 +134,15 @@ export function FileExplorer({
 
   const handleCreateSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (newFileName.trim()) {
-      onFileCreate(newFileName.trim());
+    const name = newFileName.trim();
+    if (name) {
+      if (files.some((f) => f.name === name)) {
+        setError("File with this name already exists!");
+        return;
+      }
+      onFileCreate(name);
       setNewFileName("");
+      setError(null);
       setIsCreating(false);
     }
   };
@@ -150,10 +157,16 @@ export function FileExplorer({
 
   const handleRenameSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (editingFile && editName.trim() && editName !== editingFile) {
-      onFileRename?.(editingFile, editName.trim());
+    const name = editName.trim();
+    if (editingFile && name && name !== editingFile) {
+      if (files.some((f) => f.name === name)) {
+        setError("File with this name already exists!");
+        return;
+      }
+      onFileRename?.(editingFile, name);
     }
     setEditingFile(null);
+    setError(null);
   };
 
   const handleDownload = (fileName: string) => {
@@ -276,11 +289,10 @@ export function FileExplorer({
                 {filteredFiles.map((file) => (
                   <div
                     key={file.name}
-                    className={`group flex items-center justify-between px-3 py-2 rounded-md text-sm cursor-pointer transition-all duration-200 border border-transparent ${
-                      activeFile === file.name
-                        ? "bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-200/50 dark:border-blue-800/50 font-medium"
-                        : "hover:bg-white/40 dark:hover:bg-white/5 text-gray-700 dark:text-gray-300"
-                    }`}
+                    className={`group flex items-center justify-between px-3 py-2 rounded-md text-sm cursor-pointer transition-all duration-200 border border-transparent ${activeFile === file.name
+                      ? "bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-200/50 dark:border-blue-800/50 font-medium"
+                      : "hover:bg-white/40 dark:hover:bg-white/5 text-gray-700 dark:text-gray-300"
+                      }`}
                     onClick={() => onFileSelect(file.name)}
                     onDoubleClick={(e) => startRenaming(e, file.name)}
                     onContextMenu={(e) => handleContextMenu(e, file.name)}
@@ -290,7 +302,7 @@ export function FileExplorer({
                     {editingFile === file.name ? (
                       <form
                         onSubmit={handleRenameSubmit}
-                        className="flex-1 flex items-center gap-1"
+                        className="flex-1 flex items-center gap-1 relative"
                         onClick={(e) => e.stopPropagation()}
                       >
                         <FileCode2
@@ -304,6 +316,11 @@ export function FileExplorer({
                           onBlur={handleRenameSubmit}
                           className="h-6 text-xs px-1 py-0 bg-white dark:bg-gray-800"
                         />
+                        {error && editingFile === file.name && (
+                          <div className="absolute left-0 -bottom-8 w-full px-2 py-1 bg-red-500 text-white text-[10px] rounded shadow-lg z-50">
+                            {error}
+                          </div>
+                        )}
                       </form>
                     ) : (
                       <>
@@ -366,12 +383,22 @@ export function FileExplorer({
                       <Input
                         autoFocus
                         value={newFileName}
-                        onChange={(e) => setNewFileName(e.target.value)}
-                        onBlur={() => setIsCreating(false)}
+                        onChange={(e) => {
+                          setNewFileName(e.target.value);
+                          setError(null);
+                        }}
+                        onBlur={() => {
+                          if (!error) setIsCreating(false);
+                        }}
                         placeholder="filename.py"
-                        className="h-7 text-xs"
+                        className={`h-7 text-xs ${error ? "border-red-500 focus-visible:ring-red-500" : ""}`}
                       />
                     </div>
+                    {error && (
+                      <p className="mt-1 text-[10px] text-red-500 font-medium px-2 animate-in fade-in slide-in-from-top-1">
+                        {error}
+                      </p>
+                    )}
                   </form>
                 )}
               </div>
@@ -420,11 +447,10 @@ export function FileExplorer({
                 {files.map((file) => (
                   <div
                     key={file.name}
-                    className={`flex items-center justify-between px-4 py-3 rounded-lg cursor-pointer transition-colors ${
-                      activeFile === file.name
-                        ? "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300"
-                        : "hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300"
-                    }`}
+                    className={`flex items-center justify-between px-4 py-3 rounded-lg cursor-pointer transition-colors ${activeFile === file.name
+                      ? "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300"
+                      : "hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300"
+                      }`}
                     onClick={() => {
                       onFileSelect(file.name);
                       setMobileOpen(false);

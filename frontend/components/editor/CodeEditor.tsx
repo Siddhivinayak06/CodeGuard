@@ -143,8 +143,14 @@ export default function CodeEditor({
 
   const showToast = (message: string) => {
     setShowWarning(message);
-    setTimeout(() => setShowWarning(false), 2000);
+    setTimeout(() => setShowWarning(false), 3000);
   };
+
+  useEffect(() => {
+    if (showWarning) {
+      console.log("showWarning state changed to:", showWarning);
+    }
+  }, [showWarning]);
 
   const handleModeChange = (mode: string) => {
     setCurrentMode(mode);
@@ -213,9 +219,7 @@ export default function CodeEditor({
       } else {
         showToast("Right-click disabled!");
       }
-    });
-
-    // disable paste via events
+          // disable paste via events
     editor.onDidPaste?.(() => {
       if (isAiFeatureUnlockedRef.current) return;
       showToast("Pasting is disabled!");
@@ -235,6 +239,37 @@ export default function CodeEditor({
         e.preventDefault();
         showToast("Clipboard actions are disabled!");
       }
+    });
+    });
+
+    // Disable some actions
+    editor.addAction({
+      id: "editor.action.clipboardCopyWithSyntaxHighlightingAction",
+      label: "Copy with Syntax Highlighting",
+      keybindings: [], // remove any keyboard triggers
+      precondition: "false",
+      run: function (ed) {
+        showToast("This command is disabled!");
+      },
+    });
+    editor.addAction({
+      id: "editor.action.pasteAsText",
+      label: "Paste as Text",
+      keybindings: [],
+      precondition: "false",
+      run: function (ed) {
+        showToast("This command is disabled!");
+      },
+    });
+    editor.addAction({
+      id: "editor.action.pasteAs",
+      label: "Paste As…",
+      keybindings: [],
+      precondition: "false",
+      run: function (ed) {
+        console.log("Paste As action triggered");
+        showToast("This command is disabled!");
+      },
     });
   };
 
@@ -276,7 +311,7 @@ export default function CodeEditor({
 
   return (
     <div
-      className="h-full flex flex-col bg-transparent overflow-hidden"
+      className="h-full flex flex-col bg-transparent overflow-hidden relative"
       onClick={() => setShowContextMenu(false)}
     >
       <EditorToolbar
@@ -332,11 +367,10 @@ export default function CodeEditor({
                   key={file.name}
                   className={`
                                         group flex items-center gap-2 px-3 py-2 text-sm border-r border-gray-200 dark:border-gray-800 cursor-pointer min-w-[120px] max-w-[200px] select-none transition-colors
-                                        ${
-                                          activeFileName === file.name
-                                            ? "bg-white dark:bg-gray-900 text-blue-600 dark:text-blue-400 border-t-2 border-t-blue-500 font-medium"
-                                            : "bg-gray-100 dark:bg-gray-950 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800"
-                                        }
+                                        ${activeFileName === file.name
+                      ? "bg-white dark:bg-gray-900 text-blue-600 dark:text-blue-400 border-t-2 border-t-blue-500 font-medium"
+                      : "bg-gray-100 dark:bg-gray-950 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800"
+                    }
                                     `}
                   onClick={() => onFileSelect(file.name)}
                 >
@@ -371,7 +405,7 @@ export default function CodeEditor({
               language={
                 files
                   ? files.find((f) => f.name === activeFileName)?.language ||
-                    lang
+                  lang
                   : lang
               }
               value={
@@ -416,25 +450,27 @@ export default function CodeEditor({
               >
                 <button
                   className="block px-4 py-2 w-full text-left hover:bg-gray-100 dark:hover:bg-gray-700 text-sm"
-                  onClick={() =>
+                  onClick={() => {
+                    editorRef.current?.focus();
                     editorRef.current?.trigger(
                       "keyboard",
                       "editor.action.selectHighlights",
                       null,
-                    )
-                  }
+                    );
+                  }}
                 >
                   Change All Occurrences
                 </button>
                 <button
                   className="block px-4 py-2 w-full text-left hover:bg-gray-100 dark:hover:bg-gray-700 text-sm"
-                  onClick={() =>
+                  onClick={() => {
+                    editorRef.current?.focus();
                     editorRef.current?.trigger(
                       "keyboard",
                       "editor.action.quickCommand",
                       null,
-                    )
-                  }
+                    );
+                  }}
                 >
                   Command Palette
                 </button>

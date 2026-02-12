@@ -1404,12 +1404,109 @@ export default function StudentPracticals() {
 
       <AnimatePresence>
         {viewingSubmission && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-sm animate-fadeIn">
-            <div className="glass-card-premium rounded-3xl w-full max-w-5xl max-h-[90vh] overflow-hidden flex flex-col animate-scaleIn">
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-md animate-fadeIn">
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="glass-card-premium rounded-3xl w-full max-w-5xl max-h-[90vh] overflow-hidden flex flex-col bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 shadow-2xl"
+            >
               {/* Modal Header */}
-              <div className="flex items-center justify-between p-6 border-b border-gray-100 dark:border-gray-800 bg-white/80 dark:bg-gray-900/80 backdrop-blur-md sticky top-0 z-10">
+              <div className="flex items-center justify-between p-6 border-b border-gray-100 dark:border-gray-800 bg-white/50 dark:bg-gray-900/50 backdrop-blur-sm">
+                <div className="flex items-center gap-5">
+                  <div
+                    className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${getLanguageColor(viewingSubmission.language)} text-white flex items-center justify-center font-bold shadow-lg shadow-indigo-500/20`}
+                  >
+                    <Code2 className="w-7 h-7" />
+                  </div>
+                  <div>
+                    <h3 className="text-2xl font-black text-gray-900 dark:text-white tracking-tight">
+                      {viewingSubmission.practical_title}
+                    </h3>
+                    <div className="flex items-center gap-3 text-sm text-gray-500 mt-1">
+                      <StatusBadge status={viewingSubmission.status} />
+                      {viewingSubmission.marks_obtained !== null && (
+                        <>
+                          <span className="text-gray-300">•</span>
+                          <span className="flex items-center gap-1 font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/20 px-2 py-0.5 rounded-md border border-indigo-100 dark:border-indigo-800/50">
+                            <Sparkles className="w-3.5 h-3.5" />
+                            {viewingSubmission.marks_obtained} / {filteredPracticals.find(p => p.id === viewingSubmission.practical_id)?.max_marks || 10}
+                          </span>
+                        </>
+                      )}
+                      <span className="text-gray-300">•</span>
+                      <span className="font-mono text-xs bg-gray-100 dark:bg-gray-800 px-2 py-0.5 rounded text-gray-600 dark:text-gray-400">
+                        {new Date(viewingSubmission.created_at).toLocaleString()}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setViewingSubmission(null)}
+                  className="rounded-full w-10 h-10 hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-900/20 transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </Button>
               </div>
-            </div>
+
+              <div className="flex-1 overflow-auto p-6 grid grid-cols-1 lg:grid-cols-2 gap-6 bg-gray-50/50 dark:bg-gray-950/50">
+                {/* Left: Code */}
+                <div className="space-y-6 flex flex-col min-h-0">
+                  <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 overflow-hidden shadow-sm flex-1 flex flex-col group hover:shadow-md transition-shadow">
+                    <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-900/50 flex items-center justify-between flex-shrink-0">
+                      <h4 className="font-semibold text-gray-700 dark:text-gray-200 flex items-center gap-2">
+                        <Code className="w-4 h-4 text-indigo-500" /> Submitted Code
+                      </h4>
+                      <span className="text-[10px] font-bold tracking-wider px-2 py-1 rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 uppercase border border-gray-200 dark:border-gray-600">
+                        {viewingSubmission.language}
+                      </span>
+                    </div>
+                    <div className="p-0 overflow-auto flex-1 relative">
+                      <pre className="p-5 text-xs sm:text-sm font-mono text-gray-800 dark:text-gray-200 whitespace-pre-wrap leading-relaxed">
+                        {viewingSubmission.code}
+                      </pre>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Right: Output & Test Cases */}
+                <div className="space-y-6 flex flex-col min-h-0">
+                  <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 overflow-hidden shadow-sm flex-shrink-0 group hover:shadow-md transition-shadow">
+                    <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-900/50">
+                      <h4 className="font-semibold text-gray-700 dark:text-gray-200 flex items-center gap-2">
+                        <FileText className="w-4 h-4 text-purple-500" /> Standard Output
+                      </h4>
+                    </div>
+                    <div className="p-4 bg-gray-900 text-gray-300 font-mono text-xs sm:text-sm max-h-[200px] overflow-auto whitespace-pre-wrap">
+                      {viewingSubmission.output || (
+                        <span className="opacity-50 italic">No output captured</span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Test Cases Results (Simplified) */}
+                  {viewingSubmission.testCaseResults && viewingSubmission.testCaseResults.length > 0 && (
+                    <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 overflow-hidden shadow-sm flex-1 flex flex-col group hover:shadow-md transition-shadow">
+                      <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-900/50">
+                        <h4 className="font-semibold text-gray-700 dark:text-gray-200 flex items-center gap-2">
+                          <CheckCircle2 className="w-4 h-4 text-emerald-500" /> Test Case Results
+                        </h4>
+                      </div>
+                      <div className="p-4 overflow-y-auto space-y-3">
+                        {viewingSubmission.testCaseResults.map((tc, idx) => (
+                          <div key={idx} className="flex items-center justify-between p-3 rounded-xl bg-gray-50 dark:bg-gray-900/50 border border-gray-100 dark:border-gray-800 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                            <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Test Case #{idx + 1}</span>
+                            <StatusBadge status={tc.status} />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </motion.div>
           </div>
         )}
       </AnimatePresence>

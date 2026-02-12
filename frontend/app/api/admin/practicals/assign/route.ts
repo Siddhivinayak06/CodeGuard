@@ -69,7 +69,7 @@ export async function POST(request: Request) {
     console.log("[Assign Debug] Checking practical permission for ID:", practical_id);
     const { data: practical, error: practicalError } = await supabase
       .from("practicals")
-      .select("id, title, subject_id")
+      .select("id, title, subject_id, language")
       .eq("id", practical_id)
       .single<any>();
 
@@ -194,7 +194,7 @@ export async function POST(request: Request) {
         type: "practical_assigned" as const,
         title: "New Practical Assigned",
         message: `You have been assigned practical: ${practical.title}`,
-        link: `/editor?practicalId=${practical_id}`,
+        link: `/editor?practicalId=${practical_id}${practical.subject_id ? `&subject=${practical.subject_id}` : ""}${practical.language ? `&language=${practical.language}` : ""}`,
         metadata: { practical_id, subject_id: practical.subject_id },
       }));
 

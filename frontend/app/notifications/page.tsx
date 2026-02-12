@@ -228,8 +228,8 @@ export default function NotificationsPage() {
               <button
                 onClick={() => setFilter("all")}
                 className={`px-4 py-2 text-sm font-medium rounded-lg transition-all ${filter === "all"
-                    ? "bg-white dark:bg-gray-900 text-gray-900 dark:text-white shadow-sm"
-                    : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
+                  ? "bg-white dark:bg-gray-900 text-gray-900 dark:text-white shadow-sm"
+                  : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
                   }`}
               >
                 All
@@ -237,8 +237,8 @@ export default function NotificationsPage() {
               <button
                 onClick={() => setFilter("unread")}
                 className={`px-4 py-2 text-sm font-medium rounded-lg transition-all ${filter === "unread"
-                    ? "bg-white dark:bg-gray-900 text-gray-900 dark:text-white shadow-sm"
-                    : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
+                  ? "bg-white dark:bg-gray-900 text-gray-900 dark:text-white shadow-sm"
+                  : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
                   }`}
               >
                 Unread
@@ -283,8 +283,8 @@ export default function NotificationsPage() {
               <div
                 key={notification.id}
                 className={`glass-card rounded-2xl p-5 hover-lift animate-slideUp border transition-all ${!notification.is_read
-                    ? "bg-indigo-50/50 dark:bg-indigo-900/10 border-indigo-200/50 dark:border-indigo-800/30"
-                    : "border-transparent"
+                  ? "bg-indigo-50/50 dark:bg-indigo-900/10 border-indigo-200/50 dark:border-indigo-800/30"
+                  : "border-transparent"
                   }`}
                 style={{ animationDelay: `${index * 30}ms` }}
               >
@@ -292,9 +292,9 @@ export default function NotificationsPage() {
                   {/* Icon */}
                   <div
                     className={`flex-shrink-0 w-12 h-12 rounded-xl flex items-center justify-center border ${notification.metadata?.isReattemptRequest
-                        ? "bg-purple-100 dark:bg-purple-900/30 border-purple-200 dark:border-purple-800"
-                        : notificationColors[notification.type] ||
-                        "bg-gray-100 dark:bg-gray-800 border-gray-200 dark:border-gray-700"
+                      ? "bg-purple-100 dark:bg-purple-900/30 border-purple-200 dark:border-purple-800"
+                      : notificationColors[notification.type] ||
+                      "bg-gray-100 dark:bg-gray-800 border-gray-200 dark:border-gray-700"
                       }`}
                   >
                     {notification.metadata?.isReattemptRequest ? (
@@ -312,8 +312,8 @@ export default function NotificationsPage() {
                       <div>
                         <h3
                           className={`font-semibold ${!notification.is_read
-                              ? "text-gray-900 dark:text-white"
-                              : "text-gray-700 dark:text-gray-300"
+                            ? "text-gray-900 dark:text-white"
+                            : "text-gray-700 dark:text-gray-300"
                             }`}
                         >
                           {notification.title}

@@ -353,28 +353,61 @@ int main() {
 
       const { data, error } = await supabase
         .from("student_practicals")
-        .select("attempt_count, max_attempts, is_locked, lock_reason")
+        .select(`
+          attempt_count, 
+          max_attempts, 
+          is_locked, 
+          lock_reason,
+          practicals (
+            subject_id,
+            practical_number
+          )
+        `)
         .eq("student_id", user.id)
         .eq("practical_id", Number(practicalId))
-        .single();
+        .single<any>();
 
       if (data) {
-        // Check strict lock
+        // 1. Strict Lock (is_locked or attempts)
         if (data.is_locked) {
           setIsSessionLocked(true);
           setLockReason(data.lock_reason || "Session locked by faculty.");
           return;
         }
 
-        // Check attempt limit (Refresh Protection)
         const attempts = data.attempt_count || 0;
         const max = data.max_attempts || 1;
-
         if (attempts >= max) {
           setIsSessionLocked(true);
-          setLockReason(
-            "You have already used your attempt. Refreshing is not allowed.",
-          );
+          setLockReason("You have already used your attempt. Refreshing is not allowed.");
+          return;
+        }
+
+        // 2. Sequential Lock (Subject Prerequisites)
+        const currentPrac = data.practicals;
+        if (currentPrac?.subject_id && currentPrac.practical_number !== null) {
+          const { data: subjectAssignments } = await supabase
+            .from("student_practicals")
+            .select("status, practicals(practical_number)")
+            .eq("student_id", user.id)
+            .eq("practicals.subject_id", currentPrac.subject_id);
+
+          if (subjectAssignments) {
+            const curNum = currentPrac.practical_number || 0;
+            const precedingNotDone = subjectAssignments.some((a: any) => {
+              const num = a.practicals?.practical_number || 0;
+              if (num > 0 && num < curNum) {
+                const isDone = ["passed", "completed", "submitted", "failed"].includes(a.status);
+                return !isDone;
+              }
+              return false;
+            });
+
+            if (precedingNotDone) {
+              setIsSessionLocked(true);
+              setLockReason("This practical is locked. Please complete the previous practical first.");
+            }
+          }
         }
       }
     };
@@ -479,6 +512,13 @@ int main() {
           ...data,
           subject_name: data.subjects?.subject_name || "Unknown",
         });
+
+        // Sync language if it differs from current state (URL or default)
+        if (data.language && data.language.toLowerCase() !== lang.toLowerCase()) {
+          const dbLang = data.language.toLowerCase();
+          setLang(dbLang);
+          setCode(getStarterCode(dbLang));
+        }
       }
 
       // Fetch levels if this is a multi-level practical

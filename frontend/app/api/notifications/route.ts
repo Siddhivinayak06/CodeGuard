@@ -40,8 +40,95 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
+    // Enrich notifications with practical links & lock status
+    if (data) {
+      const enriched = await Promise.all(
+        data.map(async (n: any) => {
+          if (n.type === "practical_assigned" && n.metadata?.practical_id) {
+            try {
+              const { data: spRecord } = await supabase
+                .from("student_practicals")
+                .select(`
+                  is_locked, 
+                  attempt_count, 
+                  max_attempts,
+                  practicals (
+                    subject_id,
+                    practical_number,
+                    language
+                  )
+                `)
+                .eq("student_id", user.id)
+                .eq("practical_id", n.metadata.practical_id)
+                .maybeSingle<any>();
+
+              if (spRecord) {
+                // Construct Link
+                const practical = spRecord.practicals;
+                const link = `/editor?practicalId=${n.metadata.practical_id}${practical?.subject_id ? `&subject=${practical.subject_id}` : ""}${practical?.language ? `&language=${practical.language}` : ""}`;
+                n.link = link;
+
+                // Lock Checks (Exact logic from EditorClient)
+                const isStrictLocked = spRecord.is_locked;
+                const attemptsExhausted = (spRecord.attempt_count || 0) >= (spRecord.max_attempts || 1);
+
+                if (isStrictLocked || attemptsExhausted) {
+                  n.metadata = {
+                    ...n.metadata,
+                    is_locked: true,
+                    lock_reason: isStrictLocked ? "Session locked by faculty." : "Maximum attempts reached."
+                  };
+                } else if (practical?.subject_id && practical.practical_number !== null) {
+                  // Sequential Logic
+                  const { data: subjectAssignments } = await supabase
+                    .from("student_practicals")
+                    .select(`
+                      status,
+                      practicals!inner (
+                        subject_id,
+                        practical_number
+                      )
+                    `)
+                    .eq("student_id", user.id)
+                    .eq("practicals.subject_id", practical.subject_id);
+
+                  if (subjectAssignments) {
+                    const curNum = practical.practical_number || 0;
+                    const precedingNotDone = (subjectAssignments as any[]).some((a: any) => {
+                      const num = a.practicals?.practical_number || 0;
+                      if (num > 0 && num < curNum) {
+                        const isDone = ["passed", "completed", "submitted", "failed"].includes(a.status);
+                        return !isDone;
+                      }
+                      return false;
+                    });
+
+                    if (precedingNotDone) {
+                      n.metadata = {
+                        ...n.metadata,
+                        is_locked: true,
+                        lock_reason: "Previous practicals in this subject are not completed."
+                      };
+                    }
+                  }
+                }
+              }
+            } catch (err) {
+              console.error("Error enriching notification:", err);
+            }
+          }
+          return n;
+        })
+      );
+      return NextResponse.json({
+        data: enriched,
+        total: count,
+        hasMore: count ? offset + limit < count : false,
+      });
+    }
+
     return NextResponse.json({
-      data,
+      data: data || [],
       total: count,
       hasMore: count ? offset + limit < count : false,
     });
@@ -83,6 +170,7 @@ export async function POST(request: NextRequest) {
         { status: 400 },
       );
     }
+
 
     const { data, error } = await supabase
       .from("notifications")

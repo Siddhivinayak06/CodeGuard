@@ -151,7 +151,14 @@ export default function Home() {
     else if (extension === "cpp" || extension === "cc" || extension === "hpp")
       language = "cpp";
 
-    setFiles((prev) => [...prev, { name: fileName, content: "", language }]);
+    setFiles((prev) => [
+      ...prev,
+      {
+        name: fileName,
+        content: (LANGUAGE_TEMPLATES as any)[language] || "",
+        language,
+      },
+    ]);
     setActiveFileName(fileName);
     setLang(language);
   };
@@ -168,10 +175,6 @@ export default function Home() {
 
   const handleFileRename = (oldName: string, newName: string) => {
     if (!newName.trim()) return;
-    if (files.some((f) => f.name === newName)) {
-      alert("File with this name already exists!");
-      return;
-    }
 
     const extension = newName.split(".").pop()?.toLowerCase();
     let newLanguage: "python" | "java" | "c" | "cpp" | undefined;
@@ -245,10 +248,7 @@ export default function Home() {
       newLang !== "cpp"
     )
       return;
-    setLang(newLang as "java" | "python" | "c" | "cpp");
 
-    // Reset files to default template for new language
-    const nextTemplate = (LANGUAGE_TEMPLATES as any)[newLang];
     const defaultFileName =
       newLang === "python"
         ? "main.py"
@@ -257,9 +257,18 @@ export default function Home() {
           : newLang === "cpp"
             ? "main.cpp"
             : "main.c";
-    setFiles([
-      { name: defaultFileName, content: nextTemplate, language: newLang },
-    ]);
+
+    const fileExists = files.some((f) => f.name === defaultFileName);
+
+    if (!fileExists) {
+      const nextTemplate = (LANGUAGE_TEMPLATES as any)[newLang];
+      setFiles((prev) => [
+        ...prev,
+        { name: defaultFileName, content: nextTemplate, language: newLang as any },
+      ]);
+    }
+
+    setLang(newLang as "java" | "python" | "c" | "cpp");
     setActiveFileName(defaultFileName);
   };
 
