@@ -122,10 +122,18 @@ export async function POST(req: Request) {
     // helper to call runner service
     const EXECUTE_URL =
       process.env.EXECUTE_URL || "http://localhost:5002/execute";
+
+    // Get the Supabase session token to forward to backend
+    const { data: { session } } = await supabase.auth.getSession();
+    const accessToken = session?.access_token ?? "";
+
     const callRunner = async (payload: any) => {
       const runnerRes = await fetch(EXECUTE_URL, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+        },
         body: JSON.stringify(payload),
       });
       if (!runnerRes.ok) {

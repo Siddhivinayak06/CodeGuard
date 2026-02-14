@@ -381,8 +381,8 @@ export default function Home() {
                             );
                             if (activeFile) {
                               interactiveTerminalRef.current.startExecution(
-                                activeFile.content,
-                                lang,
+                                files,
+                                activeFileName,
                               );
                             }
                           }

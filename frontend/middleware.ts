@@ -185,7 +185,6 @@ export async function middleware(request: NextRequest) {
     // 🛡️ SINGLE SESSION ENFORCEMENT
     if (isProtectedRoute(pathname)) {
       const deviceSessionId = request.cookies.get("device_session_id")?.value;
-      const { data: { user: currentUser } } = await supabase.auth.getUser(); // Already fetched above as 'user'
 
       if (user) {
         // Fetch the active session ID from the users table

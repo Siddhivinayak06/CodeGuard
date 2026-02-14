@@ -2,13 +2,18 @@ const { Queue, Worker, QueueEvents } = require('bullmq');
 const Redis = require('ioredis');
 const config = require('../config');
 const logger = require('../utils/logger');
+const { isLocalAvailable } = require('../utils/runtimeDetector');
 let runBatchCode;
 let runCode;
+let localBatchCode;
+let localRunCode;
 
 // Lazy load runners to avoid circular dependencies if any
 try {
   runBatchCode = require('../utils/dockerRunner');
   runCode = require('../utils/runCode');
+  localBatchCode = require('../utils/localRunner');
+  localRunCode = require('../utils/localRunCode');
 } catch (error) {
   logger.error('Failed to load runners in queueService', error);
 }
@@ -52,11 +57,25 @@ const processor = async (job) => {
   const { type, code, lang, batch, input } = job.data;
   logger.info(`Processing job ${job.id} type=${type} lang=${lang}`);
 
+  // Determine whether to use local or Docker execution
+  const poolManager = require('./poolManager');
+  const useLocal = poolManager.useLocal && config.allowLocalExecution && isLocalAvailable(lang);
+
   try {
     if (type === 'batch') {
+      if (useLocal) {
+        if (!localBatchCode) localBatchCode = require('../utils/localRunner');
+        logger.info(`[Queue] Using local batch runner for ${lang}`);
+        return await localBatchCode(code, lang, batch);
+      }
       if (!runBatchCode) runBatchCode = require('../utils/dockerRunner');
       return await runBatchCode(code, lang, batch);
     } else {
+      if (useLocal) {
+        if (!localRunCode) localRunCode = require('../utils/localRunCode');
+        logger.info(`[Queue] Using local single runner for ${lang}`);
+        return await localRunCode(code, lang, input);
+      }
       if (!runCode) runCode = require('../utils/runCode');
       // For problem based runs (reference code), the logic resides mostly in the route
       // but if we are just running code:

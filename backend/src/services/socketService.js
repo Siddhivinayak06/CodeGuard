@@ -1,8 +1,10 @@
 const { v4: uuidv4 } = require('uuid');
 const dockerService = require('./dockerService');
+const localService = require('./localService');
 const poolManager = require('./poolManager');
 const config = require('../config');
 const logger = require('../utils/logger');
+const { isLocalAvailable } = require('../utils/runtimeDetector');
 
 const activeSessions = new Map();
 
@@ -53,15 +55,21 @@ const handleConnection = (ws) => {
     dockerService.killIfExists(cppProcess);
     dockerService.killIfExists(pythonProcess);
     dockerService.killIfExists(javaProcess);
+    localService.killIfExists(cProcess);
+    localService.killIfExists(cppProcess);
+    localService.killIfExists(pythonProcess);
+    localService.killIfExists(javaProcess);
     cProcess = null;
     cppProcess = null;
     pythonProcess = null;
     javaProcess = null;
 
-    if (pooledContainer) {
+    if (pooledContainer && pooledContainer !== 'local') {
       const containerId = pooledContainer;
       pooledContainer = null;
       await poolManager.release(lang, containerId);
+    } else {
+      pooledContainer = null;
     }
   };
 
@@ -78,6 +86,89 @@ const handleConnection = (ws) => {
 
     lang = newLang; // Sync lang for release
 
+    // Check if we should use local execution
+    const useLocal = poolManager.useLocal && config.allowLocalExecution && isLocalAvailable(newLang);
+
+    if (useLocal) {
+      pooledContainer = 'local';
+      logger.info(`[Socket] Using local execution for ${newLang}`);
+
+      if (newLang === 'python') {
+        pythonProcess = localService.execPython(
+          (data) => {
+            const output = data.toString();
+            safeSend(ws, output);
+          },
+          (code) => {
+            logger.info(`[Local Python] exited with code ${code}`);
+          }
+        );
+        setTimeout(() => sendReady(newLang), 100);
+      } else if (newLang === 'c') {
+        cProcess = localService.execC(
+          (data) => {
+            if (suppressNextOutput) {
+              if (
+                data.includes('✅') ||
+                data.includes('❌') ||
+                data.includes('...Program')
+              ) {
+                suppressNextOutput = false;
+                safeSend(ws, data);
+              }
+              return;
+            }
+            safeSend(ws, data);
+          },
+          ({ exitCode }) => {
+            logger.info(`[Local C] exited with code ${exitCode}`);
+            suppressNextOutput = false;
+          }
+        );
+        if (cProcess) {
+          setTimeout(() => sendReady(newLang), 100);
+        } else {
+          safeSend(ws, JSON.stringify({ type: 'error', message: 'Failed to start local C process' }));
+        }
+      } else if (newLang === 'cpp') {
+        cppProcess = localService.execCpp(
+          (data) => {
+            if (suppressNextOutput) {
+              if (
+                data.includes('✅') ||
+                data.includes('❌') ||
+                data.includes('...Program')
+              ) {
+                suppressNextOutput = false;
+                safeSend(ws, data);
+              }
+              return;
+            }
+            safeSend(ws, data);
+          },
+          ({ exitCode }) => {
+            logger.info(`[Local C++] exited with code ${exitCode}`);
+            suppressNextOutput = false;
+          }
+        );
+        if (cppProcess) {
+          setTimeout(() => sendReady(newLang), 100);
+        } else {
+          safeSend(ws, JSON.stringify({ type: 'error', message: 'Failed to start local C++ process' }));
+        }
+      } else if (newLang === 'java') {
+        javaProcess = localService.execJava(
+          (data) => safeSend(ws, data.toString()),
+          (code) => {
+            logger.info(`[Local Java] exited with code ${code}`);
+          }
+        );
+        setTimeout(() => sendReady(newLang), 200);
+      }
+      return;
+    }
+
+    // --- Docker execution path (original) ---
     let containerId;
     try {
       containerId = await poolManager.acquire(newLang);
@@ -279,7 +370,7 @@ const handleConnection = (ws) => {
         name:
           parsed.filename ||
           'main' +
-            (lang === 'python' ? '.py' : lang === 'java' ? '.java' : '.c'),
+          (lang === 'python' ? '.py' : lang === 'java' ? '.java' : '.c'),
         content: parsed.data || '',
         isActive: parsed.activeFile || false,
       });
@@ -287,6 +378,7 @@ const handleConnection = (ws) => {
       if (parsed.isLast) {
         if (lang === 'python' && pythonProcess) {
           safeSend(ws, '\x1b[2J\x1b[H');
+          logger.info(`[Python] Sending ${fileBuffer.length} file(s) via code message`);
           fileBuffer.forEach((file) => {
             pythonProcess.stdin.write(`__FILE_START__ ${file.name}\n`);
             file.content
@@ -296,7 +388,7 @@ const handleConnection = (ws) => {
           pythonProcess.stdin.write('__RUN_CODE__\n');
         } else if (lang === 'c' && cProcess) {
           safeSend(ws, '\x1b[2J\x1b[H');
-          suppressNextOutput = true;
+          if (pooledContainer !== 'local') suppressNextOutput = true;
           fileBuffer.forEach((file) => {
             cProcess.write(`__FILE_START__ ${file.name}\n`);
             file.content
@@ -306,7 +398,7 @@ const handleConnection = (ws) => {
           cProcess.write('__RUN_CODE__\n');
         } else if (lang === 'cpp' && cppProcess) {
           safeSend(ws, '\x1b[2J\x1b[H');
-          suppressNextOutput = true;
+          if (pooledContainer !== 'local') suppressNextOutput = true;
           fileBuffer.forEach((file) => {
             cppProcess.write(`__FILE_START__ ${file.name}\n`);
             file.content
@@ -333,6 +425,11 @@ const handleConnection = (ws) => {
       if (lang === 'python' && pythonProcess) {
         if (parsed.type === 'execute') {
           safeSend(ws, '\x1b[2J\x1b[H');
+          logger.info(`[Python] Sending code via execute message, len=${inputData.length}`);
+          // Local wrapper needs __FILE_START__ protocol; Docker wrapper handles raw code
+          if (pooledContainer === 'local') {
+            pythonProcess.stdin.write('__FILE_START__ main.py\n');
+          }
           inputData
             .split('\n')
             .forEach((line) => pythonProcess.stdin.write(line + '\n'));
@@ -344,7 +441,7 @@ const handleConnection = (ws) => {
         if (parsed.type === 'execute') {
           safeSend(ws, '\x1b[2J\x1b[H');
           logger.info('[C] Sending code to compile');
-          suppressNextOutput = true;
+          if (pooledContainer !== 'local') suppressNextOutput = true;
           // Use __FILE_START__ to ensure file is written. Wrapper ignores __CODE_START__ without opening file.
           cProcess.write('__FILE_START__ main.c\n');
           inputData.split('\n').forEach((line) => cProcess.write(line + '\n'));
@@ -369,7 +466,7 @@ const handleConnection = (ws) => {
         if (parsed.type === 'execute') {
           safeSend(ws, '\x1b[2J\x1b[H');
           logger.info('[CPP] Sending code to compile');
-          suppressNextOutput = true;
+          if (pooledContainer !== 'local') suppressNextOutput = true;
           // Use __FILE_START__ to ensure file is written.
           cppProcess.write('__FILE_START__ main.cpp\n');
           inputData

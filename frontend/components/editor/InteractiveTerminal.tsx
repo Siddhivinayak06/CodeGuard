@@ -27,18 +27,50 @@ export interface InteractiveTerminalHandle {
 
 const lightTheme = {
   background: "#ffffff",
-  foreground: "#000000",
-  cursor: "#000000",
+  foreground: "#24292f",
+  cursor: "#24292f",
   cursorAccent: "#ffffff",
-  selectionBackground: "rgba(0, 0, 0, 0.3)",
+  selectionBackground: "rgba(3, 102, 214, 0.2)",
+  black: "#24292f",
+  red: "#cf222e",
+  green: "#1a7f37",
+  yellow: "#9a6700",
+  blue: "#0969da",
+  magenta: "#bf3989",
+  cyan: "#1b7c83",
+  white: "#6e7781",
+  brightBlack: "#57606a",
+  brightRed: "#a40e26",
+  brightGreen: "#2da44e",
+  brightYellow: "#d4a72c",
+  brightBlue: "#218bff",
+  brightMagenta: "#a0419d",
+  brightCyan: "#3192aa",
+  brightWhite: "#8c959f",
 };
 
 const darkTheme = {
   background: "#1a1b26",
-  foreground: "#a9b1d6",
+  foreground: "#c0caf5",
   cursor: "#c0caf5",
   cursorAccent: "#1a1b26",
-  selectionBackground: "rgba(113, 131, 184, 0.3)",
+  selectionBackground: "rgba(113, 131, 184, 0.2)",
+  black: "#15161e",
+  red: "#f7768e",
+  green: "#9ece6a",
+  yellow: "#e0af68",
+  blue: "#7aa2f7",
+  magenta: "#bb9af7",
+  cyan: "#7dcfff",
+  white: "#a9b1d6",
+  brightBlack: "#414868",
+  brightRed: "#f7768e",
+  brightGreen: "#9ece6a",
+  brightYellow: "#e0af68",
+  brightBlue: "#7aa2f7",
+  brightMagenta: "#bb9af7",
+  brightCyan: "#7dcfff",
+  brightWhite: "#c0caf5",
 };
 
 const InteractiveTerminal = forwardRef<
@@ -103,10 +135,18 @@ const InteractiveTerminal = forwardRef<
 
       term.current = new Terminal({
         cursorBlink: true,
+        cursorStyle: "bar",
+        cursorWidth: 2,
         fontSize,
         fontFamily,
-        scrollback: 1000,
+        lineHeight: 1.4,
+        letterSpacing: 0,
+        fontWeight: "500",
+        fontWeightBold: "700",
+        scrollback: 5000,
         theme: currentTheme,
+        allowProposedApi: true,
+        overviewRulerWidth: 10,
       });
 
       fitAddon.current = new FitAddon();
@@ -395,7 +435,8 @@ const InteractiveTerminal = forwardRef<
         // Send all files to the backend
         files.forEach((file, index) => {
           const msg = JSON.stringify({
-            type: "file",
+            // Backend expects "code" type for file upload
+            type: "code",
             data: file.content,
             filename: file.name,
             isLast: index === files.length - 1,
@@ -404,8 +445,11 @@ const InteractiveTerminal = forwardRef<
           socket.current?.send(msg);
         });
 
+        // Styled execution banner
+        const timestamp = new Date().toLocaleTimeString();
         term.current?.write(
-          `\r\n\x1b[1;36m🚀 Running ${activeFileName}...\x1b[0m\r\n\n`,
+          `\r\n\x1b[1;30;46m 🚀 EXECUTION STARTED \x1b[0m \x1b[90m at ${timestamp}\x1b[0m\r\n` +
+          `\x1b[1;36m➜ Running ${activeFileName}...\x1b[0m\r\n\n`
         );
       } else {
         // Single-file mode (backward compatibility)

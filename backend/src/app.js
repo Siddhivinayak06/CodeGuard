@@ -7,6 +7,7 @@ const morgan = require('morgan');
 const config = require('./config');
 const logger = require('./utils/logger');
 const { errorHandler, notFoundHandler } = require('./middleware/errorHandler');
+const { authMiddleware } = require('./middleware/authMiddleware');
 const executeRoute = require('./routes/execute');
 
 const app = express();
@@ -45,9 +46,9 @@ app.use(limiter);
 app.use(cors({ origin: config.cors.origin, credentials: true }));
 app.use(express.json({ limit: '5mb' }));
 
-// Routes
-app.use('/execute', executeRoute);
-app.use('/ai', require('./routes/ai'));
+// Routes (protected by auth middleware)
+app.use('/execute', authMiddleware, executeRoute);
+app.use('/ai', authMiddleware, require('./routes/ai'));
 
 // Health check
 app.get('/health', (req, res) =>

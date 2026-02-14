@@ -31,6 +31,10 @@ const envSchema = z.object({
     .string()
     .transform((val) => val === 'true')
     .default('true'),
+  ALLOW_LOCAL_EXECUTION: z
+    .string()
+    .transform((val) => val === 'true')
+    .default('true'),
 });
 
 // Validate environment variables
@@ -89,6 +93,7 @@ module.exports = {
     ollamaUrl: env.OLLAMA_URL,
   },
   executionTimeout: parseInt(process.env.EXECUTION_TIMEOUT || '15', 10),
+  allowLocalExecution: env.ALLOW_LOCAL_EXECUTION,
   logging: {
     level: env.LOG_LEVEL,
   },
