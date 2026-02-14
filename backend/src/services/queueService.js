@@ -59,7 +59,10 @@ const processor = async (job) => {
 
   // Determine whether to use local or Docker execution
   const poolManager = require('./poolManager');
-  const useLocal = poolManager.useLocal && config.allowLocalExecution && isLocalAvailable(lang);
+  const useLocal =
+    poolManager.useLocal &&
+    config.allowLocalExecution &&
+    isLocalAvailable(lang);
 
   try {
     if (type === 'batch') {

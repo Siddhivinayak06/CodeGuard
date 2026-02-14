@@ -2,7 +2,11 @@ const { spawn } = require('child_process');
 const config = require('../config');
 const logger = require('../utils/logger');
 const { v4: uuidv4 } = require('uuid');
-const { detectRuntimes, isLocalAvailable, isDockerAvailable } = require('../utils/runtimeDetector');
+const {
+  detectRuntimes,
+  isLocalAvailable,
+  isDockerAvailable,
+} = require('../utils/runtimeDetector');
 
 class PoolManager {
   constructor() {
@@ -30,19 +34,25 @@ class PoolManager {
     const runtimes = detectRuntimes();
     const localLangs = Object.keys(runtimes);
     if (localLangs.length > 0) {
-      logger.info(`[PoolManager] Local runtimes available: ${localLangs.join(', ')}`);
+      logger.info(
+        `[PoolManager] Local runtimes available: ${localLangs.join(', ')}`
+      );
     }
 
     // Check Docker availability
     this.dockerAvailable = isDockerAvailable();
 
     if (!this.dockerAvailable) {
-      logger.warn('[PoolManager] ⚠️  Docker is not available. Using local execution only.');
+      logger.warn(
+        '[PoolManager] ⚠️  Docker is not available. Using local execution only.'
+      );
       this.useLocal = true;
       this.initialized = true;
 
       if (localLangs.length === 0) {
-        logger.error('[PoolManager] No local runtimes found and Docker unavailable!');
+        logger.error(
+          '[PoolManager] No local runtimes found and Docker unavailable!'
+        );
       }
       return;
     }
@@ -62,9 +72,13 @@ class PoolManager {
     // Check if any containers were created
     const totalContainers = Object.values(this.pools).flat().length;
     if (totalContainers > 0) {
-      logger.info(`✅ Container Pool Initialized (${totalContainers} containers)`);
+      logger.info(
+        `✅ Container Pool Initialized (${totalContainers} containers)`
+      );
     } else {
-      logger.warn('[PoolManager] No Docker containers created. Falling back to local execution.');
+      logger.warn(
+        '[PoolManager] No Docker containers created. Falling back to local execution.'
+      );
       this.useLocal = true;
     }
   }

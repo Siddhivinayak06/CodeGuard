@@ -1,7 +1,7 @@
 // src/services/localService.js
 // Local interactive execution service — mirrors dockerService.js but
 // runs code directly on the host machine via child_process.spawn.
-const { spawn, execSync } = require('child_process');
+const { spawn } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
@@ -109,7 +109,9 @@ const execPython = (onData, onExit) => {
       onExit(code);
       try {
         fs.rmSync(workDir, { recursive: true, force: true });
-      } catch { }
+      } catch {
+        // ignore cleanup errors
+      }
     });
   }
 
@@ -269,7 +271,9 @@ const execC = (onData, onExit) => {
       onExit({ exitCode: code });
       try {
         fs.rmSync(workDir, { recursive: true, force: true });
-      } catch { }
+      } catch {
+        // ignore cleanup errors
+      }
     });
   }
 
@@ -310,7 +314,9 @@ const execCpp = (onData, onExit) => {
       onExit({ exitCode: code });
       try {
         fs.rmSync(workDir, { recursive: true, force: true });
-      } catch { }
+      } catch {
+        // ignore cleanup errors
+      }
     });
   }
 
@@ -350,7 +356,9 @@ const execJava = (onData, onExit) => {
       onExit(code);
       try {
         fs.rmSync(workDir, { recursive: true, force: true });
-      } catch { }
+      } catch {
+        // ignore cleanup errors
+      }
     });
   }
 

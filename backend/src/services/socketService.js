@@ -87,7 +87,10 @@ const handleConnection = (ws) => {
     lang = newLang; // Sync lang for release
 
     // Check if we should use local execution
-    const useLocal = poolManager.useLocal && config.allowLocalExecution && isLocalAvailable(newLang);
+    const useLocal =
+      poolManager.useLocal &&
+      config.allowLocalExecution &&
+      isLocalAvailable(newLang);
 
     if (useLocal) {
       pooledContainer = 'local';
@@ -128,7 +131,13 @@ const handleConnection = (ws) => {
         if (cProcess) {
           setTimeout(() => sendReady(newLang), 100);
         } else {
-          safeSend(ws, JSON.stringify({ type: 'error', message: 'Failed to start local C process' }));
+          safeSend(
+            ws,
+            JSON.stringify({
+              type: 'error',
+              message: 'Failed to start local C process',
+            })
+          );
         }
       } else if (newLang === 'cpp') {
         cppProcess = localService.execCpp(
@@ -154,7 +163,13 @@ const handleConnection = (ws) => {
         if (cppProcess) {
           setTimeout(() => sendReady(newLang), 100);
         } else {
-          safeSend(ws, JSON.stringify({ type: 'error', message: 'Failed to start local C++ process' }));
+          safeSend(
+            ws,
+            JSON.stringify({
+              type: 'error',
+              message: 'Failed to start local C++ process',
+            })
+          );
         }
       } else if (newLang === 'java') {
         javaProcess = localService.execJava(
@@ -370,7 +385,7 @@ const handleConnection = (ws) => {
         name:
           parsed.filename ||
           'main' +
-          (lang === 'python' ? '.py' : lang === 'java' ? '.java' : '.c'),
+            (lang === 'python' ? '.py' : lang === 'java' ? '.java' : '.c'),
         content: parsed.data || '',
         isActive: parsed.activeFile || false,
       });
@@ -378,7 +393,9 @@ const handleConnection = (ws) => {
       if (parsed.isLast) {
         if (lang === 'python' && pythonProcess) {
           safeSend(ws, '\x1b[2J\x1b[H');
-          logger.info(`[Python] Sending ${fileBuffer.length} file(s) via code message`);
+          logger.info(
+            `[Python] Sending ${fileBuffer.length} file(s) via code message`
+          );
           fileBuffer.forEach((file) => {
             pythonProcess.stdin.write(`__FILE_START__ ${file.name}\n`);
             file.content
@@ -425,7 +442,9 @@ const handleConnection = (ws) => {
       if (lang === 'python' && pythonProcess) {
         if (parsed.type === 'execute') {
           safeSend(ws, '\x1b[2J\x1b[H');
-          logger.info(`[Python] Sending code via execute message, len=${inputData.length}`);
+          logger.info(
+            `[Python] Sending code via execute message, len=${inputData.length}`
+          );
           // Local wrapper needs __FILE_START__ protocol; Docker wrapper handles raw code
           if (pooledContainer === 'local') {
             pythonProcess.stdin.write('__FILE_START__ main.py\n');
