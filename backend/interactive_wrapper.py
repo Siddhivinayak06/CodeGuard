@@ -93,30 +93,64 @@ while True:
     raw_line = line.strip()
     
     if raw_line.startswith("__FILE_START__"):
+        # If we were previously buffering a file, save it now
+        if current_file and buffer:
+             try:
+                with open(current_file, 'w') as f:
+                    f.write("\n".join(buffer).strip())
+             except Exception as e:
+                print(f"{RED}❌ Error saving {current_file}: {e}{RESET}", flush=True)
+
         current_file = raw_line.replace("__FILE_START__", "").strip()
         buffer = []
         continue
     
     if raw_line == "__RUN_CODE__":
         flush_stdin()
-        code = "\n".join(buffer).strip()
-        buffer = []
         
-        if code:
-            # If we have a current_file, save it to disk
-            if current_file:
-                try:
-                    with open(current_file, 'w') as f:
-                        f.write(code)
-                except Exception as e:
-                    print(f"{RED}❌ Error saving {current_file}: {e}{RESET}", flush=True)
-            
-            # Execute the code
+        # Save the LAST file buffer
+        if current_file and buffer:
+             try:
+                with open(current_file, 'w') as f:
+                    f.write("\n".join(buffer).strip())
+             except Exception as e:
+                print(f"{RED}❌ Error saving {current_file}: {e}{RESET}", flush=True)
+        
+        buffer = [] # Clear buffer after saving
+        
+        # --- DETERMINE WHICH FILE TO RUN ---
+        # Priority 1: main.py
+        # Priority 2: current_file (if it is a .py file)
+        # Priority 3: first .py file found
+        
+        target_file = None
+        
+        if os.path.exists("main.py"):
+            target_file = "main.py"
+        elif current_file and current_file.endswith(".py"):
+            target_file = current_file
+        else:
+            # Find any .py file
             try:
+                py_files = [f for f in os.listdir(".") if f.endswith(".py")]
+                if py_files:
+                    target_file = py_files[0]
+            except:
+                pass
+
+        if target_file:
+            # Execute the target file
+            try:
+                with open(target_file, 'r') as f:
+                    code = f.read()
+
                 timeout_sec = int(os.environ.get("EXECUTION_TIMEOUT", 15))
                 signal.alarm(timeout_sec)  # Start timeout
-                print(f"__SERVER_LOG__ Executing {current_file if current_file else 'code snippet'} with timeout {timeout_sec}s", flush=True)
+                print(f"__SERVER_LOG__ Executing {target_file} with timeout {timeout_sec}s", flush=True)
+                
+                # Execute in global scope
                 exec(code, globals())
+                
                 signal.alarm(0)
             except TimeoutError as e:
                 print(f"{YELLOW}{e}{RESET}", flush=True)
@@ -143,10 +177,13 @@ while True:
             finally:
                 sys.stdout.flush()
                 sys.stderr.flush()
-                print(f"__SERVER_LOG__ Execution completed for {current_file if current_file else 'code snippet'}", flush=True)
+                print(f"__SERVER_LOG__ Execution completed for {target_file}", flush=True)
+        else:
+             print(f"{RED}❌ No executable Python file found (e.g. main.py){RESET}", flush=True)
+
+        current_file = None
         
         flush_stdin()
         print(f"\n{CYAN}--- Execution Finished ---{RESET}\n", flush=True)
-        current_file = None
     else:
         buffer.append(line.rstrip("\n"))
