@@ -39,20 +39,20 @@ interface FileExplorerProps {
   className?: string;
 }
 
+const ALLOWED_EXTENSIONS = [".py", ".java", ".c", ".cpp", ".csv", ".xlsx", ".xls"];
+const ALLOWED_ACCEPT = ALLOWED_EXTENSIONS.join(",");
+
+const isAllowedFile = (fileName: string) =>
+  ALLOWED_EXTENSIONS.some((ext) => fileName.toLowerCase().endsWith(ext));
+
 const getFileIconColor = (fileName: string) => {
   if (fileName.endsWith(".py")) return "text-yellow-500";
-  if (
-    fileName.endsWith(".js") ||
-    fileName.endsWith(".jsx") ||
-    fileName.endsWith(".ts") ||
-    fileName.endsWith(".tsx")
-  )
-    return "text-blue-400";
   if (fileName.endsWith(".java")) return "text-orange-500";
   if (fileName.endsWith(".c") || fileName.endsWith(".cpp"))
     return "text-blue-600";
-  if (fileName.endsWith(".html")) return "text-orange-600";
-  if (fileName.endsWith(".css")) return "text-blue-500";
+  if (fileName.endsWith(".csv")) return "text-green-500";
+  if (fileName.endsWith(".xlsx") || fileName.endsWith(".xls"))
+    return "text-emerald-600";
   return "text-gray-400";
 };
 
@@ -90,6 +90,13 @@ export function FileExplorer({
     const file = e.target.files?.[0];
     if (!file || !onFileUpload) return;
 
+    if (!isAllowedFile(file.name)) {
+      setError("Only .py, .java, .c, .cpp, .csv, .xlsx, .xls files are allowed!");
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      setTimeout(() => setError(null), 3000);
+      return;
+    }
+
     if (file.name.endsWith(".xlsx") || file.name.endsWith(".xls")) {
       try {
         const XLSX = await import("xlsx");
@@ -108,7 +115,8 @@ export function FileExplorer({
         reader.readAsArrayBuffer(file);
       } catch (err) {
         console.error("Error parsing Excel file:", err);
-        alert("Failed to parse Excel file.");
+        setError("Failed to parse Excel file.");
+        setTimeout(() => setError(null), 3000);
       }
     } else {
       const reader = new FileReader();
@@ -136,6 +144,10 @@ export function FileExplorer({
     e.preventDefault();
     const name = newFileName.trim();
     if (name) {
+      if (!isAllowedFile(name)) {
+        setError("Only .py, .java, .c, .cpp, .csv files are allowed!");
+        return;
+      }
       if (files.some((f) => f.name === name)) {
         setError("File with this name already exists!");
         return;
@@ -280,6 +292,7 @@ export function FileExplorer({
                 type="file"
                 ref={fileInputRef}
                 className="hidden"
+                accept={ALLOWED_ACCEPT}
                 onChange={handleFileRead}
               />
             </div>

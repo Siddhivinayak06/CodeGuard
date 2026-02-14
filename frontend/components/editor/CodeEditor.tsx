@@ -8,6 +8,7 @@ import { EditorToolbar } from "./EditorToolbar";
 import { InteractiveTerminalHandle } from "./InteractiveTerminal";
 import { AssistantPanel } from "./AssistantPanel";
 import { FileExplorer, FileData } from "./FileExplorer";
+import { CsvViewer } from "./CsvViewer";
 import { StatusBar } from "./StatusBar";
 import { X, FileCode2 } from "lucide-react";
 import { registerCompletionProviders } from "@/utils/completion-provider";
@@ -219,27 +220,27 @@ export default function CodeEditor({
       } else {
         showToast("Right-click disabled!");
       }
-          // disable paste via events
-    editor.onDidPaste?.(() => {
-      if (isAiFeatureUnlockedRef.current) return;
-      showToast("Pasting is disabled!");
-      try {
-        editor.trigger("keyboard", "undo", null);
-      } catch (error) {
-        console.error("Failed to format code:", error);
-      }
-    });
+      // disable paste via events
+      editor.onDidPaste?.(() => {
+        if (isAiFeatureUnlockedRef.current) return;
+        showToast("Pasting is disabled!");
+        try {
+          editor.trigger("keyboard", "undo", null);
+        } catch (error) {
+          console.error("Failed to format code:", error);
+        }
+      });
 
-    editor.onKeyDown?.((e) => {
-      if (isAiFeatureUnlockedRef.current) return;
-      if (
-        (e.ctrlKey || e.metaKey) &&
-        ["KeyV", "KeyC", "KeyX"].includes(e.code)
-      ) {
-        e.preventDefault();
-        showToast("Clipboard actions are disabled!");
-      }
-    });
+      editor.onKeyDown?.((e) => {
+        if (isAiFeatureUnlockedRef.current) return;
+        if (
+          (e.ctrlKey || e.metaKey) &&
+          ["KeyV", "KeyC", "KeyX"].includes(e.code)
+        ) {
+          e.preventDefault();
+          showToast("Clipboard actions are disabled!");
+        }
+      });
     });
 
     // Disable some actions
@@ -400,48 +401,70 @@ export default function CodeEditor({
           )}
 
           <div className="flex-1 relative">
-            <Editor
-              height="100%"
-              language={
-                files
-                  ? files.find((f) => f.name === activeFileName)?.language ||
-                  lang
-                  : lang
+            {(() => {
+              const activeFile = files?.find((f) => f.name === activeFileName);
+              const isCsv = /\.(csv|xlsx|xls)$/i.test(activeFile?.name || "");
+
+              if (isCsv && activeFile) {
+                return (
+                  <CsvViewer
+                    content={activeFile.content}
+                    onChange={
+                      onFileChange
+                        ? (newContent) =>
+                          onFileChange(activeFile.name, newContent)
+                        : undefined
+                    }
+                    readOnly={disabled || locked || !isFullscreen}
+                    fileName={activeFile.name}
+                  />
+                );
               }
-              value={
-                files
-                  ? files.find((f) => f.name === activeFileName)?.content || ""
-                  : code
-              }
-              theme={theme === "dark" ? "glass-dark" : "glass-light"}
-              onChange={(value) => {
-                if (files && activeFileName && onFileChange) {
-                  onFileChange(activeFileName, value || "");
-                } else {
-                  setCode(value || "");
-                }
-              }}
-              onMount={handleEditorMount}
-              options={{
-                readOnly: disabled || locked || !isFullscreen,
-                minimap: { enabled: false },
-                fontSize: 16,
-                fontFamily: "'Fira Code', monospace",
-                wordWrap: "on",
-                lineNumbers: "on",
-                quickSuggestions: {
-                  other: true,
-                  comments: false,
-                  strings: false,
-                },
-                suggestOnTriggerCharacters: true,
-                tabSize: 4,
-                folding: true,
-                scrollBeyondLastLine: false,
-                padding: { top: 16, bottom: 16 },
-                stickyScroll: { enabled: false },
-              }}
-            />
+
+              return (
+                <Editor
+                  height="100%"
+                  language={
+                    files
+                      ? activeFile?.language || lang
+                      : lang
+                  }
+                  value={
+                    files
+                      ? activeFile?.content || ""
+                      : code
+                  }
+                  theme={theme === "dark" ? "glass-dark" : "glass-light"}
+                  onChange={(value) => {
+                    if (files && activeFileName && onFileChange) {
+                      onFileChange(activeFileName, value || "");
+                    } else {
+                      setCode(value || "");
+                    }
+                  }}
+                  onMount={handleEditorMount}
+                  options={{
+                    readOnly: disabled || locked || !isFullscreen,
+                    minimap: { enabled: false },
+                    fontSize: 16,
+                    fontFamily: "'Fira Code', monospace",
+                    wordWrap: "on",
+                    lineNumbers: "on",
+                    quickSuggestions: {
+                      other: true,
+                      comments: false,
+                      strings: false,
+                    },
+                    suggestOnTriggerCharacters: true,
+                    tabSize: 4,
+                    folding: true,
+                    scrollBeyondLastLine: false,
+                    padding: { top: 16, bottom: 16 },
+                    stickyScroll: { enabled: false },
+                  }}
+                />
+              );
+            })()}
 
             {showContextMenu && (
               <div

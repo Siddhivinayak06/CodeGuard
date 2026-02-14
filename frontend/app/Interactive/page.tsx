@@ -35,12 +35,13 @@ const InteractiveTerminal = dynamic(
   { ssr: false },
 );
 
-const LANGUAGE_TEMPLATES = {
+const LANGUAGE_TEMPLATES: Record<string, string> = {
   python:
     "# Welcome to Python Code Editor\n# Write your Python code here\n\nprint('Hello, World!')\n",
   java: 'public class Main {\n    public static void main(String[] args) {\n        System.out.println("Hello, World!");\n    }\n}',
   c: '#include <stdio.h>\n\nint main() {\n    printf("Hello, World!\\n");\n    return 0;\n}',
   cpp: '#include <iostream>\n\nint main() {\n    std::cout << "Hello, World!" << std::endl;\n    return 0;\n}',
+  csv: "Name,Age,City,Score\nAlice,22,Mumbai,95\nBob,21,Delhi,88\nCharlie,23,Pune,92",
 };
 
 export default function Home() {
@@ -144,23 +145,27 @@ export default function Home() {
 
   const handleFileCreate = (fileName: string) => {
     const extension = fileName.split(".").pop()?.toLowerCase();
-    let language: "python" | "java" | "c" | "cpp" = lang;
+    let language: string = lang;
     if (extension === "py") language = "python";
     else if (extension === "java") language = "java";
     else if (extension === "c") language = "c";
     else if (extension === "cpp" || extension === "cc" || extension === "hpp")
       language = "cpp";
+    else if (extension === "csv" || extension === "xlsx" || extension === "xls") language = "csv";
 
     setFiles((prev) => [
       ...prev,
       {
         name: fileName,
-        content: (LANGUAGE_TEMPLATES as any)[language] || "",
+        content: LANGUAGE_TEMPLATES[language] || "",
         language,
       },
     ]);
     setActiveFileName(fileName);
-    setLang(language);
+    // Only switch execution lang for code files
+    if (language === "python" || language === "java" || language === "c" || language === "cpp") {
+      setLang(language as "java" | "python" | "c" | "cpp");
+    }
   };
 
   const handleFileDelete = (fileName: string) => {
@@ -177,13 +182,14 @@ export default function Home() {
     if (!newName.trim()) return;
 
     const extension = newName.split(".").pop()?.toLowerCase();
-    let newLanguage: "python" | "java" | "c" | "cpp" | undefined;
+    let newLanguage: string | undefined;
 
     if (extension === "py") newLanguage = "python";
     else if (extension === "java") newLanguage = "java";
     else if (extension === "c") newLanguage = "c";
     else if (extension === "cpp" || extension === "cc" || extension === "hpp")
       newLanguage = "cpp";
+    else if (extension === "csv" || extension === "xlsx" || extension === "xls") newLanguage = "csv";
 
     setFiles((prev) =>
       prev.map((f) => {
@@ -200,8 +206,8 @@ export default function Home() {
 
     if (activeFileName === oldName) {
       setActiveFileName(newName);
-      if (newLanguage) {
-        setLang(newLanguage);
+      if (newLanguage && newLanguage !== "csv") {
+        setLang(newLanguage as "java" | "python" | "c" | "cpp");
       }
     }
   };
@@ -225,7 +231,7 @@ export default function Home() {
     else if (ext === "java") language = "java";
     else if (ext === "c") language = "c";
     else if (ext === "cpp" || ext === "cc") language = "cpp";
-    else if (ext === "js") language = "javascript";
+    else if (ext === "csv" || ext === "xlsx" || ext === "xls") language = "csv";
 
     setFiles((prev) => [...prev, { name: fileName, content, language }]);
     setActiveFileName(fileName);
