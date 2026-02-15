@@ -308,7 +308,9 @@ router.post('/explain-error', async (req, res) => {
     const { code, error, language, config } = req.body;
 
     if (!code || !error) {
-      return res.status(400).json({ error: 'Code and error message are required' });
+      return res
+        .status(400)
+        .json({ error: 'Code and error message are required' });
     }
 
     // Set headers for SSE

@@ -98,7 +98,7 @@ export async function GET() {
       .map((d: any) => d.practicals?.id)
       .filter(Boolean);
 
-    let scheduleMap = new Map();
+    const scheduleMap = new Map();
     if (practicalIds.length > 0) {
       // Fetch schedules matching user batch
       const { data: batchSchedules } = await supabase
