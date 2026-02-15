@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import {
@@ -63,10 +63,7 @@ interface AnalyticsData {
     evaluated: number;
     pending: number;
   }>;
-  deadlines: {
-    upcoming: Array<{ id: string; title: string; deadline: string }>;
-    past: number;
-  };
+
   subjectsWithPracticals: Array<{
     id: string;
     name: string;
@@ -167,6 +164,7 @@ export default function AnalyticsPage() {
   const [user, setUser] = useState<any>(null);
   const [data, setData] = useState<AnalyticsData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [upcomingSchedules, setUpcomingSchedules] = useState<any[]>([]);
 
   // Auth check
   useEffect(() => {
@@ -199,14 +197,40 @@ export default function AnalyticsPage() {
     }
   };
 
-  useEffect(() => {
-    if (user) fetchAnalytics();
-  }, [user]);
+  // Fetch upcoming schedules
+  const fetchUpcomingSchedules = useCallback(async () => {
+    try {
+      const today = new Date().toISOString().split("T")[0];
+      const endDate = new Date();
+      endDate.setMonth(endDate.getMonth() + 3);
+      const end = endDate.toISOString().split("T")[0];
+      const res = await fetch(`/api/schedule/get?startDate=${today}&endDate=${end}`);
+      const json = await res.json();
+      if (res.ok && json.schedules) {
+        // Only future schedules, sorted by date
+        const future = json.schedules
+          .filter((s: any) => s.date >= today)
+          .sort((a: any, b: any) => a.date.localeCompare(b.date))
+          .slice(0, 5);
+        setUpcomingSchedules(future);
+      }
+    } catch (err) {
+      console.error("Failed to fetch upcoming schedules", err);
+    }
+  }, []);
 
-  // Format deadline date
-  const formatDeadline = (dateStr: string) => {
-    const date = new Date(dateStr);
+  useEffect(() => {
+    if (user) {
+      fetchAnalytics();
+      fetchUpcomingSchedules();
+    }
+  }, [user, fetchUpcomingSchedules]);
+
+  // Format schedule date
+  const formatScheduleDate = (dateStr: string) => {
+    const date = new Date(dateStr + "T00:00:00");
     const now = new Date();
+    now.setHours(0, 0, 0, 0);
     const diffDays = Math.ceil(
       (date.getTime() - now.getTime()) / (1000 * 60 * 60 * 24),
     );
@@ -534,40 +558,43 @@ export default function AnalyticsPage() {
 
             {/* Bottom Row */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              {/* Upcoming Deadlines */}
+              {/* Upcoming Schedules */}
               <ChartCard
-                title="Upcoming Deadlines"
+                title="Upcoming Schedules"
                 icon={<Calendar className="w-5 h-5 text-pink-500" />}
                 delay={550}
               >
-                {data.deadlines.upcoming.length === 0 ? (
+                {upcomingSchedules.length === 0 ? (
                   <div className="text-center py-8">
                     <Calendar className="w-12 h-12 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
                     <p className="text-gray-500 dark:text-gray-400 mb-4">
-                      No upcoming deadlines
+                      No upcoming schedules
                     </p>
                     <Link
-                      href="/dashboard/faculty/practicals"
+                      href="/admin/schedule"
                       className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/30 rounded-lg hover:bg-indigo-100 dark:hover:bg-indigo-900/50 transition-colors"
                     >
                       <Plus className="w-4 h-4" />
-                      Create Assignment
+                      Create Schedule
                     </Link>
                   </div>
                 ) : (
                   <div className="space-y-3">
-                    {data.deadlines.upcoming.map((d) => (
+                    {upcomingSchedules.map((s: any, idx: number) => (
                       <div
-                        key={d.id}
+                        key={s.id || idx}
                         className="flex items-center justify-between p-3 rounded-xl bg-gray-50 dark:bg-gray-800/50"
                       >
                         <div className="flex-1 min-w-0">
                           <p className="font-medium text-gray-900 dark:text-white truncate">
-                            {d.title}
+                            {s.practicals?.title || "Practical"}
+                          </p>
+                          <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                            {s.batch_name}{s.start_time ? ` • ${s.start_time}` : ""}
                           </p>
                         </div>
                         <span className="ml-3 text-sm font-medium text-pink-600 dark:text-pink-400 whitespace-nowrap">
-                          {formatDeadline(d.deadline)}
+                          {formatScheduleDate(s.date)}
                         </span>
                       </div>
                     ))}

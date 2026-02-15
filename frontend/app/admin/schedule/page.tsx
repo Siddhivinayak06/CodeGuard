@@ -2,19 +2,27 @@
 
 import React, { useState, useEffect } from "react";
 import { YearlyCalendar } from "./components/YearlyCalendar";
-import { ScheduleDialog } from "./components/ScheduleDialog";
+
 import { ExportControls } from "./components/ExportControls";
+import { ScheduleDetailsPanel } from "./components/ScheduleDetailsPanel";
+import { BulkScheduleWizard } from "./components/BulkScheduleWizard";
+import { ScheduleGrid } from "./components/ScheduleGrid";
 import { Loader2, CalendarDays, Sparkles } from "lucide-react";
+import { createClient } from "@/lib/supabase/client";
 
 export default function YearlySchedulePage() {
-  const [schedules, setSchedules] = useState([]);
+  const [schedules, setSchedules] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
+  const [viewMode, setViewMode] = useState<"calendar" | "grid">("calendar");
+
+
+
+  const supabase = createClient();
 
   const fetchSchedules = async () => {
     setLoading(true);
     try {
-      // Fetch for a wide range, e.g., entire current year
       const currentYear = new Date().getFullYear();
       const res = await fetch(
         `/api/schedule/get?startDate=${currentYear}-01-01&endDate=${currentYear}-12-31`,
@@ -32,7 +40,11 @@ export default function YearlySchedulePage() {
 
   useEffect(() => {
     fetchSchedules();
+
+
   }, []);
+
+
 
   return (
     <div className="min-h-screen pt-20 pb-12 relative overflow-hidden">
@@ -66,11 +78,32 @@ export default function YearlySchedulePage() {
             </div>
 
             <div className="flex flex-wrap items-center gap-3">
+
+              {/* View Toggle */}
+              <div className="flex bg-gray-100 dark:bg-gray-800 rounded-lg p-1 mr-2">
+                <button
+                  onClick={() => setViewMode("calendar")}
+                  className={`px-3 py-1.5 text-sm rounded-md transition-all ${viewMode === "calendar" ? "bg-white dark:bg-gray-700 shadow text-indigo-600" : "text-gray-500 hover:text-gray-700"}`}
+                >
+                  Calendar
+                </button>
+                <button
+                  onClick={() => setViewMode("grid")}
+                  className={`px-3 py-1.5 text-sm rounded-md transition-all ${viewMode === "grid" ? "bg-white dark:bg-gray-700 shadow text-indigo-600" : "text-gray-500 hover:text-gray-700"}`}
+                >
+                  Grid View
+                </button>
+              </div>
+
+              {/* Filters */}
+
+
               <ExportControls schedules={schedules} />
-              <ScheduleDialog
-                onScheduleCreated={fetchSchedules}
-                selectedDate={selectedDate}
-              />
+
+              <div className="flex gap-2">
+                <BulkScheduleWizard onScheduleCreated={fetchSchedules} />
+
+              </div>
             </div>
           </div>
 
@@ -112,26 +145,32 @@ export default function YearlySchedulePage() {
           )}
         </div>
 
-        {/* Calendar Section */}
-        <div className="animate-slideUp animation-delay-300">
-          {loading ? (
-            <div className="glass-card rounded-2xl p-16 flex flex-col items-center justify-center gap-4">
-              <div className="relative">
-                <div className="w-16 h-16 rounded-full border-4 border-indigo-500/20 animate-pulse" />
-                <Loader2 className="absolute inset-0 m-auto h-8 w-8 animate-spin text-indigo-600 dark:text-indigo-400" />
+        {/* Content Section */}
+        {viewMode === "calendar" ? (
+          <div className="animate-slideUp animation-delay-300">
+            {loading ? (
+              <div className="glass-card rounded-2xl p-16 flex flex-col items-center justify-center gap-4">
+                <div className="relative">
+                  <div className="w-16 h-16 rounded-full border-4 border-indigo-500/20 animate-pulse" />
+                  <Loader2 className="absolute inset-0 m-auto h-8 w-8 animate-spin text-indigo-600 dark:text-indigo-400" />
+                </div>
+                <p className="text-muted-foreground animate-pulse">
+                  Loading schedule...
+                </p>
               </div>
-              <p className="text-muted-foreground animate-pulse">
-                Loading schedule...
-              </p>
-            </div>
-          ) : (
-            <YearlyCalendar
-              schedules={schedules}
-              onSelectDate={setSelectedDate}
-              selectedDate={selectedDate}
-            />
-          )}
-        </div>
+            ) : (
+              <YearlyCalendar
+                schedules={schedules}
+                onSelectDate={setSelectedDate}
+                selectedDate={selectedDate}
+              />
+            )}
+          </div>
+        ) : (
+          <div className="animate-fadeIn">
+            <ScheduleGrid onScheduleUpdated={fetchSchedules} />
+          </div>
+        )}
       </div>
     </div>
   );

@@ -121,32 +121,9 @@ function PracticalCard({
   onDelete?: (id: number) => void;
   onAssign?: (id: number) => void;
 }) {
-  const deadlineDate = useMemo(
-    () => safeDate(practical.deadline),
-    [practical.deadline],
-  );
-  const days = daysFromNow(deadlineDate);
-  const isPast = deadlineDate ? deadlineDate.getTime() < Date.now() : false;
-
-  const status = isPast ? "closed" : days <= 2 ? "due" : "active";
+  const status = "active";
 
   const statusConfig = {
-    closed: {
-      bg: "bg-white dark:bg-gray-900 border-l-4 border-l-gray-400 dark:border-l-gray-600",
-      text: "text-gray-500 dark:text-gray-400 line-through decoration-gray-400/50",
-      badge: "bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 border-gray-200 dark:border-gray-700",
-      border: "border-gray-200 dark:border-gray-800",
-      iconColor: "text-gray-400",
-      indicator: "bg-gray-400"
-    },
-    due: {
-      bg: "bg-white dark:bg-gray-900 border-l-4 border-l-amber-500",
-      text: "text-gray-900 dark:text-white",
-      badge: "bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-800",
-      border: "border-orange-100 dark:border-orange-900/30",
-      iconColor: "text-amber-500",
-      indicator: "bg-amber-500"
-    },
     active: {
       bg: "bg-white dark:bg-gray-900 border-l-4 border-l-indigo-500",
       text: "text-gray-900 dark:text-white",
@@ -220,13 +197,7 @@ function PracticalCard({
                 config.badge,
               )}
             >
-              {status === "closed"
-                ? "Closed"
-                : status === "due"
-                  ? days <= 0
-                    ? "Due Today"
-                    : `Due in ${days}d`
-                  : "Active"}
+              Active
             </span>
           </div>
 
@@ -234,61 +205,6 @@ function PracticalCard({
           <p className="text-sm leading-relaxed text-gray-700 dark:text-gray-300 line-clamp-2 mb-4">
             {practical.description || "No description provided."}
           </p>
-
-          {/* Footer info */}
-          <div className="flex items-center gap-4 text-xs">
-            <div className="flex items-center gap-1.5 text-gray-600 dark:text-gray-400">
-              <CalendarIcon />
-              <span className="font-medium">
-                {deadlineDate
-                  ? deadlineDate.toLocaleDateString(undefined, {
-                    month: "short",
-                    day: "numeric",
-                    year: "numeric",
-                  })
-                  : "No deadline"}
-              </span>
-              {deadlineDate && (
-                <span className="text-gray-500">
-                  •{" "}
-                  {deadlineDate.toLocaleTimeString([], {
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  })}
-                </span>
-              )}
-            </div>
-
-            {deadlineDate && !isPast && days <= 7 && (
-              <span
-                className={cn(
-                  "inline-flex items-center gap-1 px-2 py-1 rounded-md font-semibold",
-                  days <= 1
-                    ? "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-200"
-                    : days <= 3
-                      ? "bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-200"
-                      : "bg-sky-100 dark:bg-sky-900/30 text-sky-700 dark:text-sky-200",
-                )}
-              >
-                <svg
-                  className="w-3 h-3"
-                  fill="currentColor"
-                  viewBox="0 0 20 20"
-                >
-                  <path
-                    fillRule="evenodd"
-                    d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z"
-                    clipRule="evenodd"
-                  />
-                </svg>
-                {days <= 0
-                  ? "Due today"
-                  : days === 1
-                    ? "Due tomorrow"
-                    : `${days} days left`}
-              </span>
-            )}
-          </div>
         </div>
 
         {/* Right side - Actions & Marks */}
@@ -297,7 +213,6 @@ function PracticalCard({
             onEdit={() => onEdit?.(practical)}
             onDelete={() => onDelete?.(practical.id)}
             onAssign={() => onAssign?.(practical.id)}
-            disabledAssign={isPast}
           />
 
           <div className="flex flex-col items-end">

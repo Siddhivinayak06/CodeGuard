@@ -15,14 +15,15 @@ export async function GET(request: Request) {
       );
     }
 
-    // 1. Fetch schedules
+    // 1. Fetch schedules with joined faculty data
     const { data: schedules, error } = await supabase
       .from("schedules")
       .select(
         `
         *,
         practicals (id, title),
-        schedule_allocations (count)
+        schedule_allocations (count),
+        faculty:users!faculty_id (uid, name, email, role)
       `,
       )
       .gte("date", startDate)
@@ -34,41 +35,7 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    // 2. Fetch Faculty Details manual join
-    // Collect all faculty IDs
-    const facultyIds = Array.from(
-      new Set(
-        schedules.map((s) => s.faculty_id).filter((id): id is string => !!id),
-      ),
-    );
-
-    const facultyMap: Record<string, any> = {};
-
-    if (facultyIds.length > 0) {
-      const { data: facultyData, error: facultyError } = await supabase
-        .from("users")
-        .select("uid, name, email, role")
-        .in("uid", facultyIds);
-
-      if (!facultyError && facultyData) {
-        facultyData.forEach((f) => {
-          facultyMap[f.uid] = f;
-        });
-      } else {
-        console.error("Error fetching faculty details:", facultyError);
-      }
-    }
-
-    // 3. Merge faculty data into schedules
-    const schedulesWithFaculty = schedules.map((s) => ({
-      ...s,
-      faculty: (s.faculty_id ? facultyMap[s.faculty_id] : null) || {
-        email: "Unknown",
-        name: "Unknown",
-      },
-    }));
-
-    // 4. Also fetch holidays in this range
+    // 2. Fetch holidays in this range
     const { data: holidays, error: holidayError } = await supabase
       .from("holidays")
       .select("*")
@@ -80,7 +47,7 @@ export async function GET(request: Request) {
     }
 
     return NextResponse.json({
-      schedules: schedulesWithFaculty,
+      schedules: schedules || [],
       holidays: holidays || [],
     });
   } catch (error: any) {

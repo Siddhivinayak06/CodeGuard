@@ -26,13 +26,27 @@ import { toast } from "sonner";
 interface ScheduleDialogProps {
   onScheduleCreated: () => void;
   selectedDate?: Date;
+  initialData?: {
+    practical_id?: string;
+    batch_name?: string;
+    faculty_id?: string;
+  };
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
 
 export function ScheduleDialog({
   onScheduleCreated,
   selectedDate,
+  initialData,
+  open: controlledOpen,
+  onOpenChange: setControlledOpen,
 }: ScheduleDialogProps) {
-  const [open, setOpen] = useState(false);
+  const [internalOpen, setInternalOpen] = useState(false);
+  const isControlled = controlledOpen !== undefined;
+  const open = isControlled ? controlledOpen : internalOpen;
+  const setOpen = isControlled ? setControlledOpen! : setInternalOpen;
+
   const [loading, setLoading] = useState(false);
   const [practicals, setPracticals] = useState<any[]>([]);
   const [faculty, setFaculty] = useState<any[]>([]);
@@ -43,11 +57,23 @@ export function ScheduleDialog({
     date: selectedDate ? selectedDate.toISOString().split("T")[0] : "",
     start_time: "09:00",
     end_time: "11:00",
-    practical_id: "",
-    faculty_id: "",
-    batch_name: "",
+    practical_id: initialData?.practical_id || "",
+    faculty_id: initialData?.faculty_id || "",
+    batch_name: initialData?.batch_name || "",
     title_placeholder: "",
   });
+
+  // Effect to update form when initialData changes
+  useEffect(() => {
+    if (initialData) {
+      setFormData(prev => ({
+        ...prev,
+        practical_id: initialData.practical_id || prev.practical_id,
+        batch_name: initialData.batch_name || prev.batch_name,
+        faculty_id: initialData.faculty_id || prev.faculty_id
+      }));
+    }
+  }, [initialData]);
 
   const [conflict, setConflict] = useState<
     { conflict: boolean; reason?: string } | undefined
@@ -157,12 +183,14 @@ export function ScheduleDialog({
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button className="gap-2 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 hover:from-indigo-600 hover:via-purple-600 hover:to-pink-600 text-white shadow-lg shadow-purple-500/30 hover:shadow-xl hover:shadow-purple-500/40 transition-all duration-300 hover:-translate-y-0.5">
-          <CalendarPlus className="w-4 h-4" />
-          Schedule
-        </Button>
-      </DialogTrigger>
+      {!isControlled && (
+        <DialogTrigger asChild>
+          <Button className="gap-2 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 hover:from-indigo-600 hover:via-purple-600 hover:to-pink-600 text-white shadow-lg shadow-purple-500/30 hover:shadow-xl hover:shadow-purple-500/40 transition-all duration-300 hover:-translate-y-0.5">
+            <CalendarPlus className="w-4 h-4" />
+            Schedule
+          </Button>
+        </DialogTrigger>
+      )}
       <DialogContent className="bg-white/95 dark:bg-gray-900/95 backdrop-blur-xl border-white/20 dark:border-gray-700/50 sm:max-w-[480px] shadow-2xl">
         <DialogHeader>
           <div className="flex items-center gap-3">

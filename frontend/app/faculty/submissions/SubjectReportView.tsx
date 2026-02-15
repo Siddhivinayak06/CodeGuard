@@ -33,7 +33,7 @@ interface SubjectReportViewProps {
     subjectName: string;
     subjectCode: string;
     practicalTitles: string[];
-    practicalDeadlines: string[];
+    practicalDeadlines: (string | null)[];
     students: StudentPracticalMarks[];
     onDownloadPdf: () => void;
 }
@@ -330,7 +330,7 @@ export default function SubjectReportView({
                                                         ) : (
                                                             (() => {
                                                                 const deadline = practicalDeadlines[pIdx];
-                                                                const isExpired = deadline && new Date(deadline).getTime() < Date.now();
+                                                                const isExpired = deadline ? new Date(deadline).getTime() < Date.now() : false;
                                                                 if (isExpired) {
                                                                     return <span className="text-red-400 dark:text-red-900/50 text-[10px] uppercase font-bold">Abs</span>;
                                                                 }

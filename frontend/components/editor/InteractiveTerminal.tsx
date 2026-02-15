@@ -23,7 +23,9 @@ export interface InteractiveTerminalHandle {
     lang?: string,
   ) => void;
   switchLanguage: (lang: string) => void;
+  write: (text: string) => void;
 }
+
 
 const lightTheme = {
   background: "#ffffff",
@@ -329,6 +331,9 @@ const InteractiveTerminal = forwardRef<
     }, [fontSize, fontFamily, currentTheme]);
 
     useImperativeHandle(ref, () => ({
+      write: (text: string) => {
+        term.current?.write(text);
+      },
       startExecution: (
         filesOrCode: FileData[] | string,
         activeFileOrLang?: string,

@@ -101,24 +101,7 @@ export async function GET() {
       ...data,
     }));
 
-    // Get practicals with deadline info
-    const { data: practicalDeadlines } = await supabase
-      .from("practicals")
-      .select("id, title, deadline, subject_id")
-      .not("deadline", "is", null)
-      .order("deadline", { ascending: true })
-      .limit(10);
 
-    // Categorize practicals by deadline status
-    const now = new Date();
-    const upcomingDeadlines =
-      practicalDeadlines?.filter(
-        (p) => p.deadline && new Date(p.deadline) > now,
-      ) || [];
-    const pastDeadlines =
-      practicalDeadlines?.filter(
-        (p) => p.deadline && new Date(p.deadline) <= now,
-      ) || [];
 
     // Get subjects with practical counts - using a simpler approach
     const { data: allSubjects } = await supabase
@@ -217,10 +200,7 @@ export async function GET() {
         successRate,
       },
       activityData,
-      deadlines: {
-        upcoming: upcomingDeadlines.slice(0, 5),
-        past: pastDeadlines.length,
-      },
+
       subjectsWithPracticals,
       topStudents: topStudentsList,
     });

@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Practical, TestCase } from "../types";
+import { createClient } from "@/lib/supabase/client";
 
 interface GeneratedPractical {
     title: string;
@@ -25,7 +26,7 @@ interface GeneratedPractical {
     reference_code?: string;
     deadline?: string;
     levels?: {
-        level: "easy" | "medium" | "hard";
+        level: "Task 1" | "Task 2";
         title: string;
         description: string;
         max_marks: number;
@@ -78,14 +79,21 @@ export default function BulkImportModal({
             // Use the environment variable for API URL or default to localhost
             const apiUrl = process.env.NEXT_PUBLIC_AI_API_URL || "http://localhost:5002/ai";
 
+            const supabase = createClient();
+            const { data: { session } } = await supabase.auth.getSession();
+
             const res = await fetch(`${apiUrl}/generate-bulk-practicals-from-pdf`, {
                 method: "POST",
+                headers: {
+                    "Authorization": `Bearer ${session?.access_token || ""}`
+                },
                 body: formData,
             });
 
             if (!res.ok) {
                 const errData = await res.json();
-                throw new Error(errData.error || "Failed to process PDF");
+                const errorMessage = typeof errData.error === "object" ? errData.error.message : errData.error;
+                throw new Error(errorMessage || "Failed to process PDF");
             }
 
             const data = await res.json();
@@ -99,7 +107,7 @@ export default function BulkImportModal({
                 const isMultilevel = p.enableLevels === true || (Array.isArray(p.levels) && p.levels.length > 0);
 
                 const levels = Array.isArray(p.levels) ? p.levels.map((l: any, lIdx: number) => ({
-                    level: lIdx === 0 ? "easy" : "hard", // Default mapping: 0->easy, 1->hard. 
+                    level: lIdx === 0 ? "Task 1" : "Task 2", // Default mapping: 0->Task 1, 1->Task 2. 
                     title: l.title || `Task ${lIdx + 1}`,
                     description: l.description || "",
                     max_marks: Number(l.max_marks) || 5, // Default split marks
@@ -121,10 +129,7 @@ export default function BulkImportModal({
                 const fallbackDescription = levels.length > 0 ? levels[0].description : "";
                 const fallbackCode = levels.length > 0 ? levels[0].reference_code : "";
 
-                // Calculate staggered deadline: 1 week gap per practical
-                const baseDate = new Date();
-                baseDate.setDate(baseDate.getDate() + 7 * (idx + 1));
-                const deadline = baseDate.toISOString().slice(0, 16);
+                // deadline removed
 
                 return {
                     title: p.title || "Untitled Practical",
@@ -134,7 +139,7 @@ export default function BulkImportModal({
                     enableLevels: isMultilevel,
                     language: p.language || "c",
                     reference_code: p.reference_code || fallbackCode || "",
-                    deadline: deadline,
+
                     testCases: Array.isArray(p.testCases) ? p.testCases.map((tc: any) => ({
                         input: String(tc.input || ""),
                         expected_output: String(tc.expected_output || ""),

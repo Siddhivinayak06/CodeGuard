@@ -12,7 +12,7 @@ interface SubjectReportData {
     subjectName: string;
     subjectCode: string;
     practicalTitles: string[];
-    practicalDeadlines: string[];
+    practicalDeadlines: (string | null)[];
     students: StudentPracticalMarks[];
     generatedBy?: string;
 }
@@ -72,7 +72,7 @@ export async function generateSubjectReport({
             if (p.marks !== null) return p.marks.toString();
 
             const deadline = practicalDeadlines[pIdx];
-            const isExpired = deadline && new Date(deadline).getTime() < Date.now();
+            const isExpired = deadline ? new Date(deadline).getTime() < Date.now() : false;
             return isExpired ? "Abs" : "-";
         });
         const validMarks = student.practicals

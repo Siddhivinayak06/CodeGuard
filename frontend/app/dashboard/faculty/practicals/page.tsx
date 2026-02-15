@@ -92,7 +92,8 @@ export default function AllPracticalsPage() {
             .from("practicals")
             .select("*")
             .in("subject_id", subjectIds)
-            .order("deadline", { ascending: true });
+            .in("subject_id", subjectIds)
+            .order("created_at", { ascending: false });
 
           if (pracData) {
             setPracticals(pracData as Practical[]);
@@ -114,7 +115,8 @@ export default function AllPracticalsPage() {
       .from("practicals")
       .select("*")
       .in("subject_id", subjectIds)
-      .order("deadline", { ascending: true });
+      .in("subject_id", subjectIds)
+      .order("created_at", { ascending: false });
 
     if (data) setPracticals(data as Practical[]);
   };
@@ -151,18 +153,9 @@ export default function AllPracticalsPage() {
   };
 
   const stats = useMemo(() => {
-    if (!practicals) return { total: 0, active: 0, dueSoon: 0, completed: 0 };
-    const now = Date.now();
+    if (!practicals) return { total: 0 };
     return {
       total: practicals.length,
-      active: practicals.filter(p => !p.deadline || new Date(p.deadline).getTime() > now).length,
-      dueSoon: practicals.filter(p => {
-        if (!p.deadline) return false;
-        const d = new Date(p.deadline).getTime();
-        const diff = d - now;
-        return diff > 0 && diff < 3 * 24 * 60 * 60 * 1000; // 3 days
-      }).length,
-      completed: practicals.filter(p => p.deadline && new Date(p.deadline).getTime() < now).length // Approximation for "Closed"
     };
   }, [practicals]);
 
@@ -219,9 +212,6 @@ export default function AllPracticalsPage() {
             className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4"
           >
             <StatCard label="Total Practicals" value={stats.total} icon={Book} color="blue" />
-            <StatCard label="Active Assignments" value={stats.active} icon={CheckCircle} color="green" />
-            <StatCard label="Due Soon" value={stats.dueSoon} icon={Clock} color="orange" />
-            <StatCard label="Closed/Past Due" value={stats.completed} icon={AlertTriangle} color="purple" />
           </motion.div>
 
           {/* List Component from shared */}

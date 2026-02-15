@@ -156,12 +156,12 @@ export default function BasicDetailsForm({
         </div>
       </motion.div>
 
-      {/* Row 2: Subject, Language, Deadline */}
+      {/* Row 2: Subject, Language */}
       <motion.div
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.25 }}
-        className="grid grid-cols-1 md:grid-cols-3 gap-5 mb-5"
+        className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-5"
       >
         <FormInput label="Subject" required icon={BookOpen}>
           <select
@@ -195,18 +195,6 @@ export default function BasicDetailsForm({
             <option value="python">🐍 Python</option>
             <option value="c">⚙️ C</option>
           </select>
-        </FormInput>
-
-        <FormInput label="Deadline" required icon={Calendar}>
-          <input
-            type="datetime-local"
-            name="deadline"
-            value={form.deadline || ""}
-            onChange={handleInput}
-            onFocus={() => setFocusedField("deadline")}
-            onBlur={() => setFocusedField(null)}
-            className={getInputClass("deadline")}
-          />
         </FormInput>
       </motion.div>
 
@@ -256,7 +244,7 @@ export default function BasicDetailsForm({
                 Multi-Level Mode
               </span>
               <span className="text-[10px] text-amber-600/70 dark:text-amber-400/70">
-                Easy, Medium, Hard
+                Task 1, Task 2
               </span>
             </div>
           </div>

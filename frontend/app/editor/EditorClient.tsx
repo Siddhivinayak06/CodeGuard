@@ -280,7 +280,7 @@ int main() {
       max_marks: number;
     }>
   >([]);
-  const [activeLevel, setActiveLevel] = useState<string>("easy");
+  const [activeLevel, setActiveLevel] = useState<string>("Task 1");
 
   // expanded state for LeetCode-style test case cards
   const [expandedCases, setExpandedCases] = useState<Record<number, boolean>>(
@@ -532,9 +532,8 @@ int main() {
         if (!levelsError && levelsData && mountedRef.current) {
           const sorted = levelsData.sort((a, b) => {
             const order: Record<string, number> = {
-              easy: 0,
-              medium: 1,
-              hard: 2,
+              "Task 1": 0,
+              "Task 2": 1,
             };
             return (order[a.level] || 0) - (order[b.level] || 0);
           });
@@ -1149,16 +1148,15 @@ int main() {
                 <div className="flex items-center gap-3 flex-wrap">
                   {/* Difficulty Badge */}
                   <span
-                    className={`inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1 rounded-md ${activeLevel === "easy"
+                    className={`inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1 rounded-md ${activeLevel === "Task 1"
                       ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400"
-                      : activeLevel === "hard"
+                      : activeLevel === "Task 2"
                         ? "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400"
                         : "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400"
                       }`}
                   >
                     {hasLevelsParam
-                      ? activeLevel.charAt(0).toUpperCase() +
-                      activeLevel.slice(1)
+                      ? activeLevel
                       : "Medium"}
                   </span>
 
@@ -1198,17 +1196,16 @@ int main() {
                           key={level.id}
                           onClick={() => setActiveLevel(level.level)}
                           className={`px-4 py-1.5 rounded-md text-xs font-semibold transition-all duration-200 ${isActive
-                            ? level.level === "easy"
+                            ? level.level === "Task 1"
                               ? "bg-emerald-500 text-white shadow-sm"
-                              : level.level === "hard"
+                              : level.level === "Task 2"
                                 ? "bg-red-500 text-white shadow-sm"
                                 : "bg-amber-500 text-white shadow-sm"
                             : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200"
                             }`}
-                          title={`${level.level.charAt(0).toUpperCase() + level.level.slice(1)} – ${level.max_marks} points`}
+                          title={`${level.level} – ${level.max_marks} points`}
                         >
-                          {level.level.charAt(0).toUpperCase() +
-                            level.level.slice(1)}
+                          {level.level}
                         </button>
                       );
                     })}

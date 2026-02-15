@@ -98,7 +98,7 @@ interface FormattedPractical {
   practical_number?: number | null;
   title: string;
   description: string | null;
-  deadline: string | null;
+
   status:
   | "assigned"
   | "in_progress"
@@ -127,6 +127,8 @@ interface FormattedPractical {
     description: string | null;
     max_marks: number;
   }[];
+  schedule_date?: string | null;
+  schedule_time?: string | null;
 }
 
 type FilterType = "all" | "pending" | "overdue" | "completed";
@@ -135,40 +137,7 @@ type FilterType = "all" | "pending" | "overdue" | "completed";
 // HELPER FUNCTIONS
 // ============================================================================
 
-function formatTimeRemaining(deadline: string): {
-  text: string;
-  urgency: "overdue" | "urgent" | "soon" | "normal";
-  days: number;
-} {
-  const now = new Date();
-  const due = new Date(deadline);
-  const diffMs = due.getTime() - now.getTime();
-  const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
-  const diffHours = Math.ceil(diffMs / (1000 * 60 * 60));
 
-  if (diffMs < 0) {
-    const overdueDays = Math.abs(diffDays);
-    return {
-      text: overdueDays === 1 ? "1 day overdue" : `${overdueDays} days overdue`,
-      urgency: "overdue",
-      days: -overdueDays,
-    };
-  }
-  if (diffDays === 0) {
-    if (diffHours <= 0)
-      return { text: "Due now!", urgency: "overdue", days: 0 };
-    return {
-      text: diffHours === 1 ? "1 hour left" : `${diffHours} hours left`,
-      urgency: "urgent",
-      days: 0,
-    };
-  }
-  if (diffDays === 1)
-    return { text: "Due tomorrow", urgency: "urgent", days: 1 };
-  if (diffDays <= 3)
-    return { text: `${diffDays} days left`, urgency: "soon", days: diffDays };
-  return { text: `${diffDays} days left`, urgency: "normal", days: diffDays };
-}
 
 function getLanguageGradient(lang: string) {
   switch (lang?.toLowerCase()) {
@@ -471,16 +440,29 @@ export default function StudentPracticals() {
 
         const data: FormattedPractical[] = json.data;
 
+        // Check for overdue (Client-side logic)
+        const now = new Date();
+        now.setHours(0, 0, 0, 0); // Start of today
+
+        data.forEach(p => {
+          if (p.schedule_date && !["submitted", "completed", "passed", "failed"].includes(p.status)) {
+            const schedDate = new Date(p.schedule_date);
+            schedDate.setHours(0, 0, 0, 0);
+
+            // If schedule date is strictly before today, it is overdue
+            if (schedDate < now) {
+              p.status = "overdue";
+            }
+          }
+        });
+
         // Sort functionality
         data.sort((a, b) => {
           const getPriority = (p: FormattedPractical) => {
             if (p.status === "passed" || p.status === "completed") return 100;
             if (p.status === "failed") return 90;
-            if (p.deadline) {
-              const diff = new Date(p.deadline).getTime() - Date.now();
-              if (diff < 0) return -20;
-              return diff;
-            }
+            if (p.status === "overdue") return -10; // High priority
+            if (p.status === "in_progress") return -5;
             return 0;
           };
           return getPriority(a) - getPriority(b);
@@ -515,6 +497,8 @@ export default function StudentPracticals() {
     if (userSemester) {
       result = result.filter(p => !p.subject_semester || String(p.subject_semester) == String(userSemester));
     }
+    // Only show practicals that have been scheduled
+    result = result.filter(p => !!p.schedule_date);
     return result;
   }, [practicals, userSemester]);
 
@@ -628,12 +612,7 @@ export default function StudentPracticals() {
       doneStatuses.includes(p.status),
     ).length;
     const pending = total - completed;
-    const overdue = relevantPracticals.filter(
-      (p) =>
-        !doneStatuses.includes(p.status) &&
-        p.deadline &&
-        new Date(p.deadline) < new Date(),
-    ).length;
+    const overdue = relevantPracticals.filter(p => p.status === "overdue").length;
     const progress = total > 0 ? Math.round((completed / total) * 100) : 0;
     return { total, completed, pending, overdue, progress };
   }, [sequencedPracticals, selectedSubjectId]);
@@ -664,12 +643,7 @@ export default function StudentPracticals() {
       case "pending":
         return result.filter((p) => !doneStatuses.includes(p.status));
       case "overdue":
-        return result.filter(
-          (p) =>
-            !doneStatuses.includes(p.status) &&
-            p.deadline &&
-            new Date(p.deadline) < new Date(),
-        );
+        return result.filter(p => p.status === "overdue");
       case "completed":
         return result.filter((p) => doneStatuses.includes(p.status));
       default:
@@ -832,12 +806,8 @@ export default function StudentPracticals() {
   const renderPracticalCard = (p: FormattedPractical) => {
     const isDone = ["passed", "failed", "completed"].includes(p.status);
     const isSubmitted = p.status === "submitted";
-    const isUrgent =
-      !isDone &&
-      !isSubmitted &&
-      p.deadline &&
-      new Date(p.deadline).getTime() - Date.now() < 3 * 24 * 60 * 60 * 1000;
-    const timeInfo = p.deadline ? formatTimeRemaining(p.deadline) : null;
+    const isUrgent = false;
+    const timeInfo = null;
 
     return (
       <motion.div
@@ -897,20 +867,15 @@ export default function StudentPracticals() {
             {p.title}
           </h4>
 
-          {p.deadline && (
-            <div className="flex items-center gap-1.5 mb-3 text-xs font-medium text-gray-500 dark:text-gray-400">
+          {p.schedule_date && (
+            <div className="flex items-center gap-2 mb-3 text-xs font-medium text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/20 px-2.5 py-1.5 rounded-lg w-fit">
               <Clock className="w-3.5 h-3.5" />
-              <span className={cn(isUrgent ? "text-red-600 dark:text-red-400 font-bold" : "")}>
-                {new Date(p.deadline).toLocaleDateString(undefined, {
-                  month: "short",
-                  day: "numeric",
-                  hour: "2-digit",
-                  minute: "2-digit",
-                })}
+              <span>
+                Scheduled: {new Date(p.schedule_date).toLocaleDateString()}
+                {p.schedule_time && ` • ${p.schedule_time}`}
               </span>
             </div>
           )}
-
           <p className="text-sm text-gray-500 dark:text-gray-400 line-clamp-2 leading-relaxed">
             {p.description?.replace(/^Problem Statement:?\s*/i, "") || "No description available."}
           </p>
@@ -948,11 +913,9 @@ export default function StudentPracticals() {
               <span className="flex items-center gap-2">
                 {p.is_locked
                   ? "Locked"
-                  : !!p.deadline && new Date(p.deadline) < new Date()
-                    ? "Start (Overdue)"
-                    : p.status === "in_progress"
-                      ? "Continue Solving"
-                      : "Start Assessment"}
+                  : p.status === "in_progress"
+                    ? "Continue Solving"
+                    : "Start Assessment"}
                 {!p.is_locked && (
                   <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
                 )}
@@ -1021,11 +984,7 @@ export default function StudentPracticals() {
   const renderPracticalListItem = (p: FormattedPractical) => {
     const isDone = ["passed", "failed", "completed"].includes(p.status);
     const isSubmitted = p.status === "submitted";
-    const isUrgent =
-      !isDone &&
-      !isSubmitted &&
-      p.deadline &&
-      new Date(p.deadline).getTime() - Date.now() < 3 * 24 * 60 * 60 * 1000;
+    const isUrgent = false;
 
     return (
       <motion.div
@@ -1065,12 +1024,16 @@ export default function StudentPracticals() {
                 <Code2 className="w-3 h-3" />
                 {p.language || "Any"}
               </span>
-              {p.deadline && (
-                <span className={cn("flex items-center gap-1", isUrgent ? "text-red-600 font-medium" : "")}>
+
+              {p.schedule_date && (
+                <span className="flex items-center gap-1 text-indigo-600 dark:text-indigo-400">
                   <Clock className="w-3 h-3" />
-                  {new Date(p.deadline).toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                  {new Date(p.schedule_date).toLocaleDateString()}
+                  {p.schedule_time && <span className="text-gray-400">•</span>}
+                  {p.schedule_time}
                 </span>
               )}
+
               {(!isDone && p.max_attempts > 1) && (
                 <span className="flex items-center gap-1">
                   <Sparkles className="w-3 h-3 text-amber-500" />
@@ -1095,12 +1058,12 @@ export default function StudentPracticals() {
 
               <div className="flex gap-2">
                 {/* Reattempt Actions for Failed/Locked */}
-                {p.status === "failed" && !p.is_locked && p.attempt_count < p.max_attempts && (!p.deadline || new Date(p.deadline) >= new Date()) && (
+                {p.status === "failed" && !p.is_locked && p.attempt_count < p.max_attempts && (
                   <Button size="icon" variant="outline" className="w-8 h-8 text-orange-600 border-orange-200 bg-orange-50/50" onClick={() => handleStartPractical(p)}>
                     <RefreshCw className="w-3.5 h-3.5" />
                   </Button>
                 )}
-                {p.status === "failed" && (p.attempt_count >= p.max_attempts || (!!p.deadline && new Date(p.deadline) < new Date())) && (
+                {p.status === "failed" && (p.attempt_count >= p.max_attempts) && (
                   <Button size="icon" variant="outline" className="w-8 h-8 text-purple-600 border-purple-200 bg-purple-50/50" onClick={() => handleRequestReattempt(p)}>
                     <AlertTriangle className="w-3.5 h-3.5" />
                   </Button>
@@ -1118,7 +1081,7 @@ export default function StudentPracticals() {
               onClick={() => handleStartPractical(p)}
               disabled={p.is_locked}
             >
-              {p.is_locked ? "Locked" : !!p.deadline && new Date(p.deadline) < new Date() ? "Start (Overdue)" : "Start"}
+              {p.is_locked ? "Locked" : "Start"}
               {!p.is_locked && <ArrowRight className="w-3 h-3 ml-1.5" />}
             </Button>
           )}
@@ -1188,7 +1151,7 @@ export default function StudentPracticals() {
                       ? "bg-indigo-100 dark:bg-indigo-500/20 text-indigo-600 dark:text-indigo-300"
                       : "bg-gray-100 dark:bg-gray-800 text-gray-400 group-hover:bg-gray-200 dark:group-hover:bg-gray-700"
                   )}>
-                    {practicals.length}
+                    {sequencedPracticals.length}
                   </span>
                 </button>
 
@@ -1544,9 +1507,8 @@ export default function StudentPracticals() {
                       <div className="flex gap-3">
                         <AlertCircle className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
                         <p className="text-sm text-amber-800 dark:text-amber-200">
-                          {reattemptRequest.practical?.deadline && new Date(reattemptRequest.practical.deadline) < new Date()
-                            ? "The deadline for this practical has passed. You must request a reattempt or extension from your faculty to continue."
-                            : "You have used all your attempts for this practical. You can request an additional attempt from your faculty."
+                          {
+                            "You have used all your attempts for this practical. You can request an additional attempt from your faculty."
                           }
                         </p>
                       </div>

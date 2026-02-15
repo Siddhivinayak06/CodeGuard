@@ -20,10 +20,10 @@ export async function GET() {
 
     const userId = userData.user.id;
 
-    // Verify user is a student
+    // Verify user is a student and get batch
     const { data: userRole, error: roleError } = await supabase
       .from("users")
-      .select("role")
+      .select("role, batch")
       .eq("uid", userId)
       .single();
 
@@ -33,6 +33,8 @@ export async function GET() {
         { status: 403 },
       );
     }
+
+    const userBatch = userRole.batch;
 
     // Fetch personalized practicals
     const { data, error } = await supabase
@@ -85,10 +87,43 @@ export async function GET() {
 
     const submissionMap = new Map(submissions?.map((s) => [s.practical_id, s]));
 
+    // Fetch Schedules for these practicals (matching batch or logic)
+    // We want schedules where:
+    // 1. practical_id is in our list
+    // 2. batch matches userBatch OR it's a direct allocation (which we might not check here efficiently for all, so we'll fetch all schedules for these practicals and filter in code for now or refine query)
+    // A simpler approach: Fetch all schedules for these practical IDs, then find the one that matches this student (via batch or allocation).
+    // Note: 'schedule_allocations' links schedule -> student. 'schedules' has 'batch_name'.
+
+    const practicalIds = data
+      .map((d: any) => d.practicals?.id)
+      .filter(Boolean);
+
+    let scheduleMap = new Map();
+    if (practicalIds.length > 0) {
+      // Fetch schedules matching user batch
+      const { data: batchSchedules } = await supabase
+        .from("schedules")
+        .select("practical_id, date, start_time, end_time, batch_name")
+        .in("practical_id", practicalIds)
+        .eq("batch_name", userBatch || ""); // Match user batch
+
+      // Fetch allocated schedules (if any specific overrides/allocations existed - assuming distinct from batch for now, or just use batch if that's the primary method)
+      // For now, let's prioritize batch schedules as per requirements.
+      if (batchSchedules) {
+        batchSchedules.forEach((s) => {
+          // If multiple schedules exist for a practical (unlikely for same batch), take the latest or first? taking first.
+          if (!scheduleMap.has(s.practical_id)) {
+            scheduleMap.set(s.practical_id, s);
+          }
+        });
+      }
+    }
+
     // Map to desired format
     const practicals = data.map((sp: any) => {
       const p = sp.practicals;
       const sub = submissionMap.get(p.id);
+      const schedule = scheduleMap.get(p.id);
 
       // Determine final status
       // Priority: Passed -> Completed (Manual) -> Submission Status -> Assigned Status
@@ -105,8 +140,11 @@ export async function GET() {
         description: p.description,
         language: p.language,
         max_marks: p.max_marks,
-        deadline: sp.assigned_deadline,
         status: finalStatus,
+        schedule_date: schedule?.date || null,
+        schedule_time: schedule
+          ? `${schedule.start_time} - ${schedule.end_time}`
+          : null,
         notes: sp.notes,
         assigned_at: sp.assigned_at,
         completed_at: sp.completed_at,

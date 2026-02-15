@@ -12,7 +12,7 @@ import { Practical, Subject, TestCase, Level, Student } from "../types";
 import BasicDetailsForm from "./BasicDetailsForm";
 import LevelManager from "./LevelManager";
 import SingleLevelTestCases from "./SingleLevelTestCases";
-import AssignStudentsStep from "./AssignStudentsStep";
+// AssignStudentsStep import removed (step 2 removed)
 
 interface PracticalFormProps {
   practical: Practical | null;
@@ -64,8 +64,8 @@ export default function PracticalForm({
       practical_id: 0,
       created_at: "",
       updated_at: "",
-      level: "easy",
-      title: "Easy",
+      level: "Task 1",
+      title: "Task 1",
       description: "",
       max_marks: 8,
       testCases: [
@@ -87,8 +87,8 @@ export default function PracticalForm({
       practical_id: 0,
       created_at: "",
       updated_at: "",
-      level: "hard",
-      title: "Hard",
+      level: "Task 2",
+      title: "Task 2",
       description: "",
       max_marks: 2,
       testCases: [
@@ -113,7 +113,6 @@ export default function PracticalForm({
     subject_id: subjects[0]?.id ?? 0,
     description: "",
     language: "",
-    deadline: new Date().toISOString().slice(0, 16),
     max_marks: 10,
     practical_number: undefined,
     created_at: new Date().toISOString(),
@@ -137,18 +136,18 @@ export default function PracticalForm({
 
   // Multi-level support
   const [levels, setLevels] = useState<Level[]>(defaultLevels);
-  const [activeLevel, setActiveLevel] = useState<"easy" | "hard">(
-    "easy",
+  const [activeLevel, setActiveLevel] = useState<"Task 1" | "Task 2">(
+    "Task 1",
   );
   const [enableLevels, setEnableLevels] = useState(false);
 
 
 
-  const [step, setStep] = useState<1 | 2>(1);
+
   const [students, setStudents] = useState<Student[]>([]);
   const [selectedStudents, setSelectedStudents] = useState<Student[]>([]);
   const [assignmentDeadline, setAssignmentDeadline] = useState<string>(
-    form.deadline || "",
+    new Date().toISOString().slice(0, 16),
   );
   const [notes, setNotes] = useState("");
   const [loading, setLoading] = useState(false);
@@ -161,7 +160,7 @@ export default function PracticalForm({
     semester: "",
     batch: "",
   });
-  const [savedPracticals, setSavedPracticals] = useState<{ id: number; deadline: string }[]>([]);
+  const [savedPracticals, setSavedPracticals] = useState<{ id: number }[]>([]);
 
   // ---------------------- Multi-Draft State ----------------------
   interface DraftPractical {
@@ -182,7 +181,6 @@ export default function PracticalForm({
       subject_id: defaultSubjectId ? Number(defaultSubjectId) : (subjects[0]?.id ?? 0),
       description: "",
       language: "",
-      deadline: new Date().toISOString().slice(0, 16),
       max_marks: 10,
       practical_number: undefined,
       created_at: new Date().toISOString(),
@@ -211,10 +209,9 @@ export default function PracticalForm({
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [availableBatches, setAvailableBatches] = useState<string[]>([]);
 
-  // Reset step when modal opens
+  // Reset state when modal opens
   useEffect(() => {
     if (isOpen) {
-      setStep(1);
       // Initialize with one draft if creating new practicals (not editing)
       if (!practical) {
         if (initialDrafts && initialDrafts.length > 0) {
@@ -263,7 +260,6 @@ export default function PracticalForm({
                 subject_id: defaultSubjectId ? Number(defaultSubjectId) : (subjects[0]?.id ?? 0),
                 description: d.description || "",
                 language: d.language || "c", // Map language
-                deadline: d.deadline || new Date().toISOString().slice(0, 16), // Use imported deadline
                 max_marks: Number(d.max_marks) || 10,
                 practical_number: d.practical_number,
                 created_at: new Date().toISOString(),
@@ -313,15 +309,10 @@ export default function PracticalForm({
   // set initial state when practical prop changes
   useEffect(() => {
     if (practical) {
-      const deadline = practical.deadline
-        ? (practical.deadline as string).slice(0, 16)
-        : "";
       setForm({
         ...practical,
-        deadline,
       });
-      setAssignmentDeadline(deadline);
-      setStep(1); // Reset to step 1 when opening/editing a practical
+      setAssignmentDeadline(new Date().toISOString().slice(0, 16));
 
       const loadData = async () => {
         try {
@@ -409,7 +400,6 @@ export default function PracticalForm({
         title: "",
         description: "",
         language: "",
-        deadline: new Date().toISOString().slice(0, 16),
         max_marks: 10,
         practical_number: undefined,
         subject_id: defaultSubjectId
@@ -580,7 +570,7 @@ export default function PracticalForm({
 
   // Level management helpers
   const updateLevelField = (
-    level: "easy" | "medium" | "hard",
+    level: "Task 1" | "Task 2",
     field: string,
     value: string | number | boolean,
   ) => {
@@ -589,7 +579,7 @@ export default function PracticalForm({
     );
   };
 
-  const addLevelTestCase = (level: "easy" | "medium" | "hard") => {
+  const addLevelTestCase = (level: "Task 1" | "Task 2") => {
     setLevels((prev) =>
       prev.map((l) =>
         l.level === level
@@ -616,7 +606,7 @@ export default function PracticalForm({
   };
 
   const removeLevelTestCase = (
-    level: "easy" | "medium" | "hard",
+    level: "Task 1" | "Task 2",
     index: number,
   ) => {
     setLevels((prev) =>
@@ -629,7 +619,7 @@ export default function PracticalForm({
   };
 
   const updateLevelTestCase = (
-    level: "easy" | "medium" | "hard",
+    level: "Task 1" | "Task 2",
     index: number,
     field: keyof TestCase,
     value: string | number | boolean,
@@ -692,9 +682,14 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
       const apiUrl =
         process.env.NEXT_PUBLIC_AI_API_URL || "http://localhost:5002/ai";
 
+      const { data: { session } } = await supabase.auth.getSession();
+
       const res = await fetch(`${apiUrl}/chat`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${session?.access_token || ""}`
+        },
         body: JSON.stringify({
           messages: [{ role: "user", parts: [{ text: prompt }] }],
           config,
@@ -825,10 +820,6 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
       alert("Please select a Subject");
       return false;
     }
-    if (!form.deadline) {
-      alert("Please set a Deadline");
-      return false;
-    }
 
     if (enableLevels) {
       if (levels.length === 0) {
@@ -881,6 +872,11 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
       const { data: userData } = await supabase.auth.getUser();
       const userId = userData?.user?.id;
 
+      if (!userId) {
+        console.warn("[SaveRef] No user ID found, skipping reference code save");
+        return;
+      }
+
       // Check for existing reference code for this practical + language
       const { data: existing, error: fetchErr } = await supabase
         .from("reference_codes")
@@ -922,8 +918,7 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
       console.log(`[SaveRef] Successfully saved code for practical ${pId}`);
     } catch (err) {
       console.error("Error saving reference code:", err);
-      // Re-throw so the main handleSave can catch it and possibly alert the user
-      throw err;
+      // Do NOT re-throw, just log. We don't want to fail the whole practical because of this.
     }
   };
 
@@ -963,7 +958,6 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
         subject_id: form.subject_id,
         description: enableLevels ? "" : form.description, // Use level descriptions when levels enabled
         language: form.language,
-        deadline: form.deadline,
         max_marks: enableLevels
           ? levels.reduce((sum, l) => sum + l.max_marks, 0)
           : (form.max_marks ?? 10),
@@ -1083,7 +1077,7 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
     setSaving(true);
     let successCount = 0;
     let failCount = 0;
-    const savedData: { id: number; deadline: string }[] = [];
+    const savedData: { id: number }[] = [];
 
     try {
       // Save each draft sequentially
@@ -1128,11 +1122,10 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
             subject_id: draftForm.subject_id,
             description: draftEnableLevels ? "" : draftForm.description,
             language: draftForm.language,
-            deadline: draftForm.deadline,
             max_marks: draftEnableLevels
               ? draftLevels.reduce((sum, l) => sum + l.max_marks, 0)
               : (draftForm.max_marks ?? 10),
-            practical_number: draftForm.practical_number,
+            practical_number: draftForm.practical_number || undefined,
           };
 
           // Insert practical
@@ -1146,7 +1139,6 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
           const practicalId = newPractical.id;
           savedData.push({
             id: practicalId,
-            deadline: draftForm.deadline || new Date().toISOString()
           });
 
           if (draftEnableLevels) {
@@ -1168,7 +1160,11 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
 
               // Save reference code for this level if present
               if (level.reference_code) {
-                await saveReferenceCode(practicalId, level.reference_code, draftForm.language || "c");
+                try {
+                  await saveReferenceCode(practicalId, level.reference_code, draftForm.language || "c");
+                } catch (refErr) {
+                  console.error("Failed to save reference code for level:", refErr);
+                }
               }
 
               if (levelData && level.testCases.length > 0) {
@@ -1230,13 +1226,13 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
   }, [draftPracticals, supabase]);
 
   // Assign practical to selected students
-  const assign = async (specificItems?: { id: number; deadline?: string }[]) => {
+  const assign = async (specificItems?: { id: number }[]) => {
     // Determine which items to assign
     const itemsToAssign = specificItems && specificItems.length > 0
       ? specificItems
       : savedPracticals.length > 0
         ? savedPracticals
-        : (form.id ? [{ id: Number(form.id), deadline: form.deadline }] : []);
+        : (form.id ? [{ id: Number(form.id) }] : []);
 
     if (itemsToAssign.length === 0) {
       alert("Save the practical(s) before assigning.");
@@ -1255,10 +1251,8 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
     try {
       // Assign each practical sequentially
       for (const item of itemsToAssign) {
-        // Use the specific deadline for this practical if available, otherwise fallback to global state
-        // If it's a bulk saved item, use its stored deadline. 
-        // If it's single mode (form.id), use assignmentDeadline state (which user might have edited in step 2)
-        const deadlineToUse = item.deadline || assignmentDeadline || new Date().toISOString();
+        // Use assignmentDeadline state (which user might have edited in step 2)
+        const deadlineToUse = assignmentDeadline || new Date().toISOString();
 
         try {
           const response = await fetch("/api/admin/practicals/assign", {
@@ -1423,7 +1417,6 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
           subject_id: draft.form.subject_id,
           description: draft.enableLevels ? "" : draft.form.description,
           language: draft.form.language,
-          deadline: draft.form.deadline,
           max_marks: draft.enableLevels
             ? draft.levels.reduce((sum, l) => sum + l.max_marks, 0)
             : (draft.form.max_marks ?? 10),
@@ -1496,6 +1489,10 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
         successCount++;
       } catch (err: any) {
         console.error(`Error saving draft "${draft.form.title}":`, err);
+        // Alert the first error to help debugging
+        if (errorCount === 0) {
+          alert("Save Failed: " + (err?.message || JSON.stringify(err)));
+        }
         errorCount++;
       }
     }
@@ -1535,23 +1532,16 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
               <div className="w-full mx-auto px-4 xl:px-12 py-3 flex items-center justify-between gap-3">
                 <div className="flex items-center gap-3">
                   <div
-                    className={cx(
-                      "w-9 h-9 rounded-full flex items-center justify-center font-bold transition-all",
-                      step === 1
-                        ? "bg-gradient-to-br from-blue-600 to-purple-600 text-white shadow"
-                        : "bg-gray-200 dark:bg-gray-700 text-gray-700",
-                    )}
+                    className="w-9 h-9 rounded-full flex items-center justify-center font-bold bg-gradient-to-br from-blue-600 to-purple-600 text-white shadow"
                   >
-                    {step === 1 ? "1" : <CheckIcon />}
+                    1
                   </div>
                   <div className="leading-tight">
                     <div className="text-sm font-semibold text-gray-900 dark:text-white">
-                      {step === 1 ? "Practical Details" : "Assign Practical"}
+                      Practical Details
                     </div>
                     <div className="text-xs text-gray-500 dark:text-gray-400">
-                      {step === 1
-                        ? "Fill details & test cases"
-                        : "Select students & assign"}
+                      Fill details & test cases
                     </div>
                   </div>
                 </div>
@@ -1569,41 +1559,28 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
                     whileHover={{ scale: 1.02, y: -2 }}
                     whileTap={{ scale: 0.98 }}
                     onClick={async () => {
-                      if (step === 1) {
-                        if (isMultiDraftMode) {
-                          const savedData = await handleSaveAll();
-                          if (savedData.length > 0) {
-                            setSavedPracticals(savedData);
-                            setStep(2);
-                          }
-                        } else {
-                          const success = await handleSave();
-                          if (success) {
-                            setStep(2);
-                          }
+                      if (isMultiDraftMode) {
+                        const savedData = await handleSaveAll();
+                        if (savedData.length > 0) {
+                          onSaved();
                         }
                       } else {
-                        await assign(); // Will use savedPracticals or form.id
+                        const success = await handleSave();
+                        if (success) {
+                          onSaved();
+                        }
                       }
                     }}
-                    disabled={saving || loading}
+                    disabled={saving}
                     className={cx(
                       "inline-flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-bold transition-all shadow-lg",
-                      saving || loading
+                      saving
                         ? "bg-gray-300 dark:bg-gray-700 text-gray-500 cursor-wait"
                         : "bg-gradient-to-r from-indigo-600 to-purple-600 text-white hover:from-indigo-700 hover:to-purple-700 shadow-indigo-500/30",
                     )}
                   >
-                    {saving || loading ? <LoadingSpinner /> : null}
-                    {saving
-                      ? "Saving..."
-                      : loading
-                        ? "Assigning..."
-                        : step === 1
-                          ? singleStep
-                            ? "Save Practical"
-                            : "Save & Next →"
-                          : "Assign to Students"}
+                    {saving ? <LoadingSpinner /> : null}
+                    {saving ? "Saving..." : "Save Practical"}
                   </motion.button>
                 </div>
               </div>
@@ -1615,7 +1592,7 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
               isMultiDraftMode && !sidebarCollapsed ? "pl-0" : "px-4 xl:px-12"
             )}>
               {/* Sidebar for multi-draft mode */}
-              {isMultiDraftMode && step === 1 && (
+              {isMultiDraftMode && (
                 <motion.div
                   initial={{ width: sidebarCollapsed ? 48 : 280 }}
                   animate={{ width: sidebarCollapsed ? 48 : 280 }}
@@ -1689,18 +1666,16 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
                           // Use live form state for active draft, otherwise use draft state
                           const isActiveDraft = idx === activeDraftIndex;
                           const currentTitle = isActiveDraft ? form.title : draft.form.title;
-                          const currentDeadline = isActiveDraft ? form.deadline : draft.form.deadline;
                           const currentTestCases = isActiveDraft ? testCases : draft.testCases;
                           const currentPracticalNumber = isActiveDraft ? form.practical_number : draft.form.practical_number;
 
                           const hasTitle = currentTitle.trim() !== "";
-                          const hasDeadline = !!currentDeadline;
                           const hasTestCases = currentTestCases.some(tc => tc.input.trim() !== "" || tc.expected_output.trim() !== "");
                           const displayTitle = hasTitle ? currentTitle : `Practical ${idx + 1}`;
                           const subjectName = subjects.find(s => s.id === (isActiveDraft ? form.subject_id : draft.form.subject_id))?.subject_name || "No subject";
 
                           // Calculate completion percentage
-                          const fields = [hasTitle, hasDeadline, hasTestCases];
+                          const fields = [hasTitle, hasTestCases];
                           const completedFields = fields.filter(Boolean).length;
                           const completionPercent = Math.round((completedFields / fields.length) * 100);
                           const isComplete = completionPercent === 100;
@@ -1806,140 +1781,60 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
               {/* Main Form Area */}
               <div className={cx(
                 "flex-1",
-                isMultiDraftMode && step === 1 ? "px-4 xl:px-8" : ""
+                isMultiDraftMode ? "px-4 xl:px-8" : ""
               )}>
-                {/* Progress indicator - only show if not single step */}
-                {!singleStep && (
-                  <div className="mb-6">
-                    <div className="flex items-center justify-center gap-4">
-                      <div className="flex items-center gap-2">
-                        <div
-                          className={cx(
-                            "w-10 h-10 rounded-full flex items-center justify-center font-bold transition-all",
-                            step === 1
-                              ? "bg-gradient-to-br from-blue-600 to-purple-600 text-white shadow-lg"
-                              : "bg-emerald-600 text-white",
-                          )}
-                        >
-                          {step === 1 ? "1" : <CheckIcon />}
-                        </div>
-                        <span
-                          className={cx(
-                            "font-semibold",
-                            step === 1
-                              ? "text-gray-900 dark:text-white"
-                              : "text-gray-500 dark:text-gray-400",
-                          )}
-                        >
-                          Practical Details
-                        </span>
-                      </div>
 
-                      <div
-                        className={cx(
-                          "h-1 w-16 rounded-full",
-                          step === 2
-                            ? "bg-gradient-to-r from-blue-600 to-purple-600"
-                            : "bg-gray-200 dark:bg-gray-700",
-                        )}
-                      />
 
-                      <div className="flex items-center gap-2">
-                        <div
-                          className={cx(
-                            "w-10 h-10 rounded-full flex items-center justify-center font-bold transition-all",
-                            step === 2
-                              ? "bg-gradient-to-br from-blue-600 to-purple-600 text-white shadow-lg"
-                              : "bg-gray-200 dark:bg-gray-700 text-gray-400",
-                          )}
-                        >
-                          2
-                        </div>
-                        <span
-                          className={cx(
-                            "font-semibold",
-                            step === 2
-                              ? "text-gray-900 dark:text-white"
-                              : "text-gray-500 dark:text-gray-400",
-                          )}
-                        >
-                          Assign to Students
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                )}
+                {/* ---------- FORM CONTENT ---------- */}
+                <div className="space-y-6">
+                  {/* 1. Basic Information */}
+                  <BasicDetailsForm
+                    form={form}
+                    subjects={subjects}
+                    handleInput={handleInput}
+                    defaultSubjectId={defaultSubjectId}
+                    enableLevels={enableLevels}
+                    setEnableLevels={setEnableLevels}
+                    levels={levels}
+                  />
 
-                {/* ---------- STEP TRANSITIONS ---------- */}
-                <AnimatePresence mode="wait">
-                  {step === 1 ? (
-                    <motion.div
-                      key="step1"
-                      initial={{ opacity: 0, x: -20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      exit={{ opacity: 0, x: 20 }}
-                      transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
-                      className="space-y-6"
-                    >
-                      {/* 1. Basic Information */}
-                      <BasicDetailsForm
-                        form={form}
-                        subjects={subjects}
-                        handleInput={handleInput}
-                        defaultSubjectId={defaultSubjectId}
-                        enableLevels={enableLevels}
-                        setEnableLevels={setEnableLevels}
-                        levels={levels}
-                      />
-
-                      {/* Level Management (Tabs & Content) */}
-                      {enableLevels && (
-                        <LevelManager
-                          levels={levels}
-                          activeLevel={activeLevel}
-                          setActiveLevel={setActiveLevel}
-                          updateLevelField={updateLevelField}
-                          addLevelTestCase={addLevelTestCase}
-                          removeLevelTestCase={removeLevelTestCase}
-                          updateLevelTestCase={updateLevelTestCase}
-                          generateTestCases={generateTestCases}
-                          generatingTests={generatingTests}
-                          sampleCode={sampleCode}
-                          setSampleCode={setSampleCode}
-                          sampleLanguage={sampleLanguage || "c"}
-                        />
-                      )}
-
-                      {/* Single Level Test Cases & Description */}
-                      {!enableLevels && (
-                        <SingleLevelTestCases
-                          form={form}
-                          handleInput={handleInput}
-                          sampleCode={sampleCode}
-                          setSampleCode={setSampleCode}
-                          sampleLanguage={sampleLanguage}
-                          setSampleLanguage={setSampleLanguage}
-                          getLanguageExtension={getLanguageExtension}
-                          testCases={testCases}
-                          handleTestCaseChange={handleTestCaseChange}
-                          addTestCase={addTestCase}
-                          removeTestCase={removeTestCase}
-                          generateTestCases={generateTestCases}
-                          generatingTests={generatingTests}
-                        />
-                      )}
-                    </motion.div>
-                  ) : (
-                    <AssignStudentsStep
-                      students={students}
-                      selectedStudents={selectedStudents}
-                      setSelectedStudents={setSelectedStudents}
-                      filters={filters}
-                      setFilters={setFilters}
-                      availableBatches={availableBatches}
+                  {/* Level Management (Tabs & Content) */}
+                  {enableLevels && (
+                    <LevelManager
+                      levels={levels}
+                      activeLevel={activeLevel}
+                      setActiveLevel={setActiveLevel}
+                      updateLevelField={updateLevelField}
+                      addLevelTestCase={addLevelTestCase}
+                      removeLevelTestCase={removeLevelTestCase}
+                      updateLevelTestCase={updateLevelTestCase}
+                      generateTestCases={generateTestCases}
+                      generatingTests={generatingTests}
+                      sampleCode={sampleCode}
+                      setSampleCode={setSampleCode}
+                      sampleLanguage={sampleLanguage || "c"}
                     />
                   )}
-                </AnimatePresence>
+
+                  {/* Single Level Test Cases & Description */}
+                  {!enableLevels && (
+                    <SingleLevelTestCases
+                      form={form}
+                      handleInput={handleInput}
+                      sampleCode={sampleCode}
+                      setSampleCode={setSampleCode}
+                      sampleLanguage={sampleLanguage}
+                      setSampleLanguage={setSampleLanguage}
+                      getLanguageExtension={getLanguageExtension}
+                      testCases={testCases}
+                      handleTestCaseChange={handleTestCaseChange}
+                      addTestCase={addTestCase}
+                      removeTestCase={removeTestCase}
+                      generateTestCases={generateTestCases}
+                      generatingTests={generatingTests}
+                    />
+                  )}
+                </div>
               </div>
             </div>
           </motion.div>

@@ -332,15 +332,7 @@ export async function POST(req: Request) {
       (r: any) => !String(r.test_case_id).startsWith("user-"),
     );
 
-    const { data: practicalData } = await supabase
-      .from("practicals")
-      .select("deadline")
-      .eq("id", pid)
-      .single();
 
-    const globalDeadline = practicalData?.deadline
-      ? new Date(practicalData.deadline)
-      : null;
 
     if (mode === "submit" && submissionId) {
       // Calculate marks first
@@ -368,60 +360,7 @@ export async function POST(req: Request) {
         console.error("Error checking existing marks:", e);
       }
 
-      // Calculate Lateness & Penalty
-      let penalty = 0;
-      if (globalDeadline && studentId) {
-        try {
-          // Check for individual assignment deadline override
-          const { data: assignment } = await supabase
-            .from("student_practicals")
-            .select("assigned_deadline")
-            .eq("practical_id", pid)
-            .eq("student_id", studentId)
-            .single();
-
-          const effectiveDeadline = assignment?.assigned_deadline
-            ? new Date(assignment.assigned_deadline)
-            : globalDeadline;
-
-          if (effectiveDeadline) {
-            const now = new Date();
-            const diffTime = now.getTime() - effectiveDeadline.getTime();
-            const diffDays = diffTime / (1000 * 3600 * 24);
-
-            if (diffDays > 14) {
-              penalty = 2;
-            } else if (diffDays > 0) {
-              penalty = 1;
-            }
-          }
-        } catch (e: any) {
-          // Fallback to global deadline if assignment check fails
-          if (globalDeadline) {
-            const now = new Date();
-            const diffTime = now.getTime() - globalDeadline.getTime();
-            const diffDays = diffTime / (1000 * 3600 * 24);
-
-            if (diffDays > 14) {
-              penalty = 2;
-            } else if (diffDays > 0) {
-              penalty = 1;
-            }
-          }
-        }
-      } else if (globalDeadline) {
-        const now = new Date();
-        const diffTime = now.getTime() - globalDeadline.getTime();
-        const diffDays = diffTime / (1000 * 3600 * 24);
-
-        if (diffDays > 14) {
-          penalty = 2;
-        } else if (diffDays > 0) {
-          penalty = 1;
-        }
-      }
-
-      marksObtained = Math.max(0, baseMarks - penalty);
+      marksObtained = baseMarks;
       const newStatus = marksObtained >= 4 ? "passed" : "failed";
 
       // Re-check shouldUpdate with FINAL marks

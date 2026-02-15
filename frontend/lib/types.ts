@@ -3,7 +3,7 @@ export type Subject = { id: string; name: string; practical_count?: number };
 export type Practical = {
   id: string;
   title: string;
-  deadline?: string;
+
   submission_count?: number;
   marks?: number;
 };

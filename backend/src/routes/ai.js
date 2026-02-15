@@ -158,26 +158,43 @@ OUTPUT JSON:
       "title": "Title", 
       "description": "DETAILED problem statement. Include ALL constraints and requirements.",
       "max_marks": 10,
-      "enableLevels": false, // SET TO TRUE if multiple parts (Part A, Part B) exist.
-      "levels": [], // IF enableLevels=true: [{ "level": "easy", "title": "Part A", "description": "...", "max_marks": 5, "reference_code": "...", "testCases": [] }]
-      "language": "c",
-      "reference_code": "GENERATE_COMPLETE_WORKING_C_SOLUTION_HERE",
-      "testCases": [{ "input": "...", "expected_output": "..." }]
+      "enableLevels": true, // ALWAYS SET TO TRUE. Every practical MUST have 2 tasks.
+      "levels": [
+        { 
+          "level": "Task 1", 
+          "title": "Task 1 Title", 
+          "description": "Description for Task 1 (Standard Implementation of the concept)", 
+          "max_marks": 5, 
+          "reference_code": "...", 
+          "testCases": [{ "input": "...", "expected_output": "..." }] 
+        },
+        { 
+          "level": "Task 2", 
+          "title": "Task 2 Title", 
+          "description": "Description for Task 2 (ADVANCED/HARD version). Must include complex constraints, edge cases, or performance requirements.", 
+          "max_marks": 5, 
+          "reference_code": "...", 
+          "testCases": [{ "input": "...", "expected_output": "..." }] 
+        }
+      ],
+      "language": "c"
     }
   ]
 }
 
 RULES:
 1. **EXTRACT ALL:** Do not skip any experiment found in the text.
-2. **MULTI-LEVEL:** If experiments have parts (A/B), set "enableLevels": true. Group them.
+2. **ALWAYS 2 TASKS:** 
+   - **Task 1:** Standard, straightforward implementation of the core concept.
+   - **Task 2:** **SIGNIFICANTLY HARDER**. It must involve complex logic, edge cases, input validation, or optimization. It should challenge the student.
 3. **NUMBERING:** Use "Exp No" from text.
 4. **JSON ONLY:** No markdown.
-5. **REFERENCE CODE:** Generate a COMPLETE, WORKING C solution.
-6. **TEST CASES:** Generate EXACTLY 2 test cases per practical/level.
-
-TEXT:
-${chunkText}
-`;
+5. **REFERENCE CODE:** Generate COMPLETE, WORKING C solutions for BOTH tasks.
+6. **TEST CASES:** Generate EXACTLY 2 test cases per Task.
+7. 
+8. TEXT:
+9. ${chunkText}
+10. `;
 
         try {
           const messages = [{ role: 'user', parts: [{ text: prompt }] }];
@@ -285,5 +302,66 @@ ${chunkText}
     }
   }
 );
+
+router.post('/explain-error', async (req, res) => {
+  try {
+    const { code, error, language, config } = req.body;
+
+    if (!code || !error) {
+      return res.status(400).json({ error: 'Code and error message are required' });
+    }
+
+    // Set headers for SSE
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+
+    const prompt = `
+I encountered this error in my ${language || 'code'}:
+
+CODE:
+\`\`\`${language || ''}
+${code}
+\`\`\`
+
+ERROR:
+${error}
+
+Please explain:
+1. What this error means in simple terms (for a beginner).
+2. Exactly which line/part of the code is likely causing it.
+3. How to fix it (provide the corrected code snippet).
+`;
+
+    const messages = [{ role: 'user', parts: [{ text: prompt }] }];
+
+    // Prepare config overrides (inject secondary key if using Gemini, similar to other endpoints)
+    const configOverrides = { ...config };
+    if (!configOverrides.provider || configOverrides.provider === 'gemini') {
+      try {
+        configOverrides.apiKey = require('../config').ai.apiKey2;
+      } catch (_e) {
+        // ignore if key2 missing
+      }
+    }
+
+    await aiService.chat(messages, null, configOverrides, (chunk) => {
+      res.write(`data: ${JSON.stringify({ text: chunk })}\n\n`);
+    });
+
+    res.write(`data: [DONE]\n\n`);
+    res.end();
+  } catch (err) {
+    logger.error('Explain Error Failed:', err);
+    if (!res.headersSent) {
+      res.status(500).json({ error: err.message || 'Internal AI Error' });
+    } else {
+      res.write(
+        `data: ${JSON.stringify({ error: err.message || 'Internal AI Error' })}\n\n`
+      );
+      res.end();
+    }
+  }
+});
 
 module.exports = router;

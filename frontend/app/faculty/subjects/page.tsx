@@ -211,16 +211,16 @@ export default function FacultySubjects() {
       try {
         const { data, error } = await supabase
           .from("practicals")
-          .select(`id, title, deadline, submissions(id)`)
+          .select(`id, title, submissions(id)`)
           .eq("subject_id", Number(subjectId))
-          .order("deadline", { ascending: true });
+          .order("created_at", { ascending: false });
 
         if (error) throw error;
 
         const formatted = (data || []).map((p) => ({
           id: p.id,
           title: p.title,
-          deadline: p.deadline as string | null,
+
           description: null,
           language: null,
           max_marks: 0,
@@ -248,20 +248,7 @@ export default function FacultySubjects() {
     }
   }, [selected, loadPracticals]);
 
-  const getDeadlineStatus = (deadline: string | null) => {
-    if (!deadline) return { text: "No deadline", pill: "gray" as const };
-    const now = new Date();
-    const deadlineDate = new Date(deadline);
-    const daysLeft = Math.ceil(
-      (deadlineDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24),
-    );
 
-    if (daysLeft < 0) return { text: "Closed", pill: "gray" as const };
-    if (daysLeft === 0) return { text: "Today", pill: "orange" as const };
-    if (daysLeft <= 3)
-      return { text: `${daysLeft} days`, pill: "yellow" as const };
-    return { text: `${daysLeft} days`, pill: "green" as const };
-  };
 
   const handleViewPractical = async (practical: Practical) => {
     try {
@@ -586,14 +573,7 @@ export default function FacultySubjects() {
                 ) : (
                   <div className="space-y-2">
                     {practicals.map((p) => {
-                      const status = getDeadlineStatus(p.deadline);
-                      const statusColors = {
-                        red: "text-red-600 dark:text-red-400",
-                        orange: "text-orange-600 dark:text-orange-400",
-                        yellow: "text-amber-600 dark:text-amber-400",
-                        green: "text-emerald-600 dark:text-emerald-400",
-                        gray: "text-gray-500",
-                      };
+
                       return (
                         <div
                           key={p.id}
@@ -605,15 +585,8 @@ export default function FacultySubjects() {
                               {p.title}
                             </h4>
                             <div className="flex items-center gap-2 mt-1">
-                              <Clock
-                                className={`w-3.5 h-3.5 ${statusColors[status.pill]}`}
-                              />
-                              <span
-                                className={`text-xs font-medium ${statusColors[status.pill]}`}
-                              >
-                                {" "}
-                                {status.text}{" "}
-                                {p.deadline && `• ${formatDate(p.deadline)}`}
+                              <span className="text-xs font-medium text-gray-500">
+                                Created: {new Date(p.created_at).toLocaleDateString()}
                               </span>
                             </div>
                           </div>
@@ -764,12 +737,7 @@ export default function FacultySubjects() {
                         {selectedSubject?.subject_name}
                       </span>
                     </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-500">Deadline</span>
-                      <span className="font-medium text-gray-900 dark:text-white">
-                        {formatDate(viewingPractical.deadline)}
-                      </span>
-                    </div>
+
                     {viewingPractical.submission_count !== undefined && (
                       <div className="flex justify-between">
                         <span className="text-gray-500">Submissions</span>

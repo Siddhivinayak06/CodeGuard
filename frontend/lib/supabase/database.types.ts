@@ -236,7 +236,7 @@ export interface Database {
         Row: {
           id: number;
           practical_id: number;
-          level: "easy" | "medium" | "hard";
+          level: "Task 1" | "Task 2";
           title: string | null;
           description: string | null;
           max_marks: number;
@@ -246,7 +246,7 @@ export interface Database {
         Insert: {
           id?: number;
           practical_id: number;
-          level: "easy" | "medium" | "hard";
+          level: "Task 1" | "Task 2";
           title?: string | null;
           description?: string | null;
           max_marks?: number;
@@ -256,7 +256,7 @@ export interface Database {
         Update: {
           id?: number;
           practical_id?: number;
-          level?: "easy" | "medium" | "hard";
+          level?: "Task 1" | "Task 2";
           title?: string | null;
           description?: string | null;
           max_marks?: number;
@@ -280,7 +280,6 @@ export interface Database {
           title: string;
           description: string | null;
           language: string | null;
-          deadline: string | null;
           max_marks: number;
           created_at: string;
           updated_at: string;
@@ -292,7 +291,6 @@ export interface Database {
           title: string;
           description?: string | null;
           language?: string | null;
-          deadline?: string | null;
           max_marks?: number;
           created_at?: string;
           updated_at?: string;
@@ -304,7 +302,6 @@ export interface Database {
           title?: string;
           description?: string | null;
           language?: string | null;
-          deadline?: string | null;
           max_marks?: number;
           created_at?: string;
           updated_at?: string;

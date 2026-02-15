@@ -4,7 +4,7 @@ import { useState, useRef, useEffect, useMemo } from "react";
 import dynamic from "next/dynamic";
 import CodeEditor from "@/components/editor/CodeEditor";
 import { ModeToggle } from "@/components/layout/ModeToggle";
-import { ChevronDown, Loader2 } from "lucide-react";
+import { ChevronDown, Loader2, Sparkles } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { generatePdfClient } from "@/lib/ClientPdf";
@@ -62,6 +62,98 @@ export default function Home() {
 
   const [currentMode, setCurrentMode] = useState("Static");
   const [showAssistant, setShowAssistant] = useState(false);
+
+  const [hasError, setHasError] = useState(false);
+  const assistantRef = useRef<{ sendMessage: (msg: string) => void } | null>(
+    null,
+  );
+
+  useEffect(() => {
+    // Simple heuristic to detect errors in output
+    if (
+      interactiveOutput.includes("Traceback") ||
+      interactiveOutput.includes("Error:") ||
+      interactiveOutput.includes("Exception") ||
+      interactiveOutput.includes("Failed")
+    ) {
+      setHasError(true);
+    }
+  }, [interactiveOutput]);
+
+  const handleExplainError = async () => {
+    if (!interactiveTerminalRef.current) return;
+
+    // Visual separator
+    interactiveTerminalRef.current.write("\r\n\r\n\x1b[1;35m✨ AI Error Explanation:\x1b[0m\r\n");
+
+    const context = interactiveOutput.slice(-3000);
+    const prompt = `I encountered an error in my ${lang} interactive session:\n\nOUTPUT:\n${context}\n\nPlease explain the error and how to fix it. Keep it concise.`;
+
+    try {
+      const config = JSON.parse(localStorage.getItem("ai_settings") || "{}");
+      const apiUrl = process.env.NEXT_PUBLIC_AI_API_URL || "http://localhost:5002/ai";
+
+      if (!supabase) return;
+      const { data: { session } } = await supabase.auth.getSession();
+
+      const res = await fetch(`${apiUrl}/chat2`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${session?.access_token || ""}`
+        },
+        body: JSON.stringify({
+          messages: [{ role: "user", parts: [{ text: prompt }] }],
+          codeContext: {
+            code: files.find((f) => f.name === activeFileName)?.content || "",
+            activeFile: activeFileName,
+            files: files.map((f) => ({ name: f.name, language: f.language })),
+          },
+          config
+        }),
+      });
+
+      if (!res.ok || !res.body) throw new Error("Failed to fetch explanation");
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+
+        const events = buffer.split("\n\n");
+        buffer = events.pop() || "";
+
+        for (const ev of events) {
+          const line = ev.trim();
+          if (!line.startsWith("data:")) continue;
+          const payload = line.replace(/^data:\s*/, "");
+          if (payload === "[DONE]") break;
+          try {
+            const parsed = JSON.parse(payload);
+            if (parsed?.text) {
+              const text = parsed.text
+                .replace(/\*\*(.*?)\*\*/g, "\x1b[1m$1\x1b[0m") // Bold
+                .replace(/`(.*?)`/g, "\x1b[36m$1\x1b[0m")       // Inline code (cyan)
+                .replace(/\n/g, "\r\n");
+
+              interactiveTerminalRef.current.write(text);
+            }
+          } catch (e) {
+            console.error("Parse error", e);
+          }
+        }
+      }
+      interactiveTerminalRef.current.write("\r\n\r\n");
+
+    } catch (err) {
+      console.error(err);
+      interactiveTerminalRef.current.write("\r\n\x1b[1;31mFailed to get explanation.\x1b[0m\r\n");
+    }
+  };
 
   useEffect(() => {
     if (pathname === "/Interactive") setCurrentMode("Interactive");
@@ -369,6 +461,7 @@ export default function Home() {
                         disabled={false}
                         onRun={() => {
                           setInteractiveOutput("");
+                          setHasError(false); // Reset error state on run
                           setPlotImages([]);
                           setIsExecuting(true);
                           if (
@@ -441,6 +534,17 @@ export default function Home() {
                         </span>
                       </div>
                       <div className="flex items-center gap-2">
+                        {hasError && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={handleExplainError}
+                            className="h-6 px-2 text-[10px] font-semibold uppercase tracking-wider rounded-full bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 hover:bg-red-200 dark:hover:bg-red-900/50 border border-red-200/50 dark:border-red-800/50 flex items-center gap-1.5"
+                          >
+                            <Sparkles className="w-3 h-3" />
+                            Explain Error
+                          </Button>
+                        )}
                         <span className="px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider rounded-full bg-gradient-to-r from-indigo-500/20 to-purple-500/20 text-indigo-600 dark:text-indigo-400 border border-indigo-200/50 dark:border-indigo-700/50">
                           {lang}
                         </span>
@@ -483,6 +587,7 @@ export default function Home() {
                   className="bg-white/70 dark:bg-gray-900/70 backdrop-blur-2xl border-l border-white/30 dark:border-gray-700/50"
                 >
                   <AssistantPanel
+                    ref={assistantRef}
                     codeContext={{
                       code:
                         files.find((f) => f.name === activeFileName)?.content ||

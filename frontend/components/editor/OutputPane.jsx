@@ -31,7 +31,7 @@ const formatError = (error) => {
   return cleanedLines.join("\n").trim();
 };
 
-export default function OutputPane({ output, error, language = "Python" }) {
+export default function OutputPane({ output, error, language = "Python", onExplainError }) {
   const formattedError = formatError(error);
 
   if (!output && !formattedError) {
@@ -87,22 +87,46 @@ export default function OutputPane({ output, error, language = "Python" }) {
 
       <div className="flex-1 p-4 overflow-auto scrollbar-thin scrollbar-thumb-gray-200 dark:scrollbar-thumb-gray-800">
         {formattedError && (
-          <div className="mb-6 animate-in fade-in slide-in-from-top-1 duration-300">
-            <div className="flex items-center gap-2 text-red-500 dark:text-red-400 font-bold mb-2 uppercase text-xs tracking-widest">
-              <svg
-                className="w-4 h-4"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                />
-              </svg>
-              Standard Error
+          <div className="mb-6 animate-in fade-in slide-in-from-top-1 duration-300 group">
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2 text-red-500 dark:text-red-400 font-bold uppercase text-xs tracking-widest">
+                <svg
+                  className="w-4 h-4"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                  />
+                </svg>
+                Standard Error
+              </div>
+              {onExplainError && (
+                <button
+                  onClick={() => onExplainError(formattedError)}
+                  className="flex items-center gap-1.5 px-2 py-1 text-xs font-medium text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-900/20 hover:bg-purple-100 dark:hover:bg-purple-900/40 rounded transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"
+                  title="Ask AI to explain this error"
+                >
+                  <svg
+                    className="w-3.5 h-3.5"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M13 10V3L4 14h7v7l9-11h-7z"
+                    />
+                  </svg>
+                  Explain Error
+                </button>
+              )}
             </div>
             <div className="text-red-600 dark:text-red-400 bg-red-50/50 dark:bg-red-900/10 border-l-2 border-red-500 p-4 rounded-r-lg whitespace-pre-wrap leading-relaxed">
               {formattedError}

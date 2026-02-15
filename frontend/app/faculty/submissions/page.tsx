@@ -132,7 +132,7 @@ function FacultySubmissionsContentInner() {
     subjectName: string;
     subjectCode: string;
     practicalTitles: string[];
-    practicalDeadlines: string[];
+    practicalDeadlines: (string | null)[];
     students: {
       student_name: string;
       roll_no: string;
@@ -395,8 +395,8 @@ function FacultySubmissionsContentInner() {
       // 3. Get all practicals for this subject
       const practicalIds = subject.practicals.map((p: any) => p.id);
       const practicalTitles = subject.practicals.map((p: any) => p.title);
-      // Fetch deadlines as well
-      const practicalDeadlines = subject.practicals.map((p: any) => p.deadline);
+      // Fetch deadlines as well - deadline column removed, passing null
+      const practicalDeadlines = subject.practicals.map((p: any) => null);
 
       // 4. Fetch all submissions for these practicals
       const { data: allSubmissions } = await supabase

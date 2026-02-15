@@ -23,20 +23,20 @@ const CodeMirror = dynamic(() => import("@uiw/react-codemirror"), {
 
 interface LevelManagerProps {
   levels: Level[];
-  activeLevel: "easy" | "hard";
-  setActiveLevel: (level: "easy" | "hard") => void;
+  activeLevel: "Task 1" | "Task 2";
+  setActiveLevel: (level: "Task 1" | "Task 2") => void;
   updateLevelField: (
-    level: "easy" | "hard",
+    level: "Task 1" | "Task 2",
     field: string,
     value: string | number | boolean,
   ) => void;
-  addLevelTestCase: (level: "easy" | "hard") => void;
+  addLevelTestCase: (level: "Task 1" | "Task 2") => void;
   removeLevelTestCase: (
-    level: "easy" | "hard",
+    level: "Task 1" | "Task 2",
     index: number,
   ) => void;
   updateLevelTestCase: (
-    level: "easy" | "hard",
+    level: "Task 1" | "Task 2",
     index: number,
     field: keyof TestCase,
     value: string | number | boolean,
@@ -100,10 +100,10 @@ export default function LevelManager({
 
       {/* Level Tabs */}
       <div className="flex gap-2 mb-6">
-        {(["easy", "hard"] as const).map((lvl) => {
+        {(["Task 1", "Task 2"] as const).map((lvl) => {
           const levelInfo = {
-            easy: { label: "Easy", color: "emerald" },
-            hard: { label: "Hard", color: "red" },
+            "Task 1": { label: "Task 1", color: "emerald" },
+            "Task 2": { label: "Task 2", color: "red" },
           }[lvl];
           const isActive = activeLevel === lvl;
           return (
@@ -149,7 +149,7 @@ export default function LevelManager({
                   updateLevelField(activeLevel, "title", e.target.value)
                 }
                 className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                placeholder={`${activeLevel.charAt(0).toUpperCase() + activeLevel.slice(1)} Task Title`}
+                placeholder={`${activeLevel} Title`}
               />
             </div>
             <div>
@@ -181,7 +181,7 @@ export default function LevelManager({
                 updateLevelField(activeLevel, "description", e.target.value)
               }
               className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent min-h-[120px]"
-              placeholder={`Describe the ${activeLevel} level problem...`}
+              placeholder={`Describe the ${activeLevel} problem...`}
             />
           </div>
 

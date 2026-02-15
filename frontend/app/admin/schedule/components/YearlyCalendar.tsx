@@ -144,11 +144,10 @@ function MonthGrid({
 
   return (
     <div
-      className={`rounded-xl border transition-all duration-300 hover:shadow-lg h-full flex flex-col ${
-        isCurrentMonth
+      className={`rounded-xl border transition-all duration-300 hover:shadow-lg h-full flex flex-col ${isCurrentMonth
           ? "border-indigo-300/50 dark:border-indigo-700/50 bg-gradient-to-br from-indigo-50/80 to-purple-50/80 dark:from-indigo-950/30 dark:to-purple-950/30 shadow-lg shadow-purple-500/20"
           : "border-gray-200/70 dark:border-gray-700/50 bg-white/80 dark:bg-gray-800/80 hover:border-indigo-200 dark:hover:border-indigo-800"
-      } p-5 backdrop-blur-sm`}
+        } p-5 backdrop-blur-sm`}
     >
       <div className="flex items-center justify-between mb-4 h-7">
         <h3
@@ -177,7 +176,8 @@ function MonthGrid({
         {days.map((day) => {
           const date = new Date(year, monthIndex, day);
           const dateString = date.toISOString().split("T")[0];
-          const hasSchedule = schedules.some((s: any) => s.date === dateString);
+          const daySchedules = schedules.filter((s: any) => s.date === dateString);
+          const hasSchedule = daySchedules.length > 0;
           const isSelected =
             selectedDate && date.toDateString() === selectedDate.toDateString();
           const isToday = today.toDateString() === date.toDateString();
@@ -186,40 +186,72 @@ function MonthGrid({
             new Date(today.getFullYear(), today.getMonth(), today.getDate());
 
           return (
-            <motion.button
-              key={day}
-              whileHover={{ scale: 1.15 }}
-              whileTap={{ scale: 0.95 }}
-              onClick={() => onSelectDate(date)}
-              className={`
+            <div key={day} className="relative group/day">
+              <motion.button
+                whileHover={{ scale: 1.15 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={() => onSelectDate(date)}
+                className={`
                                 w-7 h-7 rounded-full flex items-center justify-center transition-all relative text-xs font-medium
-                                ${
-                                  isSelected
-                                    ? "bg-gradient-to-br from-indigo-500 to-purple-600 text-white ring-2 ring-indigo-300 dark:ring-indigo-700 shadow-lg shadow-indigo-500/40"
-                                    : isToday
-                                      ? "ring-2 ring-indigo-400 dark:ring-indigo-500 text-indigo-700 dark:text-indigo-300 font-bold bg-indigo-50 dark:bg-indigo-900/20"
-                                      : "hover:bg-indigo-50 dark:hover:bg-indigo-900/30 text-gray-700 dark:text-gray-300 hover:text-indigo-600 dark:hover:text-indigo-400"
-                                }
-                                ${
-                                  hasSchedule && !isSelected
-                                    ? "bg-gradient-to-br from-blue-100 to-cyan-100 dark:from-blue-900/30 dark:to-cyan-900/30 text-blue-700 dark:text-blue-300 font-bold"
-                                    : ""
-                                }
-                                ${
-                                  isPast &&
-                                  !hasSchedule &&
-                                  !isSelected &&
-                                  !isToday
-                                    ? "opacity-40"
-                                    : ""
-                                }
+                                ${isSelected
+                    ? "bg-gradient-to-br from-indigo-500 to-purple-600 text-white ring-2 ring-indigo-300 dark:ring-indigo-700 shadow-lg shadow-indigo-500/40"
+                    : isToday
+                      ? "ring-2 ring-indigo-400 dark:ring-indigo-500 text-indigo-700 dark:text-indigo-300 font-bold bg-indigo-50 dark:bg-indigo-900/20"
+                      : "hover:bg-indigo-50 dark:hover:bg-indigo-900/30 text-gray-700 dark:text-gray-300 hover:text-indigo-600 dark:hover:text-indigo-400"
+                  }
+                                ${hasSchedule && !isSelected
+                    ? "bg-gradient-to-br from-blue-100 to-cyan-100 dark:from-blue-900/30 dark:to-cyan-900/30 text-blue-700 dark:text-blue-300 font-bold"
+                    : ""
+                  }
+                                ${isPast &&
+                    !hasSchedule &&
+                    !isSelected &&
+                    !isToday
+                    ? "opacity-40"
+                    : ""
+                  }
                             `}
-            >
-              {day}
+              >
+                {day}
+                {hasSchedule && (
+                  <span className="absolute -bottom-0.5 w-1 h-1 bg-current rounded-full" />
+                )}
+              </motion.button>
+
+              {/* Hover Tooltip */}
               {hasSchedule && (
-                <span className="absolute -bottom-0.5 w-1 h-1 bg-current rounded-full" />
+                <div className="absolute z-50 bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover/day:block pointer-events-none">
+                  <div className="bg-gray-900 dark:bg-gray-800 text-white rounded-xl shadow-xl border border-gray-700/50 p-3 min-w-[200px] max-w-[260px]">
+                    <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">
+                      {date.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}
+                    </div>
+                    <div className="space-y-2">
+                      {daySchedules.map((s: any, idx: number) => (
+                        <div key={idx} className={`${idx > 0 ? "pt-2 border-t border-gray-700/50" : ""}`}>
+                          <div className="text-xs font-semibold text-white truncate">
+                            {s.practicals?.title || "Untitled Practical"}
+                          </div>
+                          <div className="flex items-center gap-2 mt-1">
+                            {s.batch_name && (
+                              <span className="text-[10px] px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-300 font-medium">
+                                {s.batch_name}
+                              </span>
+                            )}
+                            {s.start_time && (
+                              <span className="text-[10px] text-gray-400">
+                                {s.start_time}{s.end_time ? ` - ${s.end_time}` : ""}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    {/* Arrow */}
+                    <div className="absolute top-full left-1/2 -translate-x-1/2 w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-t-[6px] border-t-gray-900 dark:border-t-gray-800" />
+                  </div>
+                </div>
               )}
-            </motion.button>
+            </div>
           );
         })}
       </div>

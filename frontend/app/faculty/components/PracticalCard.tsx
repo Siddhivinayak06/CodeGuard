@@ -8,10 +8,11 @@ type Practical = {
   title: string;
   description?: string;
   language?: string;
-  deadline: string; // ISO string
+  deadline?: string; // ISO string
   max_marks?: number;
   created_at?: string;
   practical_number?: number;
+  schedules?: { batch_name: string | null; date: string }[];
 };
 
 function cn(...parts: Array<string | false | null | undefined>) {
@@ -30,27 +31,28 @@ export default function PracticalCard({
   onDelete: (id: number) => void;
 }) {
   const safeDeadline = (() => {
+    if (!practical.deadline) return null;
     try {
       return new Date(practical.deadline);
     } catch {
-      return new Date(NaN);
+      return null;
     }
   })();
 
-  const isValidDate = !Number.isNaN(safeDeadline.getTime());
-  const isPast = isValidDate ? safeDeadline.getTime() < Date.now() : false;
+  const isValidDate = safeDeadline && !Number.isNaN(safeDeadline.getTime());
+  const isPast = isValidDate ? safeDeadline!.getTime() < Date.now() : false;
   const timeUntil = isValidDate
-    ? Math.ceil((safeDeadline.getTime() - Date.now()) / (1000 * 60 * 60 * 24))
+    ? Math.ceil((safeDeadline!.getTime() - Date.now()) / (1000 * 60 * 60 * 24))
     : Infinity;
 
   const deadlineLabel = isValidDate
-    ? safeDeadline.toLocaleDateString("en-US", {
+    ? safeDeadline!.toLocaleDateString("en-US", {
       month: "short",
       day: "numeric",
       year: "numeric",
     }) +
     " • " +
-    safeDeadline.toLocaleTimeString("en-US", {
+    safeDeadline!.toLocaleTimeString("en-US", {
       hour: "2-digit",
       minute: "2-digit",
     })
@@ -122,17 +124,25 @@ export default function PracticalCard({
               />
             </svg>
 
-            <span className="font-medium">{deadlineLabel}</span>
-
-            {!isPast && isFinite(timeUntil) && timeUntil >= 0 && (
-              <span className="text-xs px-2 py-0.5 bg-blue-500/10 dark:bg-blue-500/20 text-blue-700 dark:text-blue-300 rounded-full">
-                {timeUntil === 0
-                  ? "Due today"
-                  : timeUntil === 1
-                    ? "Due tomorrow"
-                    : `${timeUntil} days left`}
-              </span>
-            )}
+            <div className={`text-sm ${practical.schedules && practical.schedules.length > 0
+                ? "text-indigo-600 dark:text-indigo-400"
+                : "text-gray-500"
+              }`}>
+              {practical.schedules && practical.schedules.length > 0 ? (
+                <div className="flex flex-col gap-1">
+                  {practical.schedules.map((s, i) => (
+                    <span key={i} className="flex items-center gap-1.5">
+                      <span className="font-semibold text-[10px] uppercase tracking-wider bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 px-1.5 py-0.5 rounded">
+                        {s.batch_name || "All"}
+                      </span>
+                      <span>{new Date(s.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</span>
+                    </span>
+                  ))}
+                </div>
+              ) : (
+                <span className="italic opacity-70">No schedule</span>
+              )}
+            </div>
           </div>
         </div>
 

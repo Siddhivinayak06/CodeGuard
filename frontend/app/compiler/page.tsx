@@ -88,6 +88,9 @@ int main() {
   const [user, setUser] = useState<User | null>(null);
   const [currentMode, setCurrentMode] = useState("Static");
   const [showAssistant, setShowAssistant] = useState(false);
+  const assistantRef = useRef<{ sendMessage: (msg: string) => void } | null>(
+    null,
+  );
 
   useEffect(() => {
     if (pathname === "/Interactive") setCurrentMode("Interactive");
@@ -151,6 +154,17 @@ int main() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleExplainError = (errorMsg: string) => {
+    setShowAssistant(true);
+    // use setTimeout to allow panel to mount/animation if needed
+    setTimeout(() => {
+      if (assistantRef.current) {
+        const prompt = `I encountered this error in my ${lang} code:\n\nERROR:\n${errorMsg}\n\nPlease explain what this error means and how to fix it.`;
+        assistantRef.current.sendMessage(prompt);
+      }
+    }, 100);
   };
 
   const downloadPdf = async () => {
@@ -271,6 +285,7 @@ int main() {
                               output={output}
                               error={errorOutput}
                               language={lang}
+                              onExplainError={handleExplainError}
                             />
                           </div>
                         </div>
@@ -291,6 +306,7 @@ int main() {
                           output={output}
                           error={errorOutput}
                           language={lang}
+                          onExplainError={handleExplainError}
                         />
                       </div>
                     </div>
@@ -311,6 +327,7 @@ int main() {
                   className="bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl border-l border-white/20 dark:border-gray-800/50"
                 >
                   <AssistantPanel
+                    ref={assistantRef}
                     codeContext={{
                       code: code,
                       activeFile:

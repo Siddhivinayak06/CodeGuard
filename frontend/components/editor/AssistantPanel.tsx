@@ -1,6 +1,8 @@
 "use client";
 
-import { useState, useRef, useEffect, useMemo } from "react";
+import { createClient } from "@/lib/supabase/client";
+
+import React, { useState, useRef, useEffect, useMemo, useImperativeHandle } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -91,7 +93,15 @@ const messageVariants = {
 };
 
 // --------- component ---------
-export function AssistantPanel({ codeContext, onClose }: AssistantPanelProps) {
+// --------- component ---------
+export interface AssistantPanelHandle {
+  sendMessage: (text: string) => void;
+}
+
+export const AssistantPanel = React.forwardRef<
+  AssistantPanelHandle,
+  AssistantPanelProps
+>(({ codeContext, onClose }, ref) => {
   const [messages, setMessages] = useState<Message[]>([
     {
       id: crypto.randomUUID(),
@@ -101,6 +111,7 @@ export function AssistantPanel({ codeContext, onClose }: AssistantPanelProps) {
   ]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const supabase = createClient();
 
   const viewportRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
@@ -112,16 +123,23 @@ export function AssistantPanel({ codeContext, onClose }: AssistantPanelProps) {
 
   const md = useMemo(() => ({ rehypePlugins: [rehypeHighlight] }), []);
 
-  async function handleSend() {
-    if (!input.trim() || loading) return;
+  useImperativeHandle(ref, () => ({
+    sendMessage: (text: string) => {
+      handleSend(text);
+    },
+  }));
+
+  async function handleSend(textOverride?: string) {
+    const textToSend = textOverride || input;
+    if (!textToSend.trim() || loading) return;
 
     const userMsg: Message = {
       id: crypto.randomUUID(),
       role: "user",
-      text: input,
+      text: textToSend,
     };
     setMessages((p) => [...p, userMsg]);
-    setInput("");
+    if (!textOverride) setInput("");
     setLoading(true);
 
     const modelId = crypto.randomUUID();
@@ -136,9 +154,19 @@ export function AssistantPanel({ codeContext, onClose }: AssistantPanelProps) {
       const apiUrl =
         process.env.NEXT_PUBLIC_AI_API_URL || "http://localhost:5002/ai";
 
+      // If this is an error explanation request, we might want to use the specialized endpoint
+      // But for simplicity in this integration, we'll stick to the chat for now, 
+      // OR we can make the Assistant smarter later.
+      // Actually, let's just use the chat endpoint but with the prompt constructed by the caller.
+
+      const { data: { session } } = await supabase.auth.getSession();
+
       const res = await fetch(`${apiUrl}/chat2`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${session?.access_token || ""}`
+        },
         body: JSON.stringify({ messages: apiMessages, codeContext, config }),
       });
       if (!res.ok || !res.body)
@@ -386,4 +414,6 @@ export function AssistantPanel({ codeContext, onClose }: AssistantPanelProps) {
       </div>
     </div>
   );
-}
+});
+
+AssistantPanel.displayName = "AssistantPanel";
