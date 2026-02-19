@@ -4,6 +4,7 @@ const router = express.Router();
 const fs = require('fs');
 const path = require('path');
 const logger = require('../utils/logger');
+const config = require('../config');
 const { z } = require('zod');
 
 // Validation Schema
@@ -42,6 +43,15 @@ try {
   runCode = require('../utils/runCode');
 } catch (e) {
   logger.error('Failed to require ../utils/runCode:', e && e.message);
+}
+
+let localBatchCode;
+let localRunCode;
+try {
+  localBatchCode = require('../utils/localRunner');
+  localRunCode = require('../utils/localRunCode');
+} catch (e) {
+  logger.warn('Failed to require local runners:', e && e.message);
 }
 
 // sanity checks: ensure modules are functions
@@ -93,27 +103,47 @@ router.post('/', async (req, res) => {
       problem,
     } = parseResult.data;
 
-    const queueService = require('../services/queueService');
+    const { isLocalAvailable, isDockerAvailable } = require('../utils/runtimeDetector');
+    const poolManager = require('../services/poolManager');
+
+    // Determine if we should use direct local execution (bypass queue/Redis)
+    const shouldUseDirectLocal = () => {
+      const dockerUp = isDockerAvailable();
+      const localOk = config.allowLocalExecution && isLocalAvailable(lang);
+      // Use direct local if Docker is not available and local compilers exist
+      if (!dockerUp && localOk) return true;
+      // Also use direct local if poolManager flagged useLocal
+      if (poolManager.useLocal && localOk) return true;
+      return false;
+    };
+
+    const useDirectLocal = shouldUseDirectLocal();
 
     // ========================
     // 1️⃣ Batch mode (multiple test cases)
     // ========================
     if (Array.isArray(batch) && batch.length > 0) {
-      logger.info(`Queuing batch execution for ${lang}...`);
-
       try {
-        // Enqueue job and wait for result (simulating synchronous API for now)
-        const job = await queueService.addJob({
-          type: 'batch',
-          code,
-          lang,
-          batch,
-          problem,
-        });
+        let runnerResults;
 
-        const runnerResults = await job.waitUntilFinished(
-          queueService.queueEvents
-        );
+        if (useDirectLocal) {
+          // Direct local execution — no Redis/queue needed
+          if (!localBatchCode) localBatchCode = require('../utils/localRunner');
+          logger.info(`[Execute] Direct local batch execution for ${lang}`);
+          runnerResults = await localBatchCode(code, lang, batch);
+        } else {
+          // Queue-based execution (requires Redis)
+          logger.info(`Queuing batch execution for ${lang}...`);
+          const queueService = require('../services/queueService');
+          const job = await queueService.addJob({
+            type: 'batch',
+            code,
+            lang,
+            batch,
+            problem,
+          });
+          runnerResults = await job.waitUntilFinished(queueService.queueEvents);
+        }
 
         for (const result of runnerResults) {
           const tc = batch.find((b) => b.id === result.test_case_id);
@@ -123,24 +153,11 @@ router.post('/', async (req, res) => {
           result.reference_stdout = result.reference_stdout ?? '';
 
           if (!tc.is_hidden && reference_code) {
-            // If reference code needs to be run, we might need another job or run it here.
-            // For simplicity/perf, let's run it here if it's light, OR we should have sent ref code to worker.
-            // Current design: Run ref code HERE (server side) or assume it was done.
-            // BETTER: Let's assume we can run ref code here for now to avoid complexity,
-            // BUT ideally ref code should also run in the worker to be safe.
-            // Given keeping it simple: Run ref code using direct runner (careful of load)
-            // OR send ref code to worker.
-            // Let's stick to the previous pattern: Ref code run is separate?
-            // Actually, the previous code ran ref code AFTER student code.
-            // We will keep running ref code directly here for now to minimize refactor risk,
-            // but strictly speaking it should be queued too.
-            // A better approach for scalability: The worker should handle reference code too.
-            // For this task, we will focus on student code queuing.
-
             try {
-              // We need runCode for reference.
+              if (!localRunCode) localRunCode = require('../utils/localRunCode');
               if (!runCode) runCode = require('../utils/runCode');
-              const refRes = await runCode(
+              const runner = useDirectLocal ? localRunCode : runCode;
+              const refRes = await runner(
                 reference_code,
                 reference_lang || lang,
                 tc.stdinInput ?? tc.input ?? ''
@@ -192,22 +209,30 @@ router.post('/', async (req, res) => {
     if (!code) return res.status(400).json({ error: 'No code provided.' });
 
     try {
-      logger.info(`Queuing single execution for ${lang}...`);
-      const job = await queueService.addJob({
-        type: 'single',
-        code,
-        lang,
-        input: stdinInput,
-        problem,
-      });
+      let userResult;
 
-      const userResult = await job.waitUntilFinished(queueService.queueEvents);
+      if (useDirectLocal) {
+        // Direct local execution — no Redis/queue needed
+        if (!localRunCode) localRunCode = require('../utils/localRunCode');
+        logger.info(`[Execute] Direct local single execution for ${lang}`);
+        userResult = await localRunCode(code, lang, stdinInput);
+      } else {
+        // Queue-based execution (requires Redis)
+        logger.info(`Queuing single execution for ${lang}...`);
+        const queueService = require('../services/queueService');
+        const job = await queueService.addJob({
+          type: 'single',
+          code,
+          lang,
+          input: stdinInput,
+          problem,
+        });
+        userResult = await job.waitUntilFinished(queueService.queueEvents);
+      }
 
       // If a problem is provided, compare with reference code
       let refOut = '';
       if (problem) {
-        // Ref code logic... keeping it local for now as per minimal change strategy
-        // Ideally: Queue this too.
         const ext = LANG_EXT[lang] || 'c';
         const referencePath = path.join(
           process.cwd(),
@@ -216,9 +241,11 @@ router.post('/', async (req, res) => {
         );
         if (fs.existsSync(referencePath)) {
           try {
-            if (!runCode) runCode = require('../utils/runCode');
+            const runner = useDirectLocal
+              ? (localRunCode || require('../utils/localRunCode'))
+              : (runCode || require('../utils/runCode'));
             const referenceCode = fs.readFileSync(referencePath, 'utf8');
-            const refResult = await runCode(referenceCode, lang, stdinInput);
+            const refResult = await runner(referenceCode, lang, stdinInput);
             refOut = (refResult.output ?? '').trim();
           } catch (e) {
             logger.error(e);

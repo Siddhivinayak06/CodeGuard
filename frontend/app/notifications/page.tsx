@@ -18,6 +18,7 @@ import NotificationsSkeleton from "@/components/skeletons/NotificationsSkeleton"
 import { formatDistanceToNow, format } from "date-fns";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 
 interface Notification {
   id: string;
@@ -162,11 +163,11 @@ export default function NotificationsPage() {
       } else {
         const data = await res.json();
         console.error("Failed to delete notification:", data.error);
-        alert(`Failed to delete: ${data.error}`);
+        toast.error(`Failed to delete: ${data.error}`);
       }
     } catch (err) {
       console.error("Delete notification error:", err);
-      alert("An error occurred while deleting");
+      toast.error("An error occurred while deleting");
     }
   };
 
@@ -185,15 +186,16 @@ export default function NotificationsPage() {
           practicalId: meta.practicalId,
         }),
       });
-      if (res.ok) {
+      const data = await res.json();
+      if (res.ok && data.success) {
         await markAsRead(notification.id);
-        alert("Re-attempt granted successfully!");
+        toast.success(`Re-attempt granted! (max attempts: ${data.newMaxAttempts})`);
       } else {
-        alert("Failed to grant re-attempt");
+        toast.error(data.error || "Failed to grant re-attempt");
       }
     } catch (err) {
       console.error(err);
-      alert("Failed to grant re-attempt");
+      toast.error("Failed to grant re-attempt");
     } finally {
       setGrantingId(null);
     }
@@ -279,131 +281,136 @@ export default function NotificationsPage() {
           </div>
         ) : (
           <div className="space-y-4">
-            {notifications.map((notification, index) => (
-              <div
-                key={notification.id}
-                className={`glass-card rounded-2xl p-5 hover-lift animate-slideUp border transition-all ${!notification.is_read
-                  ? "bg-indigo-50/50 dark:bg-indigo-900/10 border-indigo-200/50 dark:border-indigo-800/30"
-                  : "border-transparent"
-                  }`}
-                style={{ animationDelay: `${index * 30}ms` }}
-              >
-                <div className="flex gap-4">
-                  {/* Icon */}
-                  <div
-                    className={`flex-shrink-0 w-12 h-12 rounded-xl flex items-center justify-center border ${notification.metadata?.isReattemptRequest
-                      ? "bg-purple-100 dark:bg-purple-900/30 border-purple-200 dark:border-purple-800"
-                      : notificationColors[notification.type] ||
-                      "bg-gray-100 dark:bg-gray-800 border-gray-200 dark:border-gray-700"
-                      }`}
-                  >
-                    {notification.metadata?.isReattemptRequest ? (
-                      <RefreshCw className="w-6 h-6 text-purple-500" />
-                    ) : (
-                      notificationIcons[notification.type] || (
-                        <Bell className="w-6 h-6 text-gray-500" />
-                      )
-                    )}
-                  </div>
+            {notifications.map((notification, index) => {
+              const isReattemptRequest = notification.metadata?.isReattemptRequest || notification.title === "Re-attempt Request";
+              const canGrant = isReattemptRequest && notification.metadata?.studentId && notification.metadata?.practicalId;
 
-                  {/* Content */}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <h3
-                          className={`font-semibold ${!notification.is_read
-                            ? "text-gray-900 dark:text-white"
-                            : "text-gray-700 dark:text-gray-300"
-                            }`}
-                        >
-                          {notification.title}
-                        </h3>
-                        {notification.message && (
-                          <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                            {notification.message}
+              return (
+                <div
+                  key={notification.id}
+                  className={`glass-card rounded-2xl p-5 hover-lift animate-slideUp border transition-all ${!notification.is_read
+                    ? "bg-indigo-50/50 dark:bg-indigo-900/10 border-indigo-200/50 dark:border-indigo-800/30"
+                    : "border-transparent"
+                    } ${isReattemptRequest ? "border-l-4 !border-l-purple-500" : ""}`}
+                  style={{ animationDelay: `${index * 30}ms` }}
+                >
+                  <div className="flex gap-4">
+                    {/* Icon */}
+                    <div
+                      className={`flex-shrink-0 w-12 h-12 rounded-xl flex items-center justify-center border ${isReattemptRequest
+                        ? "bg-purple-100 dark:bg-purple-900/30 border-purple-200 dark:border-purple-800"
+                        : notificationColors[notification.type] ||
+                        "bg-gray-100 dark:bg-gray-800 border-gray-200 dark:border-gray-700"
+                        }`}
+                    >
+                      {isReattemptRequest ? (
+                        <RefreshCw className="w-6 h-6 text-purple-500" />
+                      ) : (
+                        notificationIcons[notification.type] || (
+                          <Bell className="w-6 h-6 text-gray-500" />
+                        )
+                      )}
+                    </div>
+
+                    {/* Content */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <h3
+                            className={`font-semibold ${!notification.is_read
+                              ? "text-gray-900 dark:text-white"
+                              : "text-gray-700 dark:text-gray-300"
+                              }`}
+                          >
+                            {notification.title}
+                          </h3>
+                          {notification.message && (
+                            <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                              {notification.message}
+                            </p>
+                          )}
+                          <p className="text-xs text-gray-400 dark:text-gray-500 mt-2">
+                            {format(
+                              new Date(notification.created_at),
+                              "MMM d, yyyy 'at' h:mm a",
+                            )}
+                            {" · "}
+                            {formatDistanceToNow(
+                              new Date(notification.created_at),
+                              { addSuffix: true },
+                            )}
                           </p>
-                        )}
-                        <p className="text-xs text-gray-400 dark:text-gray-500 mt-2">
-                          {format(
-                            new Date(notification.created_at),
-                            "MMM d, yyyy 'at' h:mm a",
-                          )}
-                          {" · "}
-                          {formatDistanceToNow(
-                            new Date(notification.created_at),
-                            { addSuffix: true },
-                          )}
-                        </p>
 
-                        {/* Grant Button */}
-                        {notification.metadata?.isReattemptRequest &&
-                          !notification.is_read && (
+                          {/* Grant Button */}
+                          {canGrant &&
+                            !notification.is_read && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleGrantReattempt(notification);
+                                }}
+                                disabled={grantingId === notification.id}
+                                className="mt-3 px-4 py-2 text-sm font-medium bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors flex items-center gap-2 disabled:opacity-50"
+                              >
+                                {grantingId === notification.id ? (
+                                  <>
+                                    <Loader2 className="w-4 h-4 animate-spin" />{" "}
+                                    Granting...
+                                  </>
+                                ) : (
+                                  <>
+                                    <RefreshCw className="w-4 h-4" /> Grant
+                                    Re-attempt
+                                  </>
+                                )}
+                              </button>
+                            )}
+                        </div>
+
+                        {/* Actions */}
+                        <div className="flex items-center gap-1">
+                          {!notification.is_read && (
                             <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleGrantReattempt(notification);
-                              }}
-                              disabled={grantingId === notification.id}
-                              className="mt-3 px-4 py-2 text-sm font-medium bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors flex items-center gap-2 disabled:opacity-50"
+                              onClick={() => markAsRead(notification.id)}
+                              className="p-2 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 rounded-lg transition-colors"
+                              title="Mark as read"
                             >
-                              {grantingId === notification.id ? (
-                                <>
-                                  <Loader2 className="w-4 h-4 animate-spin" />{" "}
-                                  Granting...
-                                </>
-                              ) : (
-                                <>
-                                  <RefreshCw className="w-4 h-4" /> Grant
-                                  Re-attempt
-                                </>
-                              )}
+                              <Check className="w-4 h-4" />
                             </button>
                           )}
+                          <button
+                            onClick={(e) =>
+                              deleteNotification(notification.id, e)
+                            }
+                            className="p-2 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                            title="Delete"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
                       </div>
 
-                      {/* Actions */}
-                      <div className="flex items-center gap-1">
-                        {!notification.is_read && (
-                          <button
-                            onClick={() => markAsRead(notification.id)}
-                            className="p-2 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 rounded-lg transition-colors"
-                            title="Mark as read"
-                          >
-                            <Check className="w-4 h-4" />
-                          </button>
-                        )}
-                        <button
-                          onClick={(e) =>
-                            deleteNotification(notification.id, e)
-                          }
-                          className="p-2 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
-                          title="Delete"
+                      {/* Link */}
+                      {notification.link && (
+                        <Link
+                          href={notification.link}
+                          className="inline-flex items-center gap-1 mt-3 text-sm font-medium text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 transition-colors"
                         >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
+                          View details →
+                        </Link>
+                      )}
                     </div>
 
-                    {/* Link */}
-                    {notification.link && (
-                      <Link
-                        href={notification.link}
-                        className="inline-flex items-center gap-1 mt-3 text-sm font-medium text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 transition-colors"
-                      >
-                        View details →
-                      </Link>
+                    {/* Unread indicator */}
+                    {!notification.is_read && (
+                      <div className="flex-shrink-0">
+                        <span className="w-3 h-3 rounded-full bg-indigo-500 block animate-pulse" />
+                      </div>
                     )}
                   </div>
-
-                  {/* Unread indicator */}
-                  {!notification.is_read && (
-                    <div className="flex-shrink-0">
-                      <span className="w-3 h-3 rounded-full bg-indigo-500 block animate-pulse" />
-                    </div>
-                  )}
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>

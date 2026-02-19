@@ -17,6 +17,7 @@ import {
   Search as SearchIcon,
   LayoutGrid,
   BarChart3,
+  RotateCcw,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { motion } from "framer-motion";
@@ -492,18 +493,35 @@ function FacultySubmissionsContentInner() {
 
     setBulkActionLoading(true);
     try {
-      const updates = action === 'pass'
-        ? { status: 'passed' as const, marks_obtained: 10 }
-        : { status: 'pending' as const, marks_obtained: null };
+      if (action === 'pass') {
+        const { error } = await supabase
+          .from("submissions")
+          .update({ status: 'passed' as const, marks_obtained: 10 })
+          .in("id", Array.from(selectedSubmissionIds));
+        if (error) throw error;
+      } else {
+        // For reattempt: call the allow-reattempt API for each selected submission
+        const selectedSubs = submissions.filter(s => selectedSubmissionIds.has(s.id));
+        const results = await Promise.allSettled(
+          selectedSubs.map(sub =>
+            fetch("/api/faculty/allow-reattempt", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                studentId: sub.student_id,
+                practicalId: sub.practical_id,
+                reason: "Faculty granted re-attempt (bulk action)",
+              }),
+            }).then(res => res.json())
+          )
+        );
+        const failed = results.filter(r => r.status === 'rejected' || (r.status === 'fulfilled' && !r.value.success));
+        if (failed.length > 0) {
+          toast.warning(`${results.length - failed.length}/${results.length} re-attempts granted`);
+        }
+      }
 
-      const { error } = await supabase
-        .from("submissions")
-        .update(updates)
-        .in("id", Array.from(selectedSubmissionIds));
-
-      if (error) throw error;
-
-      toast.success(action === 'pass' ? "Marked as passed" : "Re-attempt granted");
+      toast.success(action === 'pass' ? "Marked as passed" : "Re-attempt granted — max_attempts increased");
       setSelectedSubmissionIds(new Set());
       fetchSubmissions();
     } catch (error) {
@@ -511,6 +529,28 @@ function FacultySubmissionsContentInner() {
       toast.error("Failed to perform action");
     } finally {
       setBulkActionLoading(false);
+    }
+  };
+
+  // Per-student allow re-attempt
+  const handleAllowReattempt = async (sub: Submission) => {
+    try {
+      const res = await fetch("/api/faculty/allow-reattempt", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          studentId: sub.student_id,
+          practicalId: sub.practical_id,
+          reason: "Faculty granted re-attempt",
+        }),
+      });
+      const data = await res.json();
+      if (!data.success) throw new Error(data.error);
+      toast.success(`Re-attempt granted (max attempts: ${data.newMaxAttempts})`);
+      fetchSubmissions();
+    } catch (err: any) {
+      console.error("Allow re-attempt failed:", err);
+      toast.error(err.message || "Failed to grant re-attempt");
     }
   };
 
@@ -845,14 +885,27 @@ function FacultySubmissionsContentInner() {
                             />
                           )}
                         </td>
-                        <td className="px-4 py-3 text-right">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="bg-indigo-50 text-indigo-600 hover:bg-indigo-100 dark:bg-indigo-900/20 dark:text-indigo-400 dark:hover:bg-indigo-900/40"
-                          >
-                            Grade
-                          </Button>
+                        <td className="px-4 py-3 text-right" onClick={e => e.stopPropagation()}>
+                          <div className="flex items-center justify-end gap-2">
+                            {sub.status === 'failed' && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="gap-1.5 text-xs bg-amber-50 text-amber-700 hover:bg-amber-100 dark:bg-amber-900/20 dark:text-amber-400 dark:hover:bg-amber-900/40"
+                                onClick={() => handleAllowReattempt(sub)}
+                              >
+                                <RotateCcw className="w-3.5 h-3.5" />
+                                Re-attempt
+                              </Button>
+                            )}
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="bg-indigo-50 text-indigo-600 hover:bg-indigo-100 dark:bg-indigo-900/20 dark:text-indigo-400 dark:hover:bg-indigo-900/40"
+                            >
+                              Grade
+                            </Button>
+                          </div>
                         </td>
                       </motion.tr>
                     ))

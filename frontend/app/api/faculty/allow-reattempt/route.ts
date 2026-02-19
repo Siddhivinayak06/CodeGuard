@@ -69,6 +69,26 @@ export async function POST(req: Request) {
       created_at: new Date().toISOString(),
     });
 
+    // Notify student about the re-attempt
+    try {
+      const { data: practical } = await supabase
+        .from("practicals")
+        .select("title")
+        .eq("id", practicalId)
+        .single();
+
+      await supabase.from("notifications").insert({
+        user_id: studentId,
+        type: "submission_graded",
+        title: "Re-attempt Granted",
+        message: `Your faculty has granted a re-attempt for "${practical?.title || "a practical"}". You now have ${newMax} total attempts.`,
+        link: "/student/practicals",
+        is_read: false,
+      });
+    } catch (notifErr) {
+      console.error("Failed to send re-attempt notification:", notifErr);
+    }
+
     return NextResponse.json({
       success: true,
       message: "Re-attempt allowed",

@@ -3,6 +3,7 @@
 import { useEffect, useState, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import axios from "axios";
 import { Button } from "@/components/ui/button";
 import StudentPracticalsSkeleton from "@/components/skeletons/StudentPracticalsSkeleton";
 import type { User } from "@supabase/supabase-js";
@@ -25,10 +26,12 @@ import {
   Layout,
   ChevronRight,
   List,
+  Lock,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Tables } from "@/lib/supabase/database.types";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 
 // ============================================================================
 // ANIMATION VARIANTS
@@ -528,12 +531,37 @@ export default function StudentPracticals() {
 
       let previousCompleted = true;
       groupPracticals.forEach((p) => {
-        // If previous not completed, lock this one
+        // Check Schedule Lock
+        const now = new Date();
+        let scheduleLocked = false;
+
+        if (p.schedule_date) {
+          const schedDate = new Date(p.schedule_date);
+          if (p.schedule_time) {
+            const [hours, minutes] = p.schedule_time.split(":").map(Number);
+            schedDate.setHours(hours, minutes, 0, 0);
+          } else {
+            schedDate.setHours(0, 0, 0, 0);
+          }
+
+          if (now < schedDate) {
+            p.is_locked = true;
+            p.lock_reason = `Available on ${schedDate.toLocaleDateString()} at ${schedDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+            scheduleLocked = true;
+          }
+        }
+
+        // If previous not completed, lock this one (override schedule lock reason if needed, or maybe prioritize?)
+        // Let's prioritize schedule lock over previous lock if previous is done, but previous lock over schedule lock if previous is not done.
+
         if (!previousCompleted) {
           p.is_locked = true;
-          p.lock_reason = "Previous practical not submitted";
-        } else if (p.is_locked && (p.max_attempts - p.attempt_count > 0)) {
-          // Sequentially valid + attempts remaining -> Ensure unlocked (fix for stuck state)
+          // Only overwrite reason if it wasn't already schedule locked (to be helpful)
+          if (!scheduleLocked) {
+            p.lock_reason = "Previous practical not submitted";
+          }
+        } else if (!scheduleLocked && p.is_locked && (p.max_attempts - p.attempt_count > 0)) {
+          // Sequentially valid + attempts remaining + Not Schedule Locked -> Ensure unlocked (fix for stuck state)
           p.is_locked = false;
           p.lock_reason = null;
         }
@@ -556,17 +584,38 @@ export default function StudentPracticals() {
       others.sort(
         (a, b) => (a.practical_number || a.id) - (b.practical_number || b.id)
       );
+      // Process 'others' with same logic
       let previousCompleted = true;
       others.forEach((p) => {
-        // Remove early return on is_locked to allow progression if done/attempted
+        const now = new Date();
+        let scheduleLocked = false;
+
+        if (p.schedule_date) {
+          const schedDate = new Date(p.schedule_date);
+          if (p.schedule_time) {
+            const [hours, minutes] = p.schedule_time.split(":").map(Number);
+            schedDate.setHours(hours, minutes, 0, 0);
+          } else {
+            schedDate.setHours(0, 0, 0, 0);
+          }
+
+          if (now < schedDate) {
+            p.is_locked = true;
+            p.lock_reason = `Available on ${schedDate.toLocaleDateString()} at ${schedDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+            scheduleLocked = true;
+          }
+        }
 
         if (!previousCompleted) {
           p.is_locked = true;
-          p.lock_reason = "Previous practical not submitted";
-        } else if (p.is_locked && (p.max_attempts - p.attempt_count > 0)) {
+          if (!scheduleLocked) {
+            p.lock_reason = "Previous practical not submitted";
+          }
+        } else if (!scheduleLocked && p.is_locked && (p.max_attempts - p.attempt_count > 0)) {
           p.is_locked = false;
           p.lock_reason = null;
         }
+
         const isDone = ["passed", "completed", "submitted", "failed"].includes(
           p.status
         );
@@ -701,7 +750,7 @@ export default function StudentPracticals() {
 
   const handleStartPractical = (practical: FormattedPractical) => {
     if (practical.is_locked) {
-      alert("This practical is locked. " + (practical.lock_reason || "Please complete the previous practical first."));
+      toast.warning("This practical is locked. " + (practical.lock_reason || "Please complete the previous practical first."));
       return;
     }
 
@@ -712,7 +761,7 @@ export default function StudentPracticals() {
     const remainingAttempts = practical.max_attempts - practical.attempt_count;
 
     if (remainingAttempts <= 0) {
-      alert("You have no remaining attempts for this practical.");
+      toast.error("You have no remaining attempts for this practical.");
       return;
     }
 
@@ -730,55 +779,29 @@ export default function StudentPracticals() {
     );
   };
 
-  // Reattempt Request State
-  const [reattemptRequest, setReattemptRequest] = useState<{
-    show: boolean;
-    practical: FormattedPractical | null;
-    reason: string;
-    submitting: boolean;
-    success: boolean;
-  }>({ show: false, practical: null, reason: "", submitting: false, success: false });
-
-  const handleRequestReattempt = (practical: FormattedPractical) => {
-    setReattemptRequest({
-      show: true,
-      practical,
-      reason: "",
-      submitting: false,
-      success: false
-    });
-  };
-
-  const submitReattemptRequest = async () => {
-    if (!reattemptRequest.practical || !user) return;
-
-    setReattemptRequest(prev => ({ ...prev, submitting: true }));
-
+  const handleRequestReattempt = async (practical: FormattedPractical) => {
     try {
-      // Insert reattempt request into database
-      const { error } = await (supabase as any)
-        .from("reattempt_requests")
-        .insert({
-          student_id: user.id,
-          practical_id: reattemptRequest.practical.id,
-          reason: reattemptRequest.reason,
-          status: "pending",
-        });
+      // Optimistic Update
+      setPracticals(prev => prev.map(p => {
+        if (p.id === practical.id) {
+          return {
+            ...p,
+            lock_reason: (p.lock_reason || "Locked") + " | Re-attempt Requested"
+          };
+        }
+        return p;
+      }));
 
-      if (error) {
-        // If table doesn't exist, show success anyway (for demo purposes)
-        console.warn("Reattempt request table may not exist:", error);
-      }
+      await axios.post("/api/practical/reattempt", {
+        practicalId: practical.id
+      });
 
-      setReattemptRequest(prev => ({ ...prev, success: true, submitting: false }));
-
-      // Close modal after showing success
-      setTimeout(() => {
-        setReattemptRequest({ show: false, practical: null, reason: "", submitting: false, success: false });
-      }, 2000);
-    } catch (err) {
-      console.error("Failed to submit reattempt request:", err);
-      setReattemptRequest(prev => ({ ...prev, submitting: false }));
+      toast.success("Re-attempt request sent successfully!");
+      router.refresh();
+    } catch (err: any) {
+      console.error("Re-attempt request failed:", err);
+      toast.error(err.response?.data?.error || "Failed to send request.");
+      router.refresh(); // Revert optimistic update by refetching
     }
   };
 
@@ -807,175 +830,267 @@ export default function StudentPracticals() {
     const isDone = ["passed", "failed", "completed"].includes(p.status);
     const isSubmitted = p.status === "submitted";
     const isUrgent = false;
-    const timeInfo = null;
+    const showLocked = p.is_locked && !isDone && !isSubmitted;
+
+    // Status accent colors
+    const accentMap: Record<string, string> = {
+      passed: "from-emerald-500 to-green-400",
+      completed: "from-emerald-500 to-green-400",
+      failed: "from-red-500 to-rose-400",
+      in_progress: "from-amber-500 to-orange-400",
+      submitted: "from-blue-500 to-cyan-400",
+    };
+    const accent = accentMap[p.status] || "from-indigo-500 to-purple-500";
+
+    const scorePercent = (p.marks_obtained !== undefined && p.max_marks)
+      ? Math.round((p.marks_obtained / p.max_marks) * 100)
+      : null;
+
+    // Format schedule time (strip seconds): "09:00:00" → "09:00"
+    const formatTime = (t: string) => t?.replace(/:(\d{2})$/, "").replace(/(\d{2}:\d{2}:\d{2})\s*-\s*(\d{2}:\d{2}:\d{2})/, (_, a, b) =>
+      `${a.slice(0, 5)} – ${b.slice(0, 5)}`
+    );
 
     return (
       <motion.div
         variants={itemVariants}
         key={p.id}
         className={cn(
-          "group relative glass-card rounded-2xl p-5 transition-all duration-300 hover:shadow-xl hover:shadow-indigo-500/10 hover:-translate-y-1 border border-white/50 dark:border-gray-700/50 flex flex-col h-full bg-white/40 dark:bg-gray-900/40 backdrop-blur-md",
-          isUrgent
-            ? "border-l-4 border-l-red-500 dark:border-l-red-500 border-t-white/50 border-r-white/50 border-b-white/50"
-            : "hover:border-indigo-500/30 dark:hover:border-indigo-500/30",
+          "group relative rounded-2xl transition-all duration-300 hover:shadow-2xl hover:shadow-indigo-500/10 hover:-translate-y-1 flex flex-col h-full overflow-hidden",
+          "bg-white dark:bg-gray-900/80 backdrop-blur-xl border border-gray-200/60 dark:border-gray-700/50",
+          isUrgent && "ring-2 ring-red-500/30",
         )}
       >
-        {/* Card Header & Icon */}
-        <div className="flex items-start justify-between gap-4 mb-4">
-          <div
-            className={`w-12 h-12 shrink-0 rounded-2xl bg-gradient-to-br ${getStatusGradient(
-              p.status,
-            )} flex items-center justify-center shadow-lg shadow-indigo-500/10 group-hover:scale-110 transition-transform duration-300`}
-          >
-            <span className="text-xl font-black text-white">
-              {p.practical_number ?? p.id}
+        {/* Top Accent Bar */}
+        <div className={`h-1.5 w-full bg-gradient-to-r ${accent}`} />
+
+        {/* Card Body */}
+        <div className="p-5 flex flex-col flex-1">
+
+          {/* Header: Number Badge + Title */}
+          <div className="flex items-start gap-3 mb-4">
+            <div
+              className={`w-11 h-11 shrink-0 rounded-xl bg-gradient-to-br ${accent} flex items-center justify-center shadow-lg group-hover:scale-105 transition-transform duration-300`}
+            >
+              <span className="text-lg font-black text-white drop-shadow-sm">
+                {p.practical_number ?? p.id}
+              </span>
+            </div>
+            <div className="min-w-0 flex-1">
+              <h4 className="text-[15px] font-bold text-gray-900 dark:text-white line-clamp-2 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors leading-snug" title={p.title}>
+                {p.title}
+              </h4>
+            </div>
+          </div>
+
+          {/* Tags Row */}
+          <div className="flex flex-wrap items-center gap-1.5 mb-3">
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wide bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400">
+              <Code2 className="w-2.5 h-2.5" />
+              {p.language || "Any"}
             </span>
+            {p.hasLevels && (
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wide bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400">
+                Multi-Level
+              </span>
+            )}
+            <StatusBadge status={p.status} />
+            {showLocked && (
+              <span className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wide bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400">
+                <Lock className="w-2.5 h-2.5" />
+                Locked
+              </span>
+            )}
           </div>
 
-          <div className="flex flex-col items-end gap-1.5">
-            <div className="flex items-center gap-1.5">
-              {isUrgent && (
-                <span className="px-2 py-0.5 rounded-md bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-[10px] font-bold uppercase tracking-wider border border-red-100 dark:border-red-800/50">
-                  Due Soon
-                </span>
-              )}
-              {p.is_locked && (
-                <span className="px-2 py-0.5 rounded-md bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 text-[10px] font-bold uppercase tracking-wider border border-gray-200 dark:border-gray-700">
-                  Locked
-                </span>
-              )}
-            </div>
-            <div className="flex items-center gap-1.5">
-              <span className={cn(
-                "px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider border",
-                p.hasLevels
-                  ? "bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400 border-purple-100 dark:border-purple-800/50"
-                  : "bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 border-blue-100 dark:border-blue-800/50"
-              )}>
-                {p.hasLevels ? "Multi-Level" : p.subject_name}
-              </span>
-              <span className="px-2 py-0.5 rounded-md bg-gray-50 dark:bg-gray-800/50 text-gray-500 dark:text-gray-400 text-[10px] font-bold uppercase tracking-wider border border-gray-200 dark:border-gray-700">
-                {p.language || "Any"}
-              </span>
-            </div>
-          </div>
-        </div>
-
-        {/* Content */}
-        <div className="flex-1 mb-5">
-          <h4 className="text-lg font-bold text-gray-900 dark:text-white mb-2 line-clamp-1 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors" title={p.title}>
-            {p.title}
-          </h4>
-
+          {/* Schedule Pill */}
           {p.schedule_date && (
-            <div className="flex items-center gap-2 mb-3 text-xs font-medium text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/20 px-2.5 py-1.5 rounded-lg w-fit">
-              <Clock className="w-3.5 h-3.5" />
+            <div className="flex items-center gap-2 mb-3 text-xs font-medium text-indigo-600/80 dark:text-indigo-400/80 bg-indigo-50/60 dark:bg-indigo-900/10 px-2.5 py-1.5 rounded-lg w-fit">
+              <Clock className="w-3 h-3 shrink-0" />
               <span>
-                Scheduled: {new Date(p.schedule_date).toLocaleDateString()}
-                {p.schedule_time && ` • ${p.schedule_time}`}
+                {new Date(p.schedule_date).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}
+                {p.schedule_time && ` · ${formatTime(p.schedule_time)}`}
               </span>
             </div>
           )}
-          <p className="text-sm text-gray-500 dark:text-gray-400 line-clamp-2 leading-relaxed">
-            {p.description?.replace(/^Problem Statement:?\s*/i, "") || "No description available."}
-          </p>
-        </div>
 
-        {/* Attempts Info */}
-        {(!isDone && p.max_attempts > 1) && (
-          <div className="mb-4 pt-3 border-t border-gray-100 dark:border-gray-800/50">
-            <span className={cn(
-              "text-xs px-2 py-1 rounded-md font-medium flex items-center gap-1.5 w-fit",
-              p.max_attempts - p.attempt_count <= 1
-                ? "bg-red-50 text-red-600 dark:bg-red-900/20 dark:text-red-400"
-                : "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400"
-            )}>
-              <Sparkles className="w-3 h-3" />
-              {p.max_attempts - p.attempt_count} attempts left
-            </span>
+          {/* Description / Levels */}
+          <div className="flex-1 mb-1">
+            {p.description ? (
+              <p className="text-[13px] text-gray-500 dark:text-gray-400 line-clamp-2 leading-relaxed">
+                {p.description.replace(/^Problem Statement:?\s*/i, "")}
+              </p>
+            ) : p.hasLevels && p.levels && p.levels.length > 0 ? (
+              <div className="space-y-1">
+                {p.levels.map((lvl) => {
+                  const levelColors: Record<string, string> = {
+                    easy: "text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20",
+                    medium: "text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20",
+                    hard: "text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20",
+                  };
+                  return (
+                    <div key={lvl.id} className="flex items-center gap-2 text-[13px]">
+                      <span className={`shrink-0 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wide ${levelColors[lvl.level] || "text-gray-500 bg-gray-100"}`}>
+                        {lvl.level}
+                      </span>
+                      <span className="text-gray-500 dark:text-gray-400 line-clamp-1">
+                        {lvl.title || lvl.description?.replace(/^Problem Statement:?\s*/i, "")?.slice(0, 50) || "—"}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <p className="text-[13px] text-gray-400 dark:text-gray-500 italic">
+                No description available.
+              </p>
+            )}
           </div>
-        )}
 
-        {/* Footer Actions */}
-        <div className="mt-auto pt-4 flex items-center justify-between border-t border-gray-100 dark:border-gray-800/50">
-          {!isDone && !isSubmitted && p.status !== "failed" ? (
-            <Button
-              className={cn(
-                "w-full group-hover:translate-x-1 transition-all duration-300 shadow-md",
-                isUrgent ? "bg-red-600 hover:bg-red-700 shadow-red-500/20" : "bg-indigo-600 hover:bg-indigo-700 shadow-indigo-500/20"
-              )}
-              size="sm"
-              onClick={() => handleStartPractical(p)}
-              disabled={
-                p.is_locked
-              }
-            >
-              <span className="flex items-center gap-2">
-                {p.is_locked
-                  ? "Locked"
-                  : p.status === "in_progress"
-                    ? "Continue Solving"
-                    : "Start Assessment"}
-                {!p.is_locked && (
-                  <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
-                )}
-              </span>
-            </Button>
-          ) : (
-            <div className="w-full flex items-center justify-between gap-3">
-              {p.marks_obtained !== undefined && (
-                <div className="flex flex-col">
-                  <span className="text-[10px] text-gray-400 uppercase font-bold tracking-wider">Score</span>
-                  <span className={cn("text-xl font-black leading-none", p.status === "passed" ? "text-emerald-600" : "text-gray-900 dark:text-white")}>
-                    {p.marks_obtained}/{p.max_marks}
-                  </span>
-                </div>
-              )}
-
-              <div className="flex gap-2 ml-auto">
-                {/* Try Again Button */}
-                {p.status === "failed" &&
-                  !p.is_locked &&
-                  p.attempt_count < p.max_attempts && (
-                    <Button
-                      size="icon"
-                      variant="outline"
-                      onClick={() => handleStartPractical(p)}
-                      className="w-9 h-9 text-orange-600 border-orange-200 hover:bg-orange-50 bg-orange-50/50"
-                      title="Try Again"
-                    >
-                      <RefreshCw className="w-4 h-4" />
-                    </Button>
+          {/* Attempts Progress */}
+          {p.max_attempts > 1 && (
+            <div className="mt-3 pt-3 border-t border-gray-100 dark:border-gray-800/50">
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-[10px] text-gray-400 uppercase font-bold tracking-wider">
+                  Attempts
+                </span>
+                <span className={cn(
+                  "text-xs font-bold",
+                  p.max_attempts - p.attempt_count <= 1 ? "text-red-500" : "text-gray-500 dark:text-gray-400"
+                )}>
+                  {p.attempt_count}/{p.max_attempts}
+                </span>
+              </div>
+              <div className="w-full h-1 rounded-full bg-gray-100 dark:bg-gray-800 overflow-hidden">
+                <div
+                  className={cn(
+                    "h-full rounded-full transition-all duration-500",
+                    p.max_attempts - p.attempt_count <= 1
+                      ? "bg-gradient-to-r from-red-500 to-rose-400"
+                      : "bg-gradient-to-r from-indigo-500 to-purple-500"
                   )}
-
-                {/* Request Reattempt - Only if attempts exhausted (not for deadlines anymore) */}
-                {p.status === "failed" &&
-                  (p.attempt_count >= p.max_attempts) && (
-                    <Button
-                      size="icon"
-                      variant="outline"
-                      onClick={() => handleRequestReattempt(p)}
-                      className="w-9 h-9 text-purple-600 border-purple-200 hover:bg-purple-50 bg-purple-50/50"
-                      title="Request Reattempt"
-                    >
-                      <AlertTriangle className="w-4 h-4" />
-                    </Button>
-                  )}
-
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  className="bg-gray-100 hover:bg-gray-200 text-gray-700 dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-gray-300"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleViewResult(p.id, p.title);
-                  }}
-                >
-                  {isSubmitted ? "View Submission" : "View Result"}
-                </Button>
+                  style={{ width: `${Math.min((p.attempt_count / p.max_attempts) * 100, 100)}%` }}
+                />
               </div>
             </div>
           )}
+
+          {/* Footer */}
+          <div className={cn(
+            "mt-auto pt-4 border-t border-gray-100 dark:border-gray-800/50",
+            p.max_attempts <= 1 ? "mt-4" : "mt-3",
+            (isDone || isSubmitted || p.status === "failed") ? "flex items-center justify-between gap-3" : ""
+          )}>
+            {!isDone && !isSubmitted && p.status !== "failed" ? (
+              <Button
+                className={cn(
+                  "w-full transition-all duration-300 shadow-md font-semibold",
+                  isUrgent
+                    ? "bg-red-600 hover:bg-red-700 shadow-red-500/20"
+                    : "bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 shadow-indigo-500/25"
+                )}
+                size="sm"
+                onClick={() => handleStartPractical(p)}
+                disabled={p.is_locked}
+              >
+                <span className="flex items-center gap-2">
+                  {p.is_locked
+                    ? "Locked"
+                    : p.status === "in_progress"
+                      ? "Continue Solving"
+                      : "Start Practical"}
+                  {!p.is_locked && (
+                    <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
+                  )}
+                </span>
+              </Button>
+            ) : (
+              <>
+                {/* Score Ring */}
+                {p.marks_obtained !== undefined && scorePercent !== null && (
+                  <div className="flex items-center gap-2.5">
+                    <div className="relative w-11 h-11">
+                      <svg className="w-11 h-11 -rotate-90" viewBox="0 0 44 44">
+                        <circle cx="22" cy="22" r="18" fill="none" stroke="currentColor" strokeWidth="3" className="text-gray-100 dark:text-gray-800" />
+                        <circle
+                          cx="22" cy="22" r="18" fill="none"
+                          strokeWidth="3" strokeLinecap="round"
+                          strokeDasharray={`${(scorePercent / 100) * 113} 113`}
+                          className={cn(
+                            p.status === "passed" ? "text-emerald-500" : p.status === "failed" ? "text-red-500" : "text-indigo-500",
+                            "transition-all duration-700"
+                          )}
+                          stroke="currentColor"
+                        />
+                      </svg>
+                      <span className={cn(
+                        "absolute inset-0 flex items-center justify-center text-[10px] font-black",
+                        p.status === "passed" ? "text-emerald-600" : p.status === "failed" ? "text-red-600" : "text-gray-900 dark:text-white"
+                      )}>
+                        {scorePercent}%
+                      </span>
+                    </div>
+                    <div className="flex flex-col">
+                      <span className="text-[10px] text-gray-400 uppercase font-bold tracking-wider leading-none mb-0.5">Score</span>
+                      <span className={cn("text-base font-black leading-none", p.status === "passed" ? "text-emerald-600" : "text-gray-900 dark:text-white")}>
+                        {p.marks_obtained}<span className="text-xs font-medium text-gray-400">/{p.max_marks}</span>
+                      </span>
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex gap-1.5 ml-auto">
+                  {/* Retry */}
+                  {p.status === "failed" && p.attempt_count < p.max_attempts && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => handleStartPractical(p)}
+                      className="gap-1 text-xs text-orange-600 border-orange-200 hover:bg-orange-50 bg-orange-50/50 dark:border-orange-800/50 dark:bg-orange-900/10 dark:hover:bg-orange-900/20 dark:text-orange-400"
+                      title={p.is_locked ? "Practical Locked" : "Try Again"}
+                      disabled={p.is_locked}
+                    >
+                      <RefreshCw className="w-3 h-3" />
+                      Retry
+                    </Button>
+                  )}
+
+                  {/* Request Reattempt */}
+                  {p.status === "failed" && p.attempt_count >= p.max_attempts && (
+                    (p.lock_reason?.includes("Re-attempt Requested")) ? (
+                      <div className="flex items-center gap-1 px-2.5 py-1.5 bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400 rounded-lg text-[11px] font-bold">
+                        <Loader2 className="w-3 h-3 animate-spin" />
+                        Requested
+                      </div>
+                    ) : (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleRequestReattempt(p)}
+                        className="gap-1 text-xs text-purple-600 border-purple-200 hover:bg-purple-50 bg-purple-50/50 dark:border-purple-800/50 dark:bg-purple-900/10 dark:hover:bg-purple-900/20 dark:text-purple-400"
+                        title="Request Re-attempt from Faculty"
+                      >
+                        <AlertTriangle className="w-3 h-3" />
+                        Request
+                      </Button>
+                    )
+                  )}
+
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-gray-300 font-medium"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleViewResult(p.id, p.title);
+                    }}
+                  >
+                    {isSubmitted ? "View Submission" : "View Result"}
+                  </Button>
+                </div>
+              </>
+            )}
+          </div>
         </div>
       </motion.div>
     );
@@ -1057,16 +1172,25 @@ export default function StudentPracticals() {
               )}
 
               <div className="flex gap-2">
-                {/* Reattempt Actions for Failed/Locked */}
-                {p.status === "failed" && !p.is_locked && p.attempt_count < p.max_attempts && (
-                  <Button size="icon" variant="outline" className="w-8 h-8 text-orange-600 border-orange-200 bg-orange-50/50" onClick={() => handleStartPractical(p)}>
+                {/* Retry Button - Show if attempts are available */}
+                {p.status === "failed" && p.attempt_count < p.max_attempts && (
+                  <Button size="icon" variant="outline" className="w-8 h-8 text-orange-600 border-orange-200 bg-orange-50/50" onClick={() => handleStartPractical(p)} disabled={p.is_locked}>
                     <RefreshCw className="w-3.5 h-3.5" />
                   </Button>
                 )}
-                {p.status === "failed" && (p.attempt_count >= p.max_attempts) && (
-                  <Button size="icon" variant="outline" className="w-8 h-8 text-purple-600 border-purple-200 bg-purple-50/50" onClick={() => handleRequestReattempt(p)}>
-                    <AlertTriangle className="w-3.5 h-3.5" />
-                  </Button>
+
+                {/* Request Reattempt - Only if attempts exhausted */}
+                {p.status === "failed" && p.attempt_count >= p.max_attempts && (
+                  (p.lock_reason?.includes("Re-attempt Requested")) ? (
+                    <div className="flex items-center gap-1.5 px-3 py-1 bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400 rounded-lg border border-purple-100 dark:border-purple-800/50 text-xs font-bold animate-pulse">
+                      <Loader2 className="w-3 h-3 animate-spin" />
+                      <span>Pending</span>
+                    </div>
+                  ) : (
+                    <Button size="icon" variant="outline" className="w-8 h-8 text-purple-600 border-purple-200 bg-purple-50/50" onClick={() => handleRequestReattempt(p)}>
+                      <AlertTriangle className="w-3.5 h-3.5" />
+                    </Button>
+                  )
                 )}
 
                 <Button variant="secondary" size="sm" className="h-8 text-xs" onClick={(e) => { e.stopPropagation(); handleViewResult(p.id, p.title); }}>
@@ -1474,111 +1598,7 @@ export default function StudentPracticals() {
         )}
       </AnimatePresence>
 
-      {/* Reattempt Request Modal */}
-      <AnimatePresence>
-        {reattemptRequest.show && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-sm animate-fadeIn">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="glass-card-premium rounded-3xl w-full max-w-lg overflow-hidden flex flex-col shadow-2xl"
-            >
-              <div className="p-6 border-b border-gray-100 dark:border-gray-800 bg-gradient-to-r from-purple-50 to-indigo-50 dark:from-purple-900/20 dark:to-indigo-900/20">
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-purple-500 to-indigo-600 text-white flex items-center justify-center font-bold shadow-lg shadow-purple-500/20">
-                    <RefreshCw className="w-6 h-6" />
-                  </div>
-                  <div>
-                    <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-0.5">
-                      Request Reattempt
-                    </h3>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">
-                      {reattemptRequest.practical?.title}
-                    </p>
-                  </div>
-                </div>
-              </div>
 
-              <div className="p-6 space-y-4">
-                {!reattemptRequest.success ? (
-                  <>
-                    <div className="p-4 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
-                      <div className="flex gap-3">
-                        <AlertCircle className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
-                        <p className="text-sm text-amber-800 dark:text-amber-200">
-                          {
-                            "You have used all your attempts for this practical. You can request an additional attempt from your faculty."
-                          }
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="space-y-2">
-                      <label className="text-sm font-bold text-gray-700 dark:text-gray-300">
-                        Reason for Reattempt <span className="text-red-500">*</span>
-                      </label>
-                      <textarea
-                        value={reattemptRequest.reason}
-                        onChange={(e) => setReattemptRequest(prev => ({ ...prev, reason: e.target.value }))}
-                        placeholder="Explain why you need another attempt..."
-                        className="w-full min-h-[100px] p-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 focus:ring-2 focus:ring-purple-500 focus:border-transparent text-sm resize-none"
-                      />
-                    </div>
-                  </>
-                ) : (
-                  <div className="py-8 text-center space-y-3">
-                    <div className="w-16 h-16 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center mx-auto mb-4">
-                      <CheckCircle2 className="w-8 h-8 text-emerald-600 dark:text-emerald-400" />
-                    </div>
-                    <h4 className="text-xl font-bold text-gray-900 dark:text-white">
-                      Request Sent!
-                    </h4>
-                    <p className="text-gray-500 dark:text-gray-400 max-w-xs mx-auto">
-                      Your faculty will review your request. You'll be notified once it's approved.
-                    </p>
-                  </div>
-                )}
-              </div>
-
-              <div className="p-6 border-t border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-900/50 flex justify-end gap-3">
-                {!reattemptRequest.success ? (
-                  <>
-                    <Button
-                      variant="ghost"
-                      onClick={() => setReattemptRequest(prev => ({ ...prev, show: false }))}
-                      className="bg-white dark:bg-gray-800"
-                    >
-                      Cancel
-                    </Button>
-                    <Button
-                      onClick={submitReattemptRequest}
-                      disabled={!reattemptRequest.reason.trim() || reattemptRequest.submitting}
-                      className="bg-purple-600 hover:bg-purple-700 text-white"
-                    >
-                      {reattemptRequest.submitting ? (
-                        <>
-                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                          Sending...
-                        </>
-                      ) : (
-                        "Send Request"
-                      )}
-                    </Button>
-                  </>
-                ) : (
-                  <Button
-                    className="w-full bg-emerald-600 hover:bg-emerald-700 text-white"
-                    onClick={() => setReattemptRequest(prev => ({ ...prev, show: false }))}
-                  >
-                    Close
-                  </Button>
-                )}
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
 
       {attemptWarning.show && attemptWarning.practical && (
         <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-sm animate-fadeIn">

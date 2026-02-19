@@ -17,6 +17,7 @@ import {
 import { Button } from "@/components/ui/button";
 import type { User } from "@supabase/supabase-js";
 import { motion } from "framer-motion";
+import { toast } from "sonner";
 
 type TestCaseResult = {
   test_case_id: number;
@@ -254,6 +255,7 @@ int main() {
   const [submissionStatus, setSubmissionStatus] = useState<
     "idle" | "pending" | "evaluated" | "submitted"
   >("idle");
+  const [isSubmitted, setIsSubmitted] = useState(false);
   // userTestCases now include expectedOutput field by default (keeps parity with server)
   const [userTestCases, setUserTestCases] = useState<UserTestCase[]>([
     {
@@ -313,7 +315,7 @@ int main() {
   const { showInvalidModal, registerSession, dismissModal } =
     useSessionValidator({
       onSessionInvalidated: autoSubmitOnInvalidation,
-      enabled: !!user,
+      enabled: !!user && !isSubmitted,
       userId: user?.id || null,
     });
 
@@ -329,14 +331,14 @@ int main() {
 
   // Proctoring Hook (Only active after exam starts)
   const { violations, locked } = useProctoring({
-    active: hasExamStarted,
+    active: hasExamStarted && !isSubmitted,
     maxViolations: 3,
   });
 
   // Auto-submit on Proctoring Lock
   const hasLockSubmittedRef = useRef(false);
   useEffect(() => {
-    if (locked && !hasLockSubmittedRef.current && hasExamStarted) {
+    if (locked && !hasLockSubmittedRef.current && hasExamStarted && !isSubmitted) {
       console.warn("Proctoring Limit Reached: Auto-submitting code...");
       hasLockSubmittedRef.current = true;
       // Auto-submit and then redirect to dashboard
@@ -344,7 +346,7 @@ int main() {
         router.push("/student/submissions");
       });
     }
-  }, [locked, hasExamStarted, autoSubmitOnInvalidation, router]);
+  }, [locked, hasExamStarted, isSubmitted, autoSubmitOnInvalidation, router]);
 
   // Check lock status on mount (Prevents Refresh/Re-entry)
   useEffect(() => {
@@ -383,32 +385,7 @@ int main() {
           return;
         }
 
-        // 2. Sequential Lock (Subject Prerequisites)
-        const currentPrac = data.practicals;
-        if (currentPrac?.subject_id && currentPrac.practical_number !== null) {
-          const { data: subjectAssignments } = await supabase
-            .from("student_practicals")
-            .select("status, practicals(practical_number)")
-            .eq("student_id", user.id)
-            .eq("practicals.subject_id", currentPrac.subject_id);
-
-          if (subjectAssignments) {
-            const curNum = currentPrac.practical_number || 0;
-            const precedingNotDone = subjectAssignments.some((a: any) => {
-              const num = a.practicals?.practical_number || 0;
-              if (num > 0 && num < curNum) {
-                const isDone = ["passed", "completed", "submitted", "failed"].includes(a.status);
-                return !isDone;
-              }
-              return false;
-            });
-
-            if (precedingNotDone) {
-              setIsSessionLocked(true);
-              setLockReason("This practical is locked. Please complete the previous practical first.");
-            }
-          }
-        }
+        // Sequential lock removed — students can access any scheduled practical
       }
     };
 
@@ -476,8 +453,12 @@ int main() {
       }
       if (mountedRef.current) {
         setUser(data.user);
-        // Register session for single active session enforcement
-        registerSession(data.user.id);
+        // Session is already registered server-side during login (actions.ts)
+        // Do NOT call registerSession here — it creates a new UUID that
+        // overwrites the DB but can't overwrite the httpOnly cookie,
+        // causing a DB/cookie mismatch that the middleware detects as
+        // session hijacking and triggers logout.
+
         // Fetch roll number if student
         const { data: userData } = await supabase
           .from("users")
@@ -493,7 +474,7 @@ int main() {
     return () => {
       mountedRef.current = false;
     };
-  }, [router, supabase, registerSession]);
+  }, [router, supabase]);
 
   // ========================
   // Fetch practical
@@ -655,7 +636,7 @@ int main() {
       console.log("Run results:", results);
     } catch (err: any) {
       console.error(err);
-      alert(err?.response?.data?.error || "Error running code.");
+      toast.error(err?.response?.data?.error || "Error running code.");
     } finally {
       setLoading(false);
     }
@@ -709,13 +690,22 @@ int main() {
           : verdict === "failed"
             ? "Failed"
             : "Pending";
-      alert(
-        `Practical submitted successfully! Status: ${statusText}. Marks: ${marksObtained} / 10 (${passedTestCases}/${totalTestCases} test cases passed)`,
+      // Disable proctoring & session checks before navigating
+      setIsSubmitted(true);
+      setHasExamStarted(false);
+
+      // Exit fullscreen gracefully before navigation
+      if (document.fullscreenElement) {
+        try { await document.exitFullscreen(); } catch { }
+      }
+
+      toast.success(
+        `Practical submitted! Status: ${statusText}. Marks: ${marksObtained}/10 (${passedTestCases}/${totalTestCases} test cases passed)`,
       );
       router.push("/student/submissions");
     } catch (err: any) {
       console.error(err);
-      alert(
+      toast.error(
         err?.response?.data?.error ||
         "Error submitting practical. Please try again.",
       );

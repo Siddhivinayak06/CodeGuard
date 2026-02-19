@@ -17,16 +17,17 @@ import {
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import Link from "next/link";
+import { toast } from "sonner";
 
 export interface Notification {
   id: string;
   user_id: string;
   type:
-    | "practical_assigned"
-    | "submission_graded"
-    | "deadline_reminder"
-    | "announcement"
-    | "submission_received";
+  | "practical_assigned"
+  | "submission_graded"
+  | "deadline_reminder"
+  | "announcement"
+  | "submission_received";
   title: string;
   message: string | null;
   link: string | null;
@@ -181,11 +182,11 @@ export default function NotificationPanel() {
       } else {
         const data = await res.json();
         console.error("Failed to delete notification:", data.error);
-        alert(`Failed to delete: ${data.error}`);
+        toast.error(`Failed to delete: ${data.error}`);
       }
     } catch (err) {
       console.error("Delete notification error:", err);
-      alert("An error occurred while deleting");
+      toast.error("An error occurred while deleting");
     }
   };
 
@@ -214,15 +215,14 @@ export default function NotificationPanel() {
         }),
       });
       if (res.ok) {
-        // Mark as read and update notification
         await markAsRead(notification.id);
-        alert("Re-attempt granted successfully!");
+        toast.success("Re-attempt granted successfully!");
       } else {
-        alert("Failed to grant re-attempt");
+        toast.error("Failed to grant re-attempt");
       }
     } catch (err) {
       console.error(err);
-      alert("Failed to grant re-attempt");
+      toast.error("Failed to grant re-attempt");
     } finally {
       setGrantingId(null);
     }
@@ -322,11 +322,10 @@ export default function NotificationPanel() {
                     return (
                       <div
                         key={notification.id}
-                        className={`group p-4 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors ${
-                          !notification.is_read
+                        className={`group p-4 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors ${!notification.is_read
                             ? "bg-indigo-50/50 dark:bg-indigo-900/10"
                             : ""
-                        } ${isReattemptRequest ? "border-l-4 border-purple-500" : ""}`}
+                          } ${isReattemptRequest ? "border-l-4 border-purple-500" : ""}`}
                         onClick={() => {
                           if (!notification.is_read && !isReattemptRequest) {
                             markAsRead(notification.id);
@@ -338,12 +337,11 @@ export default function NotificationPanel() {
                       >
                         <div className="flex gap-3">
                           <div
-                            className={`flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center ${
-                              isReattemptRequest
+                            className={`flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center ${isReattemptRequest
                                 ? "bg-purple-100 dark:bg-purple-900/30"
                                 : notificationColors[notification.type] ||
-                                  "bg-gray-100 dark:bg-gray-800"
-                            }`}
+                                "bg-gray-100 dark:bg-gray-800"
+                              }`}
                           >
                             {isReattemptRequest ? (
                               <RefreshCw className="w-5 h-5 text-purple-500" />
@@ -356,11 +354,10 @@ export default function NotificationPanel() {
                           <div className="flex-1 min-w-0">
                             <div className="flex items-start justify-between gap-2">
                               <p
-                                className={`text-sm font-medium ${
-                                  !notification.is_read
+                                className={`text-sm font-medium ${!notification.is_read
                                     ? "text-gray-900 dark:text-white"
                                     : "text-gray-700 dark:text-gray-300"
-                                }`}
+                                  }`}
                               >
                                 {notification.title}
                               </p>

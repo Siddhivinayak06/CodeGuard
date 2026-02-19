@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { v4 as uuidv4 } from "uuid";
 
@@ -26,9 +26,10 @@ export function useSessionValidator(options: UseSessionValidatorOptions = {}) {
     sessionId: null,
   });
   const [showInvalidModal, setShowInvalidModal] = useState(false);
-  const supabase = createClient();
+  const supabase = useMemo(() => createClient(), []);
   const pollingRef = useRef<NodeJS.Timeout | null>(null);
   const isHandlingInvalidation = useRef(false);
+  const logoutTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Get stored session ID
   const getStoredSessionId = useCallback(() => {
@@ -38,17 +39,21 @@ export function useSessionValidator(options: UseSessionValidatorOptions = {}) {
     return null;
   }, []);
 
-  // Store session ID
+  // Store session ID (localStorage + cookie for middleware)
   const storeSessionId = useCallback((sessionId: string) => {
     if (typeof window !== "undefined") {
       localStorage.setItem("cg_session_id", sessionId);
+      // Also set as cookie so middleware can read it for single-session enforcement
+      document.cookie = `device_session_id=${sessionId}; path=/; max-age=${60 * 60 * 24}; SameSite=Lax`;
     }
   }, []);
 
-  // Clear session ID
+  // Clear session ID (localStorage + cookie)
   const clearSessionId = useCallback(() => {
     if (typeof window !== "undefined") {
       localStorage.removeItem("cg_session_id");
+      // Clear the cookie by setting max-age=0
+      document.cookie = "device_session_id=; path=/; max-age=0; SameSite=Lax";
     }
   }, []);
 
@@ -63,10 +68,7 @@ export function useSessionValidator(options: UseSessionValidatorOptions = {}) {
       try {
         const sessionId = uuidv4();
 
-        // Clear old session immediately to avoid race with polling
-        storeSessionId(sessionId);
-
-        // Update user's active_session_id in database
+        // Update user's active_session_id in database FIRST
         const { error } = await supabase
           .from("users")
           .update({
@@ -80,9 +82,7 @@ export function useSessionValidator(options: UseSessionValidatorOptions = {}) {
             "Failed to register session. Full Error:",
             JSON.stringify(error, null, 2),
           );
-          // Check if it's a column missing error
           if (error.code === "42703") {
-            // Postgres code for undefined column
             console.error(
               'CRITICAL: The "active_session_id" column is missing in the "users" table. Please run the SQL migration.',
             );
@@ -90,6 +90,9 @@ export function useSessionValidator(options: UseSessionValidatorOptions = {}) {
           isRegisteringRef.current = false;
           return null;
         }
+
+        // Store locally ONLY after DB update succeeds (prevents localStorage/DB mismatch race)
+        storeSessionId(sessionId);
 
         setSessionState((prev) => ({ ...prev, sessionId, isValid: true }));
         console.log("Session registered:", sessionId);
@@ -113,6 +116,11 @@ export function useSessionValidator(options: UseSessionValidatorOptions = {}) {
     try {
       const sessionId = getStoredSessionId();
 
+      // If no local session ID exists, skip client-side enforcement.
+      // The server-side middleware handles session enforcement via httpOnly cookies.
+      // Missing localStorage just means registerSession was never called from client.
+      if (!sessionId) return true;
+
       const { data, error } = await supabase
         .from("users")
         .select("active_session_id")
@@ -124,13 +132,10 @@ export function useSessionValidator(options: UseSessionValidatorOptions = {}) {
         return true; // Default to valid on error (fail open to prevent lockout)
       }
 
-      // If DB has an active session, local must match it
-      if (data.active_session_id) {
-        if (!sessionId) return false; // DB has session, local doesn't -> Invalid
-        if (data.active_session_id !== sessionId) return false; // Mismatch -> Invalid
+      // If DB has an active session and local has one too, they must match
+      if (data.active_session_id && data.active_session_id !== sessionId) {
+        return false; // Mismatch -> Invalid (real multi-device case)
       }
-      // If DB has no active session, we consider it valid (or should we?)
-      // Usually means user logged out elsewhere or first login.
 
       return true;
     } catch (error) {
@@ -139,9 +144,23 @@ export function useSessionValidator(options: UseSessionValidatorOptions = {}) {
     }
   }, [userId, supabase, getStoredSessionId]); // Removed registerSession dependency
 
+  const enabledRef = useRef(enabled);
+  useEffect(() => {
+    enabledRef.current = enabled;
+  }, [enabled]);
+
+  // Store the latest callback in a ref to avoid dependency cycles
+  const callbackRef = useRef(onSessionInvalidated);
+
+  // Update the ref whenever the callback changes
+  useEffect(() => {
+    callbackRef.current = onSessionInvalidated;
+  }, [onSessionInvalidated]);
+
   // Handle session invalidation
   const handleSessionInvalidated = useCallback(async () => {
-    if (isHandlingInvalidation.current) return;
+    // Check if validation is still enabled
+    if (isHandlingInvalidation.current || !enabledRef.current) return;
     isHandlingInvalidation.current = true;
 
     console.warn("Session invalidated - another login detected");
@@ -158,42 +177,69 @@ export function useSessionValidator(options: UseSessionValidatorOptions = {}) {
       pollingRef.current = null;
     }
 
-    // Call the invalidation callback (e.g., auto-submit)
-    if (onSessionInvalidated) {
+    // Call the invalidation callback (e.g., auto-submit) via ref
+    if (callbackRef.current) {
       try {
-        await onSessionInvalidated();
+        await callbackRef.current();
       } catch (error) {
         console.error("Error during invalidation callback:", error);
       }
     }
 
+    // Check availability again after async operation - preventing race condition
+    if (!enabledRef.current) return;
+
     // Clear session and sign out after a delay
-    setTimeout(async () => {
+    logoutTimeoutRef.current = setTimeout(async () => {
+      // Final check before logging out
+      if (!enabledRef.current) return;
+
       clearSessionId();
       await supabase.auth.signOut();
       // Use window.location for hard redirect to ensure state clear
       window.location.href = "/auth/login?reason=session_invalidated";
     }, 3000);
-  }, [onSessionInvalidated, clearSessionId, supabase]);
+  }, [clearSessionId, supabase]); // Removed onSessionInvalidated dependency
+
+  // Cleanup timeout on unmount OR when disabled
+  useEffect(() => {
+    return () => {
+      if (logoutTimeoutRef.current) {
+        clearTimeout(logoutTimeoutRef.current);
+        logoutTimeoutRef.current = null;
+      }
+    };
+  }, []); // Run on unmount
+
+  // Cleanup when disabled
+  useEffect(() => {
+    if (!enabled && logoutTimeoutRef.current) {
+      clearTimeout(logoutTimeoutRef.current);
+      logoutTimeoutRef.current = null;
+    }
+  }, [enabled]);
 
   // Polling effect
   useEffect(() => {
     if (!enabled || !userId) return;
 
     const poll = async () => {
+      // Double-check enabled state before polling (in case it changed during async gap)
+      if (!enabledRef.current) return;
       const isValid = await verifySession();
-      if (!isValid) {
+      if (!isValid && enabledRef.current) {
         handleSessionInvalidated();
       }
     };
 
-    // Initial check
-    poll();
+    // Delay initial check to give registerSession time to complete
+    const initialDelay = setTimeout(poll, 5000);
 
-    // Start polling
+    // Start periodic polling
     pollingRef.current = setInterval(poll, POLL_INTERVAL);
 
     return () => {
+      clearTimeout(initialDelay);
       if (pollingRef.current) {
         clearInterval(pollingRef.current);
       }

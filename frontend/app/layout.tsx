@@ -9,6 +9,7 @@ import NavbarLayout from "@/components/layout/NavbarLayout";
 import PageTransition from "@/components/layout/PageTransition";
 import { LogoutProvider } from "@/context/LogoutContext";
 import LogoutOverlay from "@/components/layout/LogoutOverlay";
+import { Toaster } from "sonner";
 
 export const metadata: Metadata = {
   title: "CodeGuard – Secure Python Editor",
@@ -44,6 +45,7 @@ export default function RootLayout({
             </PageTransition>
           </LogoutProvider>
         </ThemeProvider>
+        <Toaster richColors position="top-center" />
         {process.env.VERCEL && <Analytics />}
       </body>
     </html>

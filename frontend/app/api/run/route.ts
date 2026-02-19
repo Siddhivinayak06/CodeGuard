@@ -112,8 +112,6 @@ export async function POST(req: Request) {
     const reqLangNorm = normalizeLang(String(lang));
     const refLangNorm = normalizeLang(referenceLang);
     if (refLangNorm && reqLangNorm && refLangNorm !== reqLangNorm) {
-      // Reduced to low-level log or removed if we expect mismatch often
-      // Use informative log instead of warn if we found a fallback
       console.log(
         `Using fallback reference language (${refLangNorm}) for runner language (${reqLangNorm})`,
       );
@@ -153,7 +151,7 @@ export async function POST(req: Request) {
         const userBatch = userTestCases.map((utc: any, idx: number) => ({
           id: `user-${idx + 1}`,
           stdinInput: utc.input ?? "",
-          expectedOutput: utc.expectedOutput ?? "", // will be filled from reference if available
+          expectedOutput: utc.expectedOutput ?? "",
           is_hidden: false,
           time_limit_ms: utc.time_limit_ms ?? 2000,
           memory_limit_kb:
@@ -182,7 +180,6 @@ export async function POST(req: Request) {
             const refMap = new Map<string, string>();
             for (const d of refDetails) {
               const out = String(d.stdout ?? "");
-              // normalize line endings but keep raw until comparison step
               refMap.set(String(d.test_case_id), out);
             }
 
@@ -197,11 +194,9 @@ export async function POST(req: Request) {
               "Failed to run reference code for user test cases:",
               e,
             );
-            // If reference run fails, still fallback to running student code without expected outputs
             batch = userBatch;
           }
         } else {
-          // No reference code — just run user cases (run-only)
           batch = userBatch;
         }
       } else if (dbTestCases.length > 0) {
@@ -253,8 +248,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ results: [], verdict: "no_testcases" });
     }
 
-    // Now run student's code (we pass student's code, lang, and batch).
-    // Note: reference outputs have already been filled into batch.expectedOutput for user testcases if reference was available.
+    // Now run student's code
     let runnerResults;
     try {
       runnerResults = await callRunner({
@@ -283,7 +277,7 @@ export async function POST(req: Request) {
 
     const batchMap = new Map(batch.map((b) => [String(b.id), b]));
 
-    // Build results: for user-testcases with expectedOutput filled, compare student's stdout with expected.
+    // Build results
     const allResults = details.map((d: any) => {
       const idStr = String(d.test_case_id);
       const isUser = idStr.startsWith("user-");
@@ -296,16 +290,13 @@ export async function POST(req: Request) {
       let status: string;
       if (isUser) {
         if (expected && expected !== "") {
-          // Compare student's stdout with generated expected output
           const normStdout = normalizeOutputText(stdout);
           const normExpected = normalizeOutputText(expected);
           status = normStdout === normExpected ? "passed" : "failed";
         } else {
-          // No expected (no reference), mark as run-only
           status = "ran";
         }
       } else {
-        // db testcases: compare as usual
         const normStdout = normalizeOutputText(stdout);
         const normExpected = normalizeOutputText(expected);
         status = normStdout === normExpected ? "passed" : "failed";
@@ -324,15 +315,13 @@ export async function POST(req: Request) {
       };
     });
 
-    // Submission result handling (unchanged)
+    // Submission result handling
     let passed = 0;
     let total = 0;
     let marksObtained = 0;
     const predefinedResults = allResults.filter(
       (r: any) => !String(r.test_case_id).startsWith("user-"),
     );
-
-
 
     if (mode === "submit" && submissionId) {
       // Calculate marks first
@@ -341,8 +330,55 @@ export async function POST(req: Request) {
       ).length;
       total = predefinedResults.length;
       const baseMarks = total > 0 ? Math.round((passed / total) * maxMarks) : 0;
+      let penalty = 0;
+      let daysLate = 0;
 
-      // Check existing marks and fetch student_id for deadline check
+      // Late Submission Penalty Logic
+      try {
+        const { data: practicalData } = await (supabase
+          .from("practicals") as any)
+          .select("schedule_date, schedule_time")
+          .eq("id", pid)
+          .single();
+
+        if (practicalData?.schedule_date) {
+          const now = new Date();
+          const scheduleDate = new Date(practicalData.schedule_date);
+          let endHour = 23;
+          let endMinute = 59;
+
+          if (practicalData.schedule_time) {
+            const parts = practicalData.schedule_time.split("-");
+            const endTimePart = parts[1]?.trim();
+            if (endTimePart) {
+              const [h, m] = endTimePart.split(":").map(Number);
+              if (!isNaN(h)) endHour = h;
+              if (!isNaN(m)) endMinute = m;
+            }
+          }
+
+          const deadline = new Date(scheduleDate);
+          deadline.setHours(endHour, endMinute, 0, 0);
+
+          if (now > deadline) {
+            const diffTime = now.getTime() - deadline.getTime();
+            daysLate = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+            if (daysLate >= 14) {
+              penalty = 2;
+            } else if (daysLate >= 7) {
+              penalty = 1;
+            }
+            console.log(`[Late Submission] Days Late: ${daysLate}, Penalty: ${penalty}`);
+          }
+        }
+      } catch (e) {
+        console.error("Error calculating late penalty:", e);
+      }
+
+      marksObtained = Math.max(0, baseMarks - penalty);
+
+      // Check existing marks and fetch student_id
       let shouldUpdate = true;
       let studentId = null;
       try {
@@ -353,14 +389,10 @@ export async function POST(req: Request) {
           .single();
 
         studentId = currentSub?.student_id;
-
-        // We will compare final calculated marks (with penalty) later, but for now strict logic of "highest marks" implies comparing final results.
-        // However, if we need to check deadline, we need to calculate final marks first.
       } catch (e) {
         console.error("Error checking existing marks:", e);
       }
 
-      marksObtained = baseMarks;
       const newStatus = marksObtained >= 4 ? "passed" : "failed";
 
       // Re-check shouldUpdate with FINAL marks
@@ -380,7 +412,6 @@ export async function POST(req: Request) {
 
       if (shouldUpdate) {
         try {
-          // Update submission with new marks, status, latest code, and detailed execution results JSON
           await supabase
             .from("submissions")
             .update({
@@ -388,12 +419,12 @@ export async function POST(req: Request) {
               marks_obtained: marksObtained,
               code,
               language: reqLangNorm || lang,
-              test_cases_passed: String(passed), // Save test cases passed count
+              test_cases_passed: String(passed),
               output:
-                predefinedResults.length > 0 ? predefinedResults[0].stdout : "", // Save first test case output as summary
+                predefinedResults.length > 0 ? predefinedResults[0].stdout : "",
               execution_details: {
                 verdict: newStatus,
-                results: predefinedResults, // Array of test case results
+                results: predefinedResults,
                 judged_at: new Date().toISOString(),
               },
             })
@@ -402,8 +433,35 @@ export async function POST(req: Request) {
           console.error("Failed to update submission:", e);
         }
       } else {
-        // If we didn't update the DB, we might want to return the actual calculated status for the user feedback
-        // But keeping the consistent pattern.
+        passed = predefinedResults.filter(
+          (r: any) => r.status === "passed",
+        ).length;
+        total = predefinedResults.length;
+        marksObtained = total > 0 ? Math.round((passed / total) * maxMarks) : 0;
+      }
+
+      // Always increment attempt_count on submission (outside shouldUpdate)
+      // Use admin client to bypass RLS policies on student_practicals
+      try {
+        const { data: { user: authUser } } = await supabase.auth.getUser();
+        const sid = studentId || authUser?.id;
+        if (sid) {
+          const { data: spData } = await supabaseAdmin
+            .from("student_practicals")
+            .select("id, attempt_count")
+            .eq("student_id", sid)
+            .eq("practical_id", pid)
+            .single();
+
+          if (spData) {
+            await supabaseAdmin
+              .from("student_practicals")
+              .update({ attempt_count: (spData.attempt_count || 0) + 1 })
+              .eq("id", spData.id);
+          }
+        }
+      } catch (e) {
+        console.error("Failed to increment attempt count:", e);
       }
     } else {
       passed = predefinedResults.filter(
@@ -415,7 +473,7 @@ export async function POST(req: Request) {
 
     return NextResponse.json({
       results: allResults,
-      verdict: marksObtained >= 4 ? "passed" : "failed", // Return calculated verdict
+      verdict: marksObtained >= 4 ? "passed" : "failed",
       marksObtained,
       passedTestCases: passed,
       totalTestCases: total,

@@ -195,8 +195,9 @@ export async function middleware(request: NextRequest) {
           .single();
 
         if (!userError && userData && userData.active_session_id) {
-          // If cookie is missing OR mismatch
-          if (!deviceSessionId || userData.active_session_id !== deviceSessionId) {
+          // Only enforce if cookie EXISTS but doesn't match (single-session protection).
+          // If cookie is missing, skip enforcement — it just means user hasn't entered the editor yet.
+          if (deviceSessionId && userData.active_session_id !== deviceSessionId) {
             console.warn(`[Proxy] Session Invalid: DB=${userData.active_session_id} vs Cookie=${deviceSessionId}`);
             logSecurityEvent("SESSION_INVALIDATED", { path: pathname, userId: user.id });
 
