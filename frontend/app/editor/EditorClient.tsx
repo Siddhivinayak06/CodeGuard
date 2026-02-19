@@ -696,7 +696,7 @@ int main() {
 
       // Exit fullscreen gracefully before navigation
       if (document.fullscreenElement) {
-        try { await document.exitFullscreen(); } catch { }
+        try { await document.exitFullscreen(); } catch { /* ignore */ }
       }
 
       toast.success(

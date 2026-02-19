@@ -103,7 +103,10 @@ router.post('/', async (req, res) => {
       problem,
     } = parseResult.data;
 
-    const { isLocalAvailable, isDockerAvailable } = require('../utils/runtimeDetector');
+    const {
+      isLocalAvailable,
+      isDockerAvailable,
+    } = require('../utils/runtimeDetector');
     const poolManager = require('../services/poolManager');
 
     // Determine if we should use direct local execution (bypass queue/Redis)
@@ -154,7 +157,8 @@ router.post('/', async (req, res) => {
 
           if (!tc.is_hidden && reference_code) {
             try {
-              if (!localRunCode) localRunCode = require('../utils/localRunCode');
+              if (!localRunCode)
+                localRunCode = require('../utils/localRunCode');
               if (!runCode) runCode = require('../utils/runCode');
               const runner = useDirectLocal ? localRunCode : runCode;
               const refRes = await runner(
@@ -242,8 +246,8 @@ router.post('/', async (req, res) => {
         if (fs.existsSync(referencePath)) {
           try {
             const runner = useDirectLocal
-              ? (localRunCode || require('../utils/localRunCode'))
-              : (runCode || require('../utils/runCode'));
+              ? localRunCode || require('../utils/localRunCode')
+              : runCode || require('../utils/runCode');
             const referenceCode = fs.readFileSync(referencePath, 'utf8');
             const refResult = await runner(referenceCode, lang, stdinInput);
             refOut = (refResult.output ?? '').trim();
