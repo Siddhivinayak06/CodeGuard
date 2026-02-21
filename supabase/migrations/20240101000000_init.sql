@@ -493,8 +493,7 @@ CREATE TABLE IF NOT EXISTS "public"."practical_levels" (
     "description" "text",
     "max_marks" integer DEFAULT 10,
     "created_at" timestamp with time zone DEFAULT "now"(),
-    "updated_at" timestamp with time zone DEFAULT "now"(),
-    CONSTRAINT "practical_levels_level_check" CHECK (("level" = ANY (ARRAY['easy'::"text", 'medium'::"text", 'hard'::"text"])))
+    "updated_at" timestamp with time zone DEFAULT "now"()
 );
 
 

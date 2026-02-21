@@ -236,7 +236,7 @@ export interface Database {
         Row: {
           id: number;
           practical_id: number;
-          level: "Task 1" | "Task 2";
+          level: string;
           title: string | null;
           description: string | null;
           max_marks: number;
@@ -246,7 +246,7 @@ export interface Database {
         Insert: {
           id?: number;
           practical_id: number;
-          level: "Task 1" | "Task 2";
+          level: string;
           title?: string | null;
           description?: string | null;
           max_marks?: number;
@@ -256,7 +256,7 @@ export interface Database {
         Update: {
           id?: number;
           practical_id?: number;
-          level?: "Task 1" | "Task 2";
+          level?: string;
           title?: string | null;
           description?: string | null;
           max_marks?: number;

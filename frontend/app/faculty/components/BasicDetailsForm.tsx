@@ -243,8 +243,11 @@ export default function BasicDetailsForm({
               <span className="text-sm font-bold text-amber-800 dark:text-amber-200 block">
                 Multi-Level Mode
               </span>
-              <span className="text-[10px] text-amber-600/70 dark:text-amber-400/70">
-                Task 1, Task 2
+              <span className="text-[10px] text-amber-600/70 dark:text-amber-400/70 block truncate w-32">
+                {levels.length > 0
+                  ? levels.slice(0, 2).map((l) => l.level).join(", ") +
+                  (levels.length > 2 ? ", ..." : "")
+                  : "Task 1, Task 2"}
               </span>
             </div>
           </div>

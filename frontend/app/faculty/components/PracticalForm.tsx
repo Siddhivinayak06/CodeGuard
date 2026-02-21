@@ -136,9 +136,7 @@ export default function PracticalForm({
 
   // Multi-level support
   const [levels, setLevels] = useState<Level[]>(defaultLevels);
-  const [activeLevel, setActiveLevel] = useState<"Task 1" | "Task 2">(
-    "Task 1",
-  );
+  const [activeLevel, setActiveLevel] = useState<string>("Task 1");
   const [enableLevels, setEnableLevels] = useState(false);
 
 
@@ -570,7 +568,7 @@ export default function PracticalForm({
 
   // Level management helpers
   const updateLevelField = (
-    level: "Task 1" | "Task 2",
+    level: string,
     field: string,
     value: string | number | boolean,
   ) => {
@@ -579,7 +577,7 @@ export default function PracticalForm({
     );
   };
 
-  const addLevelTestCase = (level: "Task 1" | "Task 2") => {
+  const addLevelTestCase = (level: string) => {
     setLevels((prev) =>
       prev.map((l) =>
         l.level === level
@@ -606,7 +604,7 @@ export default function PracticalForm({
   };
 
   const removeLevelTestCase = (
-    level: "Task 1" | "Task 2",
+    level: string,
     index: number,
   ) => {
     setLevels((prev) =>
@@ -619,7 +617,7 @@ export default function PracticalForm({
   };
 
   const updateLevelTestCase = (
-    level: "Task 1" | "Task 2",
+    level: string,
     index: number,
     field: keyof TestCase,
     value: string | number | boolean,
@@ -632,6 +630,76 @@ export default function PracticalForm({
         return { ...l, testCases: newTestCases };
       }),
     );
+  };
+
+  const handleAddLevel = () => {
+    setLevels((prev) => {
+      const inserted = [
+        ...prev,
+        {
+          id: 0,
+          practical_id: typeof practical?.id === 'number' ? practical.id : 0,
+          created_at: "",
+          updated_at: "",
+          level: `Task ${prev.length + 1}`,
+          title: `Task ${prev.length + 1}`,
+          description: "",
+          max_marks: 8,
+          testCases: [
+            {
+              id: 0,
+              practical_id: null,
+              level_id: null,
+              created_at: "",
+              input: "",
+              expected_output: "",
+              is_hidden: false,
+              time_limit_ms: 2000,
+              memory_limit_kb: 65536,
+            },
+          ],
+        },
+      ];
+
+      // Ensure all tasks are named sequentially "Task 1", "Task 2", etc.
+      const renamed = inserted.map((lvl, index) => {
+        const expectedName = `Task ${index + 1}`;
+        return {
+          ...lvl,
+          level: expectedName,
+          title: lvl.title?.startsWith("Task ") ? expectedName : lvl.title
+        }
+      });
+
+      setActiveLevel(`Task ${renamed.length}`);
+      return renamed;
+    });
+  };
+
+  const handleRemoveLevel = (levelToRemove: string) => {
+    setLevels((prev) => {
+      const filtered = prev.filter((l) => l.level !== levelToRemove);
+
+      // Rename remaining tasks sequentially so there are no gaps
+      const renamed = filtered.map((lvl, index) => {
+        const expectedName = `Task ${index + 1}`;
+        return {
+          ...lvl,
+          level: expectedName,
+          title: lvl.title?.startsWith("Task ") ? expectedName : lvl.title
+        }
+      });
+
+      if (renamed.length === 0) {
+        setEnableLevels(false);
+      } else {
+        // Find the index of the removed task to intelligently focus the next available task
+        const removedIndex = prev.findIndex(l => l.level === levelToRemove);
+        const nextActiveIndex = Math.min(removedIndex, renamed.length - 1);
+        setActiveLevel(renamed[nextActiveIndex].level);
+      }
+      return renamed;
+    });
   };
 
   const getCurrentLevel = () => levels.find((l) => l.level === activeLevel)!;
@@ -1813,6 +1881,8 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
                       sampleCode={sampleCode}
                       setSampleCode={setSampleCode}
                       sampleLanguage={sampleLanguage || "c"}
+                      onAddLevel={handleAddLevel}
+                      onRemoveLevel={handleRemoveLevel}
                     />
                   )}
 

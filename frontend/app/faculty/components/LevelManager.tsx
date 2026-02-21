@@ -23,24 +23,26 @@ const CodeMirror = dynamic(() => import("@uiw/react-codemirror"), {
 
 interface LevelManagerProps {
   levels: Level[];
-  activeLevel: "Task 1" | "Task 2";
-  setActiveLevel: (level: "Task 1" | "Task 2") => void;
+  activeLevel: string;
+  setActiveLevel: (level: string) => void;
   updateLevelField: (
-    level: "Task 1" | "Task 2",
+    level: string,
     field: string,
     value: string | number | boolean,
   ) => void;
-  addLevelTestCase: (level: "Task 1" | "Task 2") => void;
+  addLevelTestCase: (level: string) => void;
   removeLevelTestCase: (
-    level: "Task 1" | "Task 2",
+    level: string,
     index: number,
   ) => void;
   updateLevelTestCase: (
-    level: "Task 1" | "Task 2",
+    level: string,
     index: number,
     field: keyof TestCase,
     value: string | number | boolean,
   ) => void;
+  onAddLevel?: () => void;
+  onRemoveLevel?: (level: string) => void;
   generateTestCases: () => void;
   generatingTests: boolean;
   sampleCode: string;
@@ -65,6 +67,8 @@ export default function LevelManager({
   sampleCode,
   setSampleCode,
   sampleLanguage,
+  onAddLevel,
+  onRemoveLevel,
 }: LevelManagerProps) {
   const { theme } = useTheme();
   const getCurrentLevel = () => levels.find((l) => l.level === activeLevel)!;
@@ -99,31 +103,82 @@ export default function LevelManager({
       </div>
 
       {/* Level Tabs */}
-      <div className="flex gap-2 mb-6">
-        {(["Task 1", "Task 2"] as const).map((lvl) => {
-          const levelInfo = {
-            "Task 1": { label: "Task 1", color: "emerald" },
-            "Task 2": { label: "Task 2", color: "red" },
-          }[lvl];
+      <div className="flex flex-wrap gap-2 mb-6 pb-2">
+        {levels.map((levelObj, index) => {
+          const lvl = levelObj.level;
+          const isCompact = levels.length > 5;
+          const matchNum = lvl.match(/\d+/);
+          const numStr = matchNum ? matchNum[0] : "";
+          const prefixStr = matchNum ? lvl.replace(numStr, "") : "";
+
+          const colorStyles = [
+            { active: "bg-emerald-500 text-white border-emerald-600 shadow-md", inactive: "bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-700 hover:border-emerald-300" },
+            { active: "bg-blue-500 text-white border-blue-600 shadow-md", inactive: "bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-700 hover:border-blue-300" },
+            { active: "bg-purple-500 text-white border-purple-600 shadow-md", inactive: "bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-700 hover:border-purple-300" },
+            { active: "bg-pink-500 text-white border-pink-600 shadow-md", inactive: "bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-700 hover:border-pink-300" },
+            { active: "bg-orange-500 text-white border-orange-600 shadow-md", inactive: "bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-700 hover:border-orange-300" },
+            { active: "bg-red-500 text-white border-red-600 shadow-md", inactive: "bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-700 hover:border-red-300" }
+          ];
+
+          const style = colorStyles[index % colorStyles.length];
           const isActive = activeLevel === lvl;
           return (
-            <motion.button
-              key={lvl}
-              type="button"
-              onClick={() => setActiveLevel(lvl)}
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-              className={cx(
-                "flex-1 py-3 px-4 rounded-xl text-sm font-bold border transition-all",
-                isActive
-                  ? `bg-${levelInfo.color}-500 text-white border-${levelInfo.color}-600 shadow-md`
-                  : `bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-700 hover:border-${levelInfo.color}-300`,
+            <div key={lvl} className={cx(
+              "flex items-center relative group flex-1",
+              "min-w-[48px] max-w-[200px] transition-all duration-300"
+            )}>
+              <motion.button
+                type="button"
+                onClick={() => setActiveLevel(lvl)}
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                className={cx(
+                  "w-full py-2.5 rounded-xl text-sm font-bold border transition-all line-clamp-1 truncate",
+                  "px-2 lg:pl-4 lg:pr-10 text-center xl:text-left",
+                  isActive ? style.active : style.inactive
+                )}
+              >
+                <span className="hidden xl:inline">{prefixStr}</span>
+                <span>{numStr || lvl}</span>
+              </motion.button>
+              {levels.length > 1 && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (onRemoveLevel) onRemoveLevel(lvl);
+                  }}
+                  className={cx(
+                    "absolute p-1 bg-red-500 text-white rounded-full shadow-md hover:bg-red-600 transition-colors z-10",
+                    "xl:right-2 xl:p-1.5 xl:rounded-lg xl:-top-auto xl:bg-transparent xl:shadow-none xl:-translate-y-0",
+                    "xl:opacity-0 group-hover:xl:opacity-100",
+                    isActive ? "xl:opacity-100 xl:text-white xl:hover:bg-white/20" : "xl:text-gray-400 xl:hover:text-red-500 xl:hover:bg-red-50 dark:xl:hover:bg-red-900/30",
+                    "-top-2 -right-2 xl:top-auto"
+                  )}
+                  title="Remove Task"
+                >
+                  <TrashIcon className="w-3 h-3 xl:w-4 xl:h-4" />
+                </button>
               )}
-            >
-              {levelInfo.label}
-            </motion.button>
+            </div>
           );
         })}
+        {onAddLevel && (
+          <motion.button
+            type="button"
+            onClick={onAddLevel}
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            className={cx(
+              "flex-1 flex items-center justify-center py-2.5 rounded-xl text-sm font-bold border border-dashed border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:border-indigo-500 hover:text-indigo-500 transition-all bg-transparent",
+              "min-w-[48px] max-w-[200px] px-2 lg:px-4"
+            )}
+            title="Add Task"
+          >
+            <PlusIcon size={16} className="xl:mr-2" />
+            <span className="hidden xl:inline">Add Task</span>
+          </motion.button>
+        )}
       </div>
 
       {/* Active Level Content */}
