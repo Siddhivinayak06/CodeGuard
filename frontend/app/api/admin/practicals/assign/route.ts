@@ -101,9 +101,9 @@ export async function POST(request: Request) {
 
     // Check if faculty teaches this subject via subject_faculty_batches junction table
     let hasFacultyAccess = false;
-    if (userRole?.role === "admin") {
+    if ((userRole as any)?.role === "admin") {
       hasFacultyAccess = true;
-    } else if (userRole?.role === "faculty") {
+    } else if ((userRole as any)?.role === "faculty") {
       const { data: facultySubject } = await supabase
         .from("subject_faculty_batches")
         .select("id")
@@ -134,7 +134,7 @@ export async function POST(request: Request) {
 
     if (studentsError) throw studentsError;
 
-    const validStudentIds = validStudents?.map((s) => s.uid) || [];
+    const validStudentIds = (validStudents as any[])?.map((s) => s.uid) || [];
     const invalidIds = student_ids.filter(
       (id) => !validStudentIds.includes(id),
     );
@@ -157,7 +157,7 @@ export async function POST(request: Request) {
       .in("student_id", student_ids);
 
     const existingStudentIds =
-      existingAssignments?.map((a) => a.student_id) || [];
+      (existingAssignments as any[])?.map((a) => a.student_id) || [];
     const newAssignments = student_ids.filter(
       (id) => !existingStudentIds.includes(id),
     );
@@ -182,7 +182,7 @@ export async function POST(request: Request) {
 
     const { data, error } = await supabase
       .from("student_practicals")
-      .insert(assignments)
+      .insert(assignments as any)
       .select();
 
     if (error) throw error;

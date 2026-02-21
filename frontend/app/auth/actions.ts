@@ -33,7 +33,7 @@ export async function login(formData: FormData) {
         .update({
             active_session_id: sessionId,
             session_updated_at: new Date().toISOString()
-        })
+        } as never)
         .eq("uid", user.id);
 
     if (dbError) {

@@ -48,7 +48,7 @@ export async function POST(req: Request) {
       );
     }
 
-    const existingMarks = existingSubmission.marks_obtained ?? 0;
+    const existingMarks = (existingSubmission as any).marks_obtained ?? 0;
     const newMarks = marks_obtained ?? 0;
 
     // Compare marks: only update if new marks are higher or equal
@@ -77,7 +77,7 @@ export async function POST(req: Request) {
 
     const { data, error } = await supabase
       .from("submissions")
-      .update(updateData)
+      .update(updateData as never)
       .eq("id", submissionId)
       .select("*")
       .single();

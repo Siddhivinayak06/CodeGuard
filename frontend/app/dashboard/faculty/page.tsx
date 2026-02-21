@@ -89,6 +89,7 @@ const initialPracticalForm: Practical = {
   description: "",
   language: null,
   max_marks: 100,
+  practical_number: null,
   created_at: new Date().toISOString(),
   updated_at: new Date().toISOString(),
   submitted: false,
@@ -200,6 +201,7 @@ export default function FacultyDashboardPage() {
     null,
   );
   const [sampleCode, setSampleCode] = useState<string>("");
+  const [starterCode, setStarterCode] = useState<string>("");
   const [sampleLanguage, setSampleLanguage] = useState<string>("c");
 
   // Fetch data
@@ -219,7 +221,7 @@ export default function FacultyDashboardPage() {
         .select("name")
         .eq("uid", data.user.id)
         .single();
-      if (userData) setUserName(userData.name);
+      if (userData) setUserName((userData as any).name);
 
       setLoading(false);
 
@@ -230,7 +232,7 @@ export default function FacultyDashboardPage() {
         .select("subject_id")
         .eq("faculty_id", data.user.id);
 
-      const subjectIds = [...new Set((facultyBatches || []).map((fb) => fb.subject_id))];
+      const subjectIds = [...new Set(((facultyBatches as any[]) || []).map((fb) => fb.subject_id))];
 
       if (subjectIds.length > 0) {
         const { data: subjData, error: subjErr } = await supabase
@@ -253,7 +255,7 @@ export default function FacultyDashboardPage() {
 
         if (pracData) {
           let practicalsWithSchedules = pracData as Practical[];
-          const pIds = pracData.map((p) => p.id);
+          const pIds = (pracData as any[]).map((p) => p.id);
 
           if (pIds.length > 0) {
             // Fetch Schedules
@@ -264,7 +266,7 @@ export default function FacultyDashboardPage() {
 
             if (schedData) {
               const schedMap = new Map<number, { batch_name: string | null; date: string }[]>();
-              schedData.forEach((s) => {
+              (schedData as any[]).forEach((s) => {
                 if (s.practical_id) {
                   const list = schedMap.get(s.practical_id) || [];
                   list.push({ batch_name: s.batch_name, date: s.date });
@@ -281,7 +283,7 @@ export default function FacultyDashboardPage() {
           setPracticals(practicalsWithSchedules);
 
           // 4. Fetch Submissions (for charts)
-          const pIdsForSubs = pracData.map((p) => p.id);
+          const pIdsForSubs = (pracData as any[]).map((p) => p.id);
           if (pIdsForSubs.length > 0) {
             const { data: subData } = await supabase
               .from("submissions")
@@ -289,7 +291,7 @@ export default function FacultyDashboardPage() {
               .in("practical_id", pIdsForSubs);
 
             if (subData) {
-              const mappedSubmissions = subData.map((s) => ({
+              const mappedSubmissions = (subData as any[]).map((s) => ({
                 id: s.id,
                 status: s.status || "pending",
                 created_at: s.created_at,
@@ -321,7 +323,7 @@ export default function FacultyDashboardPage() {
 
     if (data) {
       let practicalsWithSchedules = data as Practical[];
-      const pIds = data.map((p) => p.id);
+      const pIds = (data as any[]).map((p) => p.id);
       if (pIds.length > 0) {
         const { data: schedData } = await supabase
           .from("schedules")
@@ -330,7 +332,7 @@ export default function FacultyDashboardPage() {
 
         if (schedData) {
           const schedMap = new Map<number, { batch_name: string | null; date: string }[]>();
-          schedData.forEach((s) => {
+          (schedData as any[]).forEach((s) => {
             if (s.practical_id) {
               const list = schedMap.get(s.practical_id) || [];
               list.push({ batch_name: s.batch_name, date: s.date });
@@ -351,6 +353,7 @@ export default function FacultyDashboardPage() {
   const openCreate = (date?: Date) => {
     setEditingPractical(null);
     setSampleCode("");
+    setStarterCode("");
     setSampleLanguage("c");
     setModalOpen(true);
   };
@@ -358,13 +361,15 @@ export default function FacultyDashboardPage() {
   const openEdit = async (p: Practical) => {
     setEditingPractical(p);
 
-    const { data: refs } = await supabase
+    const { data: refsData } = await supabase
       .from("reference_codes")
       .select("*")
       .eq("practical_id", p.id)
       .order("created_at", { ascending: false });
+    const refs = refsData as any[];
     if (refs && refs.length > 0) {
       setSampleCode(refs[0].code || "");
+      setStarterCode(refs[0].starter_code || "");
       setSampleLanguage(refs[0].language || "c");
     }
 
@@ -780,6 +785,8 @@ export default function FacultyDashboardPage() {
           supabase={supabase}
           sampleCode={sampleCode}
           setSampleCode={setSampleCode}
+          starterCode={starterCode}
+          setStarterCode={setStarterCode}
           sampleLanguage={sampleLanguage}
           setSampleLanguage={setSampleLanguage}
           onClose={() => setModalOpen(false)}

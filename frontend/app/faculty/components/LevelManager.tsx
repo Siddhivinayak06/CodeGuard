@@ -6,6 +6,7 @@ import {
   FlaskConical as TestIcon,
   Plus as PlusIcon,
   Trash2 as TrashIcon,
+  Code as CodeIcon,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { TestCase, Level } from "../types";
@@ -238,6 +239,40 @@ export default function LevelManager({
               className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent min-h-[120px]"
               placeholder={`Describe the ${activeLevel} problem...`}
             />
+          </div>
+
+          {/* Starter Code */}
+          <div className="glass-card-premium rounded-2xl p-5 shadow-sm">
+            <div className="flex items-center justify-between pb-3 border-b border-gray-200 dark:border-gray-700 mb-4">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-gradient-to-br from-indigo-500 to-purple-500 rounded-xl text-white shadow-lg shadow-indigo-500/25">
+                  <CodeIcon size={18} />
+                </div>
+                <div>
+                  <h3 className="font-bold text-gray-900 dark:text-white">
+                    Starter Code
+                  </h3>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    Provide the initial code template for students
+                  </p>
+                </div>
+              </div>
+              <span className="text-xs px-3 py-1.5 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-700 dark:text-gray-300">
+                {String(sampleLanguage || "c").toUpperCase()}
+              </span>
+            </div>
+            <div className="rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700">
+              <CodeMirror
+                value={getCurrentLevel().starter_code || ""}
+                height="200px"
+                extensions={[getLanguageExtension()]}
+                theme={theme === "dark" ? oneDark : "light"}
+                onChange={(value) =>
+                  updateLevelField(activeLevel, "starter_code", value)
+                }
+                className="text-sm"
+              />
+            </div>
           </div>
 
           {/* Reference Code - Styled like SingleLevelTestCases */}

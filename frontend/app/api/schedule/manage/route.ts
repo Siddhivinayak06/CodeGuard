@@ -23,8 +23,8 @@ export async function PUT(request: Request) {
             return NextResponse.json({ error: "No fields to update" }, { status: 400 });
         }
 
-        const { data, error } = await supabase
-            .from("schedules")
+        const { data, error } = await (supabase
+            .from("schedules") as any)
             .update(updates)
             .eq("id", id)
             .select()

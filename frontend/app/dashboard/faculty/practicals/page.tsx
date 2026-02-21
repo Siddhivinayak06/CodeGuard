@@ -56,6 +56,7 @@ export default function AllPracticalsPage() {
     null,
   );
   const [sampleCode, setSampleCode] = useState<string>("");
+  const [starterCode, setStarterCode] = useState<string>("");
   const [sampleLanguage, setSampleLanguage] = useState<string>("c");
 
   // Fetch data
@@ -76,7 +77,7 @@ export default function AllPracticalsPage() {
         .select("subject_id")
         .eq("faculty_id", userData.user.id);
 
-      const subjectIds = [...new Set((facultyBatches || []).map((fb) => fb.subject_id))];
+      const subjectIds = [...new Set(((facultyBatches as any[]) || []).map((fb) => fb.subject_id))];
 
       if (subjectIds.length > 0) {
         const { data: subjData } = await supabase
@@ -124,19 +125,22 @@ export default function AllPracticalsPage() {
   const openCreate = () => {
     setEditingPractical(null);
     setSampleCode("");
+    setStarterCode("");
     setSampleLanguage("c");
     setModalOpen(true);
   };
 
   const openEdit = async (p: Practical) => {
     setEditingPractical(p);
-    const { data: refs } = await supabase
+    const { data: refsData } = await supabase
       .from("reference_codes")
       .select("*")
       .eq("practical_id", p.id)
       .order("created_at", { ascending: false });
+    const refs = refsData as any[];
     if (refs && refs.length > 0) {
       setSampleCode(refs[0].code || "");
+      setStarterCode(refs[0].starter_code || "");
       setSampleLanguage(refs[0].language || "c");
     }
     setModalOpen(true);
@@ -238,6 +242,8 @@ export default function AllPracticalsPage() {
           supabase={supabase}
           sampleCode={sampleCode}
           setSampleCode={setSampleCode}
+          starterCode={starterCode}
+          setStarterCode={setStarterCode}
           sampleLanguage={sampleLanguage}
           setSampleLanguage={setSampleLanguage}
           onClose={() => setModalOpen(false)}

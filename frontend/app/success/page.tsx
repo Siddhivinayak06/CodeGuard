@@ -76,7 +76,7 @@ export default async function SuccessPage() {
                 <User className="h-4 w-4 text-gray-500" />
                 <div>
                   <p className="text-sm text-gray-500">Name</p>
-                  <p className="font-medium">{profile?.name || "Not set"}</p>
+                  <p className="font-medium">{(profile as any)?.name || "Not set"}</p>
                 </div>
               </div>
               <div className="flex items-center gap-3">
@@ -91,7 +91,7 @@ export default async function SuccessPage() {
                 <div>
                   <p className="text-sm text-gray-500">Role</p>
                   <p className="font-medium capitalize">
-                    {profile?.role || "student"}
+                    {(profile as any)?.role || "student"}
                   </p>
                 </div>
               </div>

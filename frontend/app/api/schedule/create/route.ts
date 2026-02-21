@@ -27,11 +27,11 @@ export async function POST(request: Request) {
     // 2. Conflict Checks
 
     // 2.1 Check Holiday
-    const { data: holiday } = await supabase
+    const { data: holiday } = (await supabase
       .from("holidays")
       .select("id, description")
       .eq("date", date)
-      .single();
+      .single()) as any;
 
     if (holiday) {
       return NextResponse.json(
@@ -63,8 +63,8 @@ export async function POST(request: Request) {
     }
 
     // 3. Create Schedule
-    const { data: schedule, error: scheduleError } = await supabase
-      .from("schedules")
+    const { data: schedule, error: scheduleError } = (await (supabase
+      .from("schedules") as any)
       .insert({
         practical_id: practical_id || null, // Allow null
         faculty_id,
@@ -75,7 +75,7 @@ export async function POST(request: Request) {
         title_placeholder: title_placeholder || "Untitled Session", // Default title if no practical
       })
       .select()
-      .single();
+      .single()) as any;
 
     if (scheduleError) {
       return NextResponse.json(
@@ -89,11 +89,11 @@ export async function POST(request: Request) {
 
     // If batch_name is provided, fetch students from that batch
     if (batch_name) {
-      const { data: batchStudents, error: batchError } = await supabase
+      const { data: batchStudents, error: batchError } = (await supabase
         .from("users")
         .select("uid")
         .eq("batch", batch_name)
-        .eq("role", "student");
+        .eq("role", "student")) as any as { data: any[] | null, error: any };
 
       if (!batchError && batchStudents) {
         const batchIds = batchStudents.map((s: any) => s.uid);
@@ -112,8 +112,8 @@ export async function POST(request: Request) {
         student_id: studentId,
       }));
 
-      const { error: allocationError } = await supabase
-        .from("schedule_allocations")
+      const { error: allocationError } = await (supabase
+        .from("schedule_allocations") as any)
         .insert(allocations);
 
       if (allocationError) {

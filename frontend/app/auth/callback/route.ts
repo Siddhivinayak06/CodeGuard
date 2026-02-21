@@ -36,7 +36,7 @@ export async function GET(request: Request) {
             }
 
             // User exists - redirect to appropriate dashboard based on role
-            const role = existingUser.role?.toLowerCase();
+            const role = (existingUser as any).role?.toLowerCase();
             let redirectPath = "/dashboard/student";
             if (role === "admin") redirectPath = "/dashboard/admin";
             else if (role === "faculty") redirectPath = "/dashboard/faculty";

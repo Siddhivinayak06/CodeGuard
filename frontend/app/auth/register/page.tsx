@@ -75,7 +75,7 @@ export default function RegisterPage() {
             email: formData.email,
             name: formData.name,
             role: formData.role as "student" | "faculty" | "admin",
-          });
+          } as never);
 
         if (insertError) {
           console.error("Failed to create user profile:", insertError);

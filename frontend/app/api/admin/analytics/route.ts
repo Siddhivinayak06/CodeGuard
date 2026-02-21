@@ -84,7 +84,7 @@ export async function GET() {
     }
 
     // Count submissions per day
-    recentSubmissions?.forEach((sub) => {
+    (recentSubmissions as any[])?.forEach((sub) => {
       const date = new Date(sub.created_at);
       const dayName = days[date.getDay()];
       if (activityByDay[dayName]) {
@@ -115,7 +115,7 @@ export async function GET() {
 
     // Count practicals per subject manually
     const practicalCounts: Record<number, number> = {};
-    allPracticals?.forEach((p) => {
+    (allPracticals as any[])?.forEach((p) => {
       if (p.subject_id) {
         practicalCounts[p.subject_id] =
           (practicalCounts[p.subject_id] || 0) + 1;
@@ -123,7 +123,7 @@ export async function GET() {
     });
 
     const subjectsWithPracticals =
-      allSubjects?.map((s) => ({
+      (allSubjects as any[])?.map((s) => ({
         id: s.id,
         name: s.subject_name,
         code: s.subject_code,
@@ -138,7 +138,7 @@ export async function GET() {
 
     // Count submissions per student
     const studentSubmissionCounts: Record<string, number> = {};
-    allSubmissions?.forEach((sub) => {
+    (allSubmissions as any[])?.forEach((sub) => {
       if (sub.student_id) {
         studentSubmissionCounts[sub.student_id] =
           (studentSubmissionCounts[sub.student_id] || 0) + 1;
@@ -165,7 +165,7 @@ export async function GET() {
         .in("uid", topStudentIds);
 
       topStudentsList = topStudentIds.map((id) => {
-        const user = studentUsers?.find((u) => u.uid === id);
+        const user = (studentUsers as any[])?.find((u) => u.uid === id);
         return {
           id,
           name: user?.name || "Unknown",

@@ -412,8 +412,8 @@ export default function StudentPracticals() {
 
         if (mountedRef.current) {
           setUser(user);
-          if (userDetails?.semester) {
-            setUserSemester(String(userDetails.semester));
+          if ((userDetails as any)?.semester) {
+            setUserSemester(String((userDetails as any).semester));
           }
         }
       } catch {
@@ -730,16 +730,16 @@ export default function StudentPracticals() {
 
       setTestCases(testCasesData || []);
       setViewingSubmission({
-        id: subData.id,
-        practical_id: subData.practical_id ?? 0,
+        id: (subData as any).id,
+        practical_id: (subData as any).practical_id ?? 0,
         practical_title: practicalTitle,
-        code: subData.code || "",
-        output: subData.output || "",
-        language: subData.language || "unknown",
-        status: subData.status || "pending",
-        created_at: subData.created_at,
-        marks_obtained: subData.marks_obtained,
-        testCaseResults: (subData.execution_details as any)?.results || [],
+        code: (subData as any).code || "",
+        output: (subData as any).output || "",
+        language: (subData as any).language || "unknown",
+        status: (subData as any).status || "pending",
+        created_at: (subData as any).created_at,
+        marks_obtained: (subData as any).marks_obtained,
+        testCaseResults: ((subData as any).execution_details as any)?.results || [],
       });
     } catch (err) {
       console.error("Failed to fetch result:", err);

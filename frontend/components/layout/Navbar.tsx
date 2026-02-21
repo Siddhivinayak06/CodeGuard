@@ -89,8 +89,8 @@ export default function Navbar() {
         .eq("uid", user.id)
         .single();
 
-      if (userProfile?.name) {
-        setUserName(userProfile.name);
+      if ((userProfile as any)?.name) {
+        setUserName((userProfile as any).name);
       }
     };
 

@@ -465,8 +465,8 @@ int main() {
           .select("roll_no")
           .eq("uid", data.user.id)
           .single();
-        if (userData?.roll_no) {
-          setRollNo(userData.roll_no);
+        if ((userData as any)?.roll_no) {
+          setRollNo((userData as any).roll_no);
         }
       }
     };
@@ -488,17 +488,29 @@ int main() {
         .eq("id", Number(practicalId))
         .single();
 
-      if (!error && mountedRef.current) {
+      if (!error && mountedRef.current && data) {
         setPractical({
-          ...data,
-          subject_name: data.subjects?.subject_name || "Unknown",
+          ...(data as any),
+          subject_name: (data as any).subjects?.subject_name || "Unknown",
         });
 
-        // Sync language if it differs from current state (URL or default)
-        if (data.language && data.language.toLowerCase() !== lang.toLowerCase()) {
-          const dbLang = data.language.toLowerCase();
+        const dbLang = (data as any).language ? (data as any).language.toLowerCase() : lang.toLowerCase();
+        let initialCode = getStarterCode(dbLang);
+
+        const { data: refCodeData } = await supabase
+          .from("reference_codes")
+          .select("starter_code")
+          .eq("practical_id", Number(practicalId))
+          .order("id", { ascending: false })
+          .limit(1);
+
+        if (refCodeData && (refCodeData as any[]).length > 0 && (refCodeData as any[])[0].starter_code) {
+          initialCode = (refCodeData as any[])[0].starter_code;
+        }
+
+        if (dbLang !== lang.toLowerCase() || (refCodeData && (refCodeData as any[]).length > 0 && (refCodeData as any[])[0].starter_code)) {
           setLang(dbLang);
-          setCode(getStarterCode(dbLang));
+          setCode(initialCode);
         }
       }
 
@@ -511,7 +523,7 @@ int main() {
           .order("id", { ascending: true });
 
         if (!levelsError && levelsData && mountedRef.current) {
-          const sorted = levelsData.sort((a, b) => {
+          const sorted = (levelsData as any[]).sort((a, b) => {
             const order: Record<string, number> = {
               "Task 1": 0,
               "Task 2": 1,
@@ -519,7 +531,7 @@ int main() {
             return (order[a.level] || 0) - (order[b.level] || 0);
           });
 
-          const safeLevels = sorted.map((level) => ({
+          const safeLevels = sorted.map((level: any) => ({
             ...level,
             title: level.title || "",
             description: level.description || "",

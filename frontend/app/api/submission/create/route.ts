@@ -33,7 +33,7 @@ export async function POST(req: Request) {
       .single();
 
     if (existingSubmission) {
-      const existingMarks = existingSubmission.marks_obtained ?? 0;
+      const existingMarks = (existingSubmission as any).marks_obtained ?? 0;
       const newMarks = marks_obtained ?? 0;
 
       // Compare marks: only update code and marks if new submission is better or equal
@@ -61,8 +61,8 @@ export async function POST(req: Request) {
       const { data: updatedSubmission, error: updateError } =
         await supabase
           .from("submissions")
-          .update(updateData)
-          .eq("id", existingSubmission.id)
+          .update(updateData as never)
+          .eq("id", (existingSubmission as any).id)
           .select("*")
           .single();
 
@@ -94,7 +94,7 @@ export async function POST(req: Request) {
         output: "",
         marks_obtained: marks_obtained || 0,
         execution_details: execution_details || null,
-      })
+      } as never)
       .select("*")
       .single();
 

@@ -74,7 +74,7 @@ export function useSessionValidator(options: UseSessionValidatorOptions = {}) {
           .update({
             active_session_id: sessionId,
             session_updated_at: new Date().toISOString(),
-          })
+          } as never)
           .eq("uid", uid);
 
         if (error) {
@@ -133,7 +133,7 @@ export function useSessionValidator(options: UseSessionValidatorOptions = {}) {
       }
 
       // If DB has an active session and local has one too, they must match
-      if (data.active_session_id && data.active_session_id !== sessionId) {
+      if ((data as any).active_session_id && (data as any).active_session_id !== sessionId) {
         return false; // Mismatch -> Invalid (real multi-device case)
       }
 
@@ -253,7 +253,7 @@ export function useSessionValidator(options: UseSessionValidatorOptions = {}) {
     try {
       await supabase
         .from("users")
-        .update({ active_session_id: null })
+        .update({ active_session_id: null } as never)
         .eq("uid", userId);
 
       clearSessionId();

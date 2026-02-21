@@ -37,12 +37,12 @@ export async function POST(req: Request) {
     let levelId: string | null = null;
 
     if (level) {
-      const { data: levelData } = await supabase
+      const { data: levelData } = (await supabase
         .from("practical_levels")
         .select("id, max_marks")
         .eq("practical_id", pid)
         .eq("level", level)
-        .single();
+        .single()) as any;
 
       if (levelData) {
         levelId = String(levelData.id);
@@ -74,22 +74,22 @@ export async function POST(req: Request) {
     // Fetch reference code - Use Admin client to bypass RLS if student is running
     const { supabaseAdmin } = await import("@/lib/supabase/service");
 
-    let { data: refsData } = await supabaseAdmin
+    let { data: refsData } = (await supabaseAdmin
       .from("reference_codes")
       .select("id, language, code, is_primary, created_at")
       .eq("practical_id", pid)
       .eq("language", lang)
-      .limit(1);
+      .limit(1)) as any as { data: any[] };
 
     // If no language-specific match, fallback to primary/latest
     if (!refsData || refsData.length === 0) {
-      const { data: fallbackData } = await supabaseAdmin
+      const { data: fallbackData } = (await supabaseAdmin
         .from("reference_codes")
         .select("id, language, code, is_primary, created_at")
         .eq("practical_id", pid)
         .order("is_primary", { ascending: false })
         .order("created_at", { ascending: false })
-        .limit(1);
+        .limit(1)) as any as { data: any[] };
       refsData = fallbackData;
     }
 
@@ -382,11 +382,11 @@ export async function POST(req: Request) {
       let shouldUpdate = true;
       let studentId = null;
       try {
-        const { data: currentSub } = await supabase
+        const { data: currentSub } = (await supabase
           .from("submissions")
           .select("marks_obtained, student_id")
           .eq("id", submissionId)
-          .single();
+          .single()) as any;
 
         studentId = currentSub?.student_id;
       } catch (e) {
@@ -397,11 +397,11 @@ export async function POST(req: Request) {
 
       // Re-check shouldUpdate with FINAL marks
       try {
-        const { data: currentSub } = await supabase
+        const { data: currentSub } = (await supabase
           .from("submissions")
           .select("marks_obtained")
           .eq("id", submissionId)
-          .single();
+          .single()) as any;
 
         if (currentSub && (currentSub.marks_obtained || 0) > marksObtained) {
           shouldUpdate = false;
@@ -412,8 +412,8 @@ export async function POST(req: Request) {
 
       if (shouldUpdate) {
         try {
-          await supabase
-            .from("submissions")
+          await (supabase
+            .from("submissions") as any)
             .update({
               status: newStatus,
               marks_obtained: marksObtained,
@@ -446,16 +446,16 @@ export async function POST(req: Request) {
         const { data: { user: authUser } } = await supabase.auth.getUser();
         const sid = studentId || authUser?.id;
         if (sid) {
-          const { data: spData } = await supabaseAdmin
+          const { data: spData } = (await supabaseAdmin
             .from("student_practicals")
             .select("id, attempt_count")
             .eq("student_id", sid)
             .eq("practical_id", pid)
-            .single();
+            .single()) as any;
 
           if (spData) {
-            await supabaseAdmin
-              .from("student_practicals")
+            await (supabaseAdmin
+              .from("student_practicals") as any)
               .update({ attempt_count: (spData.attempt_count || 0) + 1 })
               .eq("id", spData.id);
           }

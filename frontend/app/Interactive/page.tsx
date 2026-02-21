@@ -198,8 +198,8 @@ export default function Home() {
             .select("roll_no")
             .eq("uid", data.user.id)
             .single();
-          if (studentData?.roll_no) {
-            setRollNo(studentData.roll_no);
+          if ((studentData as any)?.roll_no) {
+            setRollNo((studentData as any).roll_no);
           }
         }
       } catch (err) {

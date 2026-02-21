@@ -102,7 +102,7 @@ export function ScheduleDialog({
 
       setPracticals(practs || []);
       if (facs) {
-        setFaculty(facs.map((f) => ({ id: f.uid, email: f.email })));
+        setFaculty((facs as any[]).map((f) => ({ id: f.uid, email: f.email })));
       }
     }
     if (open) loadData();

@@ -45,7 +45,7 @@ export async function POST(req: Request) {
     // Update
     // We increment max_attempts to allow one more go.
     // And ensure is_locked is false.
-    const newMax = (record.max_attempts || 1) + 1;
+    const newMax = ((record as any).max_attempts || 1) + 1;
 
     const { error: updateError } = await supabase
       .from("student_practicals")
@@ -55,8 +55,8 @@ export async function POST(req: Request) {
         lock_reason: null, // Clear reason
         // We do NOT reset attempt_count, so history is preserved.
         // Since max > attempt_count, they can start.
-      })
-      .eq("id", record.id);
+      } as never)
+      .eq("id", (record as any).id);
 
     if (updateError) throw updateError;
 
@@ -67,7 +67,7 @@ export async function POST(req: Request) {
       action: "allow_reattempt",
       details: { studentId, practicalId, newMaxAttempts: newMax, reason },
       created_at: new Date().toISOString(),
-    });
+    } as any);
 
     // Notify student about the re-attempt
     try {
@@ -81,10 +81,10 @@ export async function POST(req: Request) {
         user_id: studentId,
         type: "submission_graded",
         title: "Re-attempt Granted",
-        message: `Your faculty has granted a re-attempt for "${practical?.title || "a practical"}". You now have ${newMax} total attempts.`,
+        message: `Your faculty has granted a re-attempt for "${(practical as any)?.title || "a practical"}". You now have ${newMax} total attempts.`,
         link: "/student/practicals",
         is_read: false,
-      });
+      } as any);
     } catch (notifErr) {
       console.error("Failed to send re-attempt notification:", notifErr);
     }

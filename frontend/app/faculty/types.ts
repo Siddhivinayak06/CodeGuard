@@ -4,9 +4,9 @@ export type TestCase = Tables<"test_cases">;
 export type Practical = Tables<"practicals"> & {
   testCases?: TestCase[];
   submission_count?: number;
-  practical_number?: number;
+  practical_number?: number | null;
   schedules?: { batch_name: string | null; date: string }[];
 };
 export type Subject = Tables<"subjects"> & { practical_count?: number };
 export type Student = Tables<"users">;
-export type Level = Tables<"practical_levels"> & { testCases: TestCase[]; reference_code?: string };
+export type Level = Tables<"practical_levels"> & { testCases: TestCase[]; reference_code?: string; starter_code?: string; };

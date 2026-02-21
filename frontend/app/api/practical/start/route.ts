@@ -64,7 +64,7 @@ export async function POST(req: Request) {
         .select("id")
         .eq("practical_id", practicalId);
 
-      const scheduleIds = schedules?.map((s) => s.id) || [];
+      const scheduleIds = (schedules as any[])?.map((s: any) => s.id) || [];
 
       let isAllocated = false;
 
@@ -85,63 +85,61 @@ export async function POST(req: Request) {
       }
 
       // Create the record
-      const { data: newRecord, error: createError } = await supabase
+      const { error: insertError } = await supabase
         .from("student_practicals")
         .insert({
           student_id: user.id,
           practical_id: practicalId,
-          status: "in_progress",
-          attempt_count: 1, // First attempt
-          max_attempts: 1,
-        })
-        .select()
-        .single();
+          status: "started",
+          attempt_count: 1,
+          max_attempts: 1, // Default 1 attempt allowed
+        } as never);
 
-      if (createError) throw createError;
+      if (insertError) {
+        throw insertError;
+      }
 
       return NextResponse.json({ success: true, attempt: 1 });
     }
 
-    // Check Lock Status
-    if (spRecord.is_locked) {
+    // 2. We have an existing record.
+    // Check lock status
+    if ((spRecord as any).is_locked) {
       return NextResponse.json(
         {
           success: false,
-          error: spRecord.lock_reason || "Session is locked by faculty.",
+          error: (spRecord as any).lock_reason || "Session locked by faculty.",
         },
         { status: 403 },
       );
     }
 
-    // Check Attempts
-    const currentAttempts = spRecord.attempt_count || 0;
-    const maxAttempts = spRecord.max_attempts || 1;
+    // Check attempts
+    const attempts = (spRecord as any).attempt_count || 0;
+    const max = (spRecord as any).max_attempts || 1;
 
-    if (currentAttempts >= maxAttempts) {
+    if (attempts >= max) {
       return NextResponse.json(
         {
           success: false,
-          error: "Maximum attempts reached. Contact faculty to re-attempt.",
+          error: "You have already used your attempt. Refreshing is not allowed.",
         },
         { status: 403 },
       );
     }
 
-    // If Allowed: Increment Attempt Count
+    // Allow Start - Increment attempt count
     const { error: updateError } = await supabase
       .from("student_practicals")
       .update({
-        attempt_count: currentAttempts + 1,
-        // We could set status to 'in_progress' here too if needed
+        attempt_count: attempts + 1,
         status: "in_progress",
-      })
-      .eq("id", spRecord.id);
+      } as never)
+      .eq("id", (spRecord as any).id);
 
-    if (updateError) {
-      throw updateError;
-    }
+    if (updateError) throw updateError;
 
-    return NextResponse.json({ success: true, attempt: currentAttempts + 1 });
+    return NextResponse.json({ success: true, attempt: attempts + 1 });
   } catch (err: any) {
     console.error("Error starting practical:", err);
     return NextResponse.json(

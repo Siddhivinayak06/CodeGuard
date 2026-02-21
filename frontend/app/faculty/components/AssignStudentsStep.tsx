@@ -191,7 +191,7 @@ export default function AssignStudentsStep({
                           : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 group-hover:bg-blue-100 dark:group-hover:bg-blue-900/50 group-hover:text-blue-600 dark:group-hover:text-blue-400",
                       )}
                     >
-                      {student.name.charAt(0).toUpperCase()}
+                      {(student.name || "S").charAt(0).toUpperCase()}
                     </div>
                     <div>
                       <h4

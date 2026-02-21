@@ -224,8 +224,8 @@ function StudentSubmissionsPageContent() {
 
         if (mountedRef.current) {
           setStudentDetails({
-            name: profile?.name || user.email || "Student",
-            roll_number: profile?.roll_no || "N/A",
+            name: (profile as any)?.name || user.email || "Student",
+            roll_number: (profile as any)?.roll_no || "N/A",
           });
         }
       } catch (err) {
@@ -369,10 +369,10 @@ function StudentSubmissionsPageContent() {
       if (!error && fullSub) {
         setViewingSubmission(prev => prev ? ({
           ...prev,
-          code: fullSub.code || "",
-          output: fullSub.output || "",
-          status: fullSub.status || "pending",
-          testCaseResults: (fullSub.execution_details as any)?.results || []
+          code: (fullSub as any).code || "",
+          output: (fullSub as any).output || "",
+          status: (fullSub as any).status || "pending",
+          testCaseResults: ((fullSub as any).execution_details as any)?.results || []
         }) : null);
       }
 

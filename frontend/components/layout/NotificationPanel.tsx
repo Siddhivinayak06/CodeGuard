@@ -138,7 +138,7 @@ export default function NotificationPanel() {
     try {
       const { error } = await supabase
         .from("notifications")
-        .update({ is_read: true })
+        .update({ is_read: true } as never)
         .eq("id", id);
 
       if (!error) {
@@ -158,7 +158,7 @@ export default function NotificationPanel() {
     try {
       const { error } = await supabase
         .from("notifications")
-        .update({ is_read: true })
+        .update({ is_read: true } as never)
         .eq("user_id", userId)
         .eq("is_read", false);
 
@@ -323,8 +323,8 @@ export default function NotificationPanel() {
                       <div
                         key={notification.id}
                         className={`group p-4 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors ${!notification.is_read
-                            ? "bg-indigo-50/50 dark:bg-indigo-900/10"
-                            : ""
+                          ? "bg-indigo-50/50 dark:bg-indigo-900/10"
+                          : ""
                           } ${isReattemptRequest ? "border-l-4 border-purple-500" : ""}`}
                         onClick={() => {
                           if (!notification.is_read && !isReattemptRequest) {
@@ -338,9 +338,9 @@ export default function NotificationPanel() {
                         <div className="flex gap-3">
                           <div
                             className={`flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center ${isReattemptRequest
-                                ? "bg-purple-100 dark:bg-purple-900/30"
-                                : notificationColors[notification.type] ||
-                                "bg-gray-100 dark:bg-gray-800"
+                              ? "bg-purple-100 dark:bg-purple-900/30"
+                              : notificationColors[notification.type] ||
+                              "bg-gray-100 dark:bg-gray-800"
                               }`}
                           >
                             {isReattemptRequest ? (
@@ -355,8 +355,8 @@ export default function NotificationPanel() {
                             <div className="flex items-start justify-between gap-2">
                               <p
                                 className={`text-sm font-medium ${!notification.is_read
-                                    ? "text-gray-900 dark:text-white"
-                                    : "text-gray-700 dark:text-gray-300"
+                                  ? "text-gray-900 dark:text-white"
+                                  : "text-gray-700 dark:text-gray-300"
                                   }`}
                               >
                                 {notification.title}

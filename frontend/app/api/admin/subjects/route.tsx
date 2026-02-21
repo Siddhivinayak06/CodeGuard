@@ -72,7 +72,7 @@ export async function GET() {
 
     // Group faculty batches by subject_id
     const facultyBatchesBySubject: Record<number, any[]> = {};
-    for (const fb of facultyBatches || []) {
+    for (const fb of (facultyBatches as any[]) || []) {
       const subjectId = fb.subject_id;
       if (!facultyBatchesBySubject[subjectId]) {
         facultyBatchesBySubject[subjectId] = [];
@@ -137,7 +137,7 @@ export async function POST(request: Request) {
 
     if (subjectError) throw subjectError;
 
-    const subjectId = subjectData.id;
+    const subjectId = (subjectData as any).id;
 
     // Insert faculty-batch assignments if provided
     if (faculty_batches && Array.isArray(faculty_batches) && faculty_batches.length > 0) {
@@ -149,7 +149,7 @@ export async function POST(request: Request) {
 
       const { error: fbError } = await supabase
         .from("subject_faculty_batches")
-        .insert(fbInserts);
+        .insert(fbInserts as any);
 
       if (fbError) throw fbError;
     }
@@ -192,8 +192,7 @@ export async function PUT(request: Request) {
     if (semester !== undefined) updates.semester = semester;
 
     if (Object.keys(updates).length > 0) {
-      const { error: updateError } = await supabase
-        .from("subjects")
+      const { error: updateError } = await (supabase.from("subjects") as any)
         .update(updates)
         .eq("id", id);
       if (updateError) throw updateError;
@@ -219,7 +218,7 @@ export async function PUT(request: Request) {
 
         const { error: insertError } = await supabase
           .from("subject_faculty_batches")
-          .insert(fbInserts);
+          .insert(fbInserts as any);
 
         if (insertError) throw insertError;
       }

@@ -162,7 +162,7 @@ async function handleSingleCreate(body: any) {
   };
   const { data: inserted, error: insertErr } = await supabaseAdmin
     .from("users")
-    .upsert(profile, { onConflict: "uid" })
+    .upsert(profile as any, { onConflict: "uid" })
     .select()
     .single();
   if (insertErr) throw insertErr;
@@ -256,7 +256,7 @@ async function handleBulkCreate(users: any[]) {
 
       const { data: inserted, error: insertErr } = await supabaseAdmin
         .from("users")
-        .upsert(profile, { onConflict: "uid" })
+        .upsert(profile as any, { onConflict: "uid" })
         .select()
         .single();
 

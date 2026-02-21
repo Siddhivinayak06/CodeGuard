@@ -45,7 +45,7 @@ export async function POST(req: Request) {
       );
     }
 
-    const facultyId = (practical.subjects as any)?.faculty_id;
+    const facultyId = ((practical as any).subjects as any)?.faculty_id;
 
     if (!facultyId) {
       return NextResponse.json(
@@ -61,18 +61,18 @@ export async function POST(req: Request) {
         user_id: facultyId,
         type: "submission_received", // Using allowed type from schema
         title: "Re-attempt Request",
-        message: `${studentData?.name || "A student"} has requested a re-attempt for "${practical.title}". Reason: ${reason || "No reason provided"}`,
+        message: `${(studentData as any)?.name || "A student"} has requested a re-attempt for "${(practical as any).title}". Reason: ${reason || "No reason provided"}`,
         metadata: {
           studentId: user.id,
-          studentName: studentData?.name,
+          studentName: (studentData as any)?.name,
           practicalId,
-          practicalTitle: practical.title,
+          practicalTitle: (practical as any).title,
           isReattemptRequest: true,
           reason: reason || "No reason provided",
         },
         is_read: false,
         created_at: new Date().toISOString(),
-      });
+      } as never);
 
     if (notificationError) {
       console.error("Notification error:", notificationError);

@@ -213,7 +213,7 @@ export default function BasicDetailsForm({
               value={
                 enableLevels
                   ? levels.reduce((sum, l) => sum + l.max_marks, 0)
-                  : form.max_marks
+                  : (form.max_marks ?? "")
               }
               onChange={handleInput}
               onFocus={() => setFocusedField("marks")}

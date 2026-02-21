@@ -181,7 +181,7 @@ export async function POST(request: NextRequest) {
         message: message || null,
         link: link || null,
         metadata: metadata || {},
-      })
+      } as never)
       .select()
       .single();
 
@@ -226,7 +226,7 @@ export async function PATCH(request: NextRequest) {
 
     const { data, error } = await supabase
       .from("notifications")
-      .update({ is_read: is_read ?? true })
+      .update({ is_read: is_read ?? true } as never)
       .eq("id", id)
       .eq("user_id", user.id)
       .select()

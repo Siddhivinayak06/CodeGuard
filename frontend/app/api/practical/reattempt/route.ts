@@ -27,12 +27,12 @@ export async function POST(req: Request) {
         }
 
         // 1. Fetch Student Practical Record
-        const { data: spRecord, error: fetchError } = await supabase
+        const { data: spRecord, error: fetchError } = (await supabase
             .from("student_practicals")
             .select("id, is_locked, lock_reason, practical_id")
             .eq("student_id", user.id)
             .eq("practical_id", practicalId)
-            .single();
+            .single()) as any;
 
         if (fetchError || !spRecord) {
             return NextResponse.json(
@@ -52,38 +52,38 @@ export async function POST(req: Request) {
         // 2. Identify Faculty
         // Strategy A: Check schedules
         let facultyId = null;
-        const { data: schedule } = await supabase
+        const { data: schedule } = (await supabase
             .from("schedules")
             .select("faculty_id")
             .eq("practical_id", practicalId)
             .order("date", { ascending: false })
             .limit(1)
-            .single();
+            .single()) as any;
 
         if (schedule?.faculty_id) {
             facultyId = schedule.faculty_id;
         } else {
             // Strategy B: Check subject_faculty_batches
             // Need subject_id from practicals
-            const { data: practical } = await supabase
+            const { data: practical } = (await supabase
                 .from("practicals")
                 .select("subject_id, title")
                 .eq("id", practicalId)
-                .single();
+                .single()) as any;
 
-            const { data: userData } = await supabase
+            const { data: userData } = (await supabase
                 .from("users")
                 .select("batch") // Assuming user has batch
                 .eq("uid", user.id)
-                .single();
+                .single()) as any;
 
             if (practical?.subject_id && userData?.batch) {
-                const { data: batchAlloc } = await supabase
+                const { data: batchAlloc } = (await supabase
                     .from("subject_faculty_batches")
                     .select("faculty_id")
                     .eq("subject_id", practical.subject_id)
                     .eq("batch", userData.batch)
-                    .single();
+                    .single()) as any;
 
                 if (batchAlloc?.faculty_id) {
                     facultyId = batchAlloc.faculty_id;
@@ -97,8 +97,8 @@ export async function POST(req: Request) {
             ? `${spRecord.lock_reason} | Re-attempt Requested`
             : "Locked | Re-attempt Requested";
 
-        const { error: updateError } = await supabase
-            .from("student_practicals")
+        const { error: updateError } = await (supabase
+            .from("student_practicals") as any)
             .update({
                 lock_reason: newReason,
             })
@@ -108,13 +108,13 @@ export async function POST(req: Request) {
 
         // 4. Send Notification to Faculty (if found)
         if (facultyId) {
-            const { data: practical } = await supabase
+            const { data: practical } = (await supabase
                 .from("practicals")
                 .select("title")
                 .eq("id", practicalId)
-                .single();
+                .single()) as any;
 
-            await supabase.from("notifications").insert({
+            await (supabase.from("notifications") as any).insert({
                 user_id: facultyId,
                 type: "submission_received",
                 title: "Re-attempt Request",

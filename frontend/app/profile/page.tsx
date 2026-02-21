@@ -155,15 +155,15 @@ export default function ProfilePage() {
         let studentSemester = "";
         let studentBatch = "";
 
-        if (profile?.role === "student") {
-          studentSemester = profile.semester || "";
-          studentBatch = profile.batch || "";
+        if ((profile as any)?.role === "student") {
+          studentSemester = (profile as any).semester || "";
+          studentBatch = (profile as any).batch || "";
         }
 
         setFormData({
-          name: profile?.name || user.user_metadata?.full_name || "",
+          name: (profile as any)?.name || user.user_metadata?.full_name || "",
           email: user.email || "",
-          role: profile?.role || user.user_metadata?.role || "student",
+          role: (profile as any)?.role || user.user_metadata?.role || "student",
           semester: studentSemester,
           batch: studentBatch,
         });
@@ -196,7 +196,7 @@ export default function ProfilePage() {
 
       const { error: userError } = await supabase
         .from("users")
-        .update(updates)
+        .update(updates as never)
         .eq("uid", user.id);
 
       if (userError) throw userError;

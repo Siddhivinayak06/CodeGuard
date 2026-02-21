@@ -12,11 +12,11 @@ export async function POST(request: Request) {
     }
 
     // 1. Check Holiday
-    const { data: holiday } = await supabase
+    const { data: holiday } = (await supabase
       .from("holidays")
       .select("id, description")
       .eq("date", date)
-      .single();
+      .single()) as any;
 
     if (holiday) {
       return NextResponse.json({

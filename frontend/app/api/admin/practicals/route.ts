@@ -170,8 +170,7 @@ export async function PUT(request: Request) {
     if (deadline !== undefined) updates.deadline = deadline;
     if (max_marks !== undefined) updates.max_marks = max_marks;
 
-    const { data, error } = await supabase
-      .from("practicals")
+    const { data, error } = await (supabase.from("practicals") as any)
       .update(updates)
       .eq("id", id)
       .select();

@@ -101,11 +101,11 @@ export default function StudentDashboard() {
         if (mountedRef.current) setUser(u);
 
         // Fetch user name
-        const { data: userData } = await supabase
+        const { data: userData } = (await supabase
           .from("users")
           .select("name")
           .eq("uid", u.id)
-          .single();
+          .single()) as any;
 
         if (userData?.name) setUserName(userData.name);
       } catch {
@@ -127,11 +127,11 @@ export default function StudentDashboard() {
       setLoading(true);
       try {
         // 1. Fetch Student Details (Name & Semester)
-        const { data: sd, error: sdErr } = await supabase
+        const { data: sd, error: sdErr } = (await supabase
           .from("users")
           .select("semester, name")
           .eq("uid", user.id)
-          .single();
+          .single()) as any;
 
         if (sdErr || !sd) throw new Error("Failed to fetch student details");
 
@@ -217,11 +217,11 @@ export default function StudentDashboard() {
         }
 
         // 5. Fetch Submissions for Status Counts
-        const { data: statusSubmissions } = await supabase
+        const { data: statusSubmissions } = (await supabase
           .from("submissions")
           .select("practical_id, status")
           .eq("student_id", user.id)
-          .in("practical_id", filteredPidsList);
+          .in("practical_id", filteredPidsList)) as any as { data: any[] | null };
 
         const passedSet = new Set(
           statusSubmissions

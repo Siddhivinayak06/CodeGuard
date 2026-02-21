@@ -170,7 +170,7 @@ function FacultySubmissionsContentInner() {
         .select("subject_id")
         .eq("faculty_id", user.id);
 
-      const subjectIds = [...new Set((facultyBatches || []).map((fb) => fb.subject_id))];
+      const subjectIds = [...new Set((facultyBatches || []).map((fb: any) => fb.subject_id))];
 
       if (subjectIds.length === 0) return;
 
@@ -260,15 +260,15 @@ function FacultySubmissionsContentInner() {
       if (error) throw error;
 
       // Enrich with Student Info (Name, Roll No)
-      const studentIds = [...new Set((data || []).map(s => s.student_id).filter((id): id is string => id !== null))];
+      const studentIds = [...new Set(((data || []) as any[]).map(s => s.student_id).filter((id): id is string => id !== null))];
       const { data: students } = await supabase
         .from("users")
         .select("uid, name, roll_no")
         .in("uid", studentIds);
 
-      const studentMap = new Map(students?.map(s => [s.uid, s]));
+      const studentMap = new Map((students as any[])?.map(s => [s.uid, s]));
 
-      const formatted: Submission[] = (data || []).map((s: any) => ({
+      const formatted: Submission[] = ((data || []) as any[]).map((s: any) => ({
         id: s.id,
         submission_id: s.id,
         student_id: s.student_id,
@@ -307,10 +307,10 @@ function FacultySubmissionsContentInner() {
       .eq("practical_id", practicalId)
       .order("id");
     // Cast to our TestCase interface, filtering out any with null practical_id
-    const validTestCases: TestCase[] = (data || []).filter(
+    const validTestCases: TestCase[] = ((data || []) as any[]).filter(
       (tc): tc is typeof tc & { practical_id: number; is_hidden: boolean } =>
         tc.practical_id !== null
-    ).map(tc => ({
+    ).map((tc: any) => ({
       id: tc.id,
       practical_id: tc.practical_id,
       input: tc.input,
@@ -340,7 +340,7 @@ function FacultySubmissionsContentInner() {
         .update({
           marks_obtained: marksNum,
           status: marksNum >= 5 ? 'passed' : 'failed'
-        })
+        } as never)
         .eq("id", submissionId);
 
       if (error) throw error;
@@ -359,7 +359,7 @@ function FacultySubmissionsContentInner() {
       .update({
         marks_obtained: marks,
         status: status as "passed" | "failed" | "pending" | "submitted"
-      })
+      } as never)
       .eq("id", sid);
 
     if (!error) {
@@ -390,7 +390,7 @@ function FacultySubmissionsContentInner() {
         .eq("subject_id", selectedSubjectId)
         .eq("faculty_id", user.id);
 
-      const batches = [...new Set((facultyBatches || []).map(b => b.batch))];
+      const batches = [...new Set(((facultyBatches || []) as any[]).map(b => b.batch))];
       const hasAllBatch = batches.includes("All");
 
       // 3. Get all practicals for this subject
@@ -406,7 +406,7 @@ function FacultySubmissionsContentInner() {
         .in("practical_id", practicalIds);
 
       // Get unique student IDs from submissions
-      const submitterIds = [...new Set((allSubmissions || []).map(s => s.student_id).filter(id => id !== null))];
+      const submitterIds = [...new Set(((allSubmissions || []) as any[]).map(s => s.student_id).filter(id => id !== null))];
 
       // 5. Fetch students (Both from batches AND from submissions to be safe)
       const studentQuery = supabase
@@ -445,7 +445,7 @@ function FacultySubmissionsContentInner() {
       // 6. Build the report data structure
       const reportStudents = students.map(student => {
         const practicals = practicalIds.map((pid: number) => {
-          const submission = (allSubmissions || []).find(
+          const submission = ((allSubmissions || []) as any[]).find(
             s => s.student_id === student.uid && s.practical_id === pid
           );
           return {
@@ -496,7 +496,7 @@ function FacultySubmissionsContentInner() {
       if (action === 'pass') {
         const { error } = await supabase
           .from("submissions")
-          .update({ status: 'passed' as const, marks_obtained: 10 })
+          .update({ status: 'passed' as const, marks_obtained: 10 } as never)
           .in("id", Array.from(selectedSubmissionIds));
         if (error) throw error;
       } else {

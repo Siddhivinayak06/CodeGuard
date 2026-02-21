@@ -19,7 +19,7 @@ export async function GET() {
     // Extract unique batches and sort them
     const uniqueBatches = Array.from(
       new Set(
-        (data || [])
+        ((data as any[]) || [])
           .map((item) => item.batch)
           .filter((batch): batch is string => batch !== null && batch !== ""),
       ),

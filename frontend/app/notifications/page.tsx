@@ -117,7 +117,7 @@ export default function NotificationsPage() {
     try {
       const { error } = await supabase
         .from("notifications")
-        .update({ is_read: true })
+        .update({ is_read: true } as never)
         .eq("id", id);
 
       if (!error) {
@@ -137,7 +137,7 @@ export default function NotificationsPage() {
     try {
       const { error } = await supabase
         .from("notifications")
-        .update({ is_read: true })
+        .update({ is_read: true } as never)
         .eq("user_id", userId)
         .eq("is_read", false);
 

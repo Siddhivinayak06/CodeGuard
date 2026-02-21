@@ -21,11 +21,11 @@ export async function GET() {
     const userId = userData.user.id;
 
     // Verify user is a student and get batch
-    const { data: userRole, error: roleError } = await supabase
+    const { data: userRole, error: roleError } = (await supabase
       .from("users")
       .select("role, batch")
       .eq("uid", userId)
-      .single();
+      .single()) as any;
 
     if (roleError || userRole?.role !== "student") {
       return NextResponse.json(
@@ -80,10 +80,10 @@ export async function GET() {
     if (error) throw error;
 
     // Fetch submissions for marks & status override
-    const { data: submissions } = await supabase
+    const { data: submissions } = (await supabase
       .from("submissions")
       .select("practical_id, status, marks_obtained")
-      .eq("student_id", userId);
+      .eq("student_id", userId)) as any as { data: any[] | null };
 
     const submissionMap = new Map(submissions?.map((s) => [s.practical_id, s]));
 
@@ -101,11 +101,11 @@ export async function GET() {
     const scheduleMap = new Map();
     if (practicalIds.length > 0) {
       // Fetch schedules matching user batch
-      const { data: batchSchedules } = await supabase
+      const { data: batchSchedules } = (await supabase
         .from("schedules")
         .select("practical_id, date, start_time, end_time, batch_name")
         .in("practical_id", practicalIds)
-        .eq("batch_name", userBatch || ""); // Match user batch
+        .eq("batch_name", userBatch || "")) as any as { data: any[] | null }; // Match user batch
 
       // Fetch allocated schedules (if any specific overrides/allocations existed - assuming distinct from batch for now, or just use batch if that's the primary method)
       // For now, let's prioritize batch schedules as per requirements.

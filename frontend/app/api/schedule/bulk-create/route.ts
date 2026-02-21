@@ -14,7 +14,7 @@ export async function POST(request: Request) {
             );
         }
 
-        const results = [];
+        const results: any[] = [];
         const errors = [];
 
         // We'll process sequentially for now to handle individual errors/conflicts gracefully, 
@@ -30,11 +30,11 @@ export async function POST(request: Request) {
 
         for (const batch of uniqueBatches) {
             if (batch) {
-                const { data: students } = await supabase
+                const { data: students } = (await supabase
                     .from("users")
                     .select("uid")
                     .eq("batch", batch)
-                    .eq("role", "student");
+                    .eq("role", "student")) as any as { data: any[] | null };
                 if (students) {
                     batchStudentMap[batch] = students.map(s => s.uid);
                 }
@@ -82,8 +82,8 @@ export async function POST(request: Request) {
 
 
             // Insert
-            const { data: inserted, error: insertError } = await supabase
-                .from("schedules")
+            const { data: inserted, error: insertError } = (await (supabase
+                .from("schedules") as any)
                 .insert({
                     practical_id: practical_id || null,
                     faculty_id,
@@ -94,7 +94,7 @@ export async function POST(request: Request) {
                     title_placeholder: title_placeholder || "Untitled Session",
                 })
                 .select()
-                .single();
+                .single()) as any;
 
             if (insertError) {
                 errors.push({ ...schedule, error: insertError.message });
@@ -110,7 +110,7 @@ export async function POST(request: Request) {
                     schedule_id: inserted.id,
                     student_id: uid
                 }));
-                await supabase.from("schedule_allocations").insert(allocations);
+                await (supabase.from("schedule_allocations") as any).insert(allocations);
             }
         }
 

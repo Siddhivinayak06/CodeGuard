@@ -188,11 +188,11 @@ export async function middleware(request: NextRequest) {
 
       if (user) {
         // Fetch the active session ID from the users table
-        const { data: userData, error: userError } = await supabase
+        const { data: userData, error: userError } = (await supabase
           .from("users")
           .select("active_session_id")
           .eq("uid", user.id)
-          .single();
+          .single()) as any;
 
         if (!userError && userData && userData.active_session_id) {
           // Only enforce if cookie EXISTS but doesn't match (single-session protection).

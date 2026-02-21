@@ -20,6 +20,8 @@ interface PracticalFormProps {
   supabase: SupabaseClient;
   sampleCode?: string;
   setSampleCode: (code: string) => void;
+  starterCode?: string;
+  setStarterCode: (code: string) => void;
   sampleLanguage?: string;
   setSampleLanguage: (lang: string) => void;
   onClose: () => void;
@@ -46,6 +48,8 @@ export default function PracticalForm({
   supabase,
   sampleCode = "",
   setSampleCode,
+  starterCode = "",
+  setStarterCode,
   sampleLanguage = "c",
   setSampleLanguage,
   onClose,
@@ -114,7 +118,7 @@ export default function PracticalForm({
     description: "",
     language: "",
     max_marks: 10,
-    practical_number: undefined,
+    practical_number: null,
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
     submitted: false,
@@ -168,6 +172,7 @@ export default function PracticalForm({
     levels: Level[];
     enableLevels: boolean;
     sampleCode?: string;
+    starterCode?: string;
     sampleLanguage?: string;
   }
 
@@ -180,7 +185,7 @@ export default function PracticalForm({
       description: "",
       language: "",
       max_marks: 10,
-      practical_number: undefined,
+      practical_number: null,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
       submitted: false,
@@ -199,6 +204,7 @@ export default function PracticalForm({
     levels: JSON.parse(JSON.stringify(defaultLevels)),
     enableLevels: false,
     sampleCode: "",
+    starterCode: "",
     sampleLanguage: "c",
   });
 
@@ -245,7 +251,8 @@ export default function PracticalForm({
                   time_limit_ms: 2000,
                   memory_limit_kb: 65536,
                 })) || [],
-                reference_code: importedLevel.reference_code || ""
+                reference_code: importedLevel.reference_code || "",
+                starter_code: importedLevel.starter_code || ""
               };
             });
 
@@ -278,7 +285,8 @@ export default function PracticalForm({
               levels: mappedLevels,
               enableLevels: isMultilevel,
               sampleCode: d.reference_code || "", // Map reference code
-              sampleLanguage: d.language || "c",
+              starterCode: d.starter_code || "",  // Map starter code
+              sampleLanguage: d.language || "c", // Map language
             };
           });
           setDraftPracticals(mappedDrafts);
@@ -292,6 +300,7 @@ export default function PracticalForm({
             setLevels(first.levels);
             setEnableLevels(first.enableLevels);
             if (first.sampleCode !== undefined) setSampleCode(first.sampleCode);
+            if (first.starterCode !== undefined) setStarterCode(first.starterCode);
             if (first.sampleLanguage !== undefined) setSampleLanguage(first.sampleLanguage);
           }
         } else {
@@ -399,7 +408,7 @@ export default function PracticalForm({
         description: "",
         language: "",
         max_marks: 10,
-        practical_number: undefined,
+        practical_number: null,
         subject_id: defaultSubjectId
           ? Number(defaultSubjectId)
           : (subjects[0]?.id ?? prev.subject_id),
@@ -933,8 +942,9 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
     return true;
   }, [form, enableLevels, levels, testCases]);
 
-  const saveReferenceCode = async (pId: number, code: string, lang: string) => {
-    if (!pId || !code) return;
+  // Save generic form components
+  const saveReferenceCode = async (pId: number, code: string, lang: string, starterCode?: string) => {
+    if (!pId || (!code && !starterCode)) return;
     console.log(`[SaveRef] Saving code for practical ${pId} (lang: ${lang})`);
     try {
       const { data: userData } = await supabase.auth.getUser();
@@ -957,7 +967,8 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
 
       const payload = {
         practical_id: pId,
-        code,
+        code: code || "",
+        starter_code: starterCode || null,
         language: lang,
         author: userId,
         is_primary: true,
@@ -1079,8 +1090,8 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
           if (levelErr) throw levelErr;
 
           // Save reference code for this level if present
-          if (level.reference_code) {
-            await saveReferenceCode(practicalId, level.reference_code, form.language || "c");
+          if (level.reference_code || level.starter_code) {
+            await saveReferenceCode(practicalId, level.reference_code || "", form.language || "c", level.starter_code);
           }
 
           // Insert test cases for this level
@@ -1118,8 +1129,8 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
         }
 
         // Save reference code for single level
-        if (sampleCode) {
-          await saveReferenceCode(practicalId, sampleCode, sampleLanguage);
+        if (sampleCode || starterCode) {
+          await saveReferenceCode(practicalId, sampleCode, sampleLanguage, starterCode);
         }
       }
 
@@ -1227,9 +1238,9 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
               if (levelErr) throw levelErr;
 
               // Save reference code for this level if present
-              if (level.reference_code) {
+              if (level.reference_code || level.starter_code) {
                 try {
-                  await saveReferenceCode(practicalId, level.reference_code, draftForm.language || "c");
+                  await saveReferenceCode(practicalId, level.reference_code || "", draftForm.language || "c", level.starter_code);
                 } catch (refErr) {
                   console.error("Failed to save reference code for level:", refErr);
                 }
@@ -1269,8 +1280,8 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
             }
 
             // Save reference code for single level
-            if (draft.sampleCode) {
-              await saveReferenceCode(practicalId, draft.sampleCode, draft.sampleLanguage || draftForm.language || "c");
+            if (draft.sampleCode || draft.starterCode) {
+              await saveReferenceCode(practicalId, draft.sampleCode || "", draft.sampleLanguage || draftForm.language || "c", draft.starterCode);
             }
           }
 
@@ -1391,6 +1402,7 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
           levels: JSON.parse(JSON.stringify(levels)),
           enableLevels,
           sampleCode, // Save current sample code
+          starterCode, // Save current starter code
           sampleLanguage, // Save current language
         };
       }
@@ -1450,6 +1462,7 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
       setLevels(draft.levels);
       setEnableLevels(draft.enableLevels);
       if (draft.sampleCode !== undefined) setSampleCode(draft.sampleCode);
+      if (draft.starterCode !== undefined) setStarterCode(draft.starterCode);
       if (draft.sampleLanguage !== undefined) setSampleLanguage(draft.sampleLanguage);
     }
   }, [activeDraftIndex, draftPracticals, syncCurrentDraftState]);
@@ -1474,6 +1487,7 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
         levels: JSON.parse(JSON.stringify(levels)),
         enableLevels,
         sampleCode,
+        starterCode,
         sampleLanguage,
       };
     }
@@ -1516,8 +1530,8 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
             if (levelErr) throw levelErr;
 
             // Save reference code for this level if present
-            if (level.reference_code) {
-              await saveReferenceCode(practicalId, level.reference_code, draft.form.language || "c");
+            if (level.reference_code || level.starter_code) {
+              await saveReferenceCode(practicalId, level.reference_code || "", draft.form.language || "c", level.starter_code);
             }
 
             if (levelData && level.testCases.length > 0) {
@@ -1550,8 +1564,8 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
         }
 
         // Save reference code if available in draft
-        if (draft.sampleCode) {
-          await saveReferenceCode(practicalId, draft.sampleCode, draft.sampleLanguage || draft.form.language || "c");
+        if (draft.sampleCode || draft.starterCode) {
+          await saveReferenceCode(practicalId, draft.sampleCode || "", draft.sampleLanguage || draft.form.language || "c", draft.starterCode);
         }
 
         successCount++;
@@ -1893,6 +1907,8 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
                       handleInput={handleInput}
                       sampleCode={sampleCode}
                       setSampleCode={setSampleCode}
+                      starterCode={starterCode}
+                      setStarterCode={setStarterCode}
                       sampleLanguage={sampleLanguage}
                       setSampleLanguage={setSampleLanguage}
                       getLanguageExtension={getLanguageExtension}

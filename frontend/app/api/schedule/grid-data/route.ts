@@ -20,11 +20,11 @@ export async function GET(request: Request) {
         const id = parseInt(subject_id);
 
         // 1. Fetch Practicals
-        const { data: practicals, error: pracError } = await supabase
+        const { data: practicals, error: pracError } = (await supabase
             .from("practicals")
             .select("id, title, subject_id")
             .eq("subject_id", id)
-            .order("id", { ascending: true });
+            .order("id", { ascending: true })) as any as { data: any[] | null, error: any };
 
         if (pracError) throw pracError;
 
@@ -33,27 +33,27 @@ export async function GET(request: Request) {
         // The previous code fetched from /api/batches/get which likely queries users.
         // Let's replicate that logic server-side or assume frontend passes batches?
         // Better: Fetch from users table distinct batches.
-        const { data: batchData, error: batchError } = await supabase
+        const { data: batchData, error: batchError } = (await supabase
             .from("users")
             .select("batch")
-            .not("batch", "is", null); // Get all batches
+            .not("batch", "is", null)) as any as { data: any[] | null, error: any }; // Get all batches
 
         // De-duplicate batches
         const batches = Array.from(new Set(batchData?.map(b => b.batch) || [])).sort();
 
         // 3. Fetch Schedules for this subject
-        const { data: schedules, error: schedError } = await supabase
+        const { data: schedules, error: schedError } = (await supabase
             .from("schedules")
             .select("id, practical_id, batch_name, date, start_time, end_time, faculty_id")
-            .in("practical_id", practicals?.map(p => p.id) || []);
+            .in("practical_id", practicals?.map(p => p.id) || [])) as any as { data: any[] | null, error: any };
 
         if (schedError) throw schedError;
 
         // 4. Fetch Faculty Map for Auto-Assign
-        const { data: facultyMap, error: facError } = await supabase
+        const { data: facultyMap, error: facError } = (await supabase
             .from("subject_faculty_batches")
             .select("batch, faculty_id")
-            .eq("subject_id", id);
+            .eq("subject_id", id)) as any as { data: any[] | null, error: any };
 
         if (facError) throw facError;
 

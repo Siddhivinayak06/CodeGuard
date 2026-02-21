@@ -61,6 +61,7 @@ export default function FacultySubjects() {
     null,
   );
   const [sampleCode, setSampleCode] = useState<string>(""); // initial sample code
+  const [starterCode, setStarterCode] = useState<string>("");
   const [sampleLanguage, setSampleLanguage] = useState<string>("c");
   const [showBulkImport, setShowBulkImport] = useState(false);
   const [importedPracticals, setImportedPracticals] = useState<any[]>([]);
@@ -137,7 +138,7 @@ export default function FacultySubjects() {
           return;
         }
 
-        const subjectIds = [...new Set((facultySubjects || []).map((fs) => fs.subject_id))];
+        const subjectIds = [...new Set(((facultySubjects as any[]) || []).map((fs) => fs.subject_id))];
 
         if (subjectIds.length === 0) {
           if (isMounted) setSubjects([]);
@@ -167,7 +168,7 @@ export default function FacultySubjects() {
 
         if (!isMounted) return;
 
-        const formatted = (data || []).map((s) => ({
+        const formatted = ((data as any[]) || []).map((s) => ({
           id: s.id,
           subject_name: s.subject_name,
           subject_code: s.subject_code,
@@ -217,13 +218,14 @@ export default function FacultySubjects() {
 
         if (error) throw error;
 
-        const formatted = (data || []).map((p) => ({
+        const formatted = ((data as any[]) || []).map((p) => ({
           id: p.id,
           title: p.title,
 
           description: null,
           language: null,
           max_marks: 0,
+          practical_number: null,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
           submitted: false,
@@ -271,8 +273,8 @@ export default function FacultySubjects() {
       if (tcError) throw tcError;
 
       setViewingPractical({
-        ...practicalData,
-        testCases: testCases || [],
+        ...(practicalData as any),
+        testCases: (testCases as any[]) || [],
       });
     } catch (err) {
       console.error("Failed to fetch practical details:", err);
@@ -283,6 +285,7 @@ export default function FacultySubjects() {
   const openNewPractical = () => {
     setEditingPractical(null);
     setSampleCode("");
+    setStarterCode("");
     setSampleLanguage("c");
     setImportedPracticals([]);
     setShowPracticalModal(true);
@@ -299,7 +302,19 @@ export default function FacultySubjects() {
       if (error) throw error;
       setEditingPractical(data as Practical);
 
-      // optionally load sample code from your DB if you store it
+      // load sample/starter code from your DB
+      const { data: refsData } = await supabase
+        .from("reference_codes")
+        .select("*")
+        .eq("practical_id", Number(practicalId))
+        .order("created_at", { ascending: false });
+      const refs = refsData as any[];
+      if (refs && refs.length > 0) {
+        setSampleCode(refs[0].code || "");
+        setStarterCode(refs[0].starter_code || "");
+        setSampleLanguage(refs[0].language || "c");
+      }
+
       setImportedPracticals([]);
       setShowPracticalModal(true);
     } catch (err) {
@@ -653,6 +668,8 @@ export default function FacultySubjects() {
         supabase={supabase}
         sampleCode={sampleCode}
         setSampleCode={setSampleCode}
+        starterCode={starterCode}
+        setStarterCode={setStarterCode}
         sampleLanguage={sampleLanguage}
         setSampleLanguage={setSampleLanguage}
         onClose={handleModalClose}

@@ -217,7 +217,7 @@ export default function AdminDashboard() {
           .select("name")
           .eq("uid", user.id)
           .single();
-        if (userData) setUserName(userData.name);
+        if (userData) setUserName((userData as any).name);
       } catch (err) {
         console.error("Auth fetch error:", err);
         router.push("/auth/login");
