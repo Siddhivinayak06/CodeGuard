@@ -1178,24 +1178,29 @@ int main() {
 
                 {/* Level Selector - Segmented Control */}
                 {hasLevelsParam && practicalLevels.length > 0 && (
-                  <div className="mt-4 inline-flex p-1 rounded-lg bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
+                  <div className="mt-4 flex flex-wrap gap-1 p-1 rounded-lg bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
                     {practicalLevels.map((level) => {
                       const isActive = activeLevel === level.level;
+                      const matchNum = level.level.match(/\d+/);
+                      const numStr = matchNum ? matchNum[0] : "";
+                      const prefixStr = matchNum ? level.level.replace(numStr, "") : "";
+
                       return (
                         <button
                           key={level.id}
                           onClick={() => setActiveLevel(level.level)}
-                          className={`px-4 py-1.5 rounded-md text-xs font-semibold transition-all duration-200 ${isActive
+                          className={`flex-1 min-w-[32px] sm:min-w-[64px] max-w-[120px] px-2 sm:px-4 py-1.5 rounded-md text-xs font-semibold transition-all duration-200 text-center ${isActive
                             ? level.level === "Task 1"
                               ? "bg-emerald-500 text-white shadow-sm"
                               : level.level === "Task 2"
                                 ? "bg-red-500 text-white shadow-sm"
                                 : "bg-amber-500 text-white shadow-sm"
-                            : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200"
+                            : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-white/50 dark:hover:bg-gray-700/50"
                             }`}
                           title={`${level.level} – ${level.max_marks} points`}
                         >
-                          {level.level}
+                          <span className="hidden sm:inline">{prefixStr}</span>
+                          <span>{numStr || level.level}</span>
                         </button>
                       );
                     })}
