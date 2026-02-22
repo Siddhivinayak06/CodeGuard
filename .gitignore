@@ -94,6 +94,12 @@ Thumbs.db
 .sublime-workspace
 
 # ----------------------
+# Debug / Test scripts (may contain secrets)
+# ----------------------
+check_constraints.js
+debug_*.js
+
+# ----------------------
 # Misc
 # ----------------------
 .turbo/
