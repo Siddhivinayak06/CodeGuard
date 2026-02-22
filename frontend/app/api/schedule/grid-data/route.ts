@@ -22,7 +22,7 @@ export async function GET(request: Request) {
         // 1. Fetch Practicals
         const { data: practicals, error: pracError } = (await supabase
             .from("practicals")
-            .select("id, title, subject_id")
+            .select("id, title, subject_id, practical_number")
             .eq("subject_id", id)
             .order("id", { ascending: true })) as any as { data: any[] | null, error: any };
 

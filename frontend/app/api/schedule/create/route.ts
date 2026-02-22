@@ -128,6 +128,44 @@ export async function POST(request: Request) {
       }
     }
 
+    // 5. Auto-assign practical to students in student_practicals (if practical_id provided)
+    if (practical_id && studentIdsToAllocate.length > 0) {
+      try {
+        // Check which students are already assigned to avoid duplicates
+        const { data: existingAssignments } = (await supabase
+          .from("student_practicals")
+          .select("student_id")
+          .eq("practical_id", practical_id)
+          .in("student_id", studentIdsToAllocate)) as any as { data: any[] | null };
+
+        const alreadyAssigned = new Set(
+          existingAssignments?.map((a: any) => a.student_id) || []
+        );
+
+        const newStudentPracticals = studentIdsToAllocate
+          .filter((sid) => !alreadyAssigned.has(sid))
+          .map((student_id) => ({
+            student_id,
+            practical_id,
+            assigned_deadline: date || null,
+            status: "assigned",
+          }));
+
+        if (newStudentPracticals.length > 0) {
+          const { error: spError } = await (supabase
+            .from("student_practicals") as any)
+            .insert(newStudentPracticals);
+
+          if (spError) {
+            console.error("Error auto-assigning student_practicals:", spError);
+            // Don't fail the request — schedule and allocations are already created
+          }
+        }
+      } catch (autoAssignErr) {
+        console.error("Error in auto-assign student_practicals:", autoAssignErr);
+      }
+    }
+
     return NextResponse.json({ success: true, schedule });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });

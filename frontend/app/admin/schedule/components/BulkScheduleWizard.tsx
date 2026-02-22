@@ -653,7 +653,7 @@ export function BulkScheduleWizard({ onScheduleCreated }: { onScheduleCreated: (
                                                         <tr key={p.id} className={`transition-colors ${idx % 2 === 0 ? "bg-white dark:bg-gray-950" : "bg-gray-50/40 dark:bg-gray-900/20"} hover:bg-indigo-50/30 dark:hover:bg-indigo-900/10`}>
                                                             <td className="px-5 py-3.5 border-b border-r border-gray-100 dark:border-gray-800 font-medium sticky left-0 z-10 bg-inherit text-gray-800 dark:text-gray-200 shadow-[2px_0_8px_-4px_rgba(0,0,0,0.1)] dark:shadow-[2px_0_8px_-4px_rgba(0,0,0,0.4)]">
                                                                 <div className="flex items-center gap-3 max-w-[260px]">
-                                                                    <span className="inline-flex items-center justify-center w-6 h-6 rounded-md bg-indigo-50 dark:bg-indigo-900/30 text-[11px] font-bold text-indigo-500 dark:text-indigo-400 shrink-0">{idx + 1}</span>
+                                                                    <span className="inline-flex items-center justify-center w-6 h-6 rounded-md bg-indigo-50 dark:bg-indigo-900/30 text-[11px] font-bold text-indigo-500 dark:text-indigo-400 shrink-0">{p.practical_number ?? (idx + 1)}</span>
                                                                     <span className="truncate text-[13px] font-medium" title={p.title}>{p.title}</span>
                                                                 </div>
                                                             </td>

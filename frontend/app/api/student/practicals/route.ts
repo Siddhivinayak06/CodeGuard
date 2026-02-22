@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { supabaseAdmin } from "@/lib/supabase/service";
 
 export const dynamic = "force-dynamic";
 
@@ -35,6 +36,52 @@ export async function GET() {
     }
 
     const userBatch = userRole.batch;
+
+    // Backfill: auto-assign practicals from schedules that don't have student_practicals entries yet
+    if (userBatch) {
+      try {
+        // Find all schedules for this student's batch
+        const { data: batchSchedules } = (await supabase
+          .from("schedules")
+          .select("practical_id, date")
+          .eq("batch_name", userBatch)
+          .not("practical_id", "is", null)) as any as { data: any[] | null };
+
+        if (batchSchedules && batchSchedules.length > 0) {
+          const scheduledPracticalIds = [...new Set(batchSchedules.map((s: any) => s.practical_id))];
+
+          // Check which are already assigned
+          const { data: existing } = (await supabase
+            .from("student_practicals")
+            .select("practical_id")
+            .eq("student_id", userId)
+            .in("practical_id", scheduledPracticalIds)) as any as { data: any[] | null };
+
+          const existingIds = new Set(existing?.map((e: any) => e.practical_id) || []);
+          const missingPracticals = scheduledPracticalIds.filter((id: number) => !existingIds.has(id));
+
+          if (missingPracticals.length > 0) {
+            // Build a date map for deadlines
+            const dateMap = new Map<number, string>();
+            batchSchedules.forEach((s: any) => {
+              if (!dateMap.has(s.practical_id)) dateMap.set(s.practical_id, s.date);
+            });
+
+            const inserts = missingPracticals.map((practical_id: number) => ({
+              student_id: userId,
+              practical_id,
+              assigned_deadline: dateMap.get(practical_id) || null,
+              status: "assigned",
+            }));
+
+            await (supabaseAdmin.from("student_practicals") as any).insert(inserts);
+          }
+        }
+      } catch (backfillErr) {
+        console.error("Backfill student_practicals error:", backfillErr);
+        // Non-fatal: continue with existing data
+      }
+    }
 
     // Fetch personalized practicals
     const { data, error } = await supabase
