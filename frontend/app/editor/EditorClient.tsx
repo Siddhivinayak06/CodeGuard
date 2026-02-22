@@ -524,11 +524,11 @@ int main() {
 
         if (!levelsError && levelsData && mountedRef.current) {
           const sorted = (levelsData as any[]).sort((a, b) => {
-            const order: Record<string, number> = {
-              "Task 1": 0,
-              "Task 2": 1,
+            const getNum = (s: string) => {
+              const m = s.match(/(\d+)/);
+              return m ? parseInt(m[1], 10) : 0;
             };
-            return (order[a.level] || 0) - (order[b.level] || 0);
+            return getNum(a.level) - getNum(b.level);
           });
 
           const safeLevels = sorted.map((level: any) => ({
@@ -1140,84 +1140,93 @@ int main() {
           <ResizablePanel defaultSize={40} minSize={20}>
             <div className="h-full overflow-auto bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800">
               {/* Header Section - Sticky */}
-              <div className="sticky top-0 z-10 px-6 pt-6 pb-4 bg-white dark:bg-gray-900 border-b border-gray-100 dark:border-gray-800">
-                {/* Title - Dominant */}
-                <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-4 leading-tight tracking-tight">
-                  {practical?.title || "Problem Title"}
-                </h1>
+              <div className="sticky top-0 z-10 bg-white dark:bg-gray-900 border-b border-gray-100 dark:border-gray-800">
+                {/* Accent gradient bar */}
+                <div className="h-1 w-full bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500" />
 
-                {/* Meta Row - Compact */}
-                <div className="flex items-center gap-3 flex-wrap">
-                  {/* Difficulty Badge */}
-                  <span
-                    className={`inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1 rounded-md ${activeLevel === "Task 1"
-                      ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400"
-                      : activeLevel === "Task 2"
-                        ? "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400"
-                        : "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400"
-                      }`}
-                  >
-                    {hasLevelsParam
-                      ? activeLevel
-                      : "Medium"}
-                  </span>
+                <div className="px-6 pt-5 pb-4">
+                  {/* Title */}
+                  <h1 className="text-2xl font-extrabold text-gray-900 dark:text-white mb-3 leading-snug tracking-tight">
+                    {practical?.title || "Problem Title"}
+                  </h1>
 
-                  {/* Language Badge */}
-                  <span className="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1 rounded-md bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-400">
-                    <svg
-                      className="w-3 h-3"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
+                  {/* Meta Row - Glassmorphic Badges */}
+                  <div className="flex items-center gap-2.5 flex-wrap">
+                    {/* Active Level Badge */}
+                    <span
+                      className={`inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider px-3 py-1.5 rounded-full border backdrop-blur-sm ${activeLevel === "Task 1"
+                        ? "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-800/50"
+                        : activeLevel === "Task 2"
+                          ? "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/40 dark:text-rose-400 dark:border-rose-800/50"
+                          : "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-400 dark:border-amber-800/50"
+                        }`}
                     >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"
-                      />
-                    </svg>
-                    {lang?.toUpperCase() || "JAVA"}
-                  </span>
-
-                  {/* Subject */}
-                  {practical?.subject_name && (
-                    <span className="text-xs text-gray-500 dark:text-gray-400">
-                      {practical.subject_name}
+                      <span className={`w-1.5 h-1.5 rounded-full ${activeLevel === "Task 1"
+                        ? "bg-emerald-500"
+                        : activeLevel === "Task 2"
+                          ? "bg-rose-500"
+                          : "bg-amber-500"
+                        }`} />
+                      {hasLevelsParam ? activeLevel : "Standard"}
                     </span>
+
+                    {/* Language Badge */}
+                    <span className="inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider px-3 py-1.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200 dark:bg-indigo-950/40 dark:text-indigo-400 dark:border-indigo-800/50 backdrop-blur-sm">
+                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
+                      </svg>
+                      {lang?.toUpperCase() || "JAVA"}
+                    </span>
+
+                    {/* Separator dot */}
+                    {practical?.subject_name && (
+                      <>
+                        <span className="w-1 h-1 rounded-full bg-gray-300 dark:bg-gray-600" />
+                        <span className="text-xs font-medium text-gray-500 dark:text-gray-400">
+                          {practical.subject_name}
+                        </span>
+                      </>
+                    )}
+                  </div>
+
+                  {/* Level Selector - Premium Pill Tabs */}
+                  {hasLevelsParam && practicalLevels.length > 0 && (
+                    <div className="mt-4 relative flex gap-1 p-1 rounded-xl bg-gray-100/80 dark:bg-gray-800/80 border border-gray-200/60 dark:border-gray-700/60 shadow-inner">
+                      {practicalLevels.map((level) => {
+                        const isActive = activeLevel === level.level;
+
+                        return (
+                          <button
+                            key={level.id}
+                            onClick={() => setActiveLevel(level.level)}
+                            className={`relative flex-1 px-4 py-2 rounded-lg text-xs font-bold transition-all duration-300 ease-out text-center ${isActive
+                              ? "bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-md ring-1 ring-black/5 dark:ring-white/10"
+                              : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-white/40 dark:hover:bg-gray-700/40"
+                              }`}
+                          >
+                            <span className="relative z-10 flex items-center justify-center gap-2">
+                              {isActive && (
+                                <span className={`w-2 h-2 rounded-full ${level.level === "Task 1"
+                                  ? "bg-emerald-500"
+                                  : level.level === "Task 2"
+                                    ? "bg-rose-500"
+                                    : "bg-amber-500"
+                                  } shadow-sm`} />
+                              )}
+                              <span>{level.level}</span>
+                              <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-md ${isActive
+                                ? "bg-gray-100 dark:bg-gray-600 text-gray-600 dark:text-gray-300"
+                                : "bg-gray-200/60 dark:bg-gray-700/60 text-gray-400 dark:text-gray-500"
+                                }`}>
+                                {level.max_marks}pts
+                              </span>
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
                   )}
                 </div>
-
-                {/* Level Selector - Segmented Control */}
-                {hasLevelsParam && practicalLevels.length > 0 && (
-                  <div className="mt-4 flex flex-wrap gap-1 p-1 rounded-lg bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
-                    {practicalLevels.map((level) => {
-                      const isActive = activeLevel === level.level;
-                      const matchNum = level.level.match(/\d+/);
-                      const numStr = matchNum ? matchNum[0] : "";
-                      const prefixStr = matchNum ? level.level.replace(numStr, "") : "";
-
-                      return (
-                        <button
-                          key={level.id}
-                          onClick={() => setActiveLevel(level.level)}
-                          className={`flex-1 min-w-[32px] sm:min-w-[64px] max-w-[120px] px-2 sm:px-4 py-1.5 rounded-md text-xs font-semibold transition-all duration-200 text-center ${isActive
-                            ? level.level === "Task 1"
-                              ? "bg-emerald-500 text-white shadow-sm"
-                              : level.level === "Task 2"
-                                ? "bg-red-500 text-white shadow-sm"
-                                : "bg-amber-500 text-white shadow-sm"
-                            : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-white/50 dark:hover:bg-gray-700/50"
-                            }`}
-                          title={`${level.level} – ${level.max_marks} points`}
-                        >
-                          <span className="hidden sm:inline">{prefixStr}</span>
-                          <span>{numStr || level.level}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
               </div>
 
               {/* Content */}
