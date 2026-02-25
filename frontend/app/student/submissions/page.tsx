@@ -76,6 +76,7 @@ interface Submission {
   status: string;
   created_at: string;
   marks_obtained: number | null;
+  max_marks: number;
   testCaseResults: TestCaseResult[];
   attempt_count?: number;
   max_attempts?: number;
@@ -258,6 +259,7 @@ function StudentSubmissionsPageContent() {
             marks_obtained,
             practicals (
               title,
+              max_marks,
               subject_id,
               subjects (
                 id,
@@ -287,6 +289,7 @@ function StudentSubmissionsPageContent() {
           status: s.status,
           created_at: s.created_at,
           marks_obtained: s.marks_obtained,
+          max_marks: s.practicals?.max_marks || 10,
           testCaseResults: s.execution_details?.results || [],
         }));
 
@@ -633,7 +636,7 @@ function StudentSubmissionsPageContent() {
                             {sub.marks_obtained !== null ? (
                               <span className="flex items-center gap-1.5 text-xs font-bold text-indigo-700 dark:text-indigo-300 bg-indigo-100 dark:bg-indigo-900/30 px-2.5 py-1 rounded-lg border border-indigo-200 dark:border-indigo-800 w-fit shadow-sm">
                                 <Sparkles className="w-3.5 h-3.5 text-indigo-500" />
-                                {sub.marks_obtained}/10
+                                {sub.marks_obtained}/{sub.max_marks}
                               </span>
                             ) : (
                               <span className="text-gray-400 text-xs">—</span>
@@ -699,7 +702,7 @@ function StudentSubmissionsPageContent() {
                         <span className="text-gray-300">•</span>
                         <span className="flex items-center gap-1 font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/20 px-2 py-0.5 rounded-md border border-indigo-100 dark:border-indigo-800/50">
                           <Sparkles className="w-3.5 h-3.5" />
-                          {viewingSubmission.marks_obtained} / 10
+                          {viewingSubmission.marks_obtained} / {viewingSubmission.max_marks}
                         </span>
                       </>
                     )}

@@ -366,10 +366,11 @@ export default function PracticalForm({
 
             // Match with test cases and reference codes
             const levelsWithTests = levelsData.map((l: any) => {
-              const levelRef = refsData?.find(r => r.practical_id === practical.id); // For now shared
+              const levelRef = refsData?.find((r: any) => r.level_id === l.id);
               return {
                 ...l,
                 reference_code: levelRef?.code || "",
+                starter_code: levelRef?.starter_code || "",
                 testCases: (testData || []).filter((tc: any) => tc.level_id === l.id) as TestCase[],
               };
             });
@@ -377,6 +378,7 @@ export default function PracticalForm({
 
             if (refsData && refsData.length > 0) {
               setSampleCode(refsData[0].code || "");
+              setStarterCode(refsData[0].starter_code || "");
               setSampleLanguage(refsData[0].language || "c");
             }
           } else {
@@ -390,6 +392,7 @@ export default function PracticalForm({
 
             if (refsData && refsData.length > 0) {
               setSampleCode(refsData[0].code || "");
+              setStarterCode(refsData[0].starter_code || "");
               setSampleLanguage(refsData[0].language || "c");
             }
           }
@@ -711,7 +714,7 @@ export default function PracticalForm({
     });
   };
 
-  const getCurrentLevel = () => levels.find((l) => l.level === activeLevel)!;
+  const getCurrentLevel = () => levels.find((l) => l.level === activeLevel) || levels[0];
 
   const generateTestCases = async () => {
     // Determine source description based on mode
@@ -943,29 +946,20 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
   }, [form, enableLevels, levels, testCases]);
 
   // Save generic form components
-  const saveReferenceCode = async (pId: number, code: string, lang: string, starterCode?: string) => {
-    if (!pId || (!code && !starterCode)) return;
-    console.log(`[SaveRef] Saving code for practical ${pId} (lang: ${lang})`);
+  const saveReferenceCode = async (pId: number, code: string, lang: string, starterCode?: string, levelId?: number) => {
+    if (!pId) return;
+    // Allow saving even if code is empty, as long as starterCode exists (or vice versa)
+    console.log(`[SaveRef] Saving for practical=${pId}, lang=${lang}, levelId=${levelId || 'none'}, hasCode=${!!code}, hasStarter=${!!starterCode}`);
     try {
       const { data: userData } = await supabase.auth.getUser();
       const userId = userData?.user?.id;
 
       if (!userId) {
-        console.warn("[SaveRef] No user ID found, skipping reference code save");
+        console.warn("[SaveRef] No user ID found, skipping");
         return;
       }
 
-      // Check for existing reference code for this practical + language
-      const { data: existing, error: fetchErr } = await supabase
-        .from("reference_codes")
-        .select("id")
-        .eq("practical_id", pId)
-        .eq("language", lang)
-        .maybeSingle();
-
-      if (fetchErr) throw fetchErr;
-
-      const payload = {
+      const insertPayload: Record<string, any> = {
         practical_id: pId,
         code: code || "",
         starter_code: starterCode || null,
@@ -973,31 +967,30 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
         author: userId,
         is_primary: true,
         version: 1,
+        created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       };
 
-      let resultError;
-      if (existing) {
-        const { error } = await supabase
-          .from("reference_codes")
-          .update(payload)
-          .eq("id", existing.id);
-        resultError = error;
-      } else {
-        const { error } = await supabase
-          .from("reference_codes")
-          .insert({
-            ...payload,
-            created_at: new Date().toISOString(),
-          });
-        resultError = error;
+      if (levelId) {
+        insertPayload.level_id = levelId;
       }
 
-      if (resultError) throw resultError;
-      console.log(`[SaveRef] Successfully saved code for practical ${pId}`);
-    } catch (err) {
-      console.error("Error saving reference code:", err);
-      // Do NOT re-throw, just log. We don't want to fail the whole practical because of this.
+      console.log("[SaveRef] Inserting payload:", JSON.stringify(insertPayload).substring(0, 200));
+
+      const { data, error } = await supabase
+        .from("reference_codes")
+        .insert(insertPayload)
+        .select("id, practical_id, level_id, starter_code")
+        .single();
+
+      if (error) {
+        console.error("[SaveRef] INSERT FAILED:", error.message, error.details, error.hint, error.code);
+        throw error;
+      }
+
+      console.log(`[SaveRef] ✅ Successfully saved! Row id=${data?.id}, practical=${data?.practical_id}, level_id=${data?.level_id}, has_starter=${!!data?.starter_code}`);
+    } catch (err: any) {
+      console.error("[SaveRef] Error:", err?.message || err?.code || err?.details || JSON.stringify(err));
     }
   };
 
@@ -1052,7 +1045,12 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
           .single();
         if (error) throw error;
         practicalId = data.id;
-        // delete old test cases and levels then re-insert below
+        // delete old reference codes, test cases, and levels then re-insert below
+        // NOTE: reference_codes must be deleted BEFORE practical_levels (FK dependency)
+        await supabase
+          .from("reference_codes")
+          .delete()
+          .eq("practical_id", practicalId);
         await supabase
           .from("test_cases")
           .delete()
@@ -1089,10 +1087,8 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
 
           if (levelErr) throw levelErr;
 
-          // Save reference code for this level if present
-          if (level.reference_code || level.starter_code) {
-            await saveReferenceCode(practicalId, level.reference_code || "", form.language || "c", level.starter_code);
-          }
+          // Save reference code for this level
+          await saveReferenceCode(practicalId, level.reference_code || "", form.language || "c", level.starter_code, levelData.id);
 
           // Insert test cases for this level
           if (levelData && level.testCases.length > 0) {
@@ -1149,7 +1145,7 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
     } finally {
       setSaving(false);
     }
-  }, [form, testCases, levels, enableLevels, sampleCode, sampleLanguage, supabase, validateForm, onSaveStep1]);
+  }, [form, testCases, levels, enableLevels, sampleCode, starterCode, sampleLanguage, supabase, validateForm, onSaveStep1]);
 
   // Save ALL drafts (for bulk import mode)
   const handleSaveAll = useCallback(async () => {
@@ -1237,13 +1233,11 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
 
               if (levelErr) throw levelErr;
 
-              // Save reference code for this level if present
-              if (level.reference_code || level.starter_code) {
-                try {
-                  await saveReferenceCode(practicalId, level.reference_code || "", draftForm.language || "c", level.starter_code);
-                } catch (refErr) {
-                  console.error("Failed to save reference code for level:", refErr);
-                }
+              // Save reference code for this level
+              try {
+                await saveReferenceCode(practicalId, level.reference_code || "", draftForm.language || "c", level.starter_code, levelData.id);
+              } catch (refErr) {
+                console.error("Failed to save reference code for level:", refErr);
               }
 
               if (levelData && level.testCases.length > 0) {
@@ -1408,7 +1402,7 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
       }
       return copy;
     });
-  }, [activeDraftIndex, form, testCases, levels, enableLevels, sampleCode, sampleLanguage, draftPracticals.length, practical]);
+  }, [activeDraftIndex, form, testCases, levels, enableLevels, sampleCode, starterCode, sampleLanguage, draftPracticals.length, practical]);
 
   // Add a new draft
   const addDraft = useCallback(() => {
@@ -1531,7 +1525,7 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
 
             // Save reference code for this level if present
             if (level.reference_code || level.starter_code) {
-              await saveReferenceCode(practicalId, level.reference_code || "", draft.form.language || "c", level.starter_code);
+              await saveReferenceCode(practicalId, level.reference_code || "", draft.form.language || "c", level.starter_code, levelData.id);
             }
 
             if (levelData && level.testCases.length > 0) {

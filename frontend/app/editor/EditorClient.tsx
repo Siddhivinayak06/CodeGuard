@@ -280,9 +280,26 @@ int main() {
       title: string;
       description: string;
       max_marks: number;
+      starter_code?: string;
     }>
   >([]);
   const [activeLevel, setActiveLevel] = useState<string>("Task 1");
+
+  // Per-task code buffers: stores typed code for each task level
+  const taskCodeMapRef = useRef<Record<string, string>>({});
+
+  // Switch between task levels, saving/restoring code
+  const handleSwitchLevel = (targetLevel: string) => {
+    if (targetLevel === activeLevel) return;
+    // Save current code for the current level
+    taskCodeMapRef.current[activeLevel] = code;
+    // Restore code for the target level (or use starter code, or default template)
+    const savedCode = taskCodeMapRef.current[targetLevel];
+    const targetLevelData = practicalLevels.find(l => l.level === targetLevel);
+    const starterForTarget = targetLevelData?.starter_code;
+    setCode(savedCode || starterForTarget || getStarterCode(lang));
+    setActiveLevel(targetLevel);
+  };
 
   // expanded state for LeetCode-style test case cards
   const [expandedCases, setExpandedCases] = useState<Record<number, boolean>>(
@@ -497,12 +514,16 @@ int main() {
         const dbLang = (data as any).language ? (data as any).language.toLowerCase() : lang.toLowerCase();
         let initialCode = getStarterCode(dbLang);
 
+        // For single-level practicals, fetch starter code with no level_id
         const { data: refCodeData } = await supabase
           .from("reference_codes")
           .select("starter_code")
           .eq("practical_id", Number(practicalId))
+          .is("level_id", null)
           .order("id", { ascending: false })
           .limit(1);
+
+        console.log("[EditorDebug] Single-level refCodeData:", JSON.stringify(refCodeData));
 
         if (refCodeData && (refCodeData as any[]).length > 0 && (refCodeData as any[])[0].starter_code) {
           initialCode = (refCodeData as any[])[0].starter_code;
@@ -522,6 +543,19 @@ int main() {
           .eq("practical_id", Number(practicalId))
           .order("id", { ascending: true });
 
+        // Fetch ALL reference codes for this practical (including ones without level_id)
+        const { data: allRefCodes } = await supabase
+          .from("reference_codes")
+          .select("*")
+          .eq("practical_id", Number(practicalId));
+
+        console.log("[EditorDebug] ALL reference_codes for practical:", JSON.stringify(allRefCodes));
+        console.log("[EditorDebug] Levels data:", JSON.stringify(levelsData?.map((l: any) => ({ id: l.id, level: l.level }))));
+
+        // Find a fallback starter code (from any row, including old ones with level_id=NULL)
+        const fallbackRef = (allRefCodes as any[] || []).find((r: any) => r.starter_code);
+        console.log("[EditorDebug] Fallback ref:", JSON.stringify(fallbackRef));
+
         if (!levelsError && levelsData && mountedRef.current) {
           const sorted = (levelsData as any[]).sort((a, b) => {
             const getNum = (s: string) => {
@@ -531,15 +565,35 @@ int main() {
             return getNum(a.level) - getNum(b.level);
           });
 
-          const safeLevels = sorted.map((level: any) => ({
-            ...level,
-            title: level.title || "",
-            description: level.description || "",
-          }));
+          const safeLevels = sorted.map((level: any) => {
+            // Try to find a reference code matching this specific level
+            const levelRef = (allRefCodes as any[] || []).find((r: any) => r.level_id === level.id);
+            return {
+              ...level,
+              title: level.title || "",
+              description: level.description || "",
+              starter_code: levelRef?.starter_code || fallbackRef?.starter_code || "",
+            };
+          });
           setPracticalLevels(safeLevels);
+
+          // Pre-populate taskCodeMap with starter codes for each level
+          safeLevels.forEach((level: any) => {
+            if (level.starter_code && !taskCodeMapRef.current[level.level]) {
+              taskCodeMapRef.current[level.level] = level.starter_code;
+            }
+          });
 
           if (sorted.length > 0) {
             setActiveLevel(sorted[0].level);
+            // Set initial code from the first level's starter code
+            const firstLevelRef = (allRefCodes as any[] || []).find((r: any) => r.level_id === sorted[0].id);
+            const starterToUse = firstLevelRef?.starter_code || fallbackRef?.starter_code;
+            console.log("[EditorDebug] starterToUse:", starterToUse ? starterToUse.substring(0, 50) + "..." : "NONE");
+            if (starterToUse) {
+              setLang(lang);
+              setCode(starterToUse);
+            }
           }
         }
       }
@@ -655,53 +709,78 @@ int main() {
   };
 
   const handleSubmit = async () => {
-    if (!code || !practicalId || !user) return;
+    if (!practicalId || !user) return;
 
     setLoading(true);
     try {
-      const submissionRes = await axios.post("/api/submission/create", {
-        student_id: user.id,
-        practical_id: Number(practicalId),
-        code,
-        language: lang,
-        status: "pending",
-        marks_obtained: 0,
-        test_cases_passed: "0/0",
-      });
-
-      const submission = submissionRes.data.submission;
-      if (!submission?.id) throw new Error("Failed to create submission");
-
-      const runRes = await axios.post("/api/run", {
-        code,
-        lang,
-        practicalId,
-        submissionId: submission.id,
-        mode: "submit",
-        level: activeLevel,
-      });
-
-      const verdict = runRes.data.verdict || "pending";
-      const marksObtained = runRes.data.marksObtained ?? 0;
-      const passedTestCases = runRes.data.passedTestCases ?? 0;
-      const totalTestCases = runRes.data.totalTestCases ?? 0;
-
-      // Map verdict to UI state
-      let uiStatus: "idle" | "pending" | "evaluated" | "submitted" =
-        "evaluated";
-      if (verdict === "passed" || verdict === "failed") {
-        uiStatus = "evaluated"; // Or maybe "graded"? Keeping "evaluated" for now or switch to match DB
-      } else if (verdict === "pending") {
-        uiStatus = "pending";
+      // Save current task's code to the map first
+      if (hasLevelsParam && practicalLevels.length > 0) {
+        taskCodeMapRef.current[activeLevel] = code;
       }
 
-      setSubmissionStatus(uiStatus);
-      const statusText =
-        verdict === "passed"
-          ? "Passed"
-          : verdict === "failed"
-            ? "Failed"
-            : "Pending";
+      // Determine which levels to submit
+      const levelsToSubmit = hasLevelsParam && practicalLevels.length > 0
+        ? practicalLevels
+        : [{ level: activeLevel, max_marks: 10 }]; // single-level fallback
+
+      let totalMarks = 0;
+      let totalPassed = 0;
+      let totalTests = 0;
+      let overallVerdict = "passed";
+
+      for (const levelData of levelsToSubmit) {
+        // Get code for this level
+        const levelCode = hasLevelsParam
+          ? (taskCodeMapRef.current[levelData.level] || getStarterCode(lang))
+          : code;
+
+        if (!levelCode) continue;
+
+        // Create submission for this level
+        const submissionRes = await axios.post("/api/submission/create", {
+          student_id: user.id,
+          practical_id: Number(practicalId),
+          code: levelCode,
+          language: lang,
+          status: "pending",
+          marks_obtained: 0,
+          test_cases_passed: "0/0",
+        });
+
+        const submission = submissionRes.data.submission;
+        if (!submission?.id) {
+          console.error(`Failed to create submission for ${levelData.level}`);
+          continue;
+        }
+
+        // Run tests for this level
+        const runRes = await axios.post("/api/run", {
+          code: levelCode,
+          lang,
+          practicalId,
+          submissionId: submission.id,
+          mode: "submit",
+          level: levelData.level,
+        });
+
+        const levelMarks = runRes.data.marksObtained ?? 0;
+        const levelPassed = runRes.data.passedTestCases ?? 0;
+        const levelTotal = runRes.data.totalTestCases ?? 0;
+        const levelVerdict = runRes.data.verdict || "pending";
+
+        totalMarks += levelMarks;
+        totalPassed += levelPassed;
+        totalTests += levelTotal;
+
+        if (levelVerdict === "failed" || levelVerdict === "pending") {
+          overallVerdict = "failed";
+        }
+
+        console.log(`[Submit] ${levelData.level}: ${levelVerdict} (${levelMarks} marks, ${levelPassed}/${levelTotal} tests)`);
+      }
+
+      setSubmissionStatus("evaluated");
+
       // Disable proctoring & session checks before navigating
       setIsSubmitted(true);
       setHasExamStarted(false);
@@ -711,8 +790,9 @@ int main() {
         try { await document.exitFullscreen(); } catch { /* ignore */ }
       }
 
+      const maxTotal = levelsToSubmit.reduce((sum, l) => sum + (l.max_marks || 10), 0);
       toast.success(
-        `Practical submitted! Status: ${statusText}. Marks: ${marksObtained}/10 (${passedTestCases}/${totalTestCases} test cases passed)`,
+        `All tasks submitted! Marks: ${totalMarks}/${maxTotal} (${totalPassed}/${totalTests} test cases passed)`,
       );
       router.push("/student/submissions");
     } catch (err: any) {
@@ -1198,7 +1278,7 @@ int main() {
                         return (
                           <button
                             key={level.id}
-                            onClick={() => setActiveLevel(level.level)}
+                            onClick={() => handleSwitchLevel(level.level)}
                             className={`relative flex-1 px-4 py-2 rounded-lg text-xs font-bold transition-all duration-300 ease-out text-center ${isActive
                               ? "bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-md ring-1 ring-black/5 dark:ring-white/10"
                               : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-white/40 dark:hover:bg-gray-700/40"
