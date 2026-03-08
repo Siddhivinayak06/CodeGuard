@@ -1,9 +1,12 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
+import { requireRole } from "@/lib/auth";
 
 export async function POST(request: Request) {
   try {
     const supabase = await createClient();
+    const { response: authError } = await requireRole(supabase, ["admin", "faculty"]);
+    if (authError) return authError;
     const body = await request.json();
     const {
       practical_id,

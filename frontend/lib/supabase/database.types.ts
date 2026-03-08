@@ -14,6 +14,7 @@ export interface Database {
           created_at: string
           description: string | null
           id: number
+          is_exam: boolean
           language: string | null
           max_marks: number | null
           practical_number: number | null
@@ -26,6 +27,7 @@ export interface Database {
           created_at?: string
           description?: string | null
           id?: number
+          is_exam?: boolean
           language?: string | null
           max_marks?: number | null
           practical_number?: number | null
@@ -38,6 +40,7 @@ export interface Database {
           created_at?: string
           description?: string | null
           id?: number
+          is_exam?: boolean
           language?: string | null
           max_marks?: number | null
           practical_number?: number | null
@@ -112,6 +115,76 @@ export interface Database {
           level_id?: number | null
           practical_id?: number | null
           starter_code?: string | null
+        }
+      }
+      exams: {
+        Row: {
+          id: string
+          practical_id: number
+          duration_minutes: number
+          max_violations: number
+          allow_copy_paste: boolean
+          require_fullscreen: boolean
+          show_test_results: boolean
+          start_time: string | null
+          end_time: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          practical_id: number
+          duration_minutes: number
+          max_violations?: number
+          allow_copy_paste?: boolean
+          require_fullscreen?: boolean
+          show_test_results?: boolean
+          start_time?: string | null
+          end_time?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          practical_id?: number
+          duration_minutes?: number
+          max_violations?: number
+          allow_copy_paste?: boolean
+          require_fullscreen?: boolean
+          show_test_results?: boolean
+          start_time?: string | null
+          end_time?: string | null
+          created_at?: string
+        }
+      }
+      exam_sessions: {
+        Row: {
+          id: string
+          exam_id: string
+          student_id: string
+          started_at: string
+          expires_at: string
+          submitted_at: string | null
+          is_active: boolean
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          exam_id: string
+          student_id: string
+          started_at?: string
+          expires_at: string
+          submitted_at?: string | null
+          is_active?: boolean
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          exam_id?: string
+          student_id?: string
+          started_at?: string
+          expires_at?: string
+          submitted_at?: string | null
+          is_active?: boolean
+          created_at?: string
         }
       }
       subjects: {

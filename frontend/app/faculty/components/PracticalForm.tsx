@@ -12,7 +12,7 @@ import { Practical, Subject, TestCase, Level, Student } from "../types";
 import BasicDetailsForm from "./BasicDetailsForm";
 import LevelManager from "./LevelManager";
 import SingleLevelTestCases from "./SingleLevelTestCases";
-// AssignStudentsStep import removed (step 2 removed)
+import AssignStudentsStep from "./AssignStudentsStep";
 
 interface PracticalFormProps {
   practical: Practical | null;
@@ -25,12 +25,13 @@ interface PracticalFormProps {
   sampleLanguage?: string;
   setSampleLanguage: (lang: string) => void;
   onClose: () => void;
-  onSaved: () => void;
+  onSaved: (practicalId?: number) => void;
   isOpen?: boolean;
   defaultSubjectId?: number | string | null;
   onSaveStep1?: (id: number) => void;
-  singleStep?: boolean; // If true, skip assignment step and save directly
+  singleStep?: boolean;
   initialDrafts?: any[];
+  isExam?: boolean;
 }
 
 // ---------------------- Small icons / helpers ----------------------
@@ -59,6 +60,7 @@ export default function PracticalForm({
   onSaveStep1,
   singleStep = false,
   initialDrafts,
+  isExam = false,
 }: PracticalFormProps) {
   // Level type for multi-level practicals - now using shared type
 
@@ -122,6 +124,7 @@ export default function PracticalForm({
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
     submitted: false,
+    is_exam: false,
   });
 
   const [testCases, setTestCases] = useState<TestCase[]>([
@@ -142,6 +145,9 @@ export default function PracticalForm({
   const [levels, setLevels] = useState<Level[]>(defaultLevels);
   const [activeLevel, setActiveLevel] = useState<string>("Task 1");
   const [enableLevels, setEnableLevels] = useState(false);
+
+  // Stepper state
+  const [step, setStep] = useState(1);
 
 
 
@@ -189,6 +195,7 @@ export default function PracticalForm({
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
       submitted: false,
+      is_exam: false,
     },
     testCases: [{
       id: 0,
@@ -270,6 +277,7 @@ export default function PracticalForm({
                 created_at: new Date().toISOString(),
                 updated_at: new Date().toISOString(),
                 submitted: false,
+                is_exam: false,
               },
               testCases: d.testCases?.map((tc: any) => ({
                 id: 0,
@@ -316,6 +324,7 @@ export default function PracticalForm({
   // set initial state when practical prop changes
   useEffect(() => {
     if (practical) {
+      setStep(1);
       setForm({
         ...practical,
       });
@@ -431,6 +440,7 @@ export default function PracticalForm({
       ]);
       setAssignmentDeadline(new Date().toISOString().slice(0, 16));
       setSelectedStudents([]); // Clear selected students for new practical
+      setStep(1);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [practical, subjects, defaultSubjectId]);
@@ -1025,16 +1035,17 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
       }
 
       let practicalId = Number(form.id) || 0;
-      const payload = {
+      const payload: Record<string, any> = {
         title: form.title,
         subject_id: form.subject_id,
-        description: enableLevels ? "" : form.description, // Use level descriptions when levels enabled
+        description: enableLevels ? "" : form.description,
         language: form.language,
         max_marks: enableLevels
           ? levels.reduce((sum, l) => sum + l.max_marks, 0)
           : (form.max_marks ?? 10),
         practical_number: form.practical_number,
       };
+      if (isExam) payload.is_exam = true;
 
       if (practicalId && practicalId > 0) {
         const { data, error } = await supabase
@@ -1137,7 +1148,7 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
         onSaveStep1(practicalId);
       }
 
-      return true; // Return success - let caller decide what to do next
+      return practicalId; // Return the ID so caller can use it
     } catch (err: any) {
       console.error("Error saving practical:", err);
       alert("Failed to save practical: " + (err?.message || String(err)));
@@ -1201,6 +1212,7 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
               ? draftLevels.reduce((sum, l) => sum + l.max_marks, 0)
               : (draftForm.max_marks ?? 10),
             practical_number: draftForm.practical_number || undefined,
+            is_exam: isExam,
           };
 
           // Insert practical
@@ -1354,6 +1366,7 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
 
       if (successCount > 0) {
         alert(`Assigned ${successCount} practicals successfully. ${failCount > 0 ? `${failCount} failed.` : ""}`);
+        // Can't easily pass a single ID here since this is bulk assignment, but this step is skipped for singleStep anyway
         onSaved();
       } else {
         alert("Failed to assign practicals.");
@@ -1614,7 +1627,7 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
                   </div>
                   <div className="leading-tight">
                     <div className="text-sm font-semibold text-gray-900 dark:text-white">
-                      Practical Details
+                      {isExam ? "Exam Details" : "Practical Details"}
                     </div>
                     <div className="text-xs text-gray-500 dark:text-gray-400">
                       Fill details & test cases
@@ -1635,28 +1648,47 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
                     whileHover={{ scale: 1.02, y: -2 }}
                     whileTap={{ scale: 0.98 }}
                     onClick={async () => {
-                      if (isMultiDraftMode) {
-                        const savedData = await handleSaveAll();
-                        if (savedData.length > 0) {
-                          onSaved();
+                      if (isExam && step === 1) {
+                        // Exam Step 1 -> Step 2
+                        if (isMultiDraftMode) {
+                          const savedData = await handleSaveAll();
+                          if (savedData && savedData.length > 0) {
+                            setSavedPracticals(savedData);
+                            setStep(2);
+                          }
+                        } else {
+                          const savedPracticalId = await handleSave();
+                          if (savedPracticalId) {
+                            setSavedPracticals([{ id: savedPracticalId as number }]);
+                            setStep(2);
+                          }
                         }
+                      } else if (isExam && step === 2) {
+                        // Exam Step 2 -> Assign 
+                        await assign();
                       } else {
-                        const success = await handleSave();
-                        if (success) {
-                          onSaved();
+                        // Original Practical Flow
+                        if (isMultiDraftMode) {
+                          const savedData = await handleSaveAll();
+                          // onSaved is called inside handleSaveAll for practicals
+                        } else {
+                          const savedPracticalId = await handleSave();
+                          if (savedPracticalId) {
+                            onSaved(savedPracticalId as number);
+                          }
                         }
                       }
                     }}
-                    disabled={saving}
+                    disabled={saving || loading}
                     className={cx(
                       "inline-flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-bold transition-all shadow-lg",
-                      saving
+                      (saving || loading)
                         ? "bg-gray-300 dark:bg-gray-700 text-gray-500 cursor-wait"
                         : "bg-gradient-to-r from-indigo-600 to-purple-600 text-white hover:from-indigo-700 hover:to-purple-700 shadow-indigo-500/30",
                     )}
                   >
-                    {saving ? <LoadingSpinner /> : null}
-                    {saving ? "Saving..." : "Save Practical"}
+                    {(saving || loading) ? <LoadingSpinner /> : null}
+                    {saving ? "Saving..." : loading ? "Assigning..." : isExam ? (step === 1 ? "Next: Assign Students" : "Finish & Assign") : "Save Practical"}
                   </motion.button>
                 </div>
               </div>
@@ -1665,10 +1697,10 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
             {/* Main content container with optional sidebar */}
             <div className={cx(
               "w-full mx-auto py-6 flex",
-              isMultiDraftMode && !sidebarCollapsed ? "pl-0" : "px-4 xl:px-12"
+              isMultiDraftMode && !sidebarCollapsed && step === 1 ? "pl-0" : "px-4 xl:px-12"
             )}>
               {/* Sidebar for multi-draft mode */}
-              {isMultiDraftMode && (
+              {isMultiDraftMode && step === 1 && (
                 <motion.div
                   initial={{ width: sidebarCollapsed ? 48 : 280 }}
                   animate={{ width: sidebarCollapsed ? 48 : 280 }}
@@ -1714,7 +1746,7 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
                       {/* Sidebar Header */}
                       <div className="flex items-center justify-between mb-4">
                         <h3 className="font-bold text-gray-900 dark:text-white text-sm">
-                          Practicals ({draftPracticals.length})
+                          {isExam ? "Exams" : "Practicals"} ({draftPracticals.length})
                         </h3>
                         <button
                           onClick={() => setSidebarCollapsed(true)}
@@ -1733,7 +1765,7 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
                         <div className="p-1 rounded-lg bg-white/20 group-hover:bg-white/30 transition-colors">
                           <Plus className="w-4 h-4" />
                         </div>
-                        Add New Practical
+                        {isExam ? "Add New Exam" : "Add New Practical"}
                       </button>
 
                       {/* Draft List */}
@@ -1747,7 +1779,7 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
 
                           const hasTitle = currentTitle.trim() !== "";
                           const hasTestCases = currentTestCases.some(tc => tc.input.trim() !== "" || tc.expected_output.trim() !== "");
-                          const displayTitle = hasTitle ? currentTitle : `Practical ${idx + 1}`;
+                          const displayTitle = hasTitle ? currentTitle : isExam ? `Exam ${idx + 1}` : `Practical ${idx + 1}`;
                           const subjectName = subjects.find(s => s.id === (isActiveDraft ? form.subject_id : draft.form.subject_id))?.subject_name || "No subject";
 
                           // Calculate completion percentage
@@ -1819,7 +1851,7 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
                                         ? "text-indigo-600 dark:text-indigo-400"
                                         : "text-gray-500 dark:text-gray-400"
                                     )}>
-                                      Practical {currentPracticalNumber ?? idx + 1}
+                                      {isExam ? "Exam" : "Practical"} {currentPracticalNumber ?? idx + 1}
                                     </div>
                                     <div className={cx(
                                       "truncate text-sm font-semibold",
@@ -1827,7 +1859,7 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
                                         ? "text-gray-900 dark:text-white"
                                         : "text-gray-700 dark:text-gray-300"
                                     )}>
-                                      {hasTitle ? currentTitle : "Untitled Practical"}
+                                      {hasTitle ? currentTitle : (isExam ? "Untitled Exam" : "Untitled Practical")}
                                     </div>
                                   </div>
 
@@ -1839,7 +1871,7 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
                                       removeDraft(idx);
                                     }}
                                     className="opacity-0 group-hover:opacity-100 p-1 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/30 text-gray-400 hover:text-red-500 transition-all"
-                                    title="Remove practical"
+                                    title={isExam ? "Remove exam" : "Remove practical"}
                                   >
                                     <Trash2 className="w-3.5 h-3.5" />
                                   </button>
@@ -1872,6 +1904,7 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
                     enableLevels={enableLevels}
                     setEnableLevels={setEnableLevels}
                     levels={levels}
+                    isExam={isExam}
                   />
 
                   {/* Level Management (Tabs & Content) */}
@@ -1912,6 +1945,7 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
                       removeTestCase={removeTestCase}
                       generateTestCases={generateTestCases}
                       generatingTests={generatingTests}
+                      isExam={isExam}
                     />
                   )}
                 </div>

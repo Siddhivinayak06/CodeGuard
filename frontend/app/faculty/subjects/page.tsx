@@ -229,6 +229,7 @@ export default function FacultySubjects() {
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
           submitted: false,
+          is_exam: false,
           subject_id: Number(subjectId),
           submission_count: p.submissions?.length || 0,
         }));

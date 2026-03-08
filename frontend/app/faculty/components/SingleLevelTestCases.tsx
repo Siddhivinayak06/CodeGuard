@@ -38,6 +38,7 @@ interface SingleLevelTestCasesProps {
   removeTestCase: (index: number) => void;
   generateTestCases: () => Promise<void>;
   generatingTests: boolean;
+  isExam?: boolean;
 }
 
 export default function SingleLevelTestCases({
@@ -56,6 +57,7 @@ export default function SingleLevelTestCases({
   removeTestCase,
   generateTestCases,
   generatingTests,
+  isExam,
 }: SingleLevelTestCasesProps) {
   const { theme } = useTheme();
 
@@ -72,7 +74,7 @@ export default function SingleLevelTestCases({
               Problem Description
             </h3>
             <p className="text-xs text-gray-500 dark:text-gray-400">
-              Detailed explanation of the practical task
+              Detailed explanation of the {isExam ? "exam" : "practical"} task
             </p>
           </div>
         </div>

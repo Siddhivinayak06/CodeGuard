@@ -1,8 +1,11 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
+import { requireAuth } from "@/lib/auth";
 
 export async function GET() {
   const supabase = await createClient();
+  const { response: authError } = await requireAuth(supabase);
+  if (authError) return authError;
 
   try {
     const { data, error } = await supabase

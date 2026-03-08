@@ -100,7 +100,7 @@ export default function AllPracticalsPage() {
             .from("practicals")
             .select("*")
             .in("subject_id", subjectIds)
-            .eq("is_exam", false)
+            .eq("is_exam", true)
             .order("created_at", { ascending: false });
 
           if (pracData) {
@@ -123,15 +123,15 @@ export default function AllPracticalsPage() {
       .from("practicals")
       .select("*")
       .in("subject_id", subjectIds)
-      .eq("is_exam", false)
+      .eq("is_exam", true)
       .order("created_at", { ascending: false });
 
     if (data) setPracticals(data as Practical[]);
   };
 
-  const openCreate = () => {
+  const openCreateExam = () => {
     setEditingPractical(null);
-    setCreatingExamMode(false);
+    setCreatingExamMode(true);
     setSampleCode("");
     setStarterCode("");
     setSampleLanguage("c");
@@ -252,21 +252,21 @@ export default function AllPracticalsPage() {
               </button>
               <div>
                 <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-                  All Practicals
+                  All Exams
                 </h1>
                 <p className="text-gray-500 dark:text-gray-400 text-sm">
-                  Manage assignments for all your subjects
+                  Manage exams for all your subjects
                 </p>
               </div>
             </div>
 
             <div className="flex gap-3">
               <button
-                onClick={openCreate}
-                className="inline-flex items-center gap-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-xl shadow-lg shadow-indigo-500/20 transition-all hover:-translate-y-0.5"
+                onClick={openCreateExam}
+                className="inline-flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-red-500 to-orange-500 hover:from-red-600 hover:to-orange-600 text-white font-medium rounded-xl shadow-lg shadow-orange-500/20 transition-all hover:-translate-y-0.5 border border-orange-400/20"
               >
                 <Plus size={20} />
-                Create Practical
+                Create Exam
               </button>
             </div>
           </motion.div>
@@ -278,7 +278,7 @@ export default function AllPracticalsPage() {
             transition={{ delay: 0.1 }}
             className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4"
           >
-            <StatCard label="Total Practicals" value={stats.total} icon={Book} color="blue" />
+            <StatCard label="Total Exams" value={stats.total} icon={Book} color="blue" />
           </motion.div>
 
           {/* List Component from shared */}
@@ -291,7 +291,7 @@ export default function AllPracticalsPage() {
               practicals={practicals}
               subjects={subjects}
               onEdit={openEdit}
-            // onConfigureExam removed since exams are now separate
+              isExamMode={true}
             />
           </motion.div>
         </div>

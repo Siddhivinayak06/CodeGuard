@@ -24,6 +24,7 @@ import {
   Sparkles,
   User as UserIcon,
   BarChart3,
+  Clock,
 } from "lucide-react";
 import { motion } from "framer-motion";
 
@@ -112,11 +113,7 @@ export default function Navbar() {
           href: "/dashboard/faculty",
           icon: <LayoutDashboard size={18} />,
         },
-        {
-          name: "My Schedule",
-          href: "/faculty/schedule",
-          icon: <CalendarDays size={18} />,
-        },
+
         {
           name: "Subjects",
           href: "/faculty/subjects",
@@ -127,6 +124,11 @@ export default function Navbar() {
           href: "/dashboard/faculty/practicals",
           icon: <FileText size={18} />,
         },
+        // {
+        //   name: "Exams",
+        //   href: "/dashboard/faculty/exams",
+        //   icon: <Clock size={18} />,
+        // },
         {
           name: "Submissions",
           href: "/faculty/submissions",
@@ -168,6 +170,11 @@ export default function Navbar() {
             href: "/student/practicals",
             icon: <FileText size={18} />,
           },
+          // {
+          //   name: "Exams",
+          //   href: "/student/exams",
+          //   icon: <Clock size={18} />,
+          // },
           {
             name: "Submissions",
             href: "/student/submissions",

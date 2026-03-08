@@ -17,6 +17,7 @@ interface BasicDetailsFormProps {
   enableLevels: boolean;
   setEnableLevels: (enable: boolean) => void;
   levels: Level[];
+  isExam?: boolean;
 }
 
 function cx(...parts: Array<string | false | null | undefined>) {
@@ -59,6 +60,7 @@ export default function BasicDetailsForm({
   enableLevels,
   setEnableLevels,
   levels,
+  isExam,
 }: BasicDetailsFormProps) {
   const [focusedField, setFocusedField] = useState<string | null>(null);
 
@@ -106,7 +108,7 @@ export default function BasicDetailsForm({
             Basic Information
           </h3>
           <p className="text-xs text-gray-500 dark:text-gray-400">
-            Essential details for the practical
+            Essential details for the {isExam ? "exam" : "practical"}
           </p>
         </div>
       </motion.div>
@@ -119,7 +121,7 @@ export default function BasicDetailsForm({
         className="flex gap-4 mb-5"
       >
         <div className="w-32 shrink-0">
-          <FormInput label="Practical No" required>
+          <FormInput label={isExam ? "Exam No" : "Practical No"} required>
             <input
               type="number"
               name="practical_number"
@@ -141,7 +143,7 @@ export default function BasicDetailsForm({
           </FormInput>
         </div>
         <div className="flex-1">
-          <FormInput label="Practical Title" required>
+          <FormInput label={isExam ? "Exam Title" : "Practical Title"} required>
             <input
               type="text"
               name="title"

@@ -1,9 +1,12 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
+import { requireAuth } from "@/lib/auth";
 
 export async function POST(request: Request) {
   try {
     const supabase = await createClient();
+    const { response: authError } = await requireAuth(supabase);
+    if (authError) return authError;
     const body = await request.json();
     const { faculty_id, date, start_time, end_time, exclude_id } = body;
 

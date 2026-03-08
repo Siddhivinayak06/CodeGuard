@@ -1,9 +1,12 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
+import { requireAuth } from "@/lib/auth";
 
 export async function GET(request: Request) {
     try {
         const supabase = await createClient();
+        const { response: authError } = await requireAuth(supabase);
+        if (authError) return authError;
         const { searchParams } = new URL(request.url);
         const subject_id = searchParams.get("subject_id");
         const batch_name = searchParams.get("batch");

@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/button";
 import type { User } from "@supabase/supabase-js";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
+import ReactMarkdown from "react-markdown";
 
 type TestCaseResult = {
   test_case_id: number;
@@ -199,6 +200,10 @@ export default function EditorClient() {
     searchParams?.get("language")?.toLowerCase() || "java";
   const hasLevelsParam = searchParams?.get("hasLevels") === "true";
 
+  // Exam mode params
+  const isExamMode = searchParams?.get("isExam") === "true";
+  const examIdParam = searchParams?.get("examId") || null;
+
   // Starter templates for each language
   const starterTemplates: Record<string, string> = {
     java: `public class Main {
@@ -256,6 +261,19 @@ int main() {
     "idle" | "pending" | "evaluated" | "submitted"
   >("idle");
   const [isSubmitted, setIsSubmitted] = useState(false);
+
+  // Exam mode state
+  const [examConfig, setExamConfig] = useState<{
+    duration_minutes: number;
+    max_violations: number;
+    allow_copy_paste: boolean;
+    require_fullscreen: boolean;
+    show_test_results: boolean;
+  } | null>(null);
+  const [examSession, setExamSession] = useState<any>(null);
+  const [examTimeRemaining, setExamTimeRemaining] = useState<number | null>(null); // ms
+  const examTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const examAutoSubmittedRef = useRef(false);
   // userTestCases now include expectedOutput field by default (keeps parity with server)
   const [userTestCases, setUserTestCases] = useState<UserTestCase[]>([
     {
@@ -349,8 +367,109 @@ int main() {
   // Proctoring Hook (Only active after exam starts)
   const { violations, locked } = useProctoring({
     active: hasExamStarted && !isSubmitted,
-    maxViolations: 3,
+    maxViolations: examConfig?.max_violations ?? 3,
   });
+
+  // ========================
+  // Exam Mode: Start/Resume Session
+  // ========================
+  useEffect(() => {
+    if (!isExamMode || !examIdParam || !user) return;
+
+    const startExamSession = async () => {
+      try {
+        const res = await axios.post("/api/exam/start", { examId: examIdParam });
+        setExamConfig(res.data.examConfig);
+        setExamSession(res.data.session);
+        setExamTimeRemaining(res.data.remainingMs);
+        setHasExamStarted(true);
+
+        // Enter fullscreen if required
+        if (res.data.examConfig?.require_fullscreen) {
+          try { await document.documentElement.requestFullscreen(); } catch { /* ignore */ }
+        }
+      } catch (err: any) {
+        console.error("Failed to start exam:", err);
+        const msg = err?.response?.data?.error || "Failed to start exam";
+        toast.error(msg);
+        if (msg.includes("already submitted")) {
+          setIsSubmitted(true);
+        }
+      }
+    };
+
+    startExamSession();
+  }, [isExamMode, examIdParam, user]);
+
+  // Exam countdown timer
+  useEffect(() => {
+    if (!isExamMode || examTimeRemaining === null || isSubmitted) return;
+
+    if (examTimeRemaining <= 0 && !examAutoSubmittedRef.current) {
+      examAutoSubmittedRef.current = true;
+      console.warn("Exam time expired! Auto-submitting...");
+      toast.error("Time's up! Auto-submitting your exam...");
+      handleSubmit();
+      return;
+    }
+
+    examTimerRef.current = setInterval(() => {
+      setExamTimeRemaining(prev => {
+        if (prev === null) return null;
+        const next = prev - 1000;
+        if (next <= 0 && !examAutoSubmittedRef.current) {
+          examAutoSubmittedRef.current = true;
+          clearInterval(examTimerRef.current!);
+          console.warn("Exam time expired! Auto-submitting...");
+          toast.error("Time's up! Auto-submitting your exam...");
+          handleSubmit();
+          return 0;
+        }
+        return Math.max(0, next);
+      });
+    }, 1000);
+
+    return () => {
+      if (examTimerRef.current) clearInterval(examTimerRef.current);
+    };
+  }, [isExamMode, examTimeRemaining !== null, isSubmitted]);
+
+  // Exam anti-cheating: block copy/paste/cut/right-click/DevTools
+  useEffect(() => {
+    if (!isExamMode || !hasExamStarted || isSubmitted) return;
+    if (examConfig?.allow_copy_paste) return;
+
+    const blockEvent = (e: Event) => {
+      e.preventDefault();
+      toast.warning("Copy/Paste is disabled during the exam");
+    };
+
+    const blockContextMenu = (e: Event) => {
+      e.preventDefault();
+    };
+
+    const detectDevTools = () => {
+      const threshold = 200;
+      if (window.outerWidth - window.innerWidth > threshold ||
+        window.outerHeight - window.innerHeight > threshold) {
+        console.warn("DevTools detected!");
+      }
+    };
+
+    document.addEventListener("copy", blockEvent);
+    document.addEventListener("paste", blockEvent);
+    document.addEventListener("cut", blockEvent);
+    document.addEventListener("contextmenu", blockContextMenu);
+    const devToolsInterval = setInterval(detectDevTools, 3000);
+
+    return () => {
+      document.removeEventListener("copy", blockEvent);
+      document.removeEventListener("paste", blockEvent);
+      document.removeEventListener("cut", blockEvent);
+      document.removeEventListener("contextmenu", blockContextMenu);
+      clearInterval(devToolsInterval);
+    };
+  }, [isExamMode, hasExamStarted, isSubmitted, examConfig?.allow_copy_paste]);
 
   // Auto-submit on Proctoring Lock
   const hasLockSubmittedRef = useRef(false);
@@ -1166,12 +1285,28 @@ int main() {
                   <span
                     className={`ml-1 font-bold ${violations > 0 ? "text-amber-600 dark:text-amber-400" : "text-emerald-600 dark:text-emerald-400"}`}
                   >
-                    {violations}/3
+                    {violations}/{examConfig?.max_violations ?? 3}
                   </span>
                 </span>
               </div>
             )}
           </div>
+
+          {/* Exam Timer */}
+          {isExamMode && examTimeRemaining !== null && (
+            <div className={`flex items-center gap-2 px-4 py-2 rounded-xl border font-mono text-sm font-bold ${examTimeRemaining < 60000
+              ? "bg-red-100 dark:bg-red-900/30 border-red-300 dark:border-red-700 text-red-700 dark:text-red-400 animate-pulse"
+              : examTimeRemaining < 300000
+                ? "bg-amber-100 dark:bg-amber-900/30 border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-400"
+                : "bg-emerald-100 dark:bg-emerald-900/30 border-emerald-300 dark:border-emerald-700 text-emerald-700 dark:text-emerald-400"
+              }`}>
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              {Math.floor(examTimeRemaining / 60000).toString().padStart(2, '0')}:
+              {Math.floor((examTimeRemaining % 60000) / 1000).toString().padStart(2, '0')}
+            </div>
+          )}
 
           {/* User Info */}
           {user && (
@@ -1331,11 +1466,13 @@ int main() {
                     </span>
                     Description
                   </h2>
-                  <div className="text-gray-700 dark:text-gray-300 leading-7 text-[15px] whitespace-pre-wrap font-sans">
-                    {hasLevelsParam && practicalLevels.length > 0
-                      ? practicalLevels.find((l) => l.level === activeLevel)
-                        ?.description || problemStmt
-                      : problemStmt}
+                  <div className="prose prose-sm dark:prose-invert max-w-none prose-p:leading-relaxed prose-pre:bg-gray-50 dark:prose-pre:bg-gray-900/50 prose-pre:border prose-pre:border-gray-100 dark:prose-pre:border-gray-800">
+                    <ReactMarkdown>
+                      {hasLevelsParam && practicalLevels.length > 0
+                        ? practicalLevels.find((l) => l.level === activeLevel)
+                          ?.description || problemStmt
+                        : problemStmt}
+                    </ReactMarkdown>
                   </div>
                 </div>
 
@@ -1844,6 +1981,6 @@ int main() {
           </ResizablePanel>
         </ResizablePanelGroup>
       </div>
-    </div>
+    </div >
   );
 }

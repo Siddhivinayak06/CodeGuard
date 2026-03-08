@@ -117,12 +117,11 @@ export async function GET() {
             title,
             description,
             max_marks
-          )
         )
       `
       )
       .eq("student_id", userId)
-      .eq("practicals.is_exam", false)
+      .eq("practicals.is_exam", true)
       .not("practicals", "is", null) // Ensures inner join behavior
       .order("assigned_deadline", { ascending: true });
 

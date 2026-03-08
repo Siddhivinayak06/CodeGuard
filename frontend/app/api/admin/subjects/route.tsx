@@ -1,6 +1,7 @@
 // app/api/admin/subjects/route.ts
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { requireRole } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -48,6 +49,8 @@ interface FacultyBatch {
 export async function GET() {
   try {
     const supabase = await createClient();
+    const { response: authError } = await requireRole(supabase, ["admin"]);
+    if (authError) return authError;
 
     // Get subjects
     const { data: subjectsData, error: subjectsError } = await supabase

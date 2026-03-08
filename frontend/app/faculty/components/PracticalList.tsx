@@ -114,12 +114,14 @@ function PracticalCard({
   onEdit,
   onDelete,
   onAssign,
+  onConfigureExam,
 }: {
   practical: Practical;
   subject: string;
   onEdit?: (p: Practical) => void;
   onDelete?: (id: number) => void;
   onAssign?: (id: number) => void;
+  onConfigureExam?: (p: Practical) => void;
 }) {
   const status = "active";
 
@@ -199,6 +201,13 @@ function PracticalCard({
             >
               Active
             </span>
+
+            {(practical as any).is_exam && (
+              <span className="inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-full bg-gradient-to-r from-red-100 to-orange-100 dark:from-red-900/30 dark:to-orange-900/30 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-800">
+                <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.828a1 1 0 101.415-1.414L11 9.586V6z" clipRule="evenodd" /></svg>
+                Exam
+              </span>
+            )}
           </div>
 
           {/* Description */}
@@ -213,6 +222,8 @@ function PracticalCard({
             onEdit={() => onEdit?.(practical)}
             onDelete={() => onDelete?.(practical.id)}
             onAssign={() => onAssign?.(practical.id)}
+            onConfigureExam={() => onConfigureExam?.(practical)}
+            isExam={(practical as any).is_exam}
           />
 
           <div className="flex flex-col items-end">
@@ -235,12 +246,16 @@ function ActionMenu({
   onEdit,
   onDelete,
   onAssign,
+  onConfigureExam,
   disabledAssign,
+  isExam,
 }: {
   onEdit?: () => void;
   onDelete?: () => void;
   onAssign?: () => void;
+  onConfigureExam?: () => void;
   disabledAssign?: boolean;
+  isExam?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement | null>(null);
@@ -330,6 +345,21 @@ function ActionMenu({
           <button
             onClick={() => {
               setOpen(false);
+              onConfigureExam?.();
+            }}
+            className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-orange-600 dark:text-orange-400 hover:bg-orange-50 dark:hover:bg-orange-900/20 transition-colors"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            {isExam ? "Edit Exam Settings" : "Configure as Exam"}
+          </button>
+
+          <div className="h-px bg-gray-100 dark:bg-gray-800" />
+
+          <button
+            onClick={() => {
+              setOpen(false);
               onDelete?.();
             }}
             className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
@@ -375,13 +405,17 @@ export default function PracticalList({
   onEdit,
   onAssign,
   onDelete,
+  onConfigureExam,
   subjects,
+  isExamMode,
 }: {
   practicals?: Practical[] | null;
   onEdit?: (p: Practical) => void;
   onAssign?: (id: number) => void;
   onDelete?: (id: number) => void;
+  onConfigureExam?: (p: Practical) => void;
   subjects?: Subject[] | null;
+  isExamMode?: boolean;
 }) {
   const [mode, setMode] = useState<"grid" | "list">("list");
   const [searchQuery, setSearchQuery] = useState("");
@@ -411,10 +445,10 @@ export default function PracticalList({
       <div className="flex flex-col items-center justify-center py-20 px-4">
         <EmptyIcon />
         <h3 className="mt-6 text-2xl font-bold text-gray-900 dark:text-white">
-          No practicals yet
+          {isExamMode ? "No exams yet" : "No practicals yet"}
         </h3>
         <p className="mt-2 text-center text-gray-600 dark:text-gray-400 max-w-md">
-          Get started by creating your first practical assignment. It will
+          Get started by creating your first {isExamMode ? "exam" : "practical assignment"}. It will
           appear here once created.
         </p>
         <button
@@ -434,7 +468,7 @@ export default function PracticalList({
               d="M12 4v16m8-8H4"
             />
           </svg>
-          Create First Practical
+          {isExamMode ? "Create First Exam" : "Create First Practical"}
         </button>
       </div>
     );
@@ -450,7 +484,7 @@ export default function PracticalList({
           <SearchIcon />
           <input
             type="text"
-            placeholder="Search practicals..."
+            placeholder={isExamMode ? "Search exams..." : "Search practicals..."}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full pl-10 pr-4 py-2 bg-gray-50 dark:bg-gray-800 border-none rounded-xl focus:ring-2 focus:ring-indigo-500/20 text-sm font-medium transition-all"
@@ -522,6 +556,7 @@ export default function PracticalList({
               onEdit={onEdit}
               onAssign={onAssign}
               onDelete={onDelete}
+              onConfigureExam={onConfigureExam}
             />
           );
         })}
@@ -532,10 +567,10 @@ export default function PracticalList({
         <div className="flex flex-col items-center justify-center py-20 px-4">
           <SearchIcon />
           <h3 className="mt-6 text-2xl font-bold text-gray-900 dark:text-white">
-            No practicals found
+            {isExamMode ? "No exams found" : "No practicals found"}
           </h3>
           <p className="mt-2 text-center text-gray-600 dark:text-gray-400 max-w-md">
-            No practicals match your search for "{searchQuery}". Try adjusting
+            No {isExamMode ? "exams" : "practicals"} match your search for "{searchQuery}". Try adjusting
             your search terms.
           </p>
           <button

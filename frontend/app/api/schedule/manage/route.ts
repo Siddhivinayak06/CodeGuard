@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
+import { requireRole } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -7,6 +8,8 @@ export const dynamic = "force-dynamic";
 export async function PUT(request: Request) {
     try {
         const supabase = await createClient();
+        const { response: authError } = await requireRole(supabase, ["admin", "faculty"]);
+        if (authError) return authError;
         const body = await request.json();
         const { id, date, start_time, end_time } = body;
 
@@ -42,6 +45,8 @@ export async function PUT(request: Request) {
 export async function DELETE(request: Request) {
     try {
         const supabase = await createClient();
+        const { response: authError } = await requireRole(supabase, ["admin", "faculty"]);
+        if (authError) return authError;
         const { searchParams } = new URL(request.url);
         let id = searchParams.get("id");
 

@@ -93,6 +93,7 @@ const initialPracticalForm: Practical = {
   created_at: new Date().toISOString(),
   updated_at: new Date().toISOString(),
   submitted: false,
+  is_exam: false,
 };
 const initialTestCase: TestCase = {
   id: 0,
