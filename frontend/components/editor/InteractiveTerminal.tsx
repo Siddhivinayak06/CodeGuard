@@ -442,10 +442,27 @@ const InteractiveTerminal = forwardRef<
       const isMultiFile = Array.isArray(filesOrCode);
 
       if (isMultiFile) {
-        const files = filesOrCode as FileData[];
+        const allFiles = filesOrCode as FileData[];
         const activeFileName = activeFileOrLang!;
 
-        // Send all files to the backend
+        // File extension mapping for each language
+        const langExtensions: Record<string, string[]> = {
+          python: [".py"],
+          java: [".java"],
+          c: [".c", ".h"],
+          cpp: [".cpp", ".cc", ".hpp", ".h"],
+        };
+
+        // Filter to only send files matching the current language
+        const currentExtensions = langExtensions[currentLang.current] || [];
+        const files = allFiles.filter((file) => {
+          // Always include the active file
+          if (file.name === activeFileName) return true;
+          // Include files that match the current language extensions
+          return currentExtensions.some((ext) => file.name.endsWith(ext));
+        });
+
+        // Send filtered files to the backend
         files.forEach((file, index) => {
           const msg = JSON.stringify({
             // Backend expects "code" type for file upload
