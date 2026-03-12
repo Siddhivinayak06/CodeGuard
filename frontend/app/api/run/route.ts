@@ -248,7 +248,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ results: [], verdict: "no_testcases" });
     }
 
-    // Now run student's code
+    // Run student's code (no change needed here — reference execution already happened above for user test cases)
     let runnerResults;
     try {
       runnerResults = await callRunner({
@@ -382,6 +382,7 @@ export async function POST(req: Request) {
       let shouldUpdate = true;
       let studentId = null;
       try {
+        // Single query instead of two separate ones
         const { data: currentSub } = (await supabase
           .from("submissions")
           .select("marks_obtained, student_id")
@@ -389,26 +390,14 @@ export async function POST(req: Request) {
           .single()) as any;
 
         studentId = currentSub?.student_id;
+        if (currentSub && (currentSub.marks_obtained || 0) > marksObtained) {
+          shouldUpdate = false;
+        }
       } catch (e) {
         console.error("Error checking existing marks:", e);
       }
 
       const newStatus = marksObtained >= 4 ? "passed" : "failed";
-
-      // Re-check shouldUpdate with FINAL marks
-      try {
-        const { data: currentSub } = (await supabase
-          .from("submissions")
-          .select("marks_obtained")
-          .eq("id", submissionId)
-          .single()) as any;
-
-        if (currentSub && (currentSub.marks_obtained || 0) > marksObtained) {
-          shouldUpdate = false;
-        }
-      } catch (e) {
-        console.warn("Failed to update submission with final marks:", e);
-      }
 
       if (shouldUpdate) {
         try {
@@ -443,8 +432,8 @@ export async function POST(req: Request) {
       // Always increment attempt_count on submission (outside shouldUpdate)
       // Use admin client to bypass RLS policies on student_practicals
       try {
-        const { data: { user: authUser } } = await supabase.auth.getUser();
-        const sid = studentId || authUser?.id;
+        // Reuse session user instead of making another auth call
+        const sid = studentId || session?.user?.id;
         if (sid) {
           const { data: spData } = (await supabaseAdmin
             .from("student_practicals")

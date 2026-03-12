@@ -40,86 +40,127 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    // Enrich notifications with practical links & lock status
+    // Enrich notifications with practical links & lock status (batched)
     if (data) {
-      const enriched = await Promise.all(
-        data.map(async (n: any) => {
-          if (n.type === "practical_assigned" && n.metadata?.practical_id) {
-            try {
-              const { data: spRecord } = await supabase
-                .from("student_practicals")
-                .select(`
-                  is_locked, 
-                  attempt_count, 
-                  max_attempts,
-                  practicals (
-                    subject_id,
-                    practical_number,
-                    language
-                  )
-                `)
-                .eq("student_id", user.id)
-                .eq("practical_id", n.metadata.practical_id)
-                .maybeSingle<any>();
+      // Collect all practical_ids that need enrichment
+      const practicalNotifications = data.filter(
+        (n: any) => n.type === "practical_assigned" && n.metadata?.practical_id
+      );
+      const practicalIds = [
+        ...new Set(practicalNotifications.map((n: any) => n.metadata.practical_id)),
+      ];
 
-              if (spRecord) {
-                // Construct Link
-                const practical = spRecord.practicals;
-                const link = `/editor?practicalId=${n.metadata.practical_id}${practical?.subject_id ? `&subject=${practical.subject_id}` : ""}${practical?.language ? `&language=${practical.language}` : ""}`;
-                n.link = link;
+      // Batch query 1: Fetch all student_practicals for these practical_ids in ONE call
+      let spMap = new Map<string, any>();
+      if (practicalIds.length > 0) {
+        const { data: spRecords } = await supabase
+          .from("student_practicals")
+          .select(`
+            practical_id,
+            is_locked, 
+            attempt_count, 
+            max_attempts,
+            practicals (
+              subject_id,
+              practical_number,
+              language
+            )
+          `)
+          .eq("student_id", user.id)
+          .in("practical_id", practicalIds);
 
-                // Lock Checks (Exact logic from EditorClient)
-                const isStrictLocked = spRecord.is_locked;
-                const attemptsExhausted = (spRecord.attempt_count || 0) >= (spRecord.max_attempts || 1);
+        if (spRecords) {
+          for (const sp of spRecords as any[]) {
+            spMap.set(String(sp.practical_id), sp);
+          }
+        }
+      }
 
-                if (isStrictLocked || attemptsExhausted) {
-                  n.metadata = {
-                    ...n.metadata,
-                    is_locked: true,
-                    lock_reason: isStrictLocked ? "Session locked by faculty." : "Maximum attempts reached."
-                  };
-                } else if (practical?.subject_id && practical.practical_number !== null) {
-                  // Sequential Logic
-                  const { data: subjectAssignments } = await supabase
-                    .from("student_practicals")
-                    .select(`
-                      status,
-                      practicals!inner (
-                        subject_id,
-                        practical_number
-                      )
-                    `)
-                    .eq("student_id", user.id)
-                    .eq("practicals.subject_id", practical.subject_id);
+      // Batch query 2: Fetch all subject assignments for sequential lock checking in ONE call
+      const subjectIds = [
+        ...new Set(
+          Array.from(spMap.values())
+            .map((sp: any) => sp.practicals?.subject_id)
+            .filter(Boolean)
+        ),
+      ];
+      let subjectAssignmentsMap = new Map<string, any[]>();
+      if (subjectIds.length > 0) {
+        const { data: allSubjectAssignments } = await supabase
+          .from("student_practicals")
+          .select(`
+            status,
+            practicals!inner (
+              subject_id,
+              practical_number
+            )
+          `)
+          .eq("student_id", user.id)
+          .in("practicals.subject_id", subjectIds);
 
-                  if (subjectAssignments) {
-                    const curNum = practical.practical_number || 0;
-                    const precedingNotDone = (subjectAssignments as any[]).some((a: any) => {
-                      const num = a.practicals?.practical_number || 0;
-                      if (num > 0 && num < curNum) {
-                        const isDone = ["passed", "completed", "submitted", "failed"].includes(a.status);
-                        return !isDone;
-                      }
-                      return false;
-                    });
-
-                    if (precedingNotDone) {
-                      n.metadata = {
-                        ...n.metadata,
-                        is_locked: true,
-                        lock_reason: "Previous practicals in this subject are not completed."
-                      };
-                    }
-                  }
-                }
+        if (allSubjectAssignments) {
+          for (const a of allSubjectAssignments as any[]) {
+            const sid = a.practicals?.subject_id;
+            if (sid) {
+              if (!subjectAssignmentsMap.has(String(sid))) {
+                subjectAssignmentsMap.set(String(sid), []);
               }
-            } catch (err) {
-              console.error("Error enriching notification:", err);
+              subjectAssignmentsMap.get(String(sid))!.push(a);
             }
           }
-          return n;
-        })
-      );
+        }
+      }
+
+      // Enrich in-memory (no more DB calls)
+      const enriched = data.map((n: any) => {
+        if (n.type === "practical_assigned" && n.metadata?.practical_id) {
+          const spRecord = spMap.get(String(n.metadata.practical_id));
+          if (spRecord) {
+            const practical = spRecord.practicals;
+            const link = `/editor?practicalId=${n.metadata.practical_id}${practical?.subject_id ? `&subject=${practical.subject_id}` : ""}${practical?.language ? `&language=${practical.language}` : ""}`;
+            n.link = link;
+
+            const isStrictLocked = spRecord.is_locked;
+            const attemptsExhausted =
+              (spRecord.attempt_count || 0) >= (spRecord.max_attempts || 1);
+
+            if (isStrictLocked || attemptsExhausted) {
+              n.metadata = {
+                ...n.metadata,
+                is_locked: true,
+                lock_reason: isStrictLocked
+                  ? "Session locked by faculty."
+                  : "Maximum attempts reached.",
+              };
+            } else if (
+              practical?.subject_id &&
+              practical.practical_number !== null
+            ) {
+              const assignments =
+                subjectAssignmentsMap.get(String(practical.subject_id)) || [];
+              const curNum = practical.practical_number || 0;
+              const precedingNotDone = assignments.some((a: any) => {
+                const num = a.practicals?.practical_number || 0;
+                if (num > 0 && num < curNum) {
+                  return !["passed", "completed", "submitted", "failed"].includes(a.status);
+                }
+                return false;
+              });
+
+              if (precedingNotDone) {
+                n.metadata = {
+                  ...n.metadata,
+                  is_locked: true,
+                  lock_reason:
+                    "Previous practicals in this subject are not completed.",
+                };
+              }
+            }
+          }
+        }
+        return n;
+      });
+
       return NextResponse.json({
         data: enriched,
         total: count,

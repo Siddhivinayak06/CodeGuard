@@ -124,11 +124,11 @@ export default function Navbar() {
           href: "/dashboard/faculty/practicals",
           icon: <FileText size={18} />,
         },
-        // {
-        //   name: "Exams",
-        //   href: "/dashboard/faculty/exams",
-        //   icon: <Clock size={18} />,
-        // },
+        {
+          name: "Exams",
+          href: "/dashboard/faculty/exams",
+          icon: <Clock size={18} />,
+        },
         {
           name: "Submissions",
           href: "/faculty/submissions",
@@ -170,11 +170,11 @@ export default function Navbar() {
             href: "/student/practicals",
             icon: <FileText size={18} />,
           },
-          // {
-          //   name: "Exams",
-          //   href: "/student/exams",
-          //   icon: <Clock size={18} />,
-          // },
+          {
+            name: "Exams",
+            href: "/student/exams",
+            icon: <Clock size={18} />,
+          },
           {
             name: "Submissions",
             href: "/student/submissions",

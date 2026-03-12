@@ -54,6 +54,13 @@ try {
   logger.warn('Failed to require local runners:', e && e.message);
 }
 
+// Pre-load these at module level to avoid per-request cache lookups
+const {
+  isLocalAvailable,
+  isDockerAvailable,
+} = require('../utils/runtimeDetector');
+const poolManager = require('../services/poolManager');
+
 // sanity checks: ensure modules are functions
 if (typeof runBatchCode !== 'function') {
   logger.warn('Warning: runBatchCode is not a function:', typeof runBatchCode);
@@ -103,11 +110,7 @@ router.post('/', async (req, res) => {
       problem,
     } = parseResult.data;
 
-    const {
-      isLocalAvailable,
-      isDockerAvailable,
-    } = require('../utils/runtimeDetector');
-    const poolManager = require('../services/poolManager');
+    // runtimeDetector and poolManager are pre-loaded at module level
 
     // Determine if we should use direct local execution (bypass queue/Redis)
     const shouldUseDirectLocal = () => {

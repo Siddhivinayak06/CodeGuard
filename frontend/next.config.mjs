@@ -4,7 +4,7 @@ const nextConfig = {
     // strict build checks enabled
   },
   images: {
-    unoptimized: true,
+    // Image optimization enabled (default Next.js behavior)
   },
 
   turbopack: {},
