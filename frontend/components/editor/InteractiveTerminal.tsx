@@ -106,7 +106,15 @@ const InteractiveTerminal = forwardRef<
     const isSwitching = useRef<boolean>(false); // Track if currently switching languages
 
     const currentLang = useRef<string>("python"); // default
-    const wsEndpoint = wsUrl || "ws://localhost:5002";
+    const wsEndpoint = wsUrl || (() => {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5002";
+      try {
+        const url = new URL(apiUrl);
+        return `${url.protocol === "https:" ? "wss:" : "ws:"}//${url.host}`;
+      } catch {
+        return "ws://localhost:5002";
+      }
+    })();
 
     const safeFit = () => {
       if (!fitAddon.current || !term.current) return;

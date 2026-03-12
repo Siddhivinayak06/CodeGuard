@@ -553,7 +553,7 @@ export default function Home() {
                     <div className="flex-1 overflow-hidden relative">
                       <InteractiveTerminal
                         ref={interactiveTerminalRef}
-                        wsUrl="ws://127.0.0.1:5002"
+                        wsUrl={(() => { const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5002'; const url = new URL(apiUrl); return `${url.protocol === 'https:' ? 'wss:' : 'ws:'}//${url.host}`; })()}
                         fontSize={15}
                         fontFamily="'Fira Code', 'JetBrains Mono', monospace"
                         onOutput={(data: string) =>
