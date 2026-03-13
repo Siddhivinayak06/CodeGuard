@@ -6,7 +6,6 @@ import { createClient } from "@/lib/supabase/client";
 import { Practical, Subject } from "../../../faculty/types";
 import PracticalList from "../../../faculty/components/PracticalList";
 import PracticalForm from "../../../faculty/components/PracticalForm";
-import ExamForm from "../../../faculty/components/ExamForm";
 import { ArrowLeft, Plus, Book, CheckCircle, Clock, AlertTriangle } from "lucide-react";
 import PracticalsSkeleton from "@/components/skeletons/PracticalsSkeleton";
 import { motion } from "framer-motion";
@@ -56,15 +55,11 @@ export default function AllPracticalsPage() {
   const [editingPractical, setEditingPractical] = useState<Practical | null>(
     null,
   );
-  const [creatingExamMode, setCreatingExamMode] = useState(false);
+  const [creatingExamMode, setCreatingExamMode] = useState(true);
+  const [formInitialStep, setFormInitialStep] = useState(1);
   const [sampleCode, setSampleCode] = useState<string>("");
   const [starterCode, setStarterCode] = useState<string>("");
   const [sampleLanguage, setSampleLanguage] = useState<string>("c");
-
-  // Exam modal states
-  const [examModalOpen, setExamModalOpen] = useState(false);
-  const [examPractical, setExamPractical] = useState<any>(null);
-  const [existingExamConfig, setExistingExamConfig] = useState<any>(null);
 
   // Fetch data
   useEffect(() => {
@@ -132,6 +127,7 @@ export default function AllPracticalsPage() {
   const openCreateExam = () => {
     setEditingPractical(null);
     setCreatingExamMode(true);
+    setFormInitialStep(1);
     setSampleCode("");
     setStarterCode("");
     setSampleLanguage("c");
@@ -140,6 +136,8 @@ export default function AllPracticalsPage() {
 
   const openEdit = async (p: Practical) => {
     setEditingPractical(p);
+    setCreatingExamMode(true);
+    setFormInitialStep(1);
     const { data: refsData } = await supabase
       .from("reference_codes")
       .select("*")
@@ -151,6 +149,34 @@ export default function AllPracticalsPage() {
       setStarterCode(refs[0].starter_code || "");
       setSampleLanguage(refs[0].language || "c");
     }
+    setModalOpen(true);
+  };
+
+  const openAssign = async (id: number) => {
+    const target = practicals.find((p) => p.id === id);
+    if (!target) return;
+
+    setEditingPractical(target);
+    setCreatingExamMode(true);
+    setFormInitialStep(3);
+
+    const { data: refsData } = await supabase
+      .from("reference_codes")
+      .select("*")
+      .eq("practical_id", target.id)
+      .order("created_at", { ascending: false });
+
+    const refs = refsData as any[];
+    if (refs && refs.length > 0) {
+      setSampleCode(refs[0].code || "");
+      setStarterCode(refs[0].starter_code || "");
+      setSampleLanguage(refs[0].language || "c");
+    } else {
+      setSampleCode("");
+      setStarterCode("");
+      setSampleLanguage("c");
+    }
+
     setModalOpen(true);
   };
 
@@ -291,6 +317,8 @@ export default function AllPracticalsPage() {
               practicals={practicals}
               subjects={subjects}
               onEdit={openEdit}
+              onAssign={openAssign}
+              onConfigureExam={openEdit}
               isExamMode={true}
             />
           </motion.div>
@@ -309,46 +337,13 @@ export default function AllPracticalsPage() {
           sampleLanguage={sampleLanguage}
           setSampleLanguage={setSampleLanguage}
           isExam={creatingExamMode}
+          initialStep={formInitialStep}
           onClose={() => setModalOpen(false)}
-          onSaved={(newPracticalId?: number) => {
+          onSaved={() => {
             fetchPracticals();
             setModalOpen(false);
-
-            // Auto open ExamForm if we were creating an exam and got a new ID
-            if (creatingExamMode && newPracticalId) {
-              // We need the practical object/title for ExamForm header
-              // Let's create a minimal payload or fetch it
-              const minimalPractical = {
-                id: newPracticalId,
-                title: editingPractical ? editingPractical.title : "New Exam",
-              };
-              setExamPractical(minimalPractical);
-              setExistingExamConfig(null); // Fresh config
-              setExamModalOpen(true);
-            }
           }}
         />
-
-        {/* Exam Settings Modal */}
-        {examPractical && (
-          <ExamForm
-            isOpen={examModalOpen}
-            practicalId={examPractical.id}
-            practicalTitle={examPractical.title}
-            existingExam={existingExamConfig}
-            onClose={() => {
-              setExamModalOpen(false);
-              setExamPractical(null);
-              setExistingExamConfig(null);
-            }}
-            onSaved={() => {
-              fetchPracticals();
-              setExamModalOpen(false);
-              setExamPractical(null);
-              setExistingExamConfig(null);
-            }}
-          />
-        )}
       </main>
     </div>
   );

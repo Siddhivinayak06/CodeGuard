@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import {
@@ -13,15 +13,34 @@ import {
     X,
     Save,
     Timer,
+    Shuffle,
+    Plus,
+    Trash2,
+    CheckSquare,
+    Layers,
 } from "lucide-react";
 
 interface ExamFormProps {
     isOpen: boolean;
-    practicalId: number; // The practical this exam is for
+    practicalId: number;
     practicalTitle: string;
     onClose: () => void;
     onSaved: () => void;
-    existingExam?: any; // For editing
+    existingExam?: any;
+}
+
+interface QuestionSet {
+    id?: string;
+    set_name: string;
+    level_ids: number[];
+}
+
+interface LevelInfo {
+    id: number;
+    level: string;
+    title: string | null;
+    description: string | null;
+    max_marks: number;
 }
 
 export default function ExamForm({
@@ -61,7 +80,128 @@ export default function ExamForm({
     );
     const [saving, setSaving] = useState(false);
 
+    // ---- Question Sets State ----
+    const [enableSets, setEnableSets] = useState(false);
+    const [questionSets, setQuestionSets] = useState<QuestionSet[]>([]);
+    const [availableLevels, setAvailableLevels] = useState<LevelInfo[]>([]);
+    const [loadingLevels, setLoadingLevels] = useState(false);
+
+    // Fetch levels for this practical + existing sets
+    useEffect(() => {
+        if (!isOpen || !practicalId) return;
+
+        const fetchData = async () => {
+            setLoadingLevels(true);
+            try {
+                // Fetch practical levels
+                const { data: levels } = await supabase
+                    .from("practical_levels")
+                    .select("id, level, title, description, max_marks")
+                    .eq("practical_id", practicalId)
+                    .order("id", { ascending: true });
+
+                setAvailableLevels((levels as LevelInfo[]) || []);
+
+                // Fetch existing question sets if exam exists
+                if (existingExam?.id) {
+                    const res = await fetch(`/api/exam/sets?examId=${existingExam.id}`);
+                    const json = await res.json();
+                    if (json.success && json.sets.length > 0) {
+                        setEnableSets(true);
+                        setQuestionSets(
+                            json.sets.map((s: any) => ({
+                                id: s.id,
+                                set_name: s.set_name,
+                                level_ids: s.level_ids || [],
+                            }))
+                        );
+                    }
+                }
+            } catch (err) {
+                console.error("Failed to fetch levels/sets:", err);
+            } finally {
+                setLoadingLevels(false);
+            }
+        };
+
+        fetchData();
+    }, [isOpen, practicalId, existingExam?.id, supabase]);
+
+    // ---- Question Set Helpers ----
+    const addSet = () => {
+        const nextLetter = String.fromCharCode(65 + questionSets.length); // A, B, C, ...
+        setQuestionSets((prev) => [
+            ...prev,
+            { set_name: `Set ${nextLetter}`, level_ids: [] },
+        ]);
+    };
+
+    const removeSet = (index: number) => {
+        setQuestionSets((prev) => prev.filter((_, i) => i !== index));
+    };
+
+    const updateSetName = (index: number, name: string) => {
+        setQuestionSets((prev) =>
+            prev.map((s, i) => (i === index ? { ...s, set_name: name } : s))
+        );
+    };
+
+    const toggleLevelInSet = (setIndex: number, levelId: number) => {
+        setQuestionSets((prev) =>
+            prev.map((s, i) => {
+                if (i !== setIndex) return s;
+                const has = s.level_ids.includes(levelId);
+                return {
+                    ...s,
+                    level_ids: has
+                        ? s.level_ids.filter((id) => id !== levelId)
+                        : [...s.level_ids, levelId],
+                };
+            })
+        );
+    };
+
+    // Check if a level is already used in another set
+    const isLevelUsedElsewhere = (setIndex: number, levelId: number) => {
+        return questionSets.some(
+            (s, i) => i !== setIndex && s.level_ids.includes(levelId)
+        );
+    };
+
+    // Validation
+    const getSetValidationErrors = (): string[] => {
+        const errors: string[] = [];
+        if (questionSets.length < 2) {
+            errors.push("At least 2 sets are required for random assignment.");
+        }
+        questionSets.forEach((s, i) => {
+            if (!s.set_name.trim()) errors.push(`Set ${i + 1} has no name.`);
+            if (s.level_ids.length === 0)
+                errors.push(`"${s.set_name}" has no sub-questions assigned.`);
+        });
+        // Check for unassigned levels
+        const assignedLevelIds = new Set(questionSets.flatMap((s) => s.level_ids));
+        const unassigned = availableLevels.filter(
+            (l) => !assignedLevelIds.has(l.id)
+        );
+        if (unassigned.length > 0 && questionSets.length > 0) {
+            errors.push(
+                `${unassigned.length} sub-question(s) not assigned to any set.`
+            );
+        }
+        return errors;
+    };
+
     const handleSave = async () => {
+        // Validate sets if enabled
+        if (enableSets) {
+            const errors = getSetValidationErrors();
+            if (errors.length > 0) {
+                toast.error(errors[0]);
+                return;
+            }
+        }
+
         setSaving(true);
         try {
             // Mark the practical as an exam
@@ -80,17 +220,34 @@ export default function ExamForm({
                 end_time: endTime ? new Date(endTime).toISOString() : null,
             };
 
+            let examId = existingExam?.id;
+
             if (existingExam?.id) {
-                // Update existing
                 const { error } = await (supabase.from("exams") as any)
                     .update(payload)
                     .eq("id", existingExam.id);
                 if (error) throw error;
             } else {
-                // Insert new
-                const { error } = await (supabase.from("exams") as any)
-                    .insert(payload);
+                const { data, error } = await (supabase.from("exams") as any)
+                    .insert(payload)
+                    .select("id")
+                    .single();
                 if (error) throw error;
+                examId = data.id;
+            }
+
+            // Save question sets
+            if (examId) {
+                const setsPayload = enableSets ? questionSets : [];
+                const res = await fetch("/api/exam/sets", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ examId, sets: setsPayload }),
+                });
+                const json = await res.json();
+                if (!res.ok) {
+                    throw new Error(json.error || "Failed to save question sets");
+                }
             }
 
             toast.success("Exam settings saved!");
@@ -105,9 +262,11 @@ export default function ExamForm({
 
     if (!isOpen) return null;
 
+    const setErrors = enableSets ? getSetValidationErrors() : [];
+
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-            <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-700 w-full max-w-lg mx-4 overflow-hidden">
+            <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-700 w-full max-w-2xl mx-4 overflow-hidden">
                 {/* Header */}
                 <div className="px-6 py-4 bg-gradient-to-r from-red-500 to-orange-500 text-white flex items-center justify-between">
                     <div className="flex items-center gap-3">
@@ -123,7 +282,7 @@ export default function ExamForm({
                 </div>
 
                 {/* Body */}
-                <div className="p-6 space-y-5 max-h-[65vh] overflow-y-auto">
+                <div className="p-6 space-y-5 max-h-[70vh] overflow-y-auto">
                     {/* Duration */}
                     <div>
                         <label className="flex items-center gap-2 text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
@@ -228,6 +387,174 @@ export default function ExamForm({
                             />
                         </label>
                     </div>
+
+                    {/* ================================================================ */}
+                    {/* QUESTION SETS SECTION */}
+                    {/* ================================================================ */}
+                    <div className="border-t border-gray-200 dark:border-gray-700 pt-5">
+                        {/* Enable toggle */}
+                        <label className="flex items-center justify-between p-3 bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-900/20 dark:to-purple-900/20 rounded-xl border border-indigo-200 dark:border-indigo-800 cursor-pointer hover:from-indigo-100 hover:to-purple-100 dark:hover:from-indigo-900/30 dark:hover:to-purple-900/30 transition-colors">
+                            <div className="flex items-center gap-3">
+                                <Shuffle className="w-4 h-4 text-indigo-500" />
+                                <div>
+                                    <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+                                        Random Question Sets
+                                    </span>
+                                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                                        Randomly assign different question sets to students
+                                    </p>
+                                </div>
+                            </div>
+                            <input
+                                type="checkbox"
+                                checked={enableSets}
+                                onChange={(e) => {
+                                    setEnableSets(e.target.checked);
+                                    if (e.target.checked && questionSets.length === 0) {
+                                        // Auto-create 2 sets
+                                        setQuestionSets([
+                                            { set_name: "Set A", level_ids: [] },
+                                            { set_name: "Set B", level_ids: [] },
+                                        ]);
+                                    }
+                                }}
+                                disabled={availableLevels.length === 0}
+                                className="w-5 h-5 rounded text-indigo-600 focus:ring-indigo-500"
+                            />
+                        </label>
+
+                        {availableLevels.length === 0 && (
+                            <p className="mt-2 text-xs text-amber-600 dark:text-amber-400 flex items-center gap-1.5">
+                                <AlertTriangle className="w-3.5 h-3.5" />
+                                Add sub-questions (Tasks) to the exam first before creating question sets.
+                            </p>
+                        )}
+
+                        {/* Sets Editor */}
+                        {enableSets && availableLevels.length > 0 && (
+                            <div className="mt-4 space-y-4">
+                                {/* Validation errors */}
+                                {setErrors.length > 0 && (
+                                    <div className="p-3 bg-red-50 dark:bg-red-900/20 rounded-xl border border-red-200 dark:border-red-800">
+                                        {setErrors.map((err, i) => (
+                                            <p key={i} className="text-xs text-red-600 dark:text-red-400 flex items-center gap-1.5">
+                                                <AlertTriangle className="w-3 h-3 flex-shrink-0" />
+                                                {err}
+                                            </p>
+                                        ))}
+                                    </div>
+                                )}
+
+                                {/* Set cards */}
+                                {questionSets.map((set, setIdx) => (
+                                    <div
+                                        key={setIdx}
+                                        className="p-4 bg-gray-50 dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 space-y-3"
+                                    >
+                                        {/* Set header */}
+                                        <div className="flex items-center gap-3">
+                                            <Layers className="w-4 h-4 text-indigo-500 flex-shrink-0" />
+                                            <input
+                                                type="text"
+                                                value={set.set_name}
+                                                onChange={(e) => updateSetName(setIdx, e.target.value)}
+                                                placeholder="Set Name"
+                                                className="flex-1 px-3 py-1.5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm font-semibold focus:ring-2 focus:ring-indigo-500/50 outline-none"
+                                            />
+                                            <button
+                                                onClick={() => removeSet(setIdx)}
+                                                className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                                                title="Remove set"
+                                            >
+                                                <Trash2 className="w-4 h-4" />
+                                            </button>
+                                        </div>
+
+                                        {/* Level checkboxes */}
+                                        <div className="grid grid-cols-1 gap-1.5">
+                                            {availableLevels.map((level) => {
+                                                const isInThisSet = set.level_ids.includes(level.id);
+                                                const usedElsewhere = isLevelUsedElsewhere(setIdx, level.id);
+                                                const disabled = usedElsewhere && !isInThisSet;
+
+                                                return (
+                                                    <label
+                                                        key={level.id}
+                                                        className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors cursor-pointer ${
+                                                            isInThisSet
+                                                                ? "bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-700"
+                                                                : disabled
+                                                                ? "bg-gray-100 dark:bg-gray-700/50 opacity-50 cursor-not-allowed border border-transparent"
+                                                                : "bg-white dark:bg-gray-900 hover:bg-indigo-50/50 dark:hover:bg-indigo-900/10 border border-gray-100 dark:border-gray-700"
+                                                        }`}
+                                                    >
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={isInThisSet}
+                                                            disabled={disabled}
+                                                            onChange={() => toggleLevelInSet(setIdx, level.id)}
+                                                            className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500"
+                                                        />
+                                                        <div className="flex-1 min-w-0">
+                                                            <span className="font-medium text-gray-800 dark:text-gray-200">
+                                                                {level.title || level.level}
+                                                            </span>
+                                                            {level.description && (
+                                                                <span className="ml-2 text-xs text-gray-500 dark:text-gray-400 truncate">
+                                                                    — {level.description.slice(0, 60)}
+                                                                    {level.description.length > 60 ? "..." : ""}
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                        <span className="text-xs text-gray-400 dark:text-gray-500 flex-shrink-0">
+                                                            {level.max_marks} marks
+                                                        </span>
+                                                        {usedElsewhere && !isInThisSet && (
+                                                            <span className="text-xs text-amber-500 flex-shrink-0">
+                                                                (in another set)
+                                                            </span>
+                                                        )}
+                                                    </label>
+                                                );
+                                            })}
+                                        </div>
+
+                                        {/* Set summary */}
+                                        <div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400 pt-1">
+                                            <span className="flex items-center gap-1">
+                                                <CheckSquare className="w-3 h-3" />
+                                                {set.level_ids.length} sub-question{set.level_ids.length !== 1 ? "s" : ""}
+                                            </span>
+                                            <span>
+                                                {set.level_ids.reduce((sum, id) => {
+                                                    const lvl = availableLevels.find((l) => l.id === id);
+                                                    return sum + (lvl?.max_marks || 0);
+                                                }, 0)} total marks
+                                            </span>
+                                        </div>
+                                    </div>
+                                ))}
+
+                                {/* Add set button */}
+                                <button
+                                    onClick={addSet}
+                                    className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-white dark:bg-gray-800 border-2 border-dashed border-indigo-300 dark:border-indigo-700 rounded-xl text-sm font-medium text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors"
+                                >
+                                    <Plus className="w-4 h-4" />
+                                    Add Question Set
+                                </button>
+
+                                {/* Summary */}
+                                <div className="flex items-center gap-2 p-3 bg-indigo-50 dark:bg-indigo-900/20 rounded-xl border border-indigo-200 dark:border-indigo-800">
+                                    <Shuffle className="w-4 h-4 text-indigo-500 flex-shrink-0" />
+                                    <p className="text-xs text-indigo-700 dark:text-indigo-300">
+                                        <strong>{questionSets.length} sets</strong> will be randomly assigned to students using round-robin (balanced distribution).
+                                        Each student will only see the sub-questions in their assigned set.
+                                    </p>
+                                </div>
+                            </div>
+                        )}
+                    </div>
                 </div>
 
                 {/* Footer */}
@@ -240,7 +567,7 @@ export default function ExamForm({
                     </button>
                     <button
                         onClick={handleSave}
-                        disabled={saving}
+                        disabled={saving || (enableSets && setErrors.length > 0)}
                         className="px-6 py-2 text-sm font-bold text-white bg-gradient-to-r from-red-500 to-orange-500 rounded-xl shadow-lg shadow-orange-500/20 hover:shadow-orange-500/40 transition-all disabled:opacity-50 flex items-center gap-2"
                     >
                         <Save className="w-4 h-4" />

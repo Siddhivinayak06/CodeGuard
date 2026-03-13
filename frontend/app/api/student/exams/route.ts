@@ -117,6 +117,7 @@ export async function GET() {
             title,
             description,
             max_marks
+          )
         )
       `
       )
@@ -189,10 +190,11 @@ export async function GET() {
         language: p.language,
         max_marks: p.max_marks,
         status: finalStatus,
-        schedule_date: schedule?.date || null,
+        schedule_date: schedule?.date || sp.assigned_deadline || null,
         schedule_time: schedule
           ? `${schedule.start_time} - ${schedule.end_time}`
           : null,
+        assigned_deadline: sp.assigned_deadline,
         notes: sp.notes,
         assigned_at: sp.assigned_at,
         completed_at: sp.completed_at,

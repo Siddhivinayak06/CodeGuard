@@ -5,7 +5,19 @@ import dynamic from "next/dynamic";
 import { cpp } from "@codemirror/lang-cpp";
 import { python } from "@codemirror/lang-python";
 import { SupabaseClient } from "@supabase/supabase-js";
-import { Check as CheckIcon, Loader2, Plus, FileText, Trash2, ChevronLeft, ChevronRight } from "lucide-react";
+import {
+  Check as CheckIcon,
+  Loader2,
+  Plus,
+  FileText,
+  Trash2,
+  ChevronLeft,
+  ChevronRight,
+  Layers,
+  Timer,
+  Clock,
+  Maximize,
+} from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 import { Practical, Subject, TestCase, Level, Student } from "../types";
@@ -32,6 +44,12 @@ interface PracticalFormProps {
   singleStep?: boolean;
   initialDrafts?: any[];
   isExam?: boolean;
+  initialStep?: number;
+}
+
+interface QuestionSetDraft {
+  set_name: string;
+  level_names: string[];
 }
 
 // ---------------------- Small icons / helpers ----------------------
@@ -40,6 +58,20 @@ const LoadingSpinner = () => <Loader2 className="animate-spin h-5 w-5" />;
 // simple classnames helper
 function cx(...parts: Array<string | false | null | undefined>) {
   return parts.filter(Boolean).join(" ");
+}
+
+function taskPreview(text?: string | null) {
+  const raw = (text || "").trim();
+  if (!raw) return "No description added yet.";
+
+  // Keep previews readable by removing markdown control symbols and extra spaces.
+  const cleaned = raw
+    .replace(/[#*_`>-]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (cleaned.length <= 220) return cleaned;
+  return `${cleaned.slice(0, 220)}...`;
 }
 
 // ---------------------- Component ----------------------
@@ -61,6 +93,7 @@ export default function PracticalForm({
   singleStep = false,
   initialDrafts,
   isExam = false,
+  initialStep = 1,
 }: PracticalFormProps) {
   // Level type for multi-level practicals - now using shared type
 
@@ -142,12 +175,20 @@ export default function PracticalForm({
   ]);
 
   // Multi-level support
-  const [levels, setLevels] = useState<Level[]>(defaultLevels);
-  const [activeLevel, setActiveLevel] = useState<string>("Task 1");
+  const [levels, setLevels] = useState<Level[]>(isExam ? [] : defaultLevels);
+  const [activeLevel, setActiveLevel] = useState<string>(isExam ? "" : "Task 1");
   const [enableLevels, setEnableLevels] = useState(false);
 
   // Stepper state
   const [step, setStep] = useState(1);
+
+  const [durationMinutes, setDurationMinutes] = useState(60);
+  const [requireFullscreen, setRequireFullscreen] = useState(true);
+  const [startTime, setStartTime] = useState("");
+  const [endTime, setEndTime] = useState("");
+  const [enableSets, setEnableSets] = useState(isExam);
+  const [questionSets, setQuestionSets] = useState<QuestionSetDraft[]>([]);
+  const [activeSetIdx, setActiveSetIdx] = useState(0);
 
 
 
@@ -195,7 +236,7 @@ export default function PracticalForm({
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
       submitted: false,
-      is_exam: false,
+      is_exam: isExam,
     },
     testCases: [{
       id: 0,
@@ -208,8 +249,8 @@ export default function PracticalForm({
       time_limit_ms: 2000,
       memory_limit_kb: 65536,
     }],
-    levels: JSON.parse(JSON.stringify(defaultLevels)),
-    enableLevels: false,
+    levels: isExam ? [] : JSON.parse(JSON.stringify(defaultLevels)),
+    enableLevels: isExam ? true : false,
     sampleCode: "",
     starterCode: "",
     sampleLanguage: "c",
@@ -219,6 +260,10 @@ export default function PracticalForm({
   const [activeDraftIndex, setActiveDraftIndex] = useState<number>(0);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [availableBatches, setAvailableBatches] = useState<string[]>([]);
+
+  const getLevelDisplayName = useCallback((level: Level, index: number) => {
+    return level.title?.trim() || level.level || `Task ${index + 1}`;
+  }, []);
 
   // Reset state when modal opens
   useEffect(() => {
@@ -315,6 +360,14 @@ export default function PracticalForm({
           const initialDraft = createEmptyDraft();
           setDraftPracticals([initialDraft]);
           setActiveDraftIndex(0);
+          setForm(initialDraft.form);
+          setTestCases(initialDraft.testCases);
+          setLevels(initialDraft.levels);
+          setEnableLevels(initialDraft.enableLevels);
+          setActiveLevel(isExam ? "" : "Task 1");
+          setSampleCode(initialDraft.sampleCode || "");
+          setStarterCode(initialDraft.starterCode || "");
+          setSampleLanguage(initialDraft.sampleLanguage || "c");
         }
       }
     }
@@ -324,7 +377,7 @@ export default function PracticalForm({
   // set initial state when practical prop changes
   useEffect(() => {
     if (practical) {
-      setStep(1);
+      setStep(isExam ? initialStep : 1);
       setForm({
         ...practical,
       });
@@ -391,7 +444,7 @@ export default function PracticalForm({
               setSampleLanguage(refsData[0].language || "c");
             }
           } else {
-            setEnableLevels(false);
+            setEnableLevels(isExam ? true : false);
             // Even if no levels, load reference code for single level
             const { data: refsData } = await supabase
               .from("reference_codes")
@@ -403,6 +456,50 @@ export default function PracticalForm({
               setSampleCode(refsData[0].code || "");
               setStarterCode(refsData[0].starter_code || "");
               setSampleLanguage(refsData[0].language || "c");
+            }
+          }
+
+          if (isExam) {
+            const { data: existingExam } = await supabase
+              .from("exams")
+              .select("id, duration_minutes, require_fullscreen, start_time, end_time")
+              .eq("practical_id", practical.id)
+              .maybeSingle();
+
+            if (existingExam) {
+              setDurationMinutes(existingExam.duration_minutes || 60);
+              setRequireFullscreen(existingExam.require_fullscreen ?? true);
+              setStartTime(
+                existingExam.start_time
+                  ? new Date(existingExam.start_time).toISOString().slice(0, 16)
+                  : ""
+              );
+              setEndTime(
+                existingExam.end_time
+                  ? new Date(existingExam.end_time).toISOString().slice(0, 16)
+                  : ""
+              );
+
+              const setsRes = await fetch(`/api/exam/sets?examId=${existingExam.id}`);
+              const setsJson = await setsRes.json();
+
+              if (setsJson?.success && Array.isArray(setsJson.sets) && setsJson.sets.length > 0) {
+                const levelNameById = new Map<number, string>();
+                (levelsData || []).forEach((lvl: any) => {
+                  levelNameById.set(lvl.id, lvl.title || lvl.level);
+                });
+
+                const mappedSets = setsJson.sets.map((s: any) => ({
+                  set_name: s.set_name,
+                  level_names: (s.level_ids || [])
+                    .map((id: number) => levelNameById.get(id))
+                    .filter(Boolean),
+                }));
+
+                setEnableSets(true);
+                setQuestionSets(mappedSets);
+                setActiveSetIdx(0);
+              }
             }
           }
         } catch (e) {
@@ -441,9 +538,63 @@ export default function PracticalForm({
       setAssignmentDeadline(new Date().toISOString().slice(0, 16));
       setSelectedStudents([]); // Clear selected students for new practical
       setStep(1);
+      setDurationMinutes(60);
+      setRequireFullscreen(true);
+      setStartTime("");
+      setEndTime("");
+      setEnableSets(isExam);
+      setQuestionSets([]);
+      setActiveSetIdx(0);
+      setEnableLevels(isExam ? true : false);
+      setLevels(isExam ? [] : JSON.parse(JSON.stringify(defaultLevels)));
+      setActiveLevel(isExam ? "" : "Task 1");
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [practical, subjects, defaultSubjectId]);
+  }, [practical, subjects, defaultSubjectId, isExam, initialStep]);
+
+  useEffect(() => {
+    if (!isExam) return;
+    if (!enableSets) {
+      setEnableSets(true);
+      return;
+    }
+
+    if (questionSets.length === 0) {
+      setQuestionSets([
+        { set_name: "Set A", level_names: [] },
+        { set_name: "Set B", level_names: [] },
+      ]);
+      setActiveSetIdx(0);
+    }
+  }, [enableSets, isExam, questionSets.length]);
+
+  useEffect(() => {
+    if (isExam && !enableLevels) {
+      setEnableLevels(true);
+    }
+  }, [isExam, enableLevels]);
+
+  useEffect(() => {
+    if (!enableSets || questionSets.length === 0) return;
+    if (activeSetIdx >= questionSets.length) {
+      setActiveSetIdx(Math.max(0, questionSets.length - 1));
+    }
+  }, [activeSetIdx, enableSets, questionSets.length]);
+
+  useEffect(() => {
+    if (!isExam || step !== 2 || !enableLevels) return;
+    const activeSet = questionSets[activeSetIdx];
+    if (!activeSet) return;
+
+    const scopedLevels = levels.filter((lvl, idx) =>
+      activeSet.level_names.includes(getLevelDisplayName(lvl, idx))
+    );
+
+    if (scopedLevels.length === 0) return;
+    if (!scopedLevels.some((lvl) => lvl.level === activeLevel)) {
+      setActiveLevel(scopedLevels[0].level);
+    }
+  }, [isExam, step, enableLevels, questionSets, activeSetIdx, levels, activeLevel, getLevelDisplayName]);
 
   // fetch students (with student_details) for assignment - filtered by selected subject's batches
   useEffect(() => {
@@ -594,9 +745,49 @@ export default function PracticalForm({
     field: string,
     value: string | number | boolean,
   ) => {
+    let previousDisplayName: string | null = null;
+    let nextDisplayName: string | null = null;
+
     setLevels((prev) =>
-      prev.map((l) => (l.level === level ? { ...l, [field]: value } : l)),
+      prev.map((l, idx) => {
+        if (l.level !== level) return l;
+
+        previousDisplayName = getLevelDisplayName(l, idx);
+        const updated = { ...l, [field]: value };
+        nextDisplayName = getLevelDisplayName(updated, idx);
+        return updated;
+      }),
     );
+
+    if (
+      (field === "title" || field === "level") &&
+      previousDisplayName &&
+      nextDisplayName &&
+      previousDisplayName !== nextDisplayName
+    ) {
+      setQuestionSets((prev) =>
+        prev.map((set, setIdx) => {
+          if (setIdx !== activeSetIdx) return set;
+
+          // Replace only the first matched task in the active set to avoid
+          // accidentally renaming other tasks that may have a similar label.
+          const names = [...set.level_names];
+          const replaceIdx = names.findIndex((name) => name === previousDisplayName);
+          if (replaceIdx >= 0) {
+            names[replaceIdx] = nextDisplayName!;
+          } else if (!names.includes(nextDisplayName!)) {
+            // Fallback: if prior label cannot be found (e.g., after rapid edits),
+            // keep the renamed task linked to the active set.
+            names.push(nextDisplayName!);
+          }
+
+          return {
+            ...set,
+            level_names: names,
+          };
+        })
+      );
+    }
   };
 
   const addLevelTestCase = (level: string) => {
@@ -723,6 +914,86 @@ export default function PracticalForm({
       return renamed;
     });
   };
+
+  const createTaskForActiveSet = useCallback(() => {
+    const activeSet = questionSets[activeSetIdx];
+    if (!activeSet) return;
+
+    if (!enableLevels) {
+      setEnableLevels(true);
+    }
+
+    const defaultSetName = `Set ${String.fromCharCode(65 + activeSetIdx)}`;
+    const setName = activeSet.set_name?.trim() || defaultSetName;
+    const taskNumber = activeSet.level_names.length + 1;
+    const taskTitle = `${setName} - Task ${taskNumber}`;
+    const internalLevelName = `Task ${levels.length + 1}`;
+
+    setLevels((prev) => [
+      ...prev,
+      {
+        id: 0,
+        practical_id: typeof practical?.id === "number" ? practical.id : 0,
+        created_at: "",
+        updated_at: "",
+        level: internalLevelName,
+        title: taskTitle,
+        description: "",
+        max_marks: 5,
+        testCases: [
+          {
+            id: 0,
+            practical_id: null,
+            level_id: null,
+            created_at: "",
+            input: "",
+            expected_output: "",
+            is_hidden: false,
+            time_limit_ms: 2000,
+            memory_limit_kb: 65536,
+          },
+        ],
+      },
+    ]);
+
+    setQuestionSets((prev) =>
+      prev.map((set, idx) =>
+        idx === activeSetIdx
+          ? { ...set, level_names: [...set.level_names, taskTitle] }
+          : set
+      )
+    );
+    setActiveLevel(internalLevelName);
+  }, [activeSetIdx, enableLevels, levels.length, practical?.id, questionSets]);
+
+  const removeTaskFromSet = useCallback((taskName: string) => {
+    const levelToRemove = levels.find((lvl, idx) => getLevelDisplayName(lvl, idx) === taskName);
+    if (!levelToRemove) return;
+
+    setQuestionSets((prev) =>
+      prev.map((set) => ({
+        ...set,
+        level_names: set.level_names.filter((name) => name !== taskName),
+      }))
+    );
+
+    setLevels((prev) => prev.filter((lvl) => lvl.level !== levelToRemove.level));
+  }, [levels, getLevelDisplayName]);
+
+  const removeTaskFromSetByLevel = useCallback((levelKey: string) => {
+    const levelIndex = levels.findIndex((lvl) => lvl.level === levelKey);
+    if (levelIndex < 0) return;
+
+    const taskName = getLevelDisplayName(levels[levelIndex], levelIndex);
+    setQuestionSets((prev) =>
+      prev.map((set) => ({
+        ...set,
+        level_names: set.level_names.filter((name) => name !== taskName),
+      }))
+    );
+
+    setLevels((prev) => prev.filter((lvl) => lvl.level !== levelKey));
+  }, [levels, getLevelDisplayName]);
 
   const getCurrentLevel = () => levels.find((l) => l.level === activeLevel) || levels[0];
 
@@ -922,7 +1193,7 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
           alert(`Level ${i + 1} must have a title`);
           return false;
         }
-        if (!lvl.description?.trim()) {
+        if (!isExam && !lvl.description?.trim()) {
           alert(`Level ${i + 1} must have a description`);
           return false;
         }
@@ -953,7 +1224,100 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
     }
 
     return true;
-  }, [form, enableLevels, levels, testCases]);
+  }, [form, enableLevels, levels, testCases, isExam]);
+
+  const getSetValidationErrors = useCallback(() => {
+    const errors: string[] = [];
+    if (!enableLevels || levels.length === 0) {
+      errors.push("Enable multi-level mode to configure question sets.");
+      return errors;
+    }
+    if (questionSets.length < 2) {
+      errors.push("At least 2 sets are required (Set A, Set B).");
+    }
+
+    questionSets.forEach((set, idx) => {
+      if (!set.set_name.trim()) {
+        errors.push(`Set ${idx + 1} must have a name.`);
+      }
+      if (set.level_names.length === 0) {
+        errors.push(`\"${set.set_name || `Set ${idx + 1}`}\" has no tasks created.`);
+      }
+    });
+
+    return errors;
+  }, [enableLevels, levels, questionSets, getLevelDisplayName]);
+
+  const saveExamConfiguration = useCallback(async (practicalId: number) => {
+    let examId: number | null = null;
+    const { data: existingExam } = await supabase
+      .from("exams")
+      .select("id")
+      .eq("practical_id", practicalId)
+      .maybeSingle();
+
+    const examPayload = {
+      practical_id: practicalId,
+      duration_minutes: durationMinutes,
+      require_fullscreen: requireFullscreen,
+      start_time: startTime ? new Date(startTime).toISOString() : null,
+      end_time: endTime ? new Date(endTime).toISOString() : null,
+    };
+
+    if (existingExam?.id) {
+      const { error } = await supabase
+        .from("exams")
+        .update(examPayload)
+        .eq("id", existingExam.id);
+      if (error) throw error;
+      examId = existingExam.id;
+    } else {
+      const { data, error } = await supabase
+        .from("exams")
+        .insert(examPayload)
+        .select("id")
+        .single();
+      if (error) throw error;
+      examId = data.id;
+    }
+
+    if (!examId) return;
+
+    const { data: persistedLevels } = await supabase
+      .from("practical_levels")
+      .select("id, level, title")
+      .eq("practical_id", practicalId)
+      .order("id", { ascending: true });
+
+    const levelIdByName = new Map<string, number>();
+    (persistedLevels || []).forEach((lvl: any) => {
+      levelIdByName.set(lvl.title || lvl.level, lvl.id);
+    });
+
+    const setsPayload = questionSets.map((set) => ({
+      set_name: set.set_name,
+      level_ids: set.level_names
+        .map((name) => levelIdByName.get(name))
+        .filter((id): id is number => typeof id === "number"),
+    }));
+
+    const response = await fetch("/api/exam/sets", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ examId, sets: setsPayload }),
+    });
+    const result = await response.json();
+    if (!response.ok) {
+      throw new Error(result?.error || "Failed to save question sets");
+    }
+  }, [
+    supabase,
+    durationMinutes,
+    requireFullscreen,
+    startTime,
+    endTime,
+    questionSets,
+  ]);
 
   // Save generic form components
   const saveReferenceCode = async (pId: number, code: string, lang: string, starterCode?: string, levelId?: number) => {
@@ -1010,13 +1374,32 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
 
     setSaving(true);
     try {
+      let resolvedPracticalNumber = Number(form.practical_number) || 0;
+
+      if (!resolvedPracticalNumber && form.subject_id) {
+        const { data: subjectPracticals, error: numErr } = await supabase
+          .from("practicals")
+          .select("practical_number")
+          .eq("subject_id", form.subject_id);
+
+        if (numErr) throw numErr;
+
+        const maxExisting = Math.max(
+          0,
+          ...((subjectPracticals || [])
+            .map((p: any) => Number(p.practical_number) || 0)
+            .filter((n: number) => n > 0))
+        );
+        resolvedPracticalNumber = maxExisting + 1;
+      }
+
       // Check for duplicate practical number in the same subject
-      if (form.subject_id && form.practical_number) {
+      if (form.subject_id && resolvedPracticalNumber) {
         let query = supabase
           .from("practicals")
           .select("id")
           .eq("subject_id", form.subject_id)
-          .eq("practical_number", form.practical_number);
+          .eq("practical_number", resolvedPracticalNumber);
 
         const practicalId = Number(form.id) || 0;
         if (practicalId > 0) {
@@ -1028,22 +1411,41 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
         if (checkError) throw checkError;
 
         if (existing && existing.length > 0) {
-          alert(`Practical Number ${form.practical_number} already exists for this subject.`);
+          alert(`Practical Number ${resolvedPracticalNumber} already exists for this subject.`);
           setSaving(false);
           return false;
         }
       }
 
       let practicalId = Number(form.id) || 0;
+      const resolvedExamMaxMarks = (() => {
+        if (!isExam || !enableLevels) {
+          return enableLevels
+            ? levels.reduce((sum, l) => sum + l.max_marks, 0)
+            : (form.max_marks ?? 10);
+        }
+
+        if (questionSets.length === 0) {
+          return levels.reduce((sum, l) => sum + l.max_marks, 0);
+        }
+
+        const setTotals = questionSets.map((set) =>
+          set.level_names.reduce((sum, levelName) => {
+            const matched = levels.find((lvl, idx) => getLevelDisplayName(lvl, idx) === levelName);
+            return sum + (matched?.max_marks || 0);
+          }, 0)
+        );
+
+        return Math.max(0, ...setTotals);
+      })();
+
       const payload: Record<string, any> = {
         title: form.title,
         subject_id: form.subject_id,
         description: enableLevels ? "" : form.description,
         language: form.language,
-        max_marks: enableLevels
-          ? levels.reduce((sum, l) => sum + l.max_marks, 0)
-          : (form.max_marks ?? 10),
-        practical_number: form.practical_number,
+        max_marks: resolvedExamMaxMarks,
+        practical_number: resolvedPracticalNumber || null,
       };
       if (isExam) payload.is_exam = true;
 
@@ -1156,18 +1558,48 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
     } finally {
       setSaving(false);
     }
-  }, [form, testCases, levels, enableLevels, sampleCode, starterCode, sampleLanguage, supabase, validateForm, onSaveStep1]);
+  }, [
+    form,
+    testCases,
+    levels,
+    enableLevels,
+    questionSets,
+    getLevelDisplayName,
+    isExam,
+    sampleCode,
+    starterCode,
+    sampleLanguage,
+    supabase,
+    validateForm,
+    onSaveStep1,
+  ]);
 
   // Save ALL drafts (for bulk import mode)
   const handleSaveAll = useCallback(async () => {
     setSaving(true);
     let successCount = 0;
     let failCount = 0;
+    let firstErrorMessage = "";
     const savedData: { id: number }[] = [];
 
     try {
+      // Ensure currently edited draft state is included before iterating.
+      const draftsToSave = [...draftPracticals];
+      if (draftsToSave[activeDraftIndex]) {
+        draftsToSave[activeDraftIndex] = {
+          ...draftsToSave[activeDraftIndex],
+          form: { ...form },
+          testCases: [...testCases],
+          levels: JSON.parse(JSON.stringify(levels)),
+          enableLevels,
+          sampleCode,
+          starterCode,
+          sampleLanguage,
+        };
+      }
+
       // Save each draft sequentially
-      for (const draft of draftPracticals) {
+      for (const draft of draftsToSave) {
         try {
           // Build payload from the draft's stored data
           const draftEnableLevels = draft.enableLevels;
@@ -1175,10 +1607,28 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
           const draftTestCases = draft.testCases;
           const draftForm = draft.form;
 
+          let resolvedPracticalNumber = Number(draftForm.practical_number) || 0;
+
+          if (!resolvedPracticalNumber && draftForm.subject_id) {
+            const { data: subjectPracticals, error: numErr } = await supabase
+              .from("practicals")
+              .select("practical_number")
+              .eq("subject_id", draftForm.subject_id);
+
+            if (numErr) throw numErr;
+
+            const maxExisting = Math.max(
+              0,
+              ...((subjectPracticals || [])
+                .map((p: any) => Number(p.practical_number) || 0)
+                .filter((n: number) => n > 0))
+            );
+            resolvedPracticalNumber = maxExisting + 1;
+          }
+
           // Validate this draft
           if (!draftForm.title?.trim()) {
-            console.warn(`Skipping draft without title: ${draft.id}`);
-            failCount++;
+            console.info(`Skipping empty draft without title: ${draft.id}`);
             continue;
           }
           if (!draftForm.subject_id) {
@@ -1188,30 +1638,49 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
           }
 
           // Check for duplicate practical number
-          if (draftForm.subject_id && draftForm.practical_number) {
+          if (draftForm.subject_id && resolvedPracticalNumber) {
             const { data: existing } = await supabase
               .from("practicals")
               .select("id")
               .eq("subject_id", draftForm.subject_id)
-              .eq("practical_number", draftForm.practical_number);
+              .eq("practical_number", resolvedPracticalNumber);
 
             if (existing && existing.length > 0) {
-              console.warn(`Skipping draft with duplicate practical_number: ${draftForm.practical_number}`);
+              console.warn(`Skipping draft with duplicate practical_number: ${resolvedPracticalNumber}`);
               failCount++;
               continue;
             }
           }
 
           // Build payload
+          const resolvedExamMaxMarks = (() => {
+            if (!isExam || !draftEnableLevels) {
+              return draftEnableLevels
+                ? draftLevels.reduce((sum, l) => sum + l.max_marks, 0)
+                : (draftForm.max_marks ?? 10);
+            }
+
+            if (questionSets.length === 0) {
+              return draftLevels.reduce((sum, l) => sum + l.max_marks, 0);
+            }
+
+            const setTotals = questionSets.map((set) =>
+              set.level_names.reduce((sum, levelName) => {
+                const matched = draftLevels.find((lvl, idx) => getLevelDisplayName(lvl, idx) === levelName);
+                return sum + (matched?.max_marks || 0);
+              }, 0)
+            );
+
+            return Math.max(0, ...setTotals);
+          })();
+
           const payload = {
             title: draftForm.title,
             subject_id: draftForm.subject_id,
             description: draftEnableLevels ? "" : draftForm.description,
             language: draftForm.language,
-            max_marks: draftEnableLevels
-              ? draftLevels.reduce((sum, l) => sum + l.max_marks, 0)
-              : (draftForm.max_marks ?? 10),
-            practical_number: draftForm.practical_number || undefined,
+            max_marks: resolvedExamMaxMarks,
+            practical_number: resolvedPracticalNumber || null,
             is_exam: isExam,
           };
 
@@ -1294,6 +1763,9 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
           successCount++;
         } catch (draftErr) {
           console.error(`Error saving draft ${draft.id}:`, draftErr);
+          if (!firstErrorMessage) {
+            firstErrorMessage = (draftErr as any)?.message || String(draftErr);
+          }
           failCount++;
         }
       }
@@ -1301,14 +1773,32 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
       if (successCount > 0) {
         alert(`Successfully saved ${successCount} practicals. ${failCount > 0 ? `${failCount} failed.` : ""}`);
       } else {
-        alert(`Failed to save any practicals. ${failCount} errors.`);
+        alert(
+          failCount > 0
+            ? `Failed to save any practicals. ${failCount} errors.${firstErrorMessage ? ` First error: ${firstErrorMessage}` : ""}`
+            : "No filled drafts to save. Add a title to at least one exam."
+        );
       }
 
       return savedData;
     } finally {
       setSaving(false);
     }
-  }, [draftPracticals, supabase]);
+  }, [
+    draftPracticals,
+    activeDraftIndex,
+    form,
+    testCases,
+    levels,
+    enableLevels,
+    sampleCode,
+    starterCode,
+    sampleLanguage,
+    supabase,
+    isExam,
+    questionSets,
+    getLevelDisplayName,
+  ]);
 
   // Assign practical to selected students
   const assign = async (specificItems?: { id: number }[]) => {
@@ -1331,6 +1821,7 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
 
     setLoading(true);
     let successCount = 0;
+    let skippedCount = 0;
     let failCount = 0;
 
     try {
@@ -1355,8 +1846,14 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
           if (result.success) {
             successCount++;
           } else {
-            console.error(`Failed to assign practical ${item.id}:`, result.error);
-            failCount++;
+            const errorText = String(result?.error || "").toLowerCase();
+            if (errorText.includes("already assigned")) {
+              // Idempotent behavior: treat already-assigned as a non-fatal skip.
+              skippedCount++;
+            } else {
+              console.error(`Failed to assign practical ${item.id}:`, result.error);
+              failCount++;
+            }
           }
         } catch (err) {
           console.error(`Error assigning practical ${item.id}:`, err);
@@ -1365,8 +1862,15 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
       }
 
       if (successCount > 0) {
-        alert(`Assigned ${successCount} practicals successfully. ${failCount > 0 ? `${failCount} failed.` : ""}`);
+        alert(
+          `Assigned ${successCount} practicals successfully.` +
+          `${skippedCount > 0 ? ` ${skippedCount} already assigned.` : ""}` +
+          `${failCount > 0 ? ` ${failCount} failed.` : ""}`
+        );
         // Can't easily pass a single ID here since this is bulk assignment, but this step is skipped for singleStep anyway
+        onSaved();
+      } else if (skippedCount > 0 && failCount === 0) {
+        alert(`All selected students were already assigned. (${skippedCount} practicals skipped)`);
         onSaved();
       } else {
         alert("Failed to assign practicals.");
@@ -1623,14 +2127,26 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
                   <div
                     className="w-9 h-9 rounded-full flex items-center justify-center font-bold bg-gradient-to-br from-blue-600 to-purple-600 text-white shadow"
                   >
-                    1
+                    {isExam ? step : 1}
                   </div>
                   <div className="leading-tight">
                     <div className="text-sm font-semibold text-gray-900 dark:text-white">
-                      {isExam ? "Exam Details" : "Practical Details"}
+                      {isExam
+                        ? (step === 1
+                          ? "Step 1: Exam Details & Settings"
+                          : step === 2
+                            ? "Step 2: Questions & Sets"
+                            : "Step 3: Assign Students")
+                        : "Practical Details"}
                     </div>
                     <div className="text-xs text-gray-500 dark:text-gray-400">
-                      Fill details & test cases
+                      {isExam
+                        ? (step === 1
+                          ? "Title, subject, language, duration, and exam window"
+                          : step === 2
+                            ? "Manage questions and set-wise sub-question mapping"
+                            : "Select students and finalize assignment")
+                        : "Fill details & test cases"}
                     </div>
                   </div>
                 </div>
@@ -1649,22 +2165,53 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
                     whileTap={{ scale: 0.98 }}
                     onClick={async () => {
                       if (isExam && step === 1) {
-                        // Exam Step 1 -> Step 2
-                        if (isMultiDraftMode) {
-                          const savedData = await handleSaveAll();
-                          if (savedData && savedData.length > 0) {
+                        setStep(2);
+                      } else if (isExam && step === 2) {
+                        const setErrors = getSetValidationErrors();
+                        if (setErrors.length > 0) {
+                          alert(setErrors[0]);
+                          return;
+                        }
+
+                        const itemsToConfigure = savedPracticals.length > 0
+                          ? savedPracticals
+                          : [];
+
+                        let resolvedItems = itemsToConfigure;
+
+                        if (resolvedItems.length === 0) {
+                          if (isMultiDraftMode) {
+                            const savedData = await handleSaveAll();
+                            if (!savedData || savedData.length === 0) {
+                              return;
+                            }
                             setSavedPracticals(savedData);
-                            setStep(2);
-                          }
-                        } else {
-                          const savedPracticalId = await handleSave();
-                          if (savedPracticalId) {
-                            setSavedPracticals([{ id: savedPracticalId as number }]);
-                            setStep(2);
+                            resolvedItems = savedData;
+                          } else {
+                            const savedPracticalId = await handleSave();
+                            if (!savedPracticalId) {
+                              return;
+                            }
+                            const singleSaved = [{ id: savedPracticalId as number }];
+                            setSavedPracticals(singleSaved);
+                            resolvedItems = singleSaved;
                           }
                         }
-                      } else if (isExam && step === 2) {
-                        // Exam Step 2 -> Assign 
+
+                        if (resolvedItems.length === 0) return;
+
+                        try {
+                          setSaving(true);
+                          for (const item of resolvedItems) {
+                            await saveExamConfiguration(item.id);
+                          }
+                          setStep(3);
+                        } catch (err: any) {
+                          alert(err?.message || "Failed to save exam settings.");
+                        } finally {
+                          setSaving(false);
+                        }
+                      } else if (isExam && step === 3) {
                         await assign();
                       } else {
                         // Original Practical Flow
@@ -1688,7 +2235,17 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
                     )}
                   >
                     {(saving || loading) ? <LoadingSpinner /> : null}
-                    {saving ? "Saving..." : loading ? "Assigning..." : isExam ? (step === 1 ? "Next: Assign Students" : "Finish & Assign") : "Save Practical"}
+                    {saving
+                      ? "Saving..."
+                      : loading
+                        ? "Assigning..."
+                        : isExam
+                          ? (step === 1
+                            ? "Next: Questions & Sets"
+                            : step === 2
+                              ? "Next: Assign Students"
+                              : "Finish & Assign")
+                          : "Save Practical"}
                   </motion.button>
                 </div>
               </div>
@@ -1697,10 +2254,10 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
             {/* Main content container with optional sidebar */}
             <div className={cx(
               "w-full mx-auto py-6 flex",
-              isMultiDraftMode && !sidebarCollapsed && step === 1 ? "pl-0" : "px-4 xl:px-12"
+              isMultiDraftMode && !isExam && !sidebarCollapsed && step === 1 ? "pl-0" : "px-4 xl:px-12"
             )}>
               {/* Sidebar for multi-draft mode */}
-              {isMultiDraftMode && step === 1 && (
+              {isMultiDraftMode && !isExam && step === 1 && (
                 <motion.div
                   initial={{ width: sidebarCollapsed ? 48 : 280 }}
                   animate={{ width: sidebarCollapsed ? 48 : 280 }}
@@ -1889,66 +2446,503 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
               {/* Main Form Area */}
               <div className={cx(
                 "flex-1",
-                isMultiDraftMode ? "px-4 xl:px-8" : ""
+                isMultiDraftMode && !isExam ? "px-4 xl:px-8" : ""
               )}>
-
-
                 {/* ---------- FORM CONTENT ---------- */}
-                <div className="space-y-6">
-                  {/* 1. Basic Information */}
-                  <BasicDetailsForm
-                    form={form}
-                    subjects={subjects}
-                    handleInput={handleInput}
-                    defaultSubjectId={defaultSubjectId}
-                    enableLevels={enableLevels}
-                    setEnableLevels={setEnableLevels}
-                    levels={levels}
-                    isExam={isExam}
-                  />
-
-                  {/* Level Management (Tabs & Content) */}
-                  {enableLevels && (
-                    <LevelManager
-                      levels={levels}
-                      activeLevel={activeLevel}
-                      setActiveLevel={setActiveLevel}
-                      updateLevelField={updateLevelField}
-                      addLevelTestCase={addLevelTestCase}
-                      removeLevelTestCase={removeLevelTestCase}
-                      updateLevelTestCase={updateLevelTestCase}
-                      generateTestCases={generateTestCases}
-                      generatingTests={generatingTests}
-                      sampleCode={sampleCode}
-                      setSampleCode={setSampleCode}
-                      sampleLanguage={sampleLanguage || "c"}
-                      onAddLevel={handleAddLevel}
-                      onRemoveLevel={handleRemoveLevel}
-                    />
-                  )}
-
-                  {/* Single Level Test Cases & Description */}
-                  {!enableLevels && (
-                    <SingleLevelTestCases
+                {!isExam && (
+                  <div className="space-y-6">
+                    <BasicDetailsForm
                       form={form}
+                      subjects={subjects}
                       handleInput={handleInput}
-                      sampleCode={sampleCode}
-                      setSampleCode={setSampleCode}
-                      starterCode={starterCode}
-                      setStarterCode={setStarterCode}
-                      sampleLanguage={sampleLanguage}
-                      setSampleLanguage={setSampleLanguage}
-                      getLanguageExtension={getLanguageExtension}
-                      testCases={testCases}
-                      handleTestCaseChange={handleTestCaseChange}
-                      addTestCase={addTestCase}
-                      removeTestCase={removeTestCase}
-                      generateTestCases={generateTestCases}
-                      generatingTests={generatingTests}
+                      defaultSubjectId={defaultSubjectId}
+                      enableLevels={enableLevels}
+                      setEnableLevels={setEnableLevels}
+                      levels={levels}
                       isExam={isExam}
+                      showAssessmentControls={false}
+                      showNumberField={false}
                     />
-                  )}
-                </div>
+
+                    {enableLevels && (
+                      <LevelManager
+                        levels={levels}
+                        activeLevel={activeLevel}
+                        setActiveLevel={setActiveLevel}
+                        updateLevelField={updateLevelField}
+                        addLevelTestCase={addLevelTestCase}
+                        removeLevelTestCase={removeLevelTestCase}
+                        updateLevelTestCase={updateLevelTestCase}
+                        generateTestCases={generateTestCases}
+                        generatingTests={generatingTests}
+                        sampleCode={sampleCode}
+                        setSampleCode={setSampleCode}
+                        sampleLanguage={sampleLanguage || "c"}
+                        onAddLevel={handleAddLevel}
+                        onRemoveLevel={handleRemoveLevel}
+                      />
+                    )}
+
+                    {!enableLevels && (
+                      <SingleLevelTestCases
+                        form={form}
+                        handleInput={handleInput}
+                        sampleCode={sampleCode}
+                        setSampleCode={setSampleCode}
+                        starterCode={starterCode}
+                        setStarterCode={setStarterCode}
+                        sampleLanguage={sampleLanguage}
+                        setSampleLanguage={setSampleLanguage}
+                        getLanguageExtension={getLanguageExtension}
+                        testCases={testCases}
+                        handleTestCaseChange={handleTestCaseChange}
+                        addTestCase={addTestCase}
+                        removeTestCase={removeTestCase}
+                        generateTestCases={generateTestCases}
+                        generatingTests={generatingTests}
+                        isExam={isExam}
+                      />
+                    )}
+                  </div>
+                )}
+
+                {isExam && step === 1 && (
+                  <div className="space-y-6">
+                    <BasicDetailsForm
+                      form={form}
+                      subjects={subjects}
+                      handleInput={handleInput}
+                      defaultSubjectId={defaultSubjectId}
+                      enableLevels={enableLevels}
+                      setEnableLevels={setEnableLevels}
+                      levels={levels}
+                      isExam={isExam}
+                      showAssessmentControls={false}
+                      showNumberField={false}
+                    />
+
+                    <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-700 p-6 space-y-5">
+                      <div>
+                        <h3 className="text-lg font-bold text-gray-900 dark:text-white">Exam Settings</h3>
+                        <p className="text-sm text-gray-500 dark:text-gray-400">
+                          Configure duration, fullscreen requirement, and exam time window.
+                        </p>
+                      </div>
+
+                      <div>
+                        <label className="flex items-center gap-2 text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                          <Timer className="w-4 h-4 text-orange-500" />
+                          Duration (minutes)
+                        </label>
+                        <input
+                          type="number"
+                          min={5}
+                          max={300}
+                          value={durationMinutes}
+                          onChange={(e) => setDurationMinutes(Number(e.target.value) || 60)}
+                          className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm focus:ring-2 focus:ring-orange-500/40 outline-none"
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <label className="flex items-center gap-2 text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                            <Clock className="w-4 h-4 text-blue-500" />
+                            Start Time
+                          </label>
+                          <input
+                            type="datetime-local"
+                            value={startTime}
+                            onChange={(e) => setStartTime(e.target.value)}
+                            className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/40 outline-none"
+                          />
+                        </div>
+                        <div>
+                          <label className="flex items-center gap-2 text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                            <Clock className="w-4 h-4 text-red-500" />
+                            End Time
+                          </label>
+                          <input
+                            type="datetime-local"
+                            value={endTime}
+                            onChange={(e) => setEndTime(e.target.value)}
+                            className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm focus:ring-2 focus:ring-red-500/40 outline-none"
+                          />
+                        </div>
+                      </div>
+
+                      <label className="flex items-center gap-3 p-3 rounded-xl bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
+                        <Maximize className="w-4 h-4 text-indigo-500" />
+                        <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Require Fullscreen</span>
+                        <input
+                          type="checkbox"
+                          checked={requireFullscreen}
+                          onChange={(e) => setRequireFullscreen(e.target.checked)}
+                          className="ml-auto w-4 h-4"
+                        />
+                      </label>
+                    </div>
+                  </div>
+                )}
+
+                {isExam && step === 2 && (
+                  <div className="space-y-6">
+                    <div className="grid grid-cols-1 xl:grid-cols-[320px_1fr] gap-6 items-start">
+                      <aside className="space-y-4 xl:sticky xl:top-24">
+                        <div className="bg-white dark:bg-gray-900 rounded-2xl border border-indigo-100 dark:border-indigo-900/50 p-4 shadow-sm shadow-indigo-100/30 dark:shadow-none space-y-4">
+                          <div className="rounded-xl bg-gradient-to-r from-indigo-50 to-blue-50 dark:from-indigo-950/30 dark:to-blue-950/20 border border-indigo-100 dark:border-indigo-900/40 p-3">
+                            <div className="flex items-start gap-2">
+                              <div className="p-1.5 rounded-lg bg-white dark:bg-gray-900 border border-indigo-100 dark:border-indigo-900/50">
+                                <Layers className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                              </div>
+                              <div>
+                                <h3 className="text-sm font-bold text-gray-900 dark:text-white">Question Sets</h3>
+                                <p className="text-xs text-gray-500 dark:text-gray-400">Create, select, and manage set-wise tasks.</p>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="space-y-2.5">
+                            {questionSets.map((set, idx) => (
+                              (() => {
+                                const setTotalMarks = set.level_names.reduce((sum, levelName) => {
+                                  const matched = levels.find((lvl, levelIdx) => getLevelDisplayName(lvl, levelIdx) === levelName);
+                                  return sum + (matched?.max_marks || 0);
+                                }, 0);
+                                const setTaskCount = set.level_names.length;
+                                return (
+                                  <button
+                                    key={`${set.set_name}-${idx}`}
+                                    type="button"
+                                    onClick={() => setActiveSetIdx(idx)}
+                                    className={cx(
+                                      "group relative w-full text-left px-3.5 py-3 rounded-xl border transition",
+                                      idx === activeSetIdx
+                                        ? "bg-indigo-100/80 dark:bg-indigo-900/40 border-indigo-300 dark:border-indigo-700 text-indigo-800 dark:text-indigo-200"
+                                        : "bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-700 hover:border-indigo-200 dark:hover:border-indigo-700 hover:bg-indigo-50/40 dark:hover:bg-indigo-900/20 text-gray-700 dark:text-gray-300"
+                                    )}
+                                  >
+                                    {idx === activeSetIdx && <span className="absolute left-0 top-2 bottom-2 w-1 rounded-r-full bg-indigo-500" />}
+                                    <div className="flex items-start justify-between gap-3 pl-1">
+                                      <div className="min-w-0">
+                                        <p className="truncate text-sm font-semibold">{set.set_name}</p>
+                                        <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">{setTaskCount} task(s)</p>
+                                      </div>
+                                      <div className="text-right shrink-0">
+                                        <p className="text-[11px] text-gray-500 dark:text-gray-400">Marks</p>
+                                        <p className="text-xs font-bold">{setTotalMarks}</p>
+                                      </div>
+                                    </div>
+                                  </button>
+                                );
+                              })()
+                            ))}
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const nextLetter = String.fromCharCode(65 + questionSets.length);
+                                const nextIndex = questionSets.length;
+                                setQuestionSets((prev) => [
+                                  ...prev,
+                                  { set_name: `Set ${nextLetter}`, level_names: [] },
+                                ]);
+                                setActiveSetIdx(nextIndex);
+                              }}
+                              className="w-full inline-flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl border border-dashed border-indigo-300 dark:border-indigo-700 text-indigo-600 dark:text-indigo-400 text-sm font-semibold hover:bg-indigo-50 dark:hover:bg-indigo-900/30"
+                            >
+                              <Plus className="w-4 h-4" /> Add Set
+                            </button>
+                          </div>
+                        </div>
+
+                      </aside>
+
+                      <div className="space-y-6">
+                        <div className="bg-white dark:bg-gray-900 rounded-2xl border-2 border-indigo-100 dark:border-indigo-900/50 p-6 space-y-4">
+                          {enableLevels && (() => {
+                            const setErrors = getSetValidationErrors();
+                            const activeSet = questionSets[activeSetIdx];
+                            const assignedNames = activeSet?.level_names || [];
+                            const assignedLevels = levels
+                              .map((level, idx) => ({ level, idx, name: getLevelDisplayName(level, idx) }))
+                              .filter(({ name }) => assignedNames.includes(name));
+
+                            return (
+                              <div className="space-y-4">
+                                {setErrors.length > 0 && (
+                                  <div className="rounded-xl border border-amber-200 dark:border-amber-700 bg-amber-50/70 dark:bg-amber-900/20 px-3 py-2">
+                                    <p className="text-xs font-semibold text-amber-700 dark:text-amber-300">{setErrors[0]}</p>
+                                  </div>
+                                )}
+
+                                {activeSet && (
+                                  <div className="rounded-xl border border-gray-200 dark:border-gray-700 p-4 space-y-5 bg-white/70 dark:bg-gray-900/40">
+                                    <div className="flex items-center justify-between gap-3">
+                                      <div className="min-w-0">
+                                        <div className="flex items-center gap-2 min-w-0">
+                                          <Layers className="w-4 h-4 text-indigo-500" />
+                                          <input
+                                            type="text"
+                                            value={activeSet.set_name}
+                                            onChange={(e) => {
+                                              const value = e.target.value;
+                                              setQuestionSets((prev) =>
+                                                prev.map((set, idx) =>
+                                                  idx === activeSetIdx ? { ...set, set_name: value } : set
+                                                )
+                                              );
+                                            }}
+                                            className="text-base font-bold bg-transparent border-none outline-none p-0 text-gray-900 dark:text-white min-w-0"
+                                          />
+                                        </div>
+                                        <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-1">Create and edit tasks for this selected set.</p>
+                                      </div>
+                                      {questionSets.length > 2 && (
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            setQuestionSets((prev) => prev.filter((_, idx) => idx !== activeSetIdx));
+                                            setActiveSetIdx((prev) => Math.max(0, prev - 1));
+                                          }}
+                                          className="text-xs font-semibold text-red-600 dark:text-red-400 hover:underline shrink-0"
+                                        >
+                                          Remove Set
+                                        </button>
+                                      )}
+                                    </div>
+
+                                    <div className="grid grid-cols-2 gap-3">
+                                      <div className="rounded-lg border border-gray-200 dark:border-gray-700 p-2.5 bg-gray-50/60 dark:bg-gray-800/40">
+                                        <p className="text-[11px] text-gray-500 dark:text-gray-400">Set Max Marks</p>
+                                        <p className="text-sm font-bold text-gray-900 dark:text-white">
+                                          {assignedLevels.reduce((sum, item) => sum + (item.level.max_marks || 0), 0)}
+                                        </p>
+                                      </div>
+                                      <div className="rounded-lg border border-gray-200 dark:border-gray-700 p-2.5 bg-gray-50/60 dark:bg-gray-800/40">
+                                        <p className="text-[11px] text-gray-500 dark:text-gray-400">Tasks in Set</p>
+                                        <p className="text-sm font-bold text-gray-900 dark:text-white">{assignedLevels.length}</p>
+                                      </div>
+                                    </div>
+
+                                    <div className="flex items-center justify-end">
+                                      <button
+                                        type="button"
+                                        onClick={createTaskForActiveSet}
+                                        className="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold shadow-sm"
+                                      >
+                                        <span className="inline-flex items-center gap-1"><Plus className="w-4 h-4" />Create Task for This Set</span>
+                                      </button>
+                                    </div>
+
+                                    <div>
+                                      <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-2">
+                                        Selected Set Details
+                                      </p>
+                                      {assignedLevels.length > 0 ? (
+                                        <div className="space-y-3">
+                                          {assignedLevels.map(({ level, idx, name }) => (
+                                            <div
+                                              key={`${name}-${idx}`}
+                                              className="rounded-2xl border border-gray-200 dark:border-gray-700 p-4 bg-gradient-to-br from-white to-gray-50/70 dark:from-gray-900 dark:to-gray-800/70 shadow-sm hover:shadow-md hover:border-indigo-200 dark:hover:border-indigo-700 transition-all"
+                                            >
+                                              <div className="flex items-start justify-between gap-3">
+                                                <div>
+                                                  <p className="text-base font-semibold text-gray-900 dark:text-white">{name}</p>
+                                                  <p className="text-sm text-gray-600 dark:text-gray-300 mt-1 leading-relaxed">
+                                                    {taskPreview(level.description)}
+                                                  </p>
+                                                </div>
+                                                <div className="flex items-center gap-2 shrink-0">
+                                                  <span className="text-xs font-semibold text-gray-700 dark:text-gray-200 px-2 py-1 rounded-md bg-gray-100 dark:bg-gray-700/70">
+                                                    {level.max_marks} marks
+                                                  </span>
+                                                  <button
+                                                    type="button"
+                                                    onClick={() => setActiveLevel(level.level)}
+                                                    className="text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:underline"
+                                                  >
+                                                    Open
+                                                  </button>
+                                                  <button
+                                                    type="button"
+                                                    onClick={() => removeTaskFromSet(name)}
+                                                    className="text-xs font-semibold text-red-600 dark:text-red-400 hover:underline"
+                                                  >
+                                                    Delete
+                                                  </button>
+                                                </div>
+                                              </div>
+                                              <div className="mt-3 flex items-center gap-2 text-[11px] text-gray-500 dark:text-gray-400">
+                                                <span className="inline-flex h-2 w-2 rounded-full bg-emerald-500" />
+                                                {(level.testCases || []).length} test case(s)
+                                              </div>
+                                            </div>
+                                          ))}
+                                        </div>
+                                      ) : (
+                                        <p className="text-xs text-gray-500 dark:text-gray-400">No tasks assigned to this set yet.</p>
+                                      )}
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })()}
+
+                          {!enableLevels && (
+                            <p className="text-sm text-amber-600 dark:text-amber-400">
+                              Turn on Multi-Level Mode to configure question sets.
+                            </p>
+                          )}
+                        </div>
+
+                        {enableLevels ? (() => {
+                          const activeSet = questionSets[activeSetIdx];
+                          const scopedLevels = levels.filter((lvl, idx) =>
+                            activeSet?.level_names.includes(getLevelDisplayName(lvl, idx))
+                          );
+
+                          if (!activeSet || scopedLevels.length === 0) {
+                            return (
+                              <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-700 p-6">
+                                <p className="text-sm text-gray-500 dark:text-gray-400">
+                                  No tasks in this set yet. Use "Create Task for This Set" above to start.
+                                </p>
+                              </div>
+                            );
+                          }
+
+                          const managerLevels = scopedLevels.map((lvl, idx) => ({
+                            ...lvl,
+                            level: `Task ${idx + 1}`,
+                          }));
+
+                          const originalLevelByDisplay = new Map<string, string>();
+                          managerLevels.forEach((lvl, idx) => {
+                            originalLevelByDisplay.set(lvl.level, scopedLevels[idx].level);
+                          });
+
+                          const activeScopedIndex = scopedLevels.findIndex((lvl) => lvl.level === activeLevel);
+                          const managerActiveLevel = activeScopedIndex >= 0
+                            ? `Task ${activeScopedIndex + 1}`
+                            : (managerLevels[0]?.level || "Task 1");
+
+                          return (
+                            <LevelManager
+                              levels={managerLevels}
+                              activeLevel={managerActiveLevel}
+                              setActiveLevel={(displayLevel) => {
+                                const originalLevel = originalLevelByDisplay.get(displayLevel);
+                                if (originalLevel) setActiveLevel(originalLevel);
+                              }}
+                              updateLevelField={(displayLevel, field, value) => {
+                                const originalLevel = originalLevelByDisplay.get(displayLevel);
+                                if (originalLevel) updateLevelField(originalLevel, field, value);
+                              }}
+                              addLevelTestCase={(displayLevel) => {
+                                const originalLevel = originalLevelByDisplay.get(displayLevel);
+                                if (originalLevel) addLevelTestCase(originalLevel);
+                              }}
+                              removeLevelTestCase={(displayLevel, index) => {
+                                const originalLevel = originalLevelByDisplay.get(displayLevel);
+                                if (originalLevel) removeLevelTestCase(originalLevel, index);
+                              }}
+                              updateLevelTestCase={(displayLevel, index, field, value) => {
+                                const originalLevel = originalLevelByDisplay.get(displayLevel);
+                                if (originalLevel) updateLevelTestCase(originalLevel, index, field, value);
+                              }}
+                              generateTestCases={generateTestCases}
+                              generatingTests={generatingTests}
+                              sampleCode={sampleCode}
+                              setSampleCode={setSampleCode}
+                              sampleLanguage={sampleLanguage || "c"}
+                              onAddLevel={createTaskForActiveSet}
+                              onRemoveLevel={(displayLevel) => {
+                                const originalLevel = originalLevelByDisplay.get(displayLevel);
+                                if (originalLevel) removeTaskFromSetByLevel(originalLevel);
+                              }}
+                            />
+                          );
+                        })() : (
+                          <SingleLevelTestCases
+                            form={form}
+                            handleInput={handleInput}
+                            sampleCode={sampleCode}
+                            setSampleCode={setSampleCode}
+                            starterCode={starterCode}
+                            setStarterCode={setStarterCode}
+                            sampleLanguage={sampleLanguage}
+                            setSampleLanguage={setSampleLanguage}
+                            getLanguageExtension={getLanguageExtension}
+                            testCases={testCases}
+                            handleTestCaseChange={handleTestCaseChange}
+                            addTestCase={addTestCase}
+                            removeTestCase={removeTestCase}
+                            generateTestCases={generateTestCases}
+                            generatingTests={generatingTests}
+                            isExam={isExam}
+                          />
+                        )}
+
+                        <button
+                          type="button"
+                          onClick={() => setStep(1)}
+                          className="flex items-center gap-2 text-sm font-medium text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
+                        >
+                          <ChevronLeft className="w-4 h-4" /> Back to Exam Details & Settings
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {isExam && step === 3 && (
+                  <div className="space-y-6">
+                    <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-700 p-5 grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                          Assignment Deadline
+                        </label>
+                        <input
+                          type="datetime-local"
+                          value={assignmentDeadline}
+                          onChange={(e) => setAssignmentDeadline(e.target.value)}
+                          className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500/40 outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                          Notes (Optional)
+                        </label>
+                        <input
+                          type="text"
+                          value={notes}
+                          onChange={(e) => setNotes(e.target.value)}
+                          placeholder="Instructions for students"
+                          className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500/40 outline-none"
+                        />
+                      </div>
+                    </div>
+
+                    <AssignStudentsStep
+                      students={students}
+                      selectedStudents={selectedStudents}
+                      setSelectedStudents={setSelectedStudents}
+                      filters={filters}
+                      setFilters={setFilters}
+                      availableBatches={availableBatches}
+                    />
+
+                    <button
+                      type="button"
+                      onClick={() => setStep(2)}
+                      className="flex items-center gap-2 text-sm font-medium text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
+                    >
+                      <ChevronLeft className="w-4 h-4" /> Back to Questions & Sets
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           </motion.div>

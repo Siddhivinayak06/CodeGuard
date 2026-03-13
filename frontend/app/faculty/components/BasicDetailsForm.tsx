@@ -18,6 +18,8 @@ interface BasicDetailsFormProps {
   setEnableLevels: (enable: boolean) => void;
   levels: Level[];
   isExam?: boolean;
+  showAssessmentControls?: boolean;
+  showNumberField?: boolean;
 }
 
 function cx(...parts: Array<string | false | null | undefined>) {
@@ -61,6 +63,8 @@ export default function BasicDetailsForm({
   setEnableLevels,
   levels,
   isExam,
+  showAssessmentControls = true,
+  showNumberField = true,
 }: BasicDetailsFormProps) {
   const [focusedField, setFocusedField] = useState<string | null>(null);
 
@@ -120,29 +124,31 @@ export default function BasicDetailsForm({
         transition={{ delay: 0.2 }}
         className="flex gap-4 mb-5"
       >
-        <div className="w-32 shrink-0">
-          <FormInput label={isExam ? "Exam No" : "Practical No"} required>
-            <input
-              type="number"
-              name="practical_number"
-              value={form.practical_number || ""}
-              onChange={handleInput}
-              onFocus={() => setFocusedField("practical_number")}
-              onBlur={() => setFocusedField(null)}
-              placeholder={(() => {
-                const selectedSubject = subjects.find(
-                  (s) => String(s.id) === String(form.subject_id)
-                );
-                return selectedSubject?.practical_count
-                  ? String(selectedSubject.practical_count + 1)
-                  : "1";
-              })()}
-              className={cx(getInputClass("practical_number"), "text-center font-bold")}
-              min={1}
-            />
-          </FormInput>
-        </div>
-        <div className="flex-1">
+        {showNumberField && (
+          <div className="w-32 shrink-0">
+            <FormInput label={isExam ? "Exam No" : "Practical No"} required>
+              <input
+                type="number"
+                name="practical_number"
+                value={form.practical_number || ""}
+                onChange={handleInput}
+                onFocus={() => setFocusedField("practical_number")}
+                onBlur={() => setFocusedField(null)}
+                placeholder={(() => {
+                  const selectedSubject = subjects.find(
+                    (s) => String(s.id) === String(form.subject_id)
+                  );
+                  return selectedSubject?.practical_count
+                    ? String(selectedSubject.practical_count + 1)
+                    : "1";
+                })()}
+                className={cx(getInputClass("practical_number"), "text-center font-bold")}
+                min={1}
+              />
+            </FormInput>
+          </div>
+        )}
+        <div className={showNumberField ? "flex-1" : "w-full"}>
           <FormInput label={isExam ? "Exam Title" : "Practical Title"} required>
             <input
               type="text"
@@ -200,82 +206,79 @@ export default function BasicDetailsForm({
         </FormInput>
       </motion.div>
 
-      {/* Row 3: Max Marks + Multi-Level Toggle */}
-      <motion.div
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.3 }}
-        className="flex flex-wrap items-end justify-between gap-4 pt-5 border-t border-gray-100 dark:border-gray-800"
-      >
-        <div className="w-36">
-          <FormInput label="Max Marks" required>
-            <input
-              type="number"
-              name="max_marks"
-              value={
-                enableLevels
-                  ? levels.reduce((sum, l) => sum + l.max_marks, 0)
-                  : (form.max_marks ?? "")
-              }
-              onChange={handleInput}
-              onFocus={() => setFocusedField("marks")}
-              onBlur={() => setFocusedField(null)}
-              disabled={enableLevels}
-              className={cx(
-                getInputClass("marks", enableLevels),
-                "text-center font-bold text-lg",
-              )}
-            />
-          </FormInput>
-        </div>
-
-        {/* Multi-Level Toggle - Enhanced */}
+      {showAssessmentControls && (
         <motion.div
-          whileHover={{ scale: 1.01 }}
-          className="flex items-center gap-4 px-5 py-3 bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-900/20 dark:to-orange-900/20 rounded-2xl border border-amber-200/50 dark:border-amber-700/50 shadow-sm"
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.3 }}
+          className="flex flex-wrap items-end justify-between gap-4 pt-5 border-t border-gray-100 dark:border-gray-800"
         >
-          <div className="flex items-center gap-2">
-            <motion.div
-              animate={{ rotate: enableLevels ? 360 : 0 }}
-              transition={{ duration: 0.5 }}
-            >
-              <Sparkles size={18} className="text-amber-600 dark:text-amber-400" />
-            </motion.div>
-            <div>
-              <span className="text-sm font-bold text-amber-800 dark:text-amber-200 block">
-                Multi-Level Mode
-              </span>
-              <span className="text-[10px] text-amber-600/70 dark:text-amber-400/70 block truncate w-32">
-                {levels.length > 0
-                  ? levels.slice(0, 2).map((l) => l.level).join(", ") +
-                  (levels.length > 2 ? ", ..." : "")
-                  : "Task 1, Task 2"}
-              </span>
-            </div>
+          <div className="w-36">
+            <FormInput label="Max Marks" required>
+              <input
+                type="number"
+                name="max_marks"
+                value={
+                  enableLevels
+                    ? levels.reduce((sum, l) => sum + l.max_marks, 0)
+                    : (form.max_marks ?? "")
+                }
+                onChange={handleInput}
+                onFocus={() => setFocusedField("marks")}
+                onBlur={() => setFocusedField(null)}
+                disabled={enableLevels}
+                className={cx(
+                  getInputClass("marks", enableLevels),
+                  "text-center font-bold text-lg",
+                )}
+              />
+            </FormInput>
           </div>
-          <motion.button
-            type="button"
-            onClick={() => setEnableLevels(!enableLevels)}
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            className={cx(
-              "relative inline-flex h-7 w-12 items-center rounded-full transition-all duration-300 shadow-inner",
-              enableLevels
-                ? "bg-gradient-to-r from-amber-500 to-orange-500 shadow-amber-500/30"
-                : "bg-gray-300 dark:bg-gray-600",
-            )}
+
+          <motion.div
+            whileHover={{ scale: 1.01 }}
+            className="flex items-center gap-4 px-5 py-3 bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-900/20 dark:to-orange-900/20 rounded-2xl border border-amber-200/50 dark:border-amber-700/50 shadow-sm"
           >
-            <motion.span
-              animate={{ x: enableLevels ? 22 : 3 }}
-              transition={{ type: "spring", stiffness: 500, damping: 30 }}
+            <div className="flex items-center gap-2">
+              <motion.div
+                animate={{ rotate: enableLevels ? 360 : 0 }}
+                transition={{ duration: 0.5 }}
+              >
+                <Sparkles size={18} className="text-amber-600 dark:text-amber-400" />
+              </motion.div>
+              <div>
+                <span className="text-sm font-bold text-amber-800 dark:text-amber-200 block">
+                  Multi-Level Mode
+                </span>
+                <span className="text-[10px] text-amber-600/70 dark:text-amber-400/70 block truncate w-32">
+                  {levels.length > 0
+                    ? levels.slice(0, 2).map((l) => l.level).join(", ") +
+                    (levels.length > 2 ? ", ..." : "")
+                    : "Task 1, Task 2"}
+                </span>
+              </div>
+            </div>
+            <motion.button
+              type="button"
+              onClick={() => setEnableLevels(!enableLevels)}
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
               className={cx(
-                "inline-block h-5 w-5 rounded-full shadow-md transition-colors",
-                enableLevels ? "bg-white" : "bg-white",
+                "relative inline-flex h-7 w-12 items-center rounded-full transition-all duration-300 shadow-inner",
+                enableLevels
+                  ? "bg-gradient-to-r from-amber-500 to-orange-500 shadow-amber-500/30"
+                  : "bg-gray-300 dark:bg-gray-600",
               )}
-            />
-          </motion.button>
+            >
+              <motion.span
+                animate={{ x: enableLevels ? 22 : 3 }}
+                transition={{ type: "spring", stiffness: 500, damping: 30 }}
+                className="inline-block h-5 w-5 rounded-full shadow-md transition-colors bg-white"
+              />
+            </motion.button>
+          </motion.div>
         </motion.div>
-      </motion.div>
+      )}
     </motion.div>
   );
 }

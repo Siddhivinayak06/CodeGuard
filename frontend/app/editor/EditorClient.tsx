@@ -272,6 +272,7 @@ int main() {
   } | null>(null);
   const [examSession, setExamSession] = useState<any>(null);
   const [examTimeRemaining, setExamTimeRemaining] = useState<number | null>(null); // ms
+  const [assignedSet, setAssignedSet] = useState<{ id: string; set_name: string; level_ids: number[] } | null>(null);
   const examTimerRef = useRef<NodeJS.Timeout | null>(null);
   const examAutoSubmittedRef = useRef(false);
   // userTestCases now include expectedOutput field by default (keeps parity with server)
@@ -287,7 +288,7 @@ int main() {
 
   // NEW: examples from test_cases table
   const [examplesFromDB, setExamplesFromDB] = useState<
-    Array<{ input: string; output: string }>
+    Array<{ input: string; output: string; level_id: number | null }>
   >([]);
 
   // Multi-level practical support
@@ -302,6 +303,34 @@ int main() {
     }>
   >([]);
   const [activeLevel, setActiveLevel] = useState<string>("Task 1");
+
+  const activeLevelId = useMemo(() => {
+    if (!hasLevelsParam) return null;
+    return practicalLevels.find((l) => l.level === activeLevel)?.id ?? null;
+  }, [hasLevelsParam, practicalLevels, activeLevel]);
+
+  const visibleExamplesFromDB = useMemo(() => {
+    if (!examplesFromDB.length) return [];
+
+    if (!hasLevelsParam) {
+      return examplesFromDB
+        .filter((ex) => ex.level_id === null)
+        .map(({ input, output }) => ({ input, output }));
+    }
+
+    if (activeLevelId === null) return [];
+
+    const taskScoped = examplesFromDB
+      .filter((ex) => ex.level_id === activeLevelId)
+      .map(({ input, output }) => ({ input, output }));
+
+    if (taskScoped.length > 0) return taskScoped;
+
+    // Backward compatibility for older rows that were stored without level_id.
+    return examplesFromDB
+      .filter((ex) => ex.level_id === null)
+      .map(({ input, output }) => ({ input, output }));
+  }, [examplesFromDB, hasLevelsParam, activeLevelId]);
 
   // Per-task code buffers: stores typed code for each task level
   const taskCodeMapRef = useRef<Record<string, string>>({});
@@ -383,6 +412,11 @@ int main() {
         setExamSession(res.data.session);
         setExamTimeRemaining(res.data.remainingMs);
         setHasExamStarted(true);
+
+        // Capture assigned question set (if any)
+        if (res.data.assignedSet) {
+          setAssignedSet(res.data.assignedSet);
+        }
 
         // Enter fullscreen if required
         if (res.data.examConfig?.require_fullscreen) {
@@ -694,7 +728,13 @@ int main() {
               starter_code: levelRef?.starter_code || fallbackRef?.starter_code || "",
             };
           });
-          setPracticalLevels(safeLevels);
+
+          // Filter levels by assigned question set (exam mode)
+          const filteredLevels = assignedSet?.level_ids?.length
+            ? safeLevels.filter((l: any) => assignedSet.level_ids.includes(l.id))
+            : safeLevels;
+
+          setPracticalLevels(filteredLevels);
 
           // Pre-populate taskCodeMap with starter codes for each level
           safeLevels.forEach((level: any) => {
@@ -703,10 +743,10 @@ int main() {
             }
           });
 
-          if (sorted.length > 0) {
-            setActiveLevel(sorted[0].level);
-            // Set initial code from the first level's starter code
-            const firstLevelRef = (allRefCodes as any[] || []).find((r: any) => r.level_id === sorted[0].id);
+          if (filteredLevels.length > 0) {
+            setActiveLevel(filteredLevels[0].level);
+            // Set initial code from the first visible level's starter code
+            const firstLevelRef = (allRefCodes as any[] || []).find((r: any) => r.level_id === filteredLevels[0].id);
             const starterToUse = firstLevelRef?.starter_code || fallbackRef?.starter_code;
             console.log("[EditorDebug] starterToUse:", starterToUse ? starterToUse.substring(0, 50) + "..." : "NONE");
             if (starterToUse) {
@@ -719,6 +759,33 @@ int main() {
     };
     fetchPractical();
   }, [practicalId, supabase, hasLevelsParam]);
+
+  // Re-filter levels when assignedSet arrives (handles race condition
+  // where exam/start response comes after levels are already loaded)
+  useEffect(() => {
+    if (!assignedSet?.level_ids?.length || practicalLevels.length === 0) return;
+
+    // Check if we need to filter — if any visible level is NOT in the set, filter.
+    const needsFilter = practicalLevels.some(
+      (l) => !assignedSet.level_ids.includes(l.id)
+    );
+    const currentVisible = needsFilter
+      ? practicalLevels.filter((l) => assignedSet.level_ids.includes(l.id))
+      : practicalLevels;
+
+    if (currentVisible.length > 0 && !currentVisible.find((l) => l.level === activeLevel)) {
+      setActiveLevel(currentVisible[0].level);
+      const starterForFirst = currentVisible[0].starter_code;
+      if (starterForFirst) {
+        setCode(starterForFirst);
+      }
+    }
+
+    if (needsFilter) {
+      const filtered = currentVisible;
+      setPracticalLevels(filtered);
+    }
+  }, [assignedSet, practicalLevels, activeLevel]);
 
   // ========================
   // Fetch examples (test_cases) from DB for this practical
@@ -734,7 +801,7 @@ int main() {
       try {
         const { data, error } = await supabase
           .from("test_cases")
-          .select("input, expected_output")
+          .select("input, expected_output, level_id")
           .eq("practical_id", Number(practicalId))
           .eq("is_hidden", false)
           .order("id", { ascending: true })
@@ -749,6 +816,7 @@ int main() {
           const mapped = (data || []).map((r: any) => ({
             input: r.input ?? "",
             output: r.expected_output ?? "",
+            level_id: r.level_id ?? null,
           }));
           setExamplesFromDB(mapped);
         }
@@ -1308,6 +1376,16 @@ int main() {
             </div>
           )}
 
+          {/* Assigned Set Badge */}
+          {isExamMode && assignedSet && (
+            <div className="flex items-center gap-1.5 px-3 py-2 rounded-xl border bg-indigo-100 dark:bg-indigo-900/30 border-indigo-300 dark:border-indigo-700 text-indigo-700 dark:text-indigo-400 text-sm font-bold">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+              </svg>
+              {assignedSet.set_name}
+            </div>
+          )}
+
           {/* User Info */}
           {user && (
             <div className="hidden lg:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-indigo-50/50 dark:bg-indigo-900/20 border border-indigo-100/50 dark:border-indigo-800/30">
@@ -1497,8 +1575,8 @@ int main() {
                     Examples
                   </h2>
                   <div className="space-y-4">
-                    {examplesFromDB && examplesFromDB.length > 0 ? (
-                      examplesFromDB.map((ex, idx) => (
+                    {visibleExamplesFromDB && visibleExamplesFromDB.length > 0 ? (
+                      visibleExamplesFromDB.map((ex, idx) => (
                         <motion.div
                           key={idx}
                           initial={{ opacity: 0, y: 8 }}
