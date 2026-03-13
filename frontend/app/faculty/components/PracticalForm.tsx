@@ -1303,7 +1303,7 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
         errors.push(`Set ${idx + 1} must have a name.`);
       }
       if (resolveSetLevels(set).length === 0) {
-        errors.push(`\"${set.set_name || `Set ${idx + 1}`}\" has no tasks created.`);
+        errors.push(`"${set.set_name || `Set ${idx + 1}`}" has no tasks created.`);
       }
     });
 

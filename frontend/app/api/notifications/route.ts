@@ -51,7 +51,7 @@ export async function GET(request: NextRequest) {
       ];
 
       // Batch query 1: Fetch all student_practicals for these practical_ids in ONE call
-      let spMap = new Map<string, any>();
+      const spMap = new Map<string, any>();
       if (practicalIds.length > 0) {
         const { data: spRecords } = await supabase
           .from("student_practicals")
@@ -84,7 +84,7 @@ export async function GET(request: NextRequest) {
             .filter(Boolean)
         ),
       ];
-      let subjectAssignmentsMap = new Map<string, any[]>();
+      const subjectAssignmentsMap = new Map<string, any[]>();
       if (subjectIds.length > 0) {
         const { data: allSubjectAssignments } = await supabase
           .from("student_practicals")
