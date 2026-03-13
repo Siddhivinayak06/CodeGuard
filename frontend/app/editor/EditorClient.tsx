@@ -203,6 +203,9 @@ export default function EditorClient() {
   // Exam mode params
   const isExamMode = searchParams?.get("isExam") === "true";
   const examIdParam = searchParams?.get("examId") || null;
+  const isUuidLike = (value: string | null) =>
+    !!value &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 
   // Starter templates for each language
   const starterTemplates: Record<string, string> = {
@@ -393,39 +396,137 @@ int main() {
   const [isFullscreenMode, setIsFullscreenMode] = useState(false);
   const [hasExamStarted, setHasExamStarted] = useState(false);
 
+  const proctoringStorageKey = useMemo(() => {
+    if (!isExamMode || !user?.id) return null;
+    if (examSession?.id) return `cg:exam:violations:${examSession.id}`;
+    if (isUuidLike(examIdParam)) return `cg:exam:violations:${user.id}:${examIdParam}`;
+    if (practicalId) return `cg:exam:violations:${user.id}:practical:${practicalId}`;
+    return null;
+  }, [isExamMode, user?.id, examSession?.id, examIdParam, practicalId]);
+
   // Proctoring Hook (Only active after exam starts)
   const { violations, locked } = useProctoring({
     active: hasExamStarted && !isSubmitted,
     maxViolations: examConfig?.max_violations ?? 3,
+    storageKey: proctoringStorageKey ?? undefined,
   });
 
   // ========================
   // Exam Mode: Start/Resume Session
   // ========================
   useEffect(() => {
-    if (!isExamMode || !examIdParam || !user) return;
+    if (!isExamMode || !user || (!examIdParam && !practicalId)) return;
 
     const startExamSession = async () => {
+      let effectiveExamId: string | null = examIdParam;
+
       try {
-        const res = await axios.post("/api/exam/start", { examId: examIdParam });
-        setExamConfig(res.data.examConfig);
-        setExamSession(res.data.session);
-        setExamTimeRemaining(res.data.remainingMs);
-        setHasExamStarted(true);
-
-        // Capture assigned question set (if any)
-        if (res.data.assignedSet) {
-          setAssignedSet(res.data.assignedSet);
+        // Backward compatibility: if URL carries non-UUID examId (e.g., practical id),
+        // resolve the real exam UUID using practical_id.
+        if (!isUuidLike(effectiveExamId) && practicalId) {
+          const { data: examRow } = await supabase
+            .from("exams")
+            .select("id")
+            .eq("practical_id", Number(practicalId))
+            .maybeSingle();
+          effectiveExamId = (examRow as any)?.id || null;
         }
 
-        // Enter fullscreen if required
-        if (res.data.examConfig?.require_fullscreen) {
-          try { await document.documentElement.requestFullscreen(); } catch { /* ignore */ }
+        if (!effectiveExamId) {
+          throw new Error("Missing examId");
         }
+
+        // 1) Prefer status endpoint first only for already-started sessions.
+        // For pre-created sessions (started_at=null), call /api/exam/start so backend
+        // initializes expires_at from exams.duration_minutes.
+        const statusRes = await axios.post(
+          "/api/exam/status",
+          { examId: effectiveExamId },
+          { validateStatus: () => true },
+        );
+
+        if (
+          statusRes.status === 200 &&
+          statusRes.data?.session &&
+          statusRes.data.session?.started_at
+        ) {
+          setExamConfig(statusRes.data.examConfig);
+          setExamSession(statusRes.data.session);
+          setExamTimeRemaining(statusRes.data.remainingMs);
+          setHasExamStarted(true);
+
+          if (statusRes.data.assignedSet) {
+            setAssignedSet(statusRes.data.assignedSet);
+          }
+
+          if (statusRes.data.examConfig?.require_fullscreen) {
+            try { await document.documentElement.requestFullscreen(); } catch { /* ignore */ }
+          }
+          return;
+        }
+
+        // Preserve assigned set from status for UI filtering while start call runs.
+        if (statusRes.status === 200 && statusRes.data?.assignedSet) {
+          setAssignedSet(statusRes.data.assignedSet);
+        }
+
+        // 2) No active session found -> attempt to start/resume exam session.
+        const startRes = await axios.post(
+          "/api/exam/start",
+          { examId: effectiveExamId },
+          { validateStatus: () => true },
+        );
+
+        if (startRes.status >= 200 && startRes.status < 300) {
+          setExamConfig(startRes.data.examConfig);
+          setExamSession(startRes.data.session);
+          setExamTimeRemaining(startRes.data.remainingMs);
+          setHasExamStarted(true);
+
+          if (startRes.data.assignedSet) {
+            setAssignedSet(startRes.data.assignedSet);
+          }
+
+          if (startRes.data.examConfig?.require_fullscreen) {
+            try { await document.documentElement.requestFullscreen(); } catch { /* ignore */ }
+          }
+          return;
+        }
+
+        // 3) Graceful non-throw handling for 4xx to avoid AxiosError in console.
+        const msg = startRes.data?.error || statusRes.data?.error || "Failed to start exam";
+        toast.error(msg);
+
+        // Keep assigned-set filtering available when status had it.
+        if (statusRes.data?.assignedSet) {
+          setAssignedSet(statusRes.data.assignedSet);
+        }
+
+        if (String(msg).toLowerCase().includes("already submitted")) {
+          setIsSubmitted(true);
+        }
+        return;
       } catch (err: any) {
         console.error("Failed to start exam:", err);
         const msg = err?.response?.data?.error || "Failed to start exam";
         toast.error(msg);
+
+        // Fallback: if start/status call path throws unexpectedly, fetch status once
+        // to capture assigned set and keep task filtering correct.
+        if (effectiveExamId) {
+          try {
+            const statusRes = await axios.post("/api/exam/status", { examId: effectiveExamId });
+            if (statusRes.data?.assignedSet) {
+              setAssignedSet(statusRes.data.assignedSet);
+            }
+            if (statusRes.data?.examConfig) {
+              setExamConfig(statusRes.data.examConfig);
+            }
+          } catch (statusErr) {
+            console.error("Failed to fetch exam status after start failure:", statusErr);
+          }
+        }
+
         if (msg.includes("already submitted")) {
           setIsSubmitted(true);
         }
@@ -433,7 +534,7 @@ int main() {
     };
 
     startExamSession();
-  }, [isExamMode, examIdParam, user]);
+  }, [isExamMode, examIdParam, user, practicalId, supabase]);
 
   // Exam countdown timer
   useEffect(() => {
@@ -888,8 +989,13 @@ int main() {
       setShowUserTestCases(false); // ← Add this line to switch to results tab
       console.log("Run results:", results);
     } catch (err: any) {
-      console.error(err);
-      toast.error(err?.response?.data?.error || "Error running code.");
+      const msg =
+        err?.response?.data?.executionError ||
+        err?.response?.data?.error ||
+        err?.message ||
+        "Error running code.";
+      console.warn("Run request failed:", msg);
+      toast.error(msg);
     } finally {
       setLoading(false);
     }
@@ -1038,6 +1144,16 @@ int main() {
       default:
         return "text-gray-400";
     }
+  };
+
+  const formatExamTime = (remainingMs: number) => {
+    const totalSeconds = Math.max(0, Math.floor(remainingMs / 1000));
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+    return `${hours.toString().padStart(2, "0")}:${minutes
+      .toString()
+      .padStart(2, "0")}:${seconds.toString().padStart(2, "0")}`;
   };
 
   // Structured sections from practical.description
@@ -1371,8 +1487,7 @@ int main() {
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
-              {Math.floor(examTimeRemaining / 60000).toString().padStart(2, '0')}:
-              {Math.floor((examTimeRemaining % 60000) / 1000).toString().padStart(2, '0')}
+              {formatExamTime(examTimeRemaining)}
             </div>
           )}
 
@@ -1734,6 +1849,7 @@ int main() {
                     code={code}
                     setCode={setCode}
                     disabled={locked}
+                    disableClipboardActions={true}
                     onSubmit={handleSubmit}
                     onRun={runCode}
                     onDownload={downloadPdf}

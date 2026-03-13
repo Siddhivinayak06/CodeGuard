@@ -75,6 +75,56 @@ async function fetchAssignedSet(supabase: any, assignedSetId: string | null) {
     };
 }
 
+async function reserveAttemptOnStart(
+    supabase: any,
+    userId: string,
+    practicalId: number,
+): Promise<{ ok: true } | { ok: false; status: number; error: string }> {
+    const { data: spRecord, error: spError } = await (supabase
+        .from("student_practicals") as any)
+        .select("id, attempt_count, max_attempts, is_locked, lock_reason")
+        .eq("student_id", userId)
+        .eq("practical_id", practicalId)
+        .maybeSingle();
+
+    if (spError || !spRecord) {
+        return { ok: false, status: 404, error: "Practical allocation not found" };
+    }
+
+    if (spRecord.is_locked) {
+        return {
+            ok: false,
+            status: 403,
+            error: spRecord.lock_reason || "Session locked by faculty.",
+        };
+    }
+
+    const attempts = Number(spRecord.attempt_count || 0);
+    const maxAttempts = Number(spRecord.max_attempts || 1);
+
+    if (attempts >= maxAttempts) {
+        return {
+            ok: false,
+            status: 403,
+            error: "You have no remaining attempts for this exam.",
+        };
+    }
+
+    const { error: updateErr } = await (supabase
+        .from("student_practicals") as any)
+        .update({
+            attempt_count: attempts + 1,
+            status: "in_progress",
+        })
+        .eq("id", spRecord.id);
+
+    if (updateErr) {
+        return { ok: false, status: 500, error: "Failed to reserve attempt" };
+    }
+
+    return { ok: true };
+}
+
 export async function POST(req: Request) {
     try {
         const supabase = await createClient();
@@ -130,6 +180,50 @@ export async function POST(req: Request) {
                 return NextResponse.json({ error: "You have already submitted this exam" }, { status: 400 });
             }
 
+            // Pre-assigned session created during faculty assignment: start it only when
+            // the student first opens the exam.
+            if (!existingSession.started_at) {
+                const reserveResult = await reserveAttemptOnStart(supabase, user.id, Number(exam.practical_id));
+                if (!reserveResult.ok) {
+                    return NextResponse.json({ error: reserveResult.error }, { status: reserveResult.status });
+                }
+
+                const startAt = new Date();
+                const computedExpiresAt = new Date(startAt.getTime() + exam.duration_minutes * 60 * 1000);
+                if (exam.end_time && computedExpiresAt > new Date(exam.end_time)) {
+                    computedExpiresAt.setTime(new Date(exam.end_time).getTime());
+                }
+
+                const assignedSetId = existingSession.assigned_set_id || (await pickSetRoundRobin(supabase, examId));
+
+                const { data: startedSession, error: startErr } = await (supabase
+                    .from("exam_sessions") as any)
+                    .update({
+                        started_at: startAt.toISOString(),
+                        expires_at: computedExpiresAt.toISOString(),
+                        is_active: true,
+                        assigned_set_id: assignedSetId,
+                    })
+                    .eq("id", existingSession.id)
+                    .select("*")
+                    .single();
+
+                if (startErr || !startedSession) {
+                    console.error("Failed to activate pre-assigned exam session:", startErr);
+                    return NextResponse.json({ error: "Failed to start exam" }, { status: 500 });
+                }
+
+                const remainingMs = Math.max(0, computedExpiresAt.getTime() - startAt.getTime());
+                const assignedSet = await fetchAssignedSet(supabase, assignedSetId);
+
+                return NextResponse.json({
+                    session: startedSession,
+                    remainingMs,
+                    examConfig,
+                    assignedSet,
+                });
+            }
+
             const expiresAt = new Date(existingSession.expires_at);
             const remainingMs = Math.max(0, expiresAt.getTime() - now.getTime());
 
@@ -145,6 +239,11 @@ export async function POST(req: Request) {
         }
 
         // --- Create new session ---
+
+        const reserveResult = await reserveAttemptOnStart(supabase, user.id, Number(exam.practical_id));
+        if (!reserveResult.ok) {
+            return NextResponse.json({ error: reserveResult.error }, { status: reserveResult.status });
+        }
 
         // Round-robin set assignment
         const assignedSetId = await pickSetRoundRobin(supabase, examId);

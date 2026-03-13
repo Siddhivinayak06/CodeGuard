@@ -748,7 +748,7 @@ export default function StudentPracticals() {
     }
   };
 
-  const handleStartPractical = (practical: FormattedPractical) => {
+  const handleStartPractical = async (practical: FormattedPractical) => {
     if (practical.is_locked) {
       toast.warning("This practical is locked. " + (practical.lock_reason || "Please complete the previous practical first."));
       return;
@@ -770,7 +770,18 @@ export default function StudentPracticals() {
       return;
     }
 
-    navigateToPractical(practical);
+    try {
+      const res = await axios.post("/api/practical/start", {
+        practicalId: practical.id,
+      });
+      if (!res.data?.success) {
+        toast.error(res.data?.error || "Unable to start practical");
+        return;
+      }
+      navigateToPractical(practical);
+    } catch (err: any) {
+      toast.error(err?.response?.data?.error || "Unable to start practical");
+    }
   };
 
   const navigateToPractical = (practical: FormattedPractical) => {
@@ -1630,9 +1641,9 @@ export default function StudentPracticals() {
               </Button>
               <Button
                 className="flex-1 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white"
-                onClick={() => {
+                onClick={async () => {
                   if (attemptWarning.practical) {
-                    navigateToPractical(attemptWarning.practical);
+                    await handleStartPractical(attemptWarning.practical);
                   }
                   setAttemptWarning({ show: false, practical: null });
                 }}

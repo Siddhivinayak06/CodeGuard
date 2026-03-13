@@ -45,6 +45,7 @@ interface CodeEditorProps {
   externalSetShowAssistant?: (show: boolean) => void;
   renderAssistantExternally?: boolean;
   onReset?: () => void;
+  disableClipboardActions?: boolean;
 }
 
 export default function CodeEditor({
@@ -76,6 +77,7 @@ export default function CodeEditor({
   externalSetShowAssistant,
   renderAssistantExternally = false,
   onReset,
+  disableClipboardActions = false,
 }: CodeEditorProps) {
   const { theme } = useTheme();
   const router = useRouter();
@@ -208,6 +210,39 @@ export default function CodeEditor({
     const domNode = editor.getDomNode();
     if (!domNode) return;
 
+    const shouldBlockClipboard =
+      () => disableClipboardActions && !isAiFeatureUnlockedRef.current;
+
+    const blockClipboardEvent = (event: Event) => {
+      if (!shouldBlockClipboard()) return;
+      event.preventDefault();
+      event.stopPropagation();
+      showToast("Clipboard actions are disabled!");
+    };
+
+    domNode.addEventListener("copy", blockClipboardEvent, true);
+    domNode.addEventListener("cut", blockClipboardEvent, true);
+    domNode.addEventListener("paste", blockClipboardEvent, true);
+
+    const pasteDisposable = editor.onDidPaste?.(() => {
+      if (!shouldBlockClipboard()) return;
+      showToast("Pasting is disabled!");
+      try {
+        editor.trigger("keyboard", "undo", null);
+      } catch (error) {
+        console.error("Failed to undo pasted content:", error);
+      }
+    });
+
+    const keyDownDisposable = editor.onKeyDown?.((e) => {
+      if (!shouldBlockClipboard()) return;
+      if ((e.ctrlKey || e.metaKey) && ["KeyV", "KeyC", "KeyX"].includes(e.code)) {
+        e.preventDefault();
+        e.stopPropagation();
+        showToast("Clipboard actions are disabled!");
+      }
+    });
+
     domNode.addEventListener("contextmenu", (e) => {
       e.preventDefault();
       if (!lockedRef.current) {
@@ -220,27 +255,14 @@ export default function CodeEditor({
       } else {
         showToast("Right-click disabled!");
       }
-      // disable paste via events
-      editor.onDidPaste?.(() => {
-        if (isAiFeatureUnlockedRef.current) return;
-        showToast("Pasting is disabled!");
-        try {
-          editor.trigger("keyboard", "undo", null);
-        } catch (error) {
-          console.error("Failed to format code:", error);
-        }
-      });
+    });
 
-      editor.onKeyDown?.((e) => {
-        if (isAiFeatureUnlockedRef.current) return;
-        if (
-          (e.ctrlKey || e.metaKey) &&
-          ["KeyV", "KeyC", "KeyX"].includes(e.code)
-        ) {
-          e.preventDefault();
-          showToast("Clipboard actions are disabled!");
-        }
-      });
+    editor.onDidDispose(() => {
+      domNode.removeEventListener("copy", blockClipboardEvent, true);
+      domNode.removeEventListener("cut", blockClipboardEvent, true);
+      domNode.removeEventListener("paste", blockClipboardEvent, true);
+      pasteDisposable?.dispose?.();
+      keyDownDisposable?.dispose?.();
     });
 
     // Disable some actions

@@ -265,6 +265,55 @@ export default function PracticalForm({
     return level.title?.trim() || level.level || `Task ${index + 1}`;
   }, []);
 
+  const resolveSetLevels = useCallback(
+    (setDraft?: QuestionSetDraft) => {
+      if (!setDraft) return [] as Array<{ level: Level; idx: number; name: string }>;
+
+      const resolved: Array<{ level: Level; idx: number; name: string }> = [];
+      const usedLevelIndices = new Set<number>();
+      const normalizedSetName = (setDraft.set_name || "").trim().toLowerCase();
+      const setTaskPrefix = normalizedSetName ? `${normalizedSetName} - task ` : "";
+
+      setDraft.level_names.forEach((taskName) => {
+        const normalizedTaskName = (taskName || "").trim().toLowerCase();
+        const matchedIndex = levels.findIndex((lvl, idx) => {
+          if (usedLevelIndices.has(idx)) return false;
+          const display = getLevelDisplayName(lvl, idx).trim().toLowerCase();
+          return display === normalizedTaskName;
+        });
+
+        if (matchedIndex >= 0) {
+          usedLevelIndices.add(matchedIndex);
+          resolved.push({
+            level: levels[matchedIndex],
+            idx: matchedIndex,
+            name: taskName,
+          });
+        }
+      });
+
+      // Backward compatibility: older drafts/data may have created levels that follow
+      // set naming but were not written into set.level_names.
+      if (setTaskPrefix) {
+        levels.forEach((lvl, idx) => {
+          if (usedLevelIndices.has(idx)) return;
+          const display = getLevelDisplayName(lvl, idx).trim().toLowerCase();
+          if (display.startsWith(setTaskPrefix)) {
+            usedLevelIndices.add(idx);
+            resolved.push({
+              level: lvl,
+              idx,
+              name: getLevelDisplayName(lvl, idx),
+            });
+          }
+        });
+      }
+
+      return resolved;
+    },
+    [levels, getLevelDisplayName],
+  );
+
   // Reset state when modal opens
   useEffect(() => {
     if (isOpen) {
@@ -586,15 +635,21 @@ export default function PracticalForm({
     const activeSet = questionSets[activeSetIdx];
     if (!activeSet) return;
 
-    const scopedLevels = levels.filter((lvl, idx) =>
-      activeSet.level_names.includes(getLevelDisplayName(lvl, idx))
-    );
+    const scopedLevels = resolveSetLevels(activeSet).map((item) => item.level);
 
     if (scopedLevels.length === 0) return;
     if (!scopedLevels.some((lvl) => lvl.level === activeLevel)) {
       setActiveLevel(scopedLevels[0].level);
     }
-  }, [isExam, step, enableLevels, questionSets, activeSetIdx, levels, activeLevel, getLevelDisplayName]);
+  }, [
+    isExam,
+    step,
+    enableLevels,
+    questionSets,
+    activeSetIdx,
+    activeLevel,
+    resolveSetLevels,
+  ]);
 
   // fetch students (with student_details) for assignment - filtered by selected subject's batches
   useEffect(() => {
@@ -925,7 +980,14 @@ export default function PracticalForm({
 
     const defaultSetName = `Set ${String.fromCharCode(65 + activeSetIdx)}`;
     const setName = activeSet.set_name?.trim() || defaultSetName;
-    const taskNumber = activeSet.level_names.length + 1;
+    const existingTaskNumbers = levels
+      .map((lvl, idx) => {
+        const display = getLevelDisplayName(lvl, idx);
+        const match = display.match(new RegExp(`^${setName.replace(/[.*+?^${}()|[\\]\\]/g, "\\$&")}\\s-\\sTask\\s(\\d+)$`));
+        return match ? Number(match[1]) : null;
+      })
+      .filter((n): n is number => typeof n === "number" && Number.isFinite(n));
+    const taskNumber = existingTaskNumbers.length > 0 ? Math.max(...existingTaskNumbers) + 1 : 1;
     const taskTitle = `${setName} - Task ${taskNumber}`;
     const internalLevelName = `Task ${levels.length + 1}`;
 
@@ -964,7 +1026,7 @@ export default function PracticalForm({
       )
     );
     setActiveLevel(internalLevelName);
-  }, [activeSetIdx, enableLevels, levels.length, practical?.id, questionSets]);
+  }, [activeSetIdx, enableLevels, levels, practical?.id, questionSets, getLevelDisplayName]);
 
   const removeTaskFromSet = useCallback((taskName: string) => {
     const levelToRemove = levels.find((lvl, idx) => getLevelDisplayName(lvl, idx) === taskName);
@@ -1240,13 +1302,13 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
       if (!set.set_name.trim()) {
         errors.push(`Set ${idx + 1} must have a name.`);
       }
-      if (set.level_names.length === 0) {
+      if (resolveSetLevels(set).length === 0) {
         errors.push(`\"${set.set_name || `Set ${idx + 1}`}\" has no tasks created.`);
       }
     });
 
     return errors;
-  }, [enableLevels, levels, questionSets, getLevelDisplayName]);
+  }, [enableLevels, levels, questionSets, resolveSetLevels]);
 
   const saveExamConfiguration = useCallback(async (practicalId: number) => {
     let examId: number | null = null;
@@ -1294,12 +1356,19 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
       levelIdByName.set(lvl.title || lvl.level, lvl.id);
     });
 
-    const setsPayload = questionSets.map((set) => ({
-      set_name: set.set_name,
-      level_ids: set.level_names
-        .map((name) => levelIdByName.get(name))
-        .filter((id): id is number => typeof id === "number"),
-    }));
+    const setsPayload = questionSets.map((set) => {
+      const resolvedItems = resolveSetLevels(set);
+      const resolvedNames = resolvedItems.map((item) =>
+        getLevelDisplayName(item.level, item.idx),
+      );
+
+      return {
+        set_name: set.set_name,
+        level_ids: resolvedNames
+          .map((name) => levelIdByName.get(name))
+          .filter((id): id is number => typeof id === "number"),
+      };
+    });
 
     const response = await fetch("/api/exam/sets", {
       method: "POST",
@@ -1317,6 +1386,8 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
     startTime,
     endTime,
     questionSets,
+    resolveSetLevels,
+    getLevelDisplayName,
   ]);
 
   // Save generic form components
@@ -1430,9 +1501,8 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
         }
 
         const setTotals = questionSets.map((set) =>
-          set.level_names.reduce((sum, levelName) => {
-            const matched = levels.find((lvl, idx) => getLevelDisplayName(lvl, idx) === levelName);
-            return sum + (matched?.max_marks || 0);
+          resolveSetLevels(set).reduce((sum, item) => {
+            return sum + (item.level.max_marks || 0);
           }, 0)
         );
 
@@ -1565,6 +1635,7 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
     enableLevels,
     questionSets,
     getLevelDisplayName,
+    resolveSetLevels,
     isExam,
     sampleCode,
     starterCode,
@@ -1814,46 +1885,99 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
       return;
     }
 
-    if (selectedStudents.length === 0) {
-      alert("Select at least one student to assign.");
-      return;
-    }
-
     setLoading(true);
-    let successCount = 0;
-    let skippedCount = 0;
+    let practicalsUpdated = 0;
+    let assignedCount = 0;
+    let removedCount = 0;
     let failCount = 0;
 
     try {
+      const selectedStudentIds = selectedStudents.map((s) => s.uid);
+
       // Assign each practical sequentially
       for (const item of itemsToAssign) {
         // Use assignmentDeadline state (which user might have edited in step 2)
         const deadlineToUse = assignmentDeadline || new Date().toISOString();
 
         try {
-          const response = await fetch("/api/admin/practicals/assign", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              practical_id: item.id,
-              student_ids: selectedStudents.map((s) => s.uid),
-              assigned_deadline: deadlineToUse,
-              notes,
-            }),
-          });
+          // 1) Fetch current assignments for this practical.
+          const currentResp = await fetch(
+            `/api/admin/practicals/assign?practical_id=${item.id}`,
+          );
+          const currentResult = await currentResp.json();
 
-          const result = await response.json();
-          if (result.success) {
-            successCount++;
-          } else {
-            const errorText = String(result?.error || "").toLowerCase();
-            if (errorText.includes("already assigned")) {
-              // Idempotent behavior: treat already-assigned as a non-fatal skip.
-              skippedCount++;
+          if (!currentResp.ok || !currentResult?.success) {
+            console.error(`Failed to load assignments for practical ${item.id}:`, currentResult?.error);
+            failCount++;
+            continue;
+          }
+
+          const currentAssignments: Array<{ id: number; student_id: string }> =
+            (currentResult?.data || []).map((row: any) => ({
+              id: Number(row.id),
+              student_id: String(row.student_id || ""),
+            }));
+
+          const currentStudentSet = new Set(
+            currentAssignments.map((row) => row.student_id),
+          );
+          const selectedStudentSet = new Set(selectedStudentIds);
+
+          const toAssign = selectedStudentIds.filter(
+            (studentId) => !currentStudentSet.has(studentId),
+          );
+
+          const toRemove = currentAssignments.filter(
+            (row) => !selectedStudentSet.has(row.student_id),
+          );
+
+          let itemChanged = false;
+
+          // 2) Assign newly selected students.
+          if (toAssign.length > 0) {
+            const addResp = await fetch("/api/admin/practicals/assign", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                practical_id: item.id,
+                student_ids: toAssign,
+                assigned_deadline: deadlineToUse,
+                notes,
+              }),
+            });
+
+            const addResult = await addResp.json();
+            if (addResp.ok && addResult?.success) {
+              assignedCount += toAssign.length;
+              itemChanged = true;
             } else {
-              console.error(`Failed to assign practical ${item.id}:`, result.error);
+              console.error(`Failed to assign practical ${item.id}:`, addResult?.error);
               failCount++;
             }
+          }
+
+          // 3) Remove students that were unselected.
+          for (const assignment of toRemove) {
+            const removeResp = await fetch(
+              `/api/admin/practicals/assign?assignment_id=${assignment.id}`,
+              { method: "DELETE" },
+            );
+
+            const removeResult = await removeResp.json();
+            if (removeResp.ok && removeResult?.success) {
+              removedCount += 1;
+              itemChanged = true;
+            } else {
+              console.error(
+                `Failed to remove assignment ${assignment.id} for practical ${item.id}:`,
+                removeResult?.error,
+              );
+              failCount++;
+            }
+          }
+
+          if (itemChanged) {
+            practicalsUpdated += 1;
           }
         } catch (err) {
           console.error(`Error assigning practical ${item.id}:`, err);
@@ -1861,23 +1985,22 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
         }
       }
 
-      if (successCount > 0) {
+      if (practicalsUpdated > 0) {
         alert(
-          `Assigned ${successCount} practicals successfully.` +
-          `${skippedCount > 0 ? ` ${skippedCount} already assigned.` : ""}` +
+          `Updated assignments for ${practicalsUpdated} practical(s). ` +
+          `${assignedCount} assigned, ${removedCount} removed.` +
           `${failCount > 0 ? ` ${failCount} failed.` : ""}`
         );
-        // Can't easily pass a single ID here since this is bulk assignment, but this step is skipped for singleStep anyway
         onSaved();
-      } else if (skippedCount > 0 && failCount === 0) {
-        alert(`All selected students were already assigned. (${skippedCount} practicals skipped)`);
+      } else if (failCount === 0) {
+        alert("No assignment changes detected.");
         onSaved();
       } else {
-        alert("Failed to assign practicals.");
+        alert("Failed to update some assignments.");
       }
     } catch (err) {
       console.error("Assign error:", err);
-      alert("Failed to assign practical.");
+      alert("Failed to update assignments.");
     } finally {
       setLoading(false);
     }
@@ -2605,11 +2728,12 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
                           <div className="space-y-2.5">
                             {questionSets.map((set, idx) => (
                               (() => {
-                                const setTotalMarks = set.level_names.reduce((sum, levelName) => {
-                                  const matched = levels.find((lvl, levelIdx) => getLevelDisplayName(lvl, levelIdx) === levelName);
-                                  return sum + (matched?.max_marks || 0);
-                                }, 0);
-                                const setTaskCount = set.level_names.length;
+                                const resolvedSetItems = resolveSetLevels(set);
+                                const setTotalMarks = resolvedSetItems.reduce(
+                                  (sum, item) => sum + (item.level.max_marks || 0),
+                                  0,
+                                );
+                                const setTaskCount = resolvedSetItems.length;
                                 return (
                                   <button
                                     key={`${set.set_name}-${idx}`}
@@ -2663,10 +2787,7 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
                           {enableLevels && (() => {
                             const setErrors = getSetValidationErrors();
                             const activeSet = questionSets[activeSetIdx];
-                            const assignedNames = activeSet?.level_names || [];
-                            const assignedLevels = levels
-                              .map((level, idx) => ({ level, idx, name: getLevelDisplayName(level, idx) }))
-                              .filter(({ name }) => assignedNames.includes(name));
+                            const assignedLevels = resolveSetLevels(activeSet);
 
                             return (
                               <div className="space-y-4">
@@ -2799,9 +2920,7 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
 
                         {enableLevels ? (() => {
                           const activeSet = questionSets[activeSetIdx];
-                          const scopedLevels = levels.filter((lvl, idx) =>
-                            activeSet?.level_names.includes(getLevelDisplayName(lvl, idx))
-                          );
+                          const scopedLevels = resolveSetLevels(activeSet).map((item) => item.level);
 
                           if (!activeSet || scopedLevels.length === 0) {
                             return (
@@ -2923,6 +3042,10 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
                           className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500/40 outline-none"
                         />
                       </div>
+                    </div>
+
+                    <div className="rounded-xl border border-indigo-200/70 dark:border-indigo-800/60 bg-indigo-50/70 dark:bg-indigo-900/20 px-4 py-3 text-sm text-indigo-800 dark:text-indigo-200">
+                      Assignment sync mode is enabled: selected students are assigned, unselected students are removed. For exams, each assigned student gets exactly one random question set (Set A/Set B/...).
                     </div>
 
                     <AssignStudentsStep

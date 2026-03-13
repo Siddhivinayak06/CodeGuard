@@ -147,6 +147,70 @@ export async function GET() {
       .map((d: any) => d.practicals?.id)
       .filter(Boolean);
 
+    // Resolve assigned set -> allowed level_ids per practical for this student.
+    const allowedLevelIdsByPractical = new Map<number, Set<number>>();
+    const examIdByPractical = new Map<number, string>();
+    if (practicalIds.length > 0) {
+      // exam per practical
+      const { data: examsData } = (await supabase
+        .from("exams")
+        .select("id, practical_id")
+        .in("practical_id", practicalIds)) as any as {
+          data: Array<{ id: string; practical_id: number }> | null;
+        };
+
+      const practicalByExamId = new Map<string, number>();
+      (examsData || []).forEach((row) => {
+        practicalByExamId.set(String(row.id), Number(row.practical_id));
+        examIdByPractical.set(Number(row.practical_id), String(row.id));
+      });
+
+      const examIds = Array.from(practicalByExamId.keys());
+      if (examIds.length > 0) {
+        const { data: sessionsData } = (await supabase
+          .from("exam_sessions")
+          .select("exam_id, assigned_set_id")
+          .eq("student_id", userId)
+          .in("exam_id", examIds)) as any as {
+            data: Array<{ exam_id: string; assigned_set_id: string | null }> | null;
+          };
+
+        const assignedSetByExamId = new Map<string, string>();
+        (sessionsData || []).forEach((row) => {
+          if (row.assigned_set_id) {
+            assignedSetByExamId.set(String(row.exam_id), String(row.assigned_set_id));
+          }
+        });
+
+        const assignedSetIds = Array.from(new Set(Array.from(assignedSetByExamId.values())));
+
+        if (assignedSetIds.length > 0) {
+          const { data: setLevelsData } = (await supabase
+            .from("exam_set_levels")
+            .select("question_set_id, level_id")
+            .in("question_set_id", assignedSetIds)) as any as {
+              data: Array<{ question_set_id: string; level_id: number }> | null;
+            };
+
+          const levelIdsBySetId = new Map<string, Set<number>>();
+          (setLevelsData || []).forEach((row) => {
+            const key = String(row.question_set_id);
+            const curr = levelIdsBySetId.get(key) || new Set<number>();
+            curr.add(Number(row.level_id));
+            levelIdsBySetId.set(key, curr);
+          });
+
+          assignedSetByExamId.forEach((setId, examId) => {
+            const practicalId = practicalByExamId.get(examId);
+            const allowed = levelIdsBySetId.get(setId);
+            if (practicalId && allowed && allowed.size > 0) {
+              allowedLevelIdsByPractical.set(practicalId, allowed);
+            }
+          });
+        }
+      }
+    }
+
     const scheduleMap = new Map();
     if (practicalIds.length > 0) {
       // Fetch schedules matching user batch
@@ -173,6 +237,13 @@ export async function GET() {
       const p = sp.practicals;
       const sub = submissionMap.get(p.id);
       const schedule = scheduleMap.get(p.id);
+      const examId = examIdByPractical.get(Number(p.id));
+      const allowedLevelIds = allowedLevelIdsByPractical.get(Number(p.id));
+      const visibleLevels = allowedLevelIds
+        ? (p.practical_levels || []).filter((lvl: any) =>
+            allowedLevelIds.has(Number(lvl.id)),
+          )
+        : (p.practical_levels || []);
 
       // Determine final status
       // Priority: Passed -> Completed (Manual) -> Submission Status -> Assigned Status
@@ -183,6 +254,7 @@ export async function GET() {
 
       return {
         id: p.id,
+        exam_id: examId,
         assignment_id: sp.id,
         practical_number: p.practical_number,
         title: p.title,
@@ -203,8 +275,8 @@ export async function GET() {
         subject_code: p.subjects?.subject_code,
         subject_semester: p.subjects?.semester,
         // Add levels
-        hasLevels: p.practical_levels && p.practical_levels.length > 0,
-        levels: p.practical_levels?.sort((a: any, b: any) => {
+        hasLevels: visibleLevels.length > 0,
+        levels: visibleLevels.sort((a: any, b: any) => {
           const order: Record<string, number> = { easy: 0, medium: 1, hard: 2 };
           return (order[a.level] || 0) - (order[b.level] || 0);
         }),

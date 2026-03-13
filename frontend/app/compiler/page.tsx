@@ -220,6 +220,7 @@ int main() {
                     code={code}
                     setCode={setCode}
                     disabled={locked}
+                    disableClipboardActions={true}
                     onRun={runCode}
                     onDownload={downloadPdf}
                     onSubmit={runCode}

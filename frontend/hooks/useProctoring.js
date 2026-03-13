@@ -1,15 +1,42 @@
 "use client";
 import { useEffect, useState, useRef } from "react";
 
+/**
+ * @param {{ active?: boolean; maxViolations?: number; storageKey?: string | null }} options
+ */
 export default function useProctoring({
   active = true,
   maxViolations = 3,
+  storageKey = null,
 } = {}) {
-  const [violations, setViolations] = useState(0);
+  const readStoredViolations = () => {
+    if (typeof window === "undefined" || !storageKey) return 0;
+    const raw = window.localStorage.getItem(storageKey);
+    const parsed = Number(raw);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+  };
+
+  const [violations, setViolations] = useState(readStoredViolations);
   const [locked, setLocked] = useState(false);
   const resizeTimeout = useRef(null);
   const lastViolationTime = useRef(0);
   const isGracePeriod = useRef(false);
+
+  const persistViolations = (count) => {
+    if (typeof window === "undefined" || !storageKey) return;
+    window.localStorage.setItem(storageKey, String(Math.max(0, count)));
+  };
+
+  useEffect(() => {
+    const restored = readStoredViolations();
+    setViolations(restored);
+    setLocked(restored >= maxViolations);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storageKey, maxViolations]);
+
+  useEffect(() => {
+    setLocked(violations >= maxViolations);
+  }, [violations, maxViolations]);
 
   useEffect(() => {
     if (!active) return;
@@ -32,6 +59,7 @@ export default function useProctoring({
 
       setViolations((prev) => {
         const newCount = prev + 1;
+        persistViolations(newCount);
         if (newCount >= maxViolations) setLocked(true);
         return newCount;
       });
@@ -71,5 +99,13 @@ export default function useProctoring({
     };
   }, [active, maxViolations]);
 
-  return { violations, locked };
+  const resetViolations = () => {
+    setViolations(0);
+    setLocked(false);
+    if (typeof window !== "undefined" && storageKey) {
+      window.localStorage.removeItem(storageKey);
+    }
+  };
+
+  return { violations, locked, resetViolations };
 }

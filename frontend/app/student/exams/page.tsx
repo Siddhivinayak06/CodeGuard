@@ -96,6 +96,7 @@ interface TestCaseResult {
 
 interface FormattedPractical {
   id: number;
+  exam_id?: string;
   subject_id: number | null;
   practical_id: number;
   practical_number?: number | null;
@@ -774,8 +775,12 @@ export default function StudentExams() {
   };
 
   const navigateToPractical = (practical: FormattedPractical) => {
+    const examParams = practical.exam_id
+      ? `&isExam=true&examId=${encodeURIComponent(practical.exam_id)}`
+      : "";
+
     router.push(
-      `/editor?practicalId=${practical.id}&subject=${practical.subject_id || 0}&language=${practical.language || "java"}${practical.hasLevels ? "&hasLevels=true" : ""}`,
+      `/editor?practicalId=${practical.id}&subject=${practical.subject_id || 0}&language=${practical.language || "java"}${practical.hasLevels ? "&hasLevels=true" : ""}${examParams}`,
     );
   };
 

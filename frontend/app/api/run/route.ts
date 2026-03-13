@@ -71,26 +71,53 @@ export async function POST(req: Request) {
 
     if (tcErr) console.error("Failed to fetch test cases:", tcErr);
 
-    // Fetch reference code - Use Admin client to bypass RLS if student is running
-    const { supabaseAdmin } = await import("@/lib/supabase/service");
+    // Fetch reference code. Prefer admin client, but gracefully fall back to standard client.
+    let refsData: any[] | null = null;
+    try {
+      const { supabaseAdmin } = await import("@/lib/supabase/service");
 
-    let { data: refsData } = (await supabaseAdmin
-      .from("reference_codes")
-      .select("id, language, code, is_primary, created_at")
-      .eq("practical_id", pid)
-      .eq("language", lang)
-      .limit(1)) as any as { data: any[] };
-
-    // If no language-specific match, fallback to primary/latest
-    if (!refsData || refsData.length === 0) {
-      const { data: fallbackData } = (await supabaseAdmin
+      const { data: primaryData } = (await supabaseAdmin
         .from("reference_codes")
         .select("id, language, code, is_primary, created_at")
         .eq("practical_id", pid)
-        .order("is_primary", { ascending: false })
-        .order("created_at", { ascending: false })
+        .eq("language", lang)
         .limit(1)) as any as { data: any[] };
-      refsData = fallbackData;
+
+      refsData = primaryData || [];
+
+      // If no language-specific match, fallback to primary/latest
+      if (!refsData || refsData.length === 0) {
+        const { data: fallbackData } = (await supabaseAdmin
+          .from("reference_codes")
+          .select("id, language, code, is_primary, created_at")
+          .eq("practical_id", pid)
+          .order("is_primary", { ascending: false })
+          .order("created_at", { ascending: false })
+          .limit(1)) as any as { data: any[] };
+        refsData = fallbackData || [];
+      }
+    } catch (refErr) {
+      console.warn("[Run API] Admin reference fetch failed, using regular client:", refErr);
+
+      const { data: primaryData } = (await supabase
+        .from("reference_codes")
+        .select("id, language, code, is_primary, created_at")
+        .eq("practical_id", pid)
+        .eq("language", lang)
+        .limit(1)) as any as { data: any[] };
+
+      refsData = primaryData || [];
+
+      if (!refsData || refsData.length === 0) {
+        const { data: fallbackData } = (await supabase
+          .from("reference_codes")
+          .select("id, language, code, is_primary, created_at")
+          .eq("practical_id", pid)
+          .order("is_primary", { ascending: false })
+          .order("created_at", { ascending: false })
+          .limit(1)) as any as { data: any[] };
+        refsData = fallbackData || [];
+      }
     }
 
     const refs = refsData || [];
@@ -139,6 +166,41 @@ export async function POST(req: Request) {
         throw new Error(`Runner error ${runnerRes.status}: ${text}`);
       }
       return await runnerRes.json();
+    };
+
+    const buildRunnerFailure = (
+      message: string,
+      currentBatch: any[],
+      currentMode: "run" | "submit",
+      source: "user" | "db" | "none",
+    ) => {
+      const results = (currentBatch || []).map((b: any) => ({
+        test_case_id: b?.id ?? 0,
+        status: "runtime_error",
+        input: b?.stdinInput ?? "",
+        expected: b?.expectedOutput ?? "",
+        stdout: "",
+        error: message,
+        is_hidden: b?.is_hidden ?? false,
+        time_ms: 0,
+        memory_kb: 0,
+      }));
+
+      const predefinedResults = results.filter(
+        (r: any) => !String(r.test_case_id).startsWith("user-"),
+      );
+
+      return NextResponse.json({
+        results,
+        verdict: "failed",
+        marksObtained: 0,
+        passedTestCases: 0,
+        totalTestCases: predefinedResults.length,
+        usedTestCaseSource: source,
+        raw_details: [],
+        executionError: message,
+        mode: currentMode,
+      });
     };
 
     // Prepare batch based on toggle and mode
@@ -260,10 +322,8 @@ export async function POST(req: Request) {
       });
     } catch (e: any) {
       console.error("Runner error:", e);
-      return NextResponse.json(
-        { error: e.message || "Runner failed" },
-        { status: 500 },
-      );
+      const runnerMessage = String(e?.message || "Runner failed").slice(0, 1200);
+      return buildRunnerFailure(runnerMessage, batch, mode, usedTestCaseSource);
     }
 
     const details = runnerResults.details ?? [];
@@ -429,29 +489,7 @@ export async function POST(req: Request) {
         marksObtained = total > 0 ? Math.round((passed / total) * maxMarks) : 0;
       }
 
-      // Always increment attempt_count on submission (outside shouldUpdate)
-      // Use admin client to bypass RLS policies on student_practicals
-      try {
-        // Reuse session user instead of making another auth call
-        const sid = studentId || session?.user?.id;
-        if (sid) {
-          const { data: spData } = (await supabaseAdmin
-            .from("student_practicals")
-            .select("id, attempt_count")
-            .eq("student_id", sid)
-            .eq("practical_id", pid)
-            .single()) as any;
-
-          if (spData) {
-            await (supabaseAdmin
-              .from("student_practicals") as any)
-              .update({ attempt_count: (spData.attempt_count || 0) + 1 })
-              .eq("id", spData.id);
-          }
-        }
-      } catch (e) {
-        console.error("Failed to increment attempt count:", e);
-      }
+      // attempt_count is consumed at start time (/api/practical/start or /api/exam/start).
     } else {
       passed = predefinedResults.filter(
         (r: any) => r.status === "passed",

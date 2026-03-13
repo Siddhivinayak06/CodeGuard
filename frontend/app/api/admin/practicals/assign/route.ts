@@ -187,6 +187,114 @@ export async function POST(request: Request) {
 
     if (error) throw error;
 
+    // If this practical is an exam, pre-assign one random question set per newly assigned student.
+    // This ensures Step 3 assignment locks one set per student before they open the editor.
+    try {
+      const { data: exam } = await (supabase
+        .from("exams") as any)
+        .select("id, duration_minutes, end_time")
+        .eq("practical_id", practical_id)
+        .maybeSingle();
+
+      if (exam?.id && newAssignments.length > 0) {
+        const { data: sets } = await (supabase
+          .from("exam_question_sets") as any)
+          .select("id")
+          .eq("exam_id", exam.id);
+
+        const setIds: string[] = (sets || []).map((s: any) => s.id);
+
+        if (setIds.length > 0) {
+          // Avoid duplicate exam_sessions for students who already have a session row.
+          const { data: existingSessions } = await (supabase
+            .from("exam_sessions") as any)
+            .select("student_id")
+            .eq("exam_id", exam.id)
+            .in("student_id", newAssignments);
+
+          const existingSessionStudentIds = new Set(
+            (existingSessions || []).map((row: any) => row.student_id),
+          );
+
+          const studentsWithoutSession = newAssignments.filter(
+            (studentId) => !existingSessionStudentIds.has(studentId),
+          );
+
+          if (studentsWithoutSession.length > 0) {
+            const fallbackExpiry = exam.end_time
+              ? new Date(exam.end_time).toISOString()
+              : new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString();
+
+            // Build current load per set so we can distribute students across sets fairly.
+            const { data: allExamSessions } = await (supabase
+              .from("exam_sessions") as any)
+              .select("assigned_set_id")
+              .eq("exam_id", exam.id)
+              .not("assigned_set_id", "is", null);
+
+            const setLoad = new Map<string, number>();
+            setIds.forEach((id) => setLoad.set(id, 0));
+            (allExamSessions || []).forEach((row: any) => {
+              const sid = String(row.assigned_set_id || "");
+              if (sid && setLoad.has(sid)) {
+                setLoad.set(sid, (setLoad.get(sid) || 0) + 1);
+              }
+            });
+
+            // Shuffle students first so allocation order is random for each run.
+            const shuffledStudents = [...studentsWithoutSession];
+            for (let i = shuffledStudents.length - 1; i > 0; i--) {
+              const j = Math.floor(Math.random() * (i + 1));
+              [shuffledStudents[i], shuffledStudents[j]] = [shuffledStudents[j], shuffledStudents[i]];
+            }
+
+            let previousPickedSetId: string | null = null;
+
+            const sessionRows = shuffledStudents.map((studentId) => {
+              const minLoad = Math.min(...Array.from(setLoad.values()));
+              const candidateSetIds = setIds.filter(
+                (id) => (setLoad.get(id) || 0) === minLoad,
+              );
+
+              // Prefer a different set than the immediately previous student when possible.
+              const preferredCandidateSetIds =
+                candidateSetIds.length > 1 && previousPickedSetId
+                  ? candidateSetIds.filter((id) => id !== previousPickedSetId)
+                  : candidateSetIds;
+
+              const pickedSetId =
+                preferredCandidateSetIds[Math.floor(Math.random() * preferredCandidateSetIds.length)] ||
+                setIds[Math.floor(Math.random() * setIds.length)];
+
+              setLoad.set(pickedSetId, (setLoad.get(pickedSetId) || 0) + 1);
+              previousPickedSetId = pickedSetId;
+
+              return {
+                exam_id: exam.id,
+                student_id: studentId,
+                // Session is pre-created but not started; exam/start will set started_at/expires_at.
+                started_at: null,
+                expires_at: fallbackExpiry,
+                is_active: true,
+                assigned_set_id: pickedSetId,
+              };
+            });
+
+            const { error: sessionInsertErr } = await (supabase
+              .from("exam_sessions") as any)
+              .insert(sessionRows);
+
+            if (sessionInsertErr) {
+              console.error("Failed to pre-create exam sessions:", sessionInsertErr);
+            }
+          }
+        }
+      }
+    } catch (examAssignErr) {
+      // Do not fail the practical assignment if exam set pre-assignment fails.
+      console.error("Exam set pre-assignment error:", examAssignErr);
+    }
+
     // Create notifications for assigned students
     try {
       const notifications = newAssignments.map((student_id) => ({
@@ -250,15 +358,11 @@ export async function GET(request: Request) {
       .select(
         `
         id,
+        student_id,
         assigned_deadline,
         status,
         notes,
-        assigned_at,
-        users!student_id (
-          uid,
-          name,
-          email
-        )
+        assigned_at
       `,
       )
       .eq("practical_id", Number(practicalId))
@@ -266,16 +370,43 @@ export async function GET(request: Request) {
 
     if (error) throw error;
 
-    const assignments = data.map((assignment: any) => ({
-      id: assignment.id,
-      student_id: assignment.users?.uid,
-      student_name: assignment.users?.name,
-      student_email: assignment.users?.email,
-      assigned_deadline: assignment.assigned_deadline,
-      status: assignment.status,
-      notes: assignment.notes,
-      assigned_at: assignment.assigned_at,
-    }));
+    const studentIds = Array.from(
+      new Set((data || []).map((assignment: any) => assignment.student_id).filter(Boolean)),
+    );
+
+    let studentById = new Map<string, { name: string | null; email: string | null }>();
+    if (studentIds.length > 0) {
+      const { data: usersData, error: usersError } = await supabase
+        .from("users")
+        .select("uid, name, email")
+        .in("uid", studentIds);
+
+      if (!usersError && usersData) {
+        studentById = new Map(
+          usersData.map((u: any) => [
+            String(u.uid),
+            {
+              name: u.name ?? null,
+              email: u.email ?? null,
+            },
+          ]),
+        );
+      }
+    }
+
+    const assignments = (data || []).map((assignment: any) => {
+      const studentInfo = studentById.get(String(assignment.student_id));
+      return {
+        id: assignment.id,
+        student_id: assignment.student_id,
+        student_name: studentInfo?.name ?? null,
+        student_email: studentInfo?.email ?? null,
+        assigned_deadline: assignment.assigned_deadline,
+        status: assignment.status,
+        notes: assignment.notes,
+        assigned_at: assignment.assigned_at,
+      };
+    });
 
     return NextResponse.json({ success: true, data: assignments });
   } catch (err: any) {
@@ -312,9 +443,34 @@ export async function DELETE(request: Request) {
       .from("student_practicals")
       .delete()
       .eq("id", Number(assignmentId))
-      .select();
+      .select("id, student_id, practical_id");
 
     if (error) throw error;
+
+    // If this assignment belongs to an exam practical, remove related exam session too.
+    try {
+      const deletedAssignment = (data || [])[0] as
+        | { student_id?: string; practical_id?: number }
+        | undefined;
+
+      if (deletedAssignment?.student_id && deletedAssignment?.practical_id) {
+        const { data: exam } = await (supabase
+          .from("exams") as any)
+          .select("id")
+          .eq("practical_id", deletedAssignment.practical_id)
+          .maybeSingle();
+
+        if (exam?.id) {
+          await (supabase
+            .from("exam_sessions") as any)
+            .delete()
+            .eq("exam_id", exam.id)
+            .eq("student_id", deletedAssignment.student_id);
+        }
+      }
+    } catch (cleanupErr) {
+      console.error("Error cleaning up exam session after assignment delete:", cleanupErr);
+    }
 
     return NextResponse.json({ success: true, deleted: data?.length ?? 0 });
   } catch (err: any) {

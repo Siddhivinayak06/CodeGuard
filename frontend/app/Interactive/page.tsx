@@ -459,6 +459,7 @@ export default function Home() {
                           handleFileChange(activeFileName, newCode)
                         }
                         disabled={false}
+                        disableClipboardActions={true}
                         onRun={() => {
                           setInteractiveOutput("");
                           setHasError(false); // Reset error state on run
