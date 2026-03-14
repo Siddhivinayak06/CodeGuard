@@ -4660,4 +4660,173 @@ ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "storage" GRANT ALL ON TA
 
 
 
+-- ---------------------------------------------------------------------------
+-- Post-dump hardening patch (manually curated)
+-- ---------------------------------------------------------------------------
+
+-- 1) Remove duplicate triggers
+DROP TRIGGER IF EXISTS set_timestamp_practicals ON public.practicals;
+DROP TRIGGER IF EXISTS set_timestamp_submissions ON public.submissions;
+DROP TRIGGER IF EXISTS set_timestamp_users ON public.users;
+
+-- 2) Remove duplicate indexes
+DROP INDEX IF EXISTS public.idx_student_practicals_practical;
+DROP INDEX IF EXISTS public.idx_student_practicals_student;
+DROP INDEX IF EXISTS public.idx_sfb_batch;
+DROP INDEX IF EXISTS public.idx_sfb_faculty;
+DROP INDEX IF EXISTS public.idx_sfb_subject;
+
+-- 3) Add integrity constraints
+ALTER TABLE public.exams
+    DROP CONSTRAINT IF EXISTS exams_duration_minutes_positive,
+    DROP CONSTRAINT IF EXISTS exams_max_violations_non_negative,
+    DROP CONSTRAINT IF EXISTS exams_valid_time_window;
+
+ALTER TABLE public.exams
+    ADD CONSTRAINT exams_duration_minutes_positive CHECK (duration_minutes > 0),
+    ADD CONSTRAINT exams_max_violations_non_negative CHECK (max_violations IS NULL OR max_violations >= 0),
+    ADD CONSTRAINT exams_valid_time_window CHECK (
+        start_time IS NULL OR end_time IS NULL OR end_time >= start_time
+    );
+
+ALTER TABLE public.schedules
+    DROP CONSTRAINT IF EXISTS schedules_valid_time_window;
+
+ALTER TABLE public.schedules
+    ADD CONSTRAINT schedules_valid_time_window CHECK (end_time > start_time);
+
+ALTER TABLE public.faculty_availability
+    DROP CONSTRAINT IF EXISTS faculty_availability_valid_time_window;
+
+ALTER TABLE public.faculty_availability
+    ADD CONSTRAINT faculty_availability_valid_time_window CHECK (end_time > start_time);
+
+ALTER TABLE public.student_practicals
+    DROP CONSTRAINT IF EXISTS student_practicals_attempt_count_non_negative,
+    DROP CONSTRAINT IF EXISTS student_practicals_max_attempts_positive,
+    DROP CONSTRAINT IF EXISTS student_practicals_attempt_count_within_limit;
+
+ALTER TABLE public.student_practicals
+    ADD CONSTRAINT student_practicals_attempt_count_non_negative CHECK (attempt_count >= 0),
+    ADD CONSTRAINT student_practicals_max_attempts_positive CHECK (max_attempts > 0),
+    ADD CONSTRAINT student_practicals_attempt_count_within_limit CHECK (attempt_count <= max_attempts);
+
+-- 4) RLS hardening for exam and reference-code domains
+DROP POLICY IF EXISTS "Allow authenticated manage exams" ON public.exams;
+DROP POLICY IF EXISTS "Allow authenticated manage exam_question_sets" ON public.exam_question_sets;
+DROP POLICY IF EXISTS "Allow authenticated manage exam_set_levels" ON public.exam_set_levels;
+DROP POLICY IF EXISTS "Allow authenticated manage exam_sessions" ON public.exam_sessions;
+DROP POLICY IF EXISTS "Allow authenticated users to manage reference_codes" ON public.reference_codes;
+
+DROP POLICY IF EXISTS "Exams select authenticated" ON public.exams;
+CREATE POLICY "Exams select authenticated"
+    ON public.exams
+    FOR SELECT
+    TO authenticated
+    USING (auth.role() = 'authenticated');
+
+DROP POLICY IF EXISTS "Exams manage by admin faculty" ON public.exams;
+CREATE POLICY "Exams manage by admin faculty"
+    ON public.exams
+    FOR ALL
+    TO authenticated
+    USING (public.is_admin() OR public.is_faculty())
+    WITH CHECK (public.is_admin() OR public.is_faculty());
+
+DROP POLICY IF EXISTS "Exam question sets select authenticated" ON public.exam_question_sets;
+CREATE POLICY "Exam question sets select authenticated"
+    ON public.exam_question_sets
+    FOR SELECT
+    TO authenticated
+    USING (auth.role() = 'authenticated');
+
+DROP POLICY IF EXISTS "Exam question sets manage by admin faculty" ON public.exam_question_sets;
+CREATE POLICY "Exam question sets manage by admin faculty"
+    ON public.exam_question_sets
+    FOR ALL
+    TO authenticated
+    USING (public.is_admin() OR public.is_faculty())
+    WITH CHECK (public.is_admin() OR public.is_faculty());
+
+DROP POLICY IF EXISTS "Exam set levels select authenticated" ON public.exam_set_levels;
+CREATE POLICY "Exam set levels select authenticated"
+    ON public.exam_set_levels
+    FOR SELECT
+    TO authenticated
+    USING (auth.role() = 'authenticated');
+
+DROP POLICY IF EXISTS "Exam set levels manage by admin faculty" ON public.exam_set_levels;
+CREATE POLICY "Exam set levels manage by admin faculty"
+    ON public.exam_set_levels
+    FOR ALL
+    TO authenticated
+    USING (public.is_admin() OR public.is_faculty())
+    WITH CHECK (public.is_admin() OR public.is_faculty());
+
+DROP POLICY IF EXISTS "Exam sessions select own or staff" ON public.exam_sessions;
+CREATE POLICY "Exam sessions select own or staff"
+    ON public.exam_sessions
+    FOR SELECT
+    TO authenticated
+    USING (
+        public.is_admin() OR public.is_faculty() OR student_id = auth.uid()
+    );
+
+DROP POLICY IF EXISTS "Exam sessions insert own or staff" ON public.exam_sessions;
+CREATE POLICY "Exam sessions insert own or staff"
+    ON public.exam_sessions
+    FOR INSERT
+    TO authenticated
+    WITH CHECK (
+        public.is_admin() OR public.is_faculty() OR student_id = auth.uid()
+    );
+
+DROP POLICY IF EXISTS "Exam sessions update own or staff" ON public.exam_sessions;
+CREATE POLICY "Exam sessions update own or staff"
+    ON public.exam_sessions
+    FOR UPDATE
+    TO authenticated
+    USING (
+        public.is_admin() OR public.is_faculty() OR student_id = auth.uid()
+    )
+    WITH CHECK (
+        public.is_admin() OR public.is_faculty() OR student_id = auth.uid()
+    );
+
+DROP POLICY IF EXISTS "Exam sessions delete staff only" ON public.exam_sessions;
+CREATE POLICY "Exam sessions delete staff only"
+    ON public.exam_sessions
+    FOR DELETE
+    TO authenticated
+    USING (public.is_admin() OR public.is_faculty());
+
+DROP POLICY IF EXISTS "Reference codes select authenticated" ON public.reference_codes;
+CREATE POLICY "Reference codes select authenticated"
+    ON public.reference_codes
+    FOR SELECT
+    TO authenticated
+    USING (auth.role() = 'authenticated');
+
+DROP POLICY IF EXISTS "Reference codes manage by admin faculty" ON public.reference_codes;
+CREATE POLICY "Reference codes manage by admin faculty"
+    ON public.reference_codes
+    FOR ALL
+    TO authenticated
+    USING (public.is_admin() OR public.is_faculty())
+    WITH CHECK (public.is_admin() OR public.is_faculty());
+
+-- 5) SECURITY DEFINER hardening
+ALTER FUNCTION public.create_notification(uuid, character varying, character varying, text, character varying, jsonb)
+    SET search_path = public, pg_temp;
+
+ALTER FUNCTION public.current_user_role()
+    SET search_path = public, pg_temp;
+
+ALTER FUNCTION public.handle_new_user()
+    SET search_path = public, pg_temp;
+
+REVOKE ALL ON FUNCTION public.create_notification(uuid, character varying, character varying, text, character varying, jsonb) FROM anon;
+
+
+
 
