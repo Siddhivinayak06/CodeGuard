@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useMemo, useRef } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import axios from "axios";
 import { Button } from "@/components/ui/button";
@@ -371,7 +371,6 @@ function FilterTabs({
 
 export default function StudentPracticals() {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const supabase = useMemo(() => createClient(), []);
   const mountedRef = useRef<boolean>(false);
 
@@ -710,7 +709,9 @@ export default function StudentPracticals() {
   }, [sequencedPracticals, activeFilter, searchQuery, selectedSubjectId]);
 
   useEffect(() => {
-    const practicalIdParam = searchParams.get("notificationPracticalId");
+    const practicalIdParam = new URLSearchParams(window.location.search).get(
+      "notificationPracticalId",
+    );
     if (!practicalIdParam) {
       setHighlightedPracticalId(null);
       return;
@@ -754,7 +755,7 @@ export default function StudentPracticals() {
       window.clearTimeout(scrollTimer);
       window.clearTimeout(clearTimer);
     };
-  }, [searchParams, sequencedPracticals]);
+  }, [sequencedPracticals]);
 
   // Handle View Result, Start Practical, Navigate...
   const handleViewResult = async (

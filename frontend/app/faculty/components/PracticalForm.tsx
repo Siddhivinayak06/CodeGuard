@@ -73,6 +73,15 @@ function taskPreview(text?: string | null) {
   if (cleaned.length <= 220) return cleaned;
   return `${cleaned.slice(0, 220)}...`;
 }
+function toLocalDateTimeInputValue(value?: string | null) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+
+  // datetime-local expects local wall time (no timezone suffix).
+  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+  return local.toISOString().slice(0, 16);
+}
 
 // ---------------------- Component ----------------------
 export default function PracticalForm({
@@ -196,7 +205,7 @@ export default function PracticalForm({
   const [students, setStudents] = useState<Student[]>([]);
   const [selectedStudents, setSelectedStudents] = useState<Student[]>([]);
   const [assignmentDeadline, setAssignmentDeadline] = useState<string>(
-    new Date().toISOString().slice(0, 16),
+    toLocalDateTimeInputValue(new Date().toISOString()),
   );
   const [notes, setNotes] = useState("");
   const [loading, setLoading] = useState(false);
@@ -519,15 +528,13 @@ export default function PracticalForm({
               setDurationMinutes(existingExam.duration_minutes || 60);
               setRequireFullscreen(existingExam.require_fullscreen ?? true);
               setStartTime(
-                existingExam.start_time
-                  ? new Date(existingExam.start_time).toISOString().slice(0, 16)
-                  : ""
+                toLocalDateTimeInputValue(existingExam.start_time)
               );
               setEndTime(
-                existingExam.end_time
-                  ? new Date(existingExam.end_time).toISOString().slice(0, 16)
-                  : ""
+                toLocalDateTimeInputValue(existingExam.end_time)
               );
+  setAssignmentDeadline(toLocalDateTimeInputValue(new Date().toISOString()));
+  setAssignmentDeadline(toLocalDateTimeInputValue(new Date().toISOString()));
 
               const setsRes = await fetch(`/api/exam/sets?examId=${existingExam.id}`);
               const setsJson = await setsRes.json();
@@ -2359,7 +2366,11 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
                           for (const item of resolvedItems) {
                             await saveExamConfiguration(item.id, { skipSetSync: true });
                           }
-                          setStep(2);
+                          if (singleStep) {
+                            onSaved(resolvedItems[0]?.id);
+                          } else {
+                            setStep(2);
+                          }
                         } catch (err: any) {
                           alert(err?.message || "Failed to save exam details.");
                         } finally {
