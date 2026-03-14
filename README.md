@@ -50,16 +50,24 @@
 
 ## 🗄️ Database Setup (Supabase)
 
-CodeGuard relies on a robust PostgreSQL schema protected by **44 Row Level Security (RLS) policies**.
+CodeGuard uses a Supabase PostgreSQL schema snapshot stored in [`supabase/remote_schema_dump.sql`](supabase/remote_schema_dump.sql).
 
-1.  **Locate the Schema**: The initialization script is located at [`database/init_schema.sql`](database/init_schema.sql).
-2.  **Initialize Database**:
-    - Go to your **Supabase Dashboard** → **SQL Editor**.
-    - Copy & paste the contents of `database/init_schema.sql`.
-    - Click **Run**.
-3.  **Structure**:
-    - **Tables**: Users, Practicals, Submissions, Test Cases, Grades, etc.
-    - **Security**: Granular RLS policies ensure strict data isolation between Students, Faculty, and Admins.
+1. **Locate the Schema**: Use [`supabase/remote_schema_dump.sql`](supabase/remote_schema_dump.sql).
+2. **Initialize Database**:
+   - Open **Supabase Dashboard** → **SQL Editor**.
+   - Paste the contents of `supabase/remote_schema_dump.sql`.
+   - Execute the script.
+3. **What it includes**:
+   - Core application tables (users, practicals, submissions, exams, schedules, notifications, etc.)
+   - Triggers and functions used by auth/session/submission flows
+   - RLS policies and grants for role-based access
+
+### Refreshing Schema Snapshot
+If the remote database structure changes, regenerate the snapshot from the linked Supabase project:
+
+```bash
+npx supabase db dump --linked --schema public,auth,storage --file supabase/remote_schema_dump.sql
+```
 
 ---
 
