@@ -50,6 +50,7 @@ export default function AllPracticalsPage() {
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [practicals, setPracticals] = useState<Practical[]>([]);
   const [user, setUser] = useState<any>(null);
+  const [deletingPracticalIds, setDeletingPracticalIds] = useState<Set<number>>(new Set());
 
   // Modal states
   const [modalOpen, setModalOpen] = useState(false);
@@ -157,63 +158,38 @@ export default function AllPracticalsPage() {
   const deletePractical = async (id: number) => {
     if (!confirm("Are you sure you want to delete this practical? This will also delete all submissions, test cases, levels, schedules, and reference codes.")) return;
 
+    if (deletingPracticalIds.has(id)) return;
+
+    const previousPracticals = practicals;
+    setDeletingPracticalIds((prev) => new Set(prev).add(id));
+    // Optimistic UI: remove immediately so the action feels instant.
+    setPracticals((prev) => prev.filter((p) => p.id !== id));
+
     try {
-      // Delete in FK dependency order (children first)
-
-      // 1. Delete test_case_results (depends on submissions + test_cases)
-      const { data: subIds } = await supabase
-        .from("submissions")
-        .select("id")
-        .eq("practical_id", id);
-      if (subIds && subIds.length > 0) {
-        await supabase
-          .from("test_case_results")
-          .delete()
-          .in("submission_id", (subIds as any[]).map(s => s.id));
-      }
-
-      // 2. Delete submissions
-      await supabase.from("submissions").delete().eq("practical_id", id);
-
-      // 3. Delete schedule_allocations (depends on schedules)
-      const { data: schedIds } = await supabase
+      // Keep schedule cleanup explicit; most related data is removed by DB cascades.
+      const { error: schedulesDeleteError } = await supabase
         .from("schedules")
-        .select("id")
+        .delete()
         .eq("practical_id", id);
-      if (schedIds && schedIds.length > 0) {
-        await supabase
-          .from("schedule_allocations")
-          .delete()
-          .in("schedule_id", (schedIds as any[]).map(s => s.id));
-      }
 
-      // 4. Delete schedules
-      await supabase.from("schedules").delete().eq("practical_id", id);
+      if (schedulesDeleteError) throw schedulesDeleteError;
 
-      // 5. Delete student_practicals
-      await supabase.from("student_practicals").delete().eq("practical_id", id);
+      const { error: practicalDeleteError } = await supabase
+        .from("practicals")
+        .delete()
+        .eq("id", id);
 
-      // 6. Delete reference_codes (depends on practical_levels)
-      await supabase.from("reference_codes").delete().eq("practical_id", id);
-
-      // 7. Delete test_cases (depends on practical_levels)
-      await supabase.from("test_cases").delete().eq("practical_id", id);
-
-      // 8. Delete practical_levels
-      await supabase.from("practical_levels").delete().eq("practical_id", id);
-
-      // 9. Finally delete the practical itself
-      const { error } = await supabase.from("practicals").delete().eq("id", id);
-
-      if (!error) {
-        setPracticals((prev) => prev.filter((p) => p.id !== id));
-      } else {
-        console.error("Failed to delete practical:", error);
-        alert("Failed to delete practical: " + error.message);
-      }
+      if (practicalDeleteError) throw practicalDeleteError;
     } catch (err: any) {
       console.error("Delete error:", err);
+      setPracticals(previousPracticals);
       alert("Failed to delete practical: " + (err?.message || "Unknown error"));
+    } finally {
+      setDeletingPracticalIds((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
     }
   };
 
@@ -291,6 +267,8 @@ export default function AllPracticalsPage() {
               practicals={practicals}
               subjects={subjects}
               onEdit={openEdit}
+              onDelete={deletePractical}
+              deletingPracticalIds={deletingPracticalIds}
             // onConfigureExam removed since exams are now separate
             />
           </motion.div>

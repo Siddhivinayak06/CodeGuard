@@ -33,7 +33,7 @@ export async function POST(req: Request) {
 
     const { data: spRecord, error: fetchError } = await supabase
       .from("student_practicals")
-      .select("id, attempt_count, max_attempts, is_locked, lock_reason")
+      .select("id, attempt_count, max_attempts, is_locked, lock_reason, status")
       .eq("student_id", user.id)
       .eq("practical_id", practicalId) // specific practical
       .single();
@@ -90,7 +90,7 @@ export async function POST(req: Request) {
         .insert({
           student_id: user.id,
           practical_id: practicalId,
-          status: "started",
+          status: "in_progress",
           attempt_count: 1,
           max_attempts: 1, // Default 1 attempt allowed
         } as never);
@@ -117,6 +117,12 @@ export async function POST(req: Request) {
     // Check attempts
     const attempts = (spRecord as any).attempt_count || 0;
     const max = (spRecord as any).max_attempts || 1;
+    const currentStatus = (spRecord as any).status;
+
+    // Idempotent start: if this attempt is already in progress, do not increment again.
+    if (currentStatus === "in_progress") {
+      return NextResponse.json({ success: true, attempt: attempts });
+    }
 
     if (attempts >= max) {
       return NextResponse.json(

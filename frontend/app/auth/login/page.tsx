@@ -29,6 +29,7 @@ export default function LoginPage() {
 }
 
 function LoginContent() {
+  const isProduction = process.env.NODE_ENV === "production";
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -403,24 +404,28 @@ function LoginContent() {
                   </motion.button>
                 </form>
 
-                {/* Divider */}
-                <div className="my-8 flex items-center gap-4">
-                  <div className="flex-1 h-px bg-gray-200 dark:bg-gray-800" />
-                  <span className="text-sm text-gray-500 font-medium">
-                    New here?
-                  </span>
-                  <div className="flex-1 h-px bg-gray-200 dark:bg-gray-800" />
-                </div>
+                {!isProduction && (
+                  <>
+                    {/* Divider */}
+                    <div className="my-8 flex items-center gap-4">
+                      <div className="flex-1 h-px bg-gray-200 dark:bg-gray-800" />
+                      <span className="text-sm text-gray-500 font-medium">
+                        New here?
+                      </span>
+                      <div className="flex-1 h-px bg-gray-200 dark:bg-gray-800" />
+                    </div>
 
-                {/* Register Link */}
-                <motion.div whileHover={{ scale: 1.02 }}>
-                  <Link
-                    href="/auth/register"
-                    className="block w-full py-4 px-6 rounded-xl btn-secondary text-center font-bold text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800/50 transition-colors shadow-md"
-                  >
-                    Create an Account
-                  </Link>
-                </motion.div>
+                    {/* Register Link */}
+                    <motion.div whileHover={{ scale: 1.02 }}>
+                      <Link
+                        href="/auth/register"
+                        className="block w-full py-4 px-6 rounded-xl btn-secondary text-center font-bold text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800/50 transition-colors shadow-md"
+                      >
+                        Create an Account
+                      </Link>
+                    </motion.div>
+                  </>
+                )}
               </motion.div>
             ) : (
               <motion.div

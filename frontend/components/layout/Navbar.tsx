@@ -208,7 +208,15 @@ export default function Navbar() {
                   alt="CodeGuard Logo"
                   width={140}
                   height={40}
-                  className="h-13 w-auto object-contain"
+                  className="h-13 w-auto object-contain dark:hidden"
+                  priority
+                />
+                <Image
+                  src="/CodeGuard_Dark_Logo.png"
+                  alt="CodeGuard Logo"
+                  width={140}
+                  height={40}
+                  className="hidden h-13 w-auto object-contain dark:block"
                   priority
                 />
               </div>

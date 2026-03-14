@@ -49,6 +49,7 @@ export default function AllPracticalsPage() {
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [practicals, setPracticals] = useState<Practical[]>([]);
   const [user, setUser] = useState<any>(null);
+  const [deletingPracticalIds, setDeletingPracticalIds] = useState<Set<number>>(new Set());
 
   // Modal states
   const [modalOpen, setModalOpen] = useState(false);
@@ -60,6 +61,97 @@ export default function AllPracticalsPage() {
   const [sampleCode, setSampleCode] = useState<string>("");
   const [starterCode, setStarterCode] = useState<string>("");
   const [sampleLanguage, setSampleLanguage] = useState<string>("c");
+
+  const enrichExamPracticals = async (rows: Practical[]) => {
+    try {
+      if (!rows || rows.length === 0) return rows;
+
+      const practicalIds = rows.map((p) => p.id);
+      const { data: examRows } = await supabase
+        .from("exams")
+        .select("id, practical_id, start_time, end_time")
+        .in("practical_id", practicalIds);
+
+      const { data: levelRows } = await supabase
+        .from("practical_levels")
+        .select("id, practical_id, level, title")
+        .in("practical_id", practicalIds)
+        .order("id", { ascending: true });
+
+      const examIdByPracticalId = new Map<number, string>();
+      const examTimeById = new Map<string, { start_time?: string | null; end_time?: string | null }>();
+
+      (examRows || []).forEach((row: any) => {
+        if (row?.practical_id && row?.id) {
+          const pid = Number(row.practical_id);
+          const examId = String(row.id);
+          examIdByPracticalId.set(pid, examId);
+          examTimeById.set(examId, {
+            start_time: row.start_time,
+            end_time: row.end_time,
+          });
+        }
+      });
+
+      const levelNameById = new Map<number, string>();
+      (levelRows || []).forEach((lvl: any, idx: number) => {
+        const id = Number(lvl.id);
+        const fallback = `Task ${idx + 1}`;
+        levelNameById.set(id, String(lvl?.title || lvl?.level || fallback));
+      });
+
+      const examIds = Array.from(examTimeById.keys());
+      let setRows: any[] = [];
+      if (examIds.length > 0) {
+        const { data } = await supabase
+          .from("exam_sets")
+          .select("exam_id, set_name, level_ids, set_order")
+          .in("exam_id", examIds)
+          .order("set_order", { ascending: true });
+        setRows = (data as any[]) || [];
+      }
+
+      const setCountByExamId = new Map<string, number>();
+      const setPreviewByExamId = new Map<string, string[]>();
+
+      setRows.forEach((row: any) => {
+        const examId = String(row.exam_id);
+        const setName = String(row.set_name || "Set");
+        const levelIds = Array.isArray(row.level_ids) ? row.level_ids : [];
+
+        setCountByExamId.set(examId, (setCountByExamId.get(examId) || 0) + 1);
+
+        const existing = setPreviewByExamId.get(examId) || [];
+        const previewLines = levelIds.map((levelId: any, idx: number) => {
+          const resolved = levelNameById.get(Number(levelId)) || `Task ${idx + 1}`;
+          return `${setName} - ${resolved}`;
+        });
+
+        setPreviewByExamId.set(examId, [...existing, ...previewLines]);
+      });
+
+      return rows.map((p) => {
+        const examId = examIdByPracticalId.get(p.id);
+        const examSetCount = examId ? (setCountByExamId.get(examId) || 0) : 0;
+        const examTimes = examId ? examTimeById.get(examId) : null;
+        const endTime = examTimes?.end_time || null;
+        const isOverdue = endTime ? new Date(endTime).getTime() < Date.now() : false;
+        const preview = examId ? (setPreviewByExamId.get(examId) || []) : [];
+
+        return {
+          ...p,
+          exam_set_count: examSetCount,
+          exam_start_time: examTimes?.start_time || null,
+          exam_end_time: endTime,
+          exam_is_overdue: isOverdue,
+          exam_set_preview: preview.slice(0, 4),
+        } as Practical;
+      });
+    } catch (err) {
+      console.error("Failed to enrich exam practicals:", err);
+      return rows;
+    }
+  };
 
   // Fetch data
   useEffect(() => {
@@ -99,7 +191,8 @@ export default function AllPracticalsPage() {
             .order("created_at", { ascending: false });
 
           if (pracData) {
-            setPracticals(pracData as Practical[]);
+            const enriched = await enrichExamPracticals(pracData as Practical[]);
+            setPracticals(enriched);
           }
         }
       }
@@ -121,7 +214,10 @@ export default function AllPracticalsPage() {
       .eq("is_exam", true)
       .order("created_at", { ascending: false });
 
-    if (data) setPracticals(data as Practical[]);
+    if (data) {
+      const enriched = await enrichExamPracticals(data as Practical[]);
+      setPracticals(enriched);
+    }
   };
 
   const openCreateExam = () => {
@@ -181,65 +277,34 @@ export default function AllPracticalsPage() {
   };
 
   const deletePractical = async (id: number) => {
-    if (!confirm("Are you sure you want to delete this practical? This will also delete all submissions, test cases, levels, schedules, and reference codes.")) return;
+    if (!confirm("Are you sure you want to delete this exam? This will permanently delete exam settings, question sets, assigned sessions, submissions, test cases, levels, schedules, and reference codes.")) return;
+
+    if (deletingPracticalIds.has(id)) return;
+
+    const previousPracticals = practicals;
+    setDeletingPracticalIds((prev) => new Set(prev).add(id));
+    // Optimistic UI: remove immediately so delete feels instant.
+    setPracticals((prev) => prev.filter((p) => p.id !== id));
 
     try {
-      // Delete in FK dependency order (children first)
+      const response = await fetch(`/api/admin/practicals?id=${id}`, {
+        method: "DELETE",
+      });
 
-      // 1. Delete test_case_results (depends on submissions + test_cases)
-      const { data: subIds } = await supabase
-        .from("submissions")
-        .select("id")
-        .eq("practical_id", id);
-      if (subIds && subIds.length > 0) {
-        await supabase
-          .from("test_case_results")
-          .delete()
-          .in("submission_id", (subIds as any[]).map(s => s.id));
-      }
-
-      // 2. Delete submissions
-      await supabase.from("submissions").delete().eq("practical_id", id);
-
-      // 3. Delete schedule_allocations (depends on schedules)
-      const { data: schedIds } = await supabase
-        .from("schedules")
-        .select("id")
-        .eq("practical_id", id);
-      if (schedIds && schedIds.length > 0) {
-        await supabase
-          .from("schedule_allocations")
-          .delete()
-          .in("schedule_id", (schedIds as any[]).map(s => s.id));
-      }
-
-      // 4. Delete schedules
-      await supabase.from("schedules").delete().eq("practical_id", id);
-
-      // 5. Delete student_practicals
-      await supabase.from("student_practicals").delete().eq("practical_id", id);
-
-      // 6. Delete reference_codes (depends on practical_levels)
-      await supabase.from("reference_codes").delete().eq("practical_id", id);
-
-      // 7. Delete test_cases (depends on practical_levels)
-      await supabase.from("test_cases").delete().eq("practical_id", id);
-
-      // 8. Delete practical_levels
-      await supabase.from("practical_levels").delete().eq("practical_id", id);
-
-      // 9. Finally delete the practical itself
-      const { error } = await supabase.from("practicals").delete().eq("id", id);
-
-      if (!error) {
-        setPracticals((prev) => prev.filter((p) => p.id !== id));
-      } else {
-        console.error("Failed to delete practical:", error);
-        alert("Failed to delete practical: " + error.message);
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok || !payload?.success) {
+        throw new Error(payload?.error || "Failed to delete exam");
       }
     } catch (err: any) {
       console.error("Delete error:", err);
+      setPracticals(previousPracticals);
       alert("Failed to delete practical: " + (err?.message || "Unknown error"));
+    } finally {
+      setDeletingPracticalIds((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
     }
   };
 
@@ -318,8 +383,10 @@ export default function AllPracticalsPage() {
               subjects={subjects}
               onEdit={openEdit}
               onAssign={openAssign}
+              onDelete={deletePractical}
               onConfigureExam={openEdit}
               isExamMode={true}
+              deletingPracticalIds={deletingPracticalIds}
             />
           </motion.div>
         </div>

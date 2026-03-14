@@ -97,6 +97,8 @@ interface TestCaseResult {
 interface FormattedPractical {
   id: number;
   exam_id?: string;
+  exam_start_time?: string | null;
+  exam_end_time?: string | null;
   subject_id: number | null;
   practical_id: number;
   practical_number?: number | null;
@@ -136,6 +138,13 @@ interface FormattedPractical {
 }
 
 type FilterType = "all" | "pending" | "overdue" | "completed";
+
+function hasExamEnded(practical: FormattedPractical) {
+  if (!practical.exam_end_time) return false;
+  const endTime = new Date(practical.exam_end_time);
+  if (Number.isNaN(endTime.getTime())) return false;
+  return Date.now() > endTime.getTime();
+}
 
 // ============================================================================
 // HELPER FUNCTIONS
@@ -750,6 +759,11 @@ export default function StudentExams() {
   };
 
   const handleStartPractical = (practical: FormattedPractical) => {
+    if (hasExamEnded(practical)) {
+      toast.error("This exam is closed.");
+      return;
+    }
+
     if (practical.is_locked) {
       toast.warning("This practical is locked. " + (practical.lock_reason || "Please complete the previous practical first."));
       return;
@@ -836,6 +850,8 @@ export default function StudentExams() {
     const isSubmitted = p.status === "submitted";
     const isUrgent = false;
     const showLocked = p.is_locked && !isDone && !isSubmitted;
+    const examClosed = hasExamEnded(p);
+    const hasNoAttemptsLeft = p.attempt_count >= p.max_attempts;
 
     // Status accent colors
     const accentMap: Record<string, string> = {
@@ -996,15 +1012,19 @@ export default function StudentExams() {
                 )}
                 size="sm"
                 onClick={() => handleStartPractical(p)}
-                disabled={p.is_locked}
+                disabled={p.is_locked || hasNoAttemptsLeft || examClosed}
               >
                 <span className="flex items-center gap-2">
                   {p.is_locked
                     ? "Locked"
+                    : examClosed
+                      ? "Closed"
+                    : hasNoAttemptsLeft
+                      ? "Attempts Exhausted"
                     : p.status === "in_progress"
                       ? "Continue Exam"
                       : "Start Exam"}
-                  {!p.is_locked && (
+                  {!p.is_locked && !hasNoAttemptsLeft && !examClosed && (
                     <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
                   )}
                 </span>
@@ -1105,6 +1125,7 @@ export default function StudentExams() {
     const isDone = ["passed", "failed", "completed"].includes(p.status);
     const isSubmitted = p.status === "submitted";
     const isUrgent = false;
+    const examClosed = hasExamEnded(p);
 
     return (
       <motion.div
@@ -1179,7 +1200,7 @@ export default function StudentExams() {
               <div className="flex gap-2">
                 {/* Retry Button - Show if attempts are available */}
                 {p.status === "failed" && p.attempt_count < p.max_attempts && (
-                  <Button size="icon" variant="outline" className="w-8 h-8 text-orange-600 border-orange-200 bg-orange-50/50" onClick={() => handleStartPractical(p)} disabled={p.is_locked}>
+                  <Button size="icon" variant="outline" className="w-8 h-8 text-orange-600 border-orange-200 bg-orange-50/50" onClick={() => handleStartPractical(p)} disabled={p.is_locked || examClosed}>
                     <RefreshCw className="w-3.5 h-3.5" />
                   </Button>
                 )}
@@ -1208,10 +1229,10 @@ export default function StudentExams() {
               size="sm"
               className={cn("h-8 text-xs px-4", isUrgent ? "bg-red-600 hover:bg-red-700" : "bg-indigo-600 hover:bg-indigo-700")}
               onClick={() => handleStartPractical(p)}
-              disabled={p.is_locked}
+              disabled={p.is_locked || examClosed}
             >
-              {p.is_locked ? "Locked" : "Start"}
-              {!p.is_locked && <ArrowRight className="w-3 h-3 ml-1.5" />}
+              {p.is_locked ? "Locked" : examClosed ? "Closed" : "Start"}
+              {!p.is_locked && !examClosed && <ArrowRight className="w-3 h-3 ml-1.5" />}
             </Button>
           )}
         </div>
@@ -1637,7 +1658,17 @@ export default function StudentExams() {
                 className="flex-1 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white"
                 onClick={() => {
                   if (attemptWarning.practical) {
-                    navigateToPractical(attemptWarning.practical);
+                    const latestPractical = practicals.find(
+                      (p) => p.id === attemptWarning.practical?.id,
+                    );
+                    const target = latestPractical || attemptWarning.practical;
+                    const remainingAttempts = target.max_attempts - target.attempt_count;
+
+                    if (remainingAttempts <= 0) {
+                      toast.error("You have no remaining attempts for this exam.");
+                    } else {
+                      navigateToPractical(target);
+                    }
                   }
                   setAttemptWarning({ show: false, practical: null });
                 }}

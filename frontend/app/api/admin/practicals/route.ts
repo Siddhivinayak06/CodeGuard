@@ -3,6 +3,26 @@ import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
+function isMissingRelationError(err: any) {
+  const code = err?.code;
+  const message = String(err?.message || "").toLowerCase();
+  return (
+    code === "42P01" ||
+    code === "PGRST205" ||
+    message.includes("does not exist") ||
+    message.includes("could not find the table") ||
+    message.includes("schema cache")
+  );
+}
+
+async function swallowMissingRelation<T>(op: () => Promise<{ data?: T; error?: any }>) {
+  const result = await op();
+  if (result?.error && !isMissingRelationError(result.error)) {
+    throw result.error;
+  }
+  return result;
+}
+
 /** Check if current user is faculty or admin */
 async function isFacultyOrAdmin(supabase: any) {
   try {
@@ -211,10 +231,71 @@ export async function DELETE(request: Request) {
       );
     }
 
+    const practicalId = Number(id);
+
+    // 1) Cleanup exam-related data explicitly (supports both schema variants).
+    const { data: examsData } = await swallowMissingRelation(() =>
+      (supabase.from("exams") as any)
+        .select("id")
+        .eq("practical_id", practicalId),
+    );
+
+    const examIds = ((examsData as any[]) || []).map((e) => String(e.id));
+
+    if (examIds.length > 0) {
+      await swallowMissingRelation(() =>
+        (supabase.from("exam_sessions") as any)
+          .delete()
+          .in("exam_id", examIds),
+      );
+
+      // Normalized schema: exam_question_sets + exam_set_levels
+      const { data: questionSetsData } = await swallowMissingRelation(() =>
+        (supabase.from("exam_question_sets") as any)
+          .select("id")
+          .in("exam_id", examIds),
+      );
+
+      const questionSetIds = ((questionSetsData as any[]) || []).map((s) => String(s.id));
+      if (questionSetIds.length > 0) {
+        await swallowMissingRelation(() =>
+          (supabase.from("exam_set_levels") as any)
+            .delete()
+            .in("question_set_id", questionSetIds),
+        );
+      }
+
+      await swallowMissingRelation(() =>
+        (supabase.from("exam_question_sets") as any)
+          .delete()
+          .in("exam_id", examIds),
+      );
+
+      // Legacy schema: exam_sets
+      await swallowMissingRelation(() =>
+        (supabase.from("exam_sets") as any)
+          .delete()
+          .in("exam_id", examIds),
+      );
+
+      await swallowMissingRelation(() =>
+        (supabase.from("exams") as any)
+          .delete()
+          .in("id", examIds),
+      );
+    }
+
+    // 2) Cleanup schedules explicitly (FK is ON DELETE SET NULL in base schema).
+    await swallowMissingRelation(() =>
+      (supabase.from("schedules") as any)
+        .delete()
+        .eq("practical_id", practicalId),
+    );
+
     const { data, error } = await supabase
       .from("practicals")
       .delete()
-      .eq("id", Number(id))
+      .eq("id", practicalId)
       .select();
     if (error) throw error;
 

@@ -60,6 +60,8 @@ export default function FacultySubjects() {
   const [editingPractical, setEditingPractical] = useState<Practical | null>(
     null,
   );
+  const [modalIsExam, setModalIsExam] = useState(false);
+  const [formInitialStep, setFormInitialStep] = useState(1);
   const [sampleCode, setSampleCode] = useState<string>(""); // initial sample code
   const [starterCode, setStarterCode] = useState<string>("");
   const [sampleLanguage, setSampleLanguage] = useState<string>("c");
@@ -212,7 +214,7 @@ export default function FacultySubjects() {
       try {
         const { data, error } = await supabase
           .from("practicals")
-          .select(`id, title, submissions(id)`)
+          .select(`id, title, is_exam, created_at, submissions(id)`)
           .eq("subject_id", Number(subjectId))
           .order("created_at", { ascending: false });
 
@@ -226,13 +228,14 @@ export default function FacultySubjects() {
           language: null,
           max_marks: 0,
           practical_number: null,
-          created_at: new Date().toISOString(),
+          created_at: p.created_at || new Date().toISOString(),
           updated_at: new Date().toISOString(),
           submitted: false,
-          is_exam: false,
+          is_exam: Boolean(p.is_exam),
           subject_id: Number(subjectId),
           submission_count: p.submissions?.length || 0,
-        }));
+        }))
+          .sort((a, b) => Number(Boolean(b.is_exam)) - Number(Boolean(a.is_exam)));
 
         setPracticals(formatted);
       } catch (err) {
@@ -285,6 +288,8 @@ export default function FacultySubjects() {
 
   const openNewPractical = () => {
     setEditingPractical(null);
+    setModalIsExam(false);
+    setFormInitialStep(1);
     setSampleCode("");
     setStarterCode("");
     setSampleLanguage("c");
@@ -302,6 +307,8 @@ export default function FacultySubjects() {
         .single();
       if (error) throw error;
       setEditingPractical(data as Practical);
+      setModalIsExam(Boolean((data as any).is_exam));
+      setFormInitialStep(1);
 
       // load sample/starter code from your DB
       const { data: refsData } = await supabase
@@ -327,6 +334,8 @@ export default function FacultySubjects() {
   const handleModalClose = () => {
     setShowPracticalModal(false);
     setEditingPractical(null);
+    setModalIsExam(false);
+    setFormInitialStep(1);
     setImportedPracticals([]);
   };
 
@@ -357,6 +366,8 @@ export default function FacultySubjects() {
     0,
   );
   const selectedSubject = subjects.find((s) => s.id === selected);
+  const examCount = practicals.filter((p) => Boolean((p as any).is_exam)).length;
+  const practicalCount = practicals.length - examCount;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50 dark:from-gray-950 dark:via-purple-950/20 dark:to-blue-950/20">
@@ -540,9 +551,17 @@ export default function FacultySubjects() {
                     {selectedSubject?.subject_name || "Select a subject"}
                   </h2>
                   <p className="text-sm text-gray-500 mt-0.5">
-                    Managing {practicals.length} practical
+                    Managing {practicals.length} item
                     {practicals.length !== 1 ? "s" : ""}
                   </p>
+                  <div className="mt-2 flex items-center gap-2">
+                    <span className="inline-flex items-center px-2.5 py-1 text-xs font-semibold rounded-md bg-gray-100 text-gray-700 border border-gray-200 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-700">
+                      Practicals: {practicalCount}
+                    </span>
+                    <span className="inline-flex items-center px-2.5 py-1 text-xs font-semibold rounded-md bg-orange-100 text-orange-700 border border-orange-200 dark:bg-orange-900/30 dark:text-orange-300 dark:border-orange-800">
+                      Exams: {examCount}
+                    </span>
+                  </div>
                 </div>
                 {selectedSubject && (
                   <button
@@ -589,17 +608,29 @@ export default function FacultySubjects() {
                 ) : (
                   <div className="space-y-2">
                     {practicals.map((p) => {
+                      const isExam = Boolean((p as any).is_exam);
 
                       return (
                         <div
                           key={p.id}
-                          className="flex items-center justify-between p-4 bg-white dark:bg-gray-800/60 border border-gray-100 dark:border-gray-700/50 rounded-xl hover:shadow-md hover:border-indigo-200 dark:hover:border-indigo-800/50 transition-all"
+                          className={`flex items-center justify-between p-4 border rounded-xl transition-all ${
+                            isExam
+                              ? "bg-orange-50/70 dark:bg-orange-900/10 border-orange-200 dark:border-orange-800/60 hover:shadow-md hover:border-orange-300 dark:hover:border-orange-700"
+                              : "bg-white dark:bg-gray-800/60 border-gray-100 dark:border-gray-700/50 hover:shadow-md hover:border-indigo-200 dark:hover:border-indigo-800/50"
+                          }`}
                         >
                           {/* Left: Title & Deadline */}
                           <div className="flex-1 min-w-0">
-                            <h4 className="font-semibold text-gray-900 dark:text-white truncate">
-                              {p.title}
-                            </h4>
+                            <div className="flex items-center gap-2 min-w-0">
+                              <h4 className="font-semibold text-gray-900 dark:text-white truncate">
+                                {p.title}
+                              </h4>
+                              {isExam && (
+                                <span className="inline-flex items-center px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide rounded-md bg-orange-100 text-orange-700 border border-orange-200 dark:bg-orange-900/30 dark:text-orange-300 dark:border-orange-800">
+                                  Exam
+                                </span>
+                              )}
+                            </div>
                             <div className="flex items-center gap-2 mt-1">
                               <span className="text-xs font-medium text-gray-500">
                                 Created: {new Date(p.created_at).toLocaleDateString()}
@@ -636,8 +667,12 @@ export default function FacultySubjects() {
                             </button>
                             <button
                               onClick={() => openEditPractical(p.id)}
-                              className="p-2 text-gray-400 hover:text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-900/20 rounded-lg transition-colors"
-                              title="Edit"
+                              className={`p-2 rounded-lg transition-colors ${
+                                isExam
+                                  ? "text-gray-400 hover:text-orange-600 hover:bg-orange-50 dark:hover:bg-orange-900/20"
+                                  : "text-gray-400 hover:text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-900/20"
+                              }`}
+                              title={isExam ? "Edit Exam" : "Edit Practical"}
                             >
                               <Pencil className="w-4 h-4" />
                             </button>
@@ -677,6 +712,8 @@ export default function FacultySubjects() {
         onSaved={handleSaved}
         defaultSubjectId={selected}
         initialDrafts={importedPracticals}
+        isExam={modalIsExam}
+        initialStep={formInitialStep}
       />
 
       <BulkImportModal

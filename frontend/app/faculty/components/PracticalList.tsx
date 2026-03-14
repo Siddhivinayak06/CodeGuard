@@ -115,6 +115,7 @@ function PracticalCard({
   onDelete,
   onAssign,
   onConfigureExam,
+  isDeleting,
 }: {
   practical: Practical;
   subject: string;
@@ -122,12 +123,34 @@ function PracticalCard({
   onDelete?: (id: number) => void;
   onAssign?: (id: number) => void;
   onConfigureExam?: (p: Practical) => void;
+  isDeleting?: boolean;
 }) {
+  const [menuOpen, setMenuOpen] = useState(false);
   const status = "active";
+  const isExam = Boolean((practical as any).is_exam);
+  const examSetPreview = Array.isArray((practical as any).exam_set_preview)
+    ? ((practical as any).exam_set_preview as string[])
+    : [];
+  const examSetCount = typeof (practical as any).exam_set_count === "number"
+    ? Number((practical as any).exam_set_count)
+    : 0;
+  const examEndTime = (practical as any).exam_end_time as string | null | undefined;
+  const examIsOverdue = Boolean((practical as any).exam_is_overdue);
+
+  const formatDate = (value?: string | null) => {
+    if (!value) return "";
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return "";
+    return d.toLocaleDateString("en-IN", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+    });
+  };
 
   const statusConfig = {
     active: {
-      bg: "bg-white dark:bg-gray-900 border-l-4 border-l-indigo-500",
+      bg: "bg-white dark:bg-gray-900",
       text: "text-gray-900 dark:text-white",
       badge: "bg-indigo-50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-400 border-indigo-200 dark:border-indigo-800",
       border: "border-indigo-100 dark:border-indigo-900/30",
@@ -137,30 +160,30 @@ function PracticalCard({
   };
 
   const config = statusConfig[status];
+  const accentGradient = isExam
+    ? "bg-gradient-to-r from-orange-500 via-rose-500 to-fuchsia-500"
+    : "bg-gradient-to-r from-indigo-500 via-violet-500 to-blue-500";
 
   return (
     <article
       tabIndex={0}
       className={cn(
-        "group relative flex flex-col p-6 rounded-xl transition-all duration-300",
-        "bg-white dark:bg-gray-900 border shadow-sm hover:shadow-lg hover:-translate-y-1",
-        config.bg, // Apply left border
-        "border-gray-100 dark:border-gray-800", // Default border
+        "group relative flex flex-col rounded-2xl transition-all duration-300 overflow-visible",
+        "border border-slate-200/70 dark:border-slate-700/70 bg-white/95 dark:bg-slate-900/95",
+        "shadow-[0_8px_24px_rgba(15,23,42,0.06)] hover:shadow-[0_14px_34px_rgba(15,23,42,0.10)] hover:-translate-y-0.5",
+        config.bg,
+        isDeleting && "opacity-60 pointer-events-none",
+        menuOpen ? "z-40" : "z-0",
       )}
     >
-      {/* Background decoration */}
-      <div className="absolute top-0 right-0 p-6 opacity-5 dark:opacity-0 pointer-events-none group-hover:opacity-10 transition-opacity">
-        <svg className={cn("w-24 h-24 transform rotate-12", config.iconColor)} fill="currentColor" viewBox="0 0 24 24">
-          <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14H9v-2h2v2zm0-4H9V7h2v5z" />
-        </svg>
-      </div>
+      <div className={cn("h-1.5 w-full", accentGradient)} />
 
-      <div className="flex items-start justify-between gap-4">
-        <div className="flex-1 min-w-0">
+      <div className="flex items-start justify-between gap-5 p-6">
+        <div className="flex-1 min-w-0 space-y-4">
           {/* Title */}
           <h3
             className={cn(
-              "font-bold text-xl mb-3 line-clamp-2 leading-tight",
+              "font-bold text-2xl line-clamp-2 leading-tight tracking-tight",
               config.text,
             )}
           >
@@ -169,7 +192,7 @@ function PracticalCard({
 
           {/* Badges */}
           <div className="flex flex-wrap items-center gap-2 mb-4">
-            <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full bg-gradient-to-r from-purple-100 to-pink-100 dark:from-purple-900/30 dark:to-pink-900/30 text-purple-700 dark:text-purple-200 border border-purple-200 dark:border-purple-800">
+            <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-200 border border-violet-200 dark:border-violet-800">
               <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
                 <path d="M10.394 2.08a1 1 0 00-.788 0l-7 3a1 1 0 000 1.84L5.25 8.051a.999.999 0 01.356-.257l4-1.714a1 1 0 11.788 1.838L7.667 9.088l1.94.831a1 1 0 00.787 0l7-3a1 1 0 000-1.838l-7-3zM3.31 9.397L5 10.12v4.102a8.969 8.969 0 00-1.05-.174 1 1 0 01-.89-.89 11.115 11.115 0 01.25-3.762zM9.3 16.573A9.026 9.026 0 007 14.935v-3.957l1.818.78a3 3 0 002.364 0l5.508-2.361a11.026 11.026 0 01.25 3.762 1 1 0 01-.89.89 8.968 8.968 0 00-5.35 2.524 1 1 0 01-1.4 0zM6 18a1 1 0 001-1v-2.065a8.935 8.935 0 00-2-.712V17a1 1 0 001 1z" />
               </svg>
@@ -193,47 +216,97 @@ function PracticalCard({
               </span>
             )}
 
-            <span
-              className={cn(
-                "text-xs font-bold px-3 py-1.5 rounded-full",
-                config.badge,
-              )}
-            >
-              Active
-            </span>
+            {!isExam && (
+              <span
+                className={cn(
+                  "text-xs font-bold px-3 py-1.5 rounded-full",
+                  config.badge,
+                )}
+              >
+                Active
+              </span>
+            )}
 
-            {(practical as any).is_exam && (
-              <span className="inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-full bg-gradient-to-r from-red-100 to-orange-100 dark:from-red-900/30 dark:to-orange-900/30 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-800">
-                <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.828a1 1 0 101.415-1.414L11 9.586V6z" clipRule="evenodd" /></svg>
-                Exam
+            {isExam && (examSetCount > 0 || examSetPreview.length > 0) && (
+              <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800 uppercase tracking-wide">
+                Multi-Level
+              </span>
+            )}
+
+            {isExam && examSetCount > 0 && (
+              <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
+                {examSetCount} Set{examSetCount === 1 ? "" : "s"}
+              </span>
+            )}
+
+            {isExam && examIsOverdue && (
+              <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                Closed
               </span>
             )}
           </div>
 
-          {/* Description */}
-          <p className="text-sm leading-relaxed text-gray-700 dark:text-gray-300 line-clamp-2 mb-4">
-            {practical.description || "No description provided."}
-          </p>
+          {isExam && examEndTime && (
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-300 border border-indigo-100 dark:border-indigo-800 w-fit">
+              <CalendarIcon />
+              <span className="text-sm font-medium">{formatDate(examEndTime)}</span>
+            </div>
+          )}
+
+          {/* Description / Set Task Preview */}
+          {isExam && examSetPreview.length > 0 ? (
+            <div className="space-y-2.5 pt-1">
+              {examSetPreview.map((line, idx) => {
+                const taskMatch = line.match(/task\s*\d+/i);
+                const taskLabel = taskMatch ? taskMatch[0].toUpperCase() : `TASK ${idx + 1}`;
+                return (
+                  <div key={`${practical.id}-preview-${idx}`} className="flex items-center gap-3 text-sm rounded-xl border border-slate-200/80 dark:border-slate-700/80 bg-slate-50/80 dark:bg-slate-800/40 px-3 py-2">
+                    <span className="px-2.5 py-1 rounded-md text-[11px] font-bold tracking-wide bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+                      {taskLabel}
+                    </span>
+                    <span className="text-slate-600 dark:text-slate-300 line-clamp-1">{line}</span>
+                  </div>
+                );
+              })}
+            </div>
+          ) : isExam ? (
+            practical.description?.trim() ? (
+              <p className="text-sm leading-relaxed text-gray-700 dark:text-gray-300 line-clamp-2 mb-4">
+                {practical.description}
+              </p>
+            ) : null
+          ) : (
+            <p className="text-sm leading-relaxed text-gray-700 dark:text-gray-300 line-clamp-2 mb-4">
+              {practical.description?.trim()
+                ? practical.description
+                : "No practical description added yet."}
+            </p>
+          )}
         </div>
 
         {/* Right side - Actions & Marks */}
-        <div className="flex flex-col items-end gap-3 z-10">
+        <div className="flex flex-col items-end gap-4 z-10">
           <ActionMenu
             onEdit={() => onEdit?.(practical)}
             onDelete={() => onDelete?.(practical.id)}
             onAssign={() => onAssign?.(practical.id)}
             onConfigureExam={() => onConfigureExam?.(practical)}
             isExam={(practical as any).is_exam}
+            isDeleting={isDeleting}
+            onOpenChange={setMenuOpen}
           />
 
-          <div className="flex flex-col items-end">
-            <div className="flex items-baseline gap-1">
-              <span className="text-2xl font-bold text-gray-900 dark:text-white tracking-tight">
+          <div className="min-w-[128px] rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 px-4 py-3 text-right">
+            <div className="flex items-baseline justify-end gap-1">
+              <span className="text-3xl font-black text-gray-900 dark:text-white tracking-tight leading-none">
                 {practical.max_marks ?? "—"}
               </span>
-              <span className="text-xs font-semibold text-gray-500 uppercase">pts</span>
+              <span className="text-xs font-semibold text-slate-500 uppercase">PTS</span>
             </div>
-            <span className="text-[10px] font-medium text-gray-400">Total Marks</span>
+            <span className="text-[11px] font-medium text-slate-500">Total Marks</span>
           </div>
         </div>
       </div>
@@ -249,6 +322,8 @@ function ActionMenu({
   onConfigureExam,
   disabledAssign,
   isExam,
+  isDeleting,
+  onOpenChange,
 }: {
   onEdit?: () => void;
   onDelete?: () => void;
@@ -256,9 +331,15 @@ function ActionMenu({
   onConfigureExam?: () => void;
   disabledAssign?: boolean;
   isExam?: boolean;
+  isDeleting?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    onOpenChange?.(open);
+  }, [open, onOpenChange]);
 
   useEffect(() => {
     function handler(e: MouseEvent) {
@@ -280,6 +361,7 @@ function ActionMenu({
     <div className="relative" ref={ref}>
       <button
         onClick={() => setOpen(!open)}
+        disabled={isDeleting}
         className="p-2 rounded-lg hover:bg-white/60 dark:hover:bg-gray-800/60 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
         title="More actions"
       >
@@ -308,7 +390,7 @@ function ActionMenu({
                 d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
               />
             </svg>
-            Edit Practical
+            {isExam ? "Edit Exam" : "Edit Practical"}
           </button>
 
           <button
@@ -337,7 +419,7 @@ function ActionMenu({
                 d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"
               />
             </svg>
-            Assign to Students
+            {isExam ? "Assign Exam" : "Assign to Students"}
           </button>
 
           <div className="h-px bg-gray-100 dark:bg-gray-800" />
@@ -362,7 +444,13 @@ function ActionMenu({
               setOpen(false);
               onDelete?.();
             }}
-            className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+            disabled={isDeleting}
+            className={cn(
+              "w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-colors",
+              isDeleting
+                ? "text-gray-400 dark:text-gray-600 cursor-not-allowed"
+                : "text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20",
+            )}
           >
             <svg
               className="w-4 h-4"
@@ -377,7 +465,7 @@ function ActionMenu({
                 d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
               />
             </svg>
-            Delete Practical
+            {isDeleting ? "Deleting..." : isExam ? "Delete Exam" : "Delete Practical"}
           </button>
         </div>
       )}
@@ -408,6 +496,7 @@ export default function PracticalList({
   onConfigureExam,
   subjects,
   isExamMode,
+  deletingPracticalIds,
 }: {
   practicals?: Practical[] | null;
   onEdit?: (p: Practical) => void;
@@ -416,6 +505,7 @@ export default function PracticalList({
   onConfigureExam?: (p: Practical) => void;
   subjects?: Subject[] | null;
   isExamMode?: boolean;
+  deletingPracticalIds?: Set<number>;
 }) {
   const [mode, setMode] = useState<"grid" | "list">("list");
   const [searchQuery, setSearchQuery] = useState("");
@@ -557,6 +647,7 @@ export default function PracticalList({
               onAssign={onAssign}
               onDelete={onDelete}
               onConfigureExam={onConfigureExam}
+              isDeleting={deletingPracticalIds?.has(p.id)}
             />
           );
         })}

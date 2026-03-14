@@ -131,6 +131,10 @@ export async function middleware(request: NextRequest) {
     return safeRedirect(request, "/maintenance")
   }
 
+  if (process.env.NODE_ENV === "production" && pathname === "/auth/register") {
+    return safeRedirect(request, AUTH_REDIRECT)
+  }
+
   /* 3. Fast Path Short-Circuits */
   if (isPublicRoute(pathname)) {
     const response = injectSecurityHeaders(NextResponse.next())

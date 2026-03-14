@@ -75,6 +75,8 @@ The easiest way to run CodeGuard is using Docker Compose. This brings up the fro
 Create a `.env` file in the root directory:
 ```env
 # --- Application ---
+# Environment mode
+NODE_ENV=development
 # Frontend URL (for CORS)
 CORS_ORIGIN=http://localhost:3000
 # Backend API URL (used by Frontend)
@@ -101,6 +103,11 @@ DOCKER_CPU_LIMIT=0.5
 DOCKER_POOL_SIZE_PYTHON=2
 EXECUTION_TIMEOUT=15
 ```
+
+### Auth Behavior by Environment
+- `NODE_ENV=development`: `/auth/register` is available.
+- `NODE_ENV=production`: `/auth/register` is blocked by middleware and redirects to `/auth/login`.
+- In production, the login page also hides the **Create an Account** action.
 
 ### 2. Launch
 ```bash
@@ -147,22 +154,57 @@ If you prefer running services individually for development:
 ## 🧱 Architecture Overview
 
 ```mermaid
-graph TD
-    User[User Browser]
-    FE[Next.js Frontend]
-    BE[Express Backend]
-    DB[(Supabase DB)]
-    Redis[(Redis Queue)]
-    Docker[Docker Runtime]
-    AI[Gemini AI]
+flowchart LR
+   U[User Browser]
 
-    User <-->|HTTP/WS| FE
-    FE <-->|HTTP/WS| BE
-    BE <-->|Read/Write| DB
-    BE <-->|Jobs| Redis
-    BE <-->|Execute| Docker
-    BE <-->|Analyze| AI
-    Docker -->|Result| BE
+   subgraph FE[Frontend Layer]
+      N[Next.js App]
+      MW[Edge Middleware\nAuth + Route Guards]
+      ED[Monaco Editor + Terminal UI]
+   end
+
+   subgraph BE[Backend Layer]
+      API[Express API]
+      WS[WebSocket Gateway]
+      Q[BullMQ Workers]
+   end
+
+   subgraph EX[Execution Layer]
+      RP[Runtime Pool Manager]
+      PY[(Python Container Pool)]
+      JV[(Java Container Pool)]
+      CC[(C/C++ Container Pool)]
+   end
+
+   subgraph DATA[Data & Services]
+      SB[(Supabase\nPostgreSQL + Auth)]
+      RD[(Redis)]
+      AI[Gemini AI]
+   end
+
+   U -->|HTTP| N
+   U <-->|WebSocket| WS
+   N --> MW
+   MW -->|Session validation| SB
+   N -->|API calls| API
+   ED -->|Run / submit code| API
+
+   API -->|Auth + data ops| SB
+   API -->|Enqueue jobs| RD
+   RD -->|Dispatch| Q
+   Q --> RP
+
+   RP --> PY
+   RP --> JV
+   RP --> CC
+
+   PY -->|Execution result| API
+   JV -->|Execution result| API
+   CC -->|Execution result| API
+
+   API -->|Hints / diagnostics| AI
+   API -->|Live output| WS
+   WS -->|Stream output| U
 ```
 
 ---

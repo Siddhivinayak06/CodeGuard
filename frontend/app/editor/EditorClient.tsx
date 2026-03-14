@@ -363,6 +363,15 @@ int main() {
     // Auto-submit current code when session is invalidated
     if (code && practicalId && user) {
       try {
+        // Ensure attempt is consumed for practical mode even on forced auto-submit.
+        if (!isExamMode) {
+          await axios.post(
+            "/api/practical/start",
+            { practicalId: Number(practicalId) },
+            { validateStatus: () => true },
+          );
+        }
+
         await axios.post("/api/submission/create", {
           student_id: user.id,
           practical_id: Number(practicalId),
@@ -1011,10 +1020,28 @@ int main() {
         taskCodeMapRef.current[activeLevel] = code;
       }
 
-      // Determine which levels to submit
-      const levelsToSubmit = hasLevelsParam && practicalLevels.length > 0
-        ? practicalLevels
-        : [{ level: activeLevel, max_marks: 10 }]; // single-level fallback
+      // Determine which levels to submit.
+      // In exam mode with assigned sets, submit and score only assigned set levels.
+      const levelsToSubmit = (() => {
+        if (hasLevelsParam && practicalLevels.length > 0) {
+          if (isExamMode && assignedSet?.level_ids?.length) {
+            const levelById = new Map<number, any>();
+            practicalLevels.forEach((lvl: any) => levelById.set(Number(lvl.id), lvl));
+
+            const assignedLevels = assignedSet.level_ids
+              .map((id) => levelById.get(Number(id)))
+              .filter(Boolean);
+
+            if (assignedLevels.length > 0) {
+              return assignedLevels;
+            }
+          }
+
+          return practicalLevels;
+        }
+
+        return [{ level: activeLevel, max_marks: 10 }]; // single-level fallback
+      })();
 
       let totalMarks = 0;
       let totalPassed = 0;

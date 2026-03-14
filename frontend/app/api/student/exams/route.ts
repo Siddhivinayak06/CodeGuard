@@ -150,19 +150,24 @@ export async function GET() {
     // Resolve assigned set -> allowed level_ids per practical for this student.
     const allowedLevelIdsByPractical = new Map<number, Set<number>>();
     const examIdByPractical = new Map<number, string>();
+    const examWindowByPractical = new Map<number, { start_time?: string | null; end_time?: string | null }>();
     if (practicalIds.length > 0) {
       // exam per practical
       const { data: examsData } = (await supabase
         .from("exams")
-        .select("id, practical_id")
+        .select("id, practical_id, start_time, end_time")
         .in("practical_id", practicalIds)) as any as {
-          data: Array<{ id: string; practical_id: number }> | null;
+          data: Array<{ id: string; practical_id: number; start_time?: string | null; end_time?: string | null }> | null;
         };
 
       const practicalByExamId = new Map<string, number>();
       (examsData || []).forEach((row) => {
         practicalByExamId.set(String(row.id), Number(row.practical_id));
         examIdByPractical.set(Number(row.practical_id), String(row.id));
+        examWindowByPractical.set(Number(row.practical_id), {
+          start_time: row.start_time ?? null,
+          end_time: row.end_time ?? null,
+        });
       });
 
       const examIds = Array.from(practicalByExamId.keys());
@@ -238,6 +243,7 @@ export async function GET() {
       const sub = submissionMap.get(p.id);
       const schedule = scheduleMap.get(p.id);
       const examId = examIdByPractical.get(Number(p.id));
+      const examWindow = examWindowByPractical.get(Number(p.id));
       const allowedLevelIds = allowedLevelIdsByPractical.get(Number(p.id));
       const visibleLevels = allowedLevelIds
         ? (p.practical_levels || []).filter((lvl: any) =>
@@ -255,6 +261,8 @@ export async function GET() {
       return {
         id: p.id,
         exam_id: examId,
+        exam_start_time: examWindow?.start_time ?? null,
+        exam_end_time: examWindow?.end_time ?? null,
         assignment_id: sp.id,
         practical_number: p.practical_number,
         title: p.title,
