@@ -58,6 +58,7 @@ export default function AllPracticalsPage() {
   );
   const [creatingExamMode, setCreatingExamMode] = useState(true);
   const [formInitialStep, setFormInitialStep] = useState(1);
+  const [formSingleStep, setFormSingleStep] = useState(false);
   const [sampleCode, setSampleCode] = useState<string>("");
   const [starterCode, setStarterCode] = useState<string>("");
   const [sampleLanguage, setSampleLanguage] = useState<string>("c");
@@ -224,6 +225,7 @@ export default function AllPracticalsPage() {
     setEditingPractical(null);
     setCreatingExamMode(true);
     setFormInitialStep(1);
+    setFormSingleStep(false);
     setSampleCode("");
     setStarterCode("");
     setSampleLanguage("c");
@@ -234,6 +236,7 @@ export default function AllPracticalsPage() {
     setEditingPractical(p);
     setCreatingExamMode(true);
     setFormInitialStep(1);
+    setFormSingleStep(false);
     const { data: refsData } = await supabase
       .from("reference_codes")
       .select("*")
@@ -255,6 +258,37 @@ export default function AllPracticalsPage() {
     setEditingPractical(target);
     setCreatingExamMode(true);
     setFormInitialStep(3);
+    setFormSingleStep(true);
+
+    const { data: refsData } = await supabase
+      .from("reference_codes")
+      .select("*")
+      .eq("practical_id", target.id)
+      .order("created_at", { ascending: false });
+
+    const refs = refsData as any[];
+    if (refs && refs.length > 0) {
+      setSampleCode(refs[0].code || "");
+      setStarterCode(refs[0].starter_code || "");
+      setSampleLanguage(refs[0].language || "c");
+    } else {
+      setSampleCode("");
+      setStarterCode("");
+      setSampleLanguage("c");
+    }
+
+    setModalOpen(true);
+  };
+
+  const openEditExamSettings = async (exam: Practical | number) => {
+    const examId = typeof exam === "number" ? exam : exam.id;
+    const target = practicals.find((p) => p.id === examId);
+    if (!target) return;
+
+    setEditingPractical(target);
+    setCreatingExamMode(true);
+    setFormInitialStep(1);
+    setFormSingleStep(true);
 
     const { data: refsData } = await supabase
       .from("reference_codes")
@@ -384,7 +418,7 @@ export default function AllPracticalsPage() {
               onEdit={openEdit}
               onAssign={openAssign}
               onDelete={deletePractical}
-              onConfigureExam={openEdit}
+              onConfigureExam={openEditExamSettings}
               isExamMode={true}
               deletingPracticalIds={deletingPracticalIds}
             />
@@ -405,6 +439,7 @@ export default function AllPracticalsPage() {
           setSampleLanguage={setSampleLanguage}
           isExam={creatingExamMode}
           initialStep={formInitialStep}
+          singleStep={formSingleStep}
           onClose={() => setModalOpen(false)}
           onSaved={() => {
             fetchPracticals();

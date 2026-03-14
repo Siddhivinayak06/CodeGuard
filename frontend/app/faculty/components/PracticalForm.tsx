@@ -1244,6 +1244,12 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
       return false;
     }
 
+    // Exam Step 1 saves only core metadata and exam settings.
+    // Question/set validation is enforced in later steps.
+    if (isExam && step === 1) {
+      return true;
+    }
+
     if (enableLevels) {
       if (levels.length === 0) {
         alert("Please add at least one Level");
@@ -1286,7 +1292,7 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
     }
 
     return true;
-  }, [form, enableLevels, levels, testCases, isExam]);
+  }, [form, enableLevels, levels, testCases, isExam, step]);
 
   const getSetValidationErrors = useCallback(() => {
     const errors: string[] = [];
@@ -1310,7 +1316,10 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
     return errors;
   }, [enableLevels, levels, questionSets, resolveSetLevels]);
 
-  const saveExamConfiguration = useCallback(async (practicalId: number) => {
+  const saveExamConfiguration = useCallback(async (
+    practicalId: number,
+    options?: { skipSetSync?: boolean },
+  ) => {
     let examId: number | null = null;
     const { data: existingExam } = await supabase
       .from("exams")
@@ -1344,6 +1353,7 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
     }
 
     if (!examId) return;
+    if (options?.skipSetSync) return;
 
     const { data: persistedLevels } = await supabase
       .from("practical_levels")
@@ -1509,12 +1519,16 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
         return Math.max(0, ...setTotals);
       })();
 
+      const safeExamMaxMarks = isExam
+        ? Math.max(1, Number(resolvedExamMaxMarks) || 0)
+        : resolvedExamMaxMarks;
+
       const payload: Record<string, any> = {
         title: form.title,
         subject_id: form.subject_id,
         description: enableLevels ? "" : form.description,
         language: form.language,
-        max_marks: resolvedExamMaxMarks,
+        max_marks: safeExamMaxMarks,
         practical_number: resolvedPracticalNumber || null,
       };
       if (isExam) payload.is_exam = true;
@@ -1745,12 +1759,16 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
             return Math.max(0, ...setTotals);
           })();
 
+          const safeExamMaxMarks = isExam
+            ? Math.max(1, Number(resolvedExamMaxMarks) || 0)
+            : resolvedExamMaxMarks;
+
           const payload = {
             title: draftForm.title,
             subject_id: draftForm.subject_id,
             description: draftEnableLevels ? "" : draftForm.description,
             language: draftForm.language,
-            max_marks: resolvedExamMaxMarks,
+            max_marks: safeExamMaxMarks,
             practical_number: resolvedPracticalNumber || null,
             is_exam: isExam,
           };
@@ -1894,6 +1912,13 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
     try {
       const selectedStudentIds = selectedStudents.map((s) => s.uid);
 
+      // Scope sync removals to what faculty is currently managing.
+      // If a batch filter is selected, only that batch is synced for removals.
+      const manageableStudentIds = students
+        .filter((s) => !filters.batch || s.batch === filters.batch)
+        .map((s) => s.uid);
+      const manageableStudentSet = new Set(manageableStudentIds);
+
       // Assign each practical sequentially
       for (const item of itemsToAssign) {
         // Use assignmentDeadline state (which user might have edited in step 2)
@@ -1928,7 +1953,9 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
           );
 
           const toRemove = currentAssignments.filter(
-            (row) => !selectedStudentSet.has(row.student_id),
+            (row) =>
+              manageableStudentSet.has(row.student_id) &&
+              !selectedStudentSet.has(row.student_id),
           );
 
           let itemChanged = false;
@@ -2250,11 +2277,17 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
                   <div
                     className="w-9 h-9 rounded-full flex items-center justify-center font-bold bg-gradient-to-br from-blue-600 to-purple-600 text-white shadow"
                   >
-                    {isExam ? step : 1}
+                    {isExam ? (singleStep ? 1 : step) : 1}
                   </div>
                   <div className="leading-tight">
                     <div className="text-sm font-semibold text-gray-900 dark:text-white">
-                      {isExam
+                      {isExam && singleStep
+                        ? (step === 2
+                          ? "Edit Exam Settings"
+                          : step === 3
+                            ? "Assign Exam"
+                            : "Exam Details")
+                        : isExam
                         ? (step === 1
                           ? "Step 1: Exam Details & Settings"
                           : step === 2
@@ -2263,7 +2296,13 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
                         : "Practical Details"}
                     </div>
                     <div className="text-xs text-gray-500 dark:text-gray-400">
-                      {isExam
+                      {isExam && singleStep
+                        ? (step === 2
+                          ? "Update exam question sets and timing settings"
+                          : step === 3
+                            ? "Select students and finalize assignment"
+                            : "Title, subject, language, duration, and exam window")
+                        : isExam
                         ? (step === 1
                           ? "Title, subject, language, duration, and exam window"
                           : step === 2
@@ -2288,7 +2327,44 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
                     whileTap={{ scale: 0.98 }}
                     onClick={async () => {
                       if (isExam && step === 1) {
-                        setStep(2);
+                        const itemsToConfigure = savedPracticals.length > 0
+                          ? savedPracticals
+                          : [];
+
+                        let resolvedItems = itemsToConfigure;
+
+                        if (resolvedItems.length === 0) {
+                          if (isMultiDraftMode) {
+                            const savedData = await handleSaveAll();
+                            if (!savedData || savedData.length === 0) {
+                              return;
+                            }
+                            setSavedPracticals(savedData);
+                            resolvedItems = savedData;
+                          } else {
+                            const savedPracticalId = await handleSave();
+                            if (!savedPracticalId) {
+                              return;
+                            }
+                            const singleSaved = [{ id: savedPracticalId as number }];
+                            setSavedPracticals(singleSaved);
+                            resolvedItems = singleSaved;
+                          }
+                        }
+
+                        if (resolvedItems.length === 0) return;
+
+                        try {
+                          setSaving(true);
+                          for (const item of resolvedItems) {
+                            await saveExamConfiguration(item.id, { skipSetSync: true });
+                          }
+                          setStep(2);
+                        } catch (err: any) {
+                          alert(err?.message || "Failed to save exam details.");
+                        } finally {
+                          setSaving(false);
+                        }
                       } else if (isExam && step === 2) {
                         const setErrors = getSetValidationErrors();
                         if (setErrors.length > 0) {
@@ -2328,7 +2404,11 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
                           for (const item of resolvedItems) {
                             await saveExamConfiguration(item.id);
                           }
-                          setStep(3);
+                          if (singleStep) {
+                            onSaved(resolvedItems[0]?.id);
+                          } else {
+                            setStep(3);
+                          }
                         } catch (err: any) {
                           alert(err?.message || "Failed to save exam settings.");
                         } finally {
@@ -2363,11 +2443,17 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
                       : loading
                         ? "Assigning..."
                         : isExam
-                          ? (step === 1
-                            ? "Next: Questions & Sets"
-                            : step === 2
-                              ? "Next: Assign Students"
-                              : "Finish & Assign")
+                          ? (singleStep
+                            ? (step === 2
+                              ? "Save Settings"
+                              : step === 3
+                                ? "Finish & Assign"
+                                : "Save Exam")
+                            : (step === 1
+                              ? "Next: Questions & Sets"
+                              : step === 2
+                                ? "Next: Assign Students"
+                                : "Finish & Assign"))
                           : "Save Practical"}
                   </motion.button>
                 </div>
@@ -3004,13 +3090,15 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
                           />
                         )}
 
-                        <button
-                          type="button"
-                          onClick={() => setStep(1)}
-                          className="flex items-center gap-2 text-sm font-medium text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
-                        >
-                          <ChevronLeft className="w-4 h-4" /> Back to Exam Details & Settings
-                        </button>
+                        {!singleStep && (
+                          <button
+                            type="button"
+                            onClick={() => setStep(1)}
+                            className="flex items-center gap-2 text-sm font-medium text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
+                          >
+                            <ChevronLeft className="w-4 h-4" /> Back to Exam Details & Settings
+                          </button>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -3045,7 +3133,7 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
                     </div>
 
                     <div className="rounded-xl border border-indigo-200/70 dark:border-indigo-800/60 bg-indigo-50/70 dark:bg-indigo-900/20 px-4 py-3 text-sm text-indigo-800 dark:text-indigo-200">
-                      Assignment sync mode is enabled: selected students are assigned, unselected students are removed. For exams, each assigned student gets exactly one random question set (Set A/Set B/...).
+                      Assignment sync mode is enabled: selected students are assigned, unselected students are removed from the current visible scope (selected batch or all visible batches). For exams, each assigned student gets exactly one random question set (Set A/Set B/...).
                     </div>
 
                     <AssignStudentsStep
@@ -3057,13 +3145,15 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
                       availableBatches={availableBatches}
                     />
 
-                    <button
-                      type="button"
-                      onClick={() => setStep(2)}
-                      className="flex items-center gap-2 text-sm font-medium text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
-                    >
-                      <ChevronLeft className="w-4 h-4" /> Back to Questions & Sets
-                    </button>
+                    {!singleStep && (
+                      <button
+                        type="button"
+                        onClick={() => setStep(2)}
+                        className="flex items-center gap-2 text-sm font-medium text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
+                      >
+                        <ChevronLeft className="w-4 h-4" /> Back to Questions & Sets
+                      </button>
+                    )}
                   </div>
                 )}
               </div>
