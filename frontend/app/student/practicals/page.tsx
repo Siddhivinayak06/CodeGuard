@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useMemo, useRef } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import axios from "axios";
 import { Button } from "@/components/ui/button";
@@ -135,6 +135,13 @@ interface FormattedPractical {
 }
 
 type FilterType = "all" | "pending" | "overdue" | "completed";
+
+const NON_HIGHLIGHTABLE_STATUSES = new Set([
+  "submitted",
+  "completed",
+  "passed",
+  "overdue",
+]);
 
 // ============================================================================
 // HELPER FUNCTIONS
@@ -364,6 +371,7 @@ function FilterTabs({
 
 export default function StudentPracticals() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const supabase = useMemo(() => createClient(), []);
   const mountedRef = useRef<boolean>(false);
 
@@ -375,6 +383,7 @@ export default function StudentPracticals() {
   const [selectedSubjectId, setSelectedSubjectId] = useState<number | "all">("all");
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [userSemester, setUserSemester] = useState<string | null>(null);
+  const [highlightedPracticalId, setHighlightedPracticalId] = useState<number | null>(null);
 
   // Result Modal State
   const [viewingSubmission, setViewingSubmission] = useState<Submission | null>(
@@ -700,6 +709,53 @@ export default function StudentPracticals() {
     }
   }, [sequencedPracticals, activeFilter, searchQuery, selectedSubjectId]);
 
+  useEffect(() => {
+    const practicalIdParam = searchParams.get("notificationPracticalId");
+    if (!practicalIdParam) {
+      setHighlightedPracticalId(null);
+      return;
+    }
+
+    const practicalId = Number(practicalIdParam);
+    if (!Number.isFinite(practicalId)) {
+      setHighlightedPracticalId(null);
+      return;
+    }
+
+    const target = sequencedPracticals.find((p) => p.id === practicalId);
+    if (!target) {
+      setHighlightedPracticalId(null);
+      return;
+    }
+
+    const safeStatus = String(target.status || "").toLowerCase();
+    const canHighlight = !target.is_locked && !NON_HIGHLIGHTABLE_STATUSES.has(safeStatus);
+    if (!canHighlight) {
+      setHighlightedPracticalId(null);
+      return;
+    }
+
+    setHighlightedPracticalId(practicalId);
+    if (target.subject_id) {
+      setSelectedSubjectId(target.subject_id);
+      setActiveFilter("all");
+    }
+
+    const scrollTimer = window.setTimeout(() => {
+      const el = document.querySelector(`[data-practical-id=\"${practicalId}\"]`);
+      el?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 250);
+
+    const clearTimer = window.setTimeout(() => {
+      setHighlightedPracticalId((prev) => (prev === practicalId ? null : prev));
+    }, 6000);
+
+    return () => {
+      window.clearTimeout(scrollTimer);
+      window.clearTimeout(clearTimer);
+    };
+  }, [searchParams, sequencedPracticals]);
+
   // Handle View Result, Start Practical, Navigate...
   const handleViewResult = async (
     practicalId: number,
@@ -842,6 +898,7 @@ export default function StudentPracticals() {
     const isSubmitted = p.status === "submitted";
     const isUrgent = false;
     const showLocked = p.is_locked && !isDone && !isSubmitted;
+    const isHighlighted = highlightedPracticalId === p.id;
 
     // Status accent colors
     const accentMap: Record<string, string> = {
@@ -866,9 +923,11 @@ export default function StudentPracticals() {
       <motion.div
         variants={itemVariants}
         key={p.id}
+        data-practical-id={p.id}
         className={cn(
           "group relative rounded-2xl transition-all duration-300 hover:shadow-2xl hover:shadow-indigo-500/10 hover:-translate-y-1 flex flex-col h-full overflow-hidden",
           "bg-white dark:bg-gray-900/80 backdrop-blur-xl border border-gray-200/60 dark:border-gray-700/50",
+          isHighlighted && "ring-2 ring-indigo-500 ring-offset-2 ring-offset-slate-50 dark:ring-offset-gray-950 shadow-xl shadow-indigo-500/20",
           isUrgent && "ring-2 ring-red-500/30",
         )}
       >
@@ -1111,13 +1170,16 @@ export default function StudentPracticals() {
     const isDone = ["passed", "failed", "completed"].includes(p.status);
     const isSubmitted = p.status === "submitted";
     const isUrgent = false;
+    const isHighlighted = highlightedPracticalId === p.id;
 
     return (
       <motion.div
         variants={itemVariants}
         key={p.id}
+        data-practical-id={p.id}
         className={cn(
           "group w-full glass-card rounded-xl p-4 transition-all duration-300 hover:bg-white/60 dark:hover:bg-gray-900/60 border border-white/50 dark:border-gray-700/50 flex flex-col md:flex-row items-start md:items-center gap-4 bg-white/40 dark:bg-gray-900/40 backdrop-blur-md",
+          isHighlighted && "ring-2 ring-indigo-500 ring-offset-2 ring-offset-slate-50 dark:ring-offset-gray-950 shadow-lg shadow-indigo-500/20",
           isUrgent && "border-l-4 border-l-red-500 dark:border-l-red-500"
         )}
       >

@@ -32,6 +32,13 @@ interface Notification {
   metadata: Record<string, any> | null;
 }
 
+const NON_HIGHLIGHTABLE_STATUSES = new Set([
+  "submitted",
+  "completed",
+  "passed",
+  "overdue",
+]);
+
 const notificationIcons: Record<string, React.ReactNode> = {
   practical_assigned: <FileCode className="w-6 h-6 text-blue-500" />,
   submission_graded: <GraduationCap className="w-6 h-6 text-emerald-500" />,
@@ -98,7 +105,63 @@ export default function NotificationsPage() {
         return;
       }
 
-      setNotifications((data as unknown as Notification[]) || []);
+      let sanitizedNotifications = (data as unknown as Notification[]) || [];
+
+      const practicalNotifications = sanitizedNotifications.filter(
+        (n) => n.type === "practical_assigned",
+      );
+
+      if (practicalNotifications.length > 0) {
+        try {
+          const practicalRes = await fetch("/api/student/practicals", {
+            cache: "no-store",
+          });
+
+          if (practicalRes.ok) {
+            const payload = await practicalRes.json();
+            const studentPracticals = Array.isArray(payload?.data)
+              ? payload.data
+              : [];
+            const activePracticalIds = new Set(
+              studentPracticals
+                .map((p: any) => Number(p?.id))
+                .filter((id: number) => Number.isFinite(id) && id > 0),
+            );
+
+            const staleNotificationIds = practicalNotifications
+              .filter((notification) => {
+                const rawPracticalId =
+                  notification.metadata?.practical_id ??
+                  notification.metadata?.practicalId;
+                const practicalId = Number(rawPracticalId);
+
+                return (
+                  Number.isFinite(practicalId) &&
+                  practicalId > 0 &&
+                  !activePracticalIds.has(practicalId)
+                );
+              })
+              .map((n) => n.id);
+
+            if (staleNotificationIds.length > 0) {
+              await Promise.all(
+                staleNotificationIds.map((id) =>
+                  fetch(`/api/notifications?id=${id}`, { method: "DELETE" }),
+                ),
+              );
+
+              const staleSet = new Set(staleNotificationIds);
+              sanitizedNotifications = sanitizedNotifications.filter(
+                (n) => !staleSet.has(n.id),
+              );
+            }
+          }
+        } catch (cleanupErr) {
+          console.error("Failed to cleanup stale practical notifications:", cleanupErr);
+        }
+      }
+
+      setNotifications(sanitizedNotifications);
     } catch (err) {
       console.error("Notification fetch error:", err);
     } finally {
@@ -169,6 +232,63 @@ export default function NotificationsPage() {
       console.error("Delete notification error:", err);
       toast.error("An error occurred while deleting");
     }
+  };
+
+  const getNotificationPracticalId = (notification: Notification) => {
+    const metadataPracticalId =
+      notification.metadata?.practical_id ?? notification.metadata?.practicalId;
+    const parsedId = Number(metadataPracticalId);
+    return Number.isFinite(parsedId) && parsedId > 0 ? parsedId : null;
+  };
+
+  const isStartablePractical = (status: string | null | undefined, isLocked: boolean) => {
+    const safeStatus = (status || "").toLowerCase();
+    return !isLocked && !NON_HIGHLIGHTABLE_STATUSES.has(safeStatus);
+  };
+
+  const handleNotificationClick = async (notification: Notification) => {
+    await markAsRead(notification.id);
+
+    if (notification.type !== "practical_assigned") {
+      if (notification.link) {
+        router.push(notification.link);
+      }
+      return;
+    }
+
+    const practicalId = getNotificationPracticalId(notification);
+    if (!practicalId) {
+      router.push("/student/practicals");
+      return;
+    }
+
+    try {
+      const res = await fetch("/api/student/practicals", { cache: "no-store" });
+
+      if (res.ok) {
+        const payload = await res.json();
+        const practicals = Array.isArray(payload?.data) ? payload.data : [];
+        const target = practicals.find((p: any) => Number(p?.id) === practicalId);
+
+        // Auto-clean stale notifications when their practical has been deleted.
+        if (!target) {
+          await deleteNotification(notification.id);
+          toast.info("This practical is no longer available, so the notification was removed.");
+          return;
+        }
+
+        const shouldHighlight = isStartablePractical(target.status, !!target.is_locked);
+        const url = shouldHighlight
+          ? `/student/practicals?notificationPracticalId=${practicalId}`
+          : "/student/practicals";
+        router.push(url);
+        return;
+      }
+    } catch (err) {
+      console.error("Notification click validation failed:", err);
+    }
+
+    router.push("/student/practicals");
   };
 
   // Handle Grant Re-attempt
@@ -288,10 +408,11 @@ export default function NotificationsPage() {
               return (
                 <div
                   key={notification.id}
+                  onClick={() => handleNotificationClick(notification)}
                   className={`glass-card rounded-2xl p-5 hover-lift animate-slideUp border transition-all ${!notification.is_read
                     ? "bg-indigo-50/50 dark:bg-indigo-900/10 border-indigo-200/50 dark:border-indigo-800/30"
                     : "border-transparent"
-                    } ${isReattemptRequest ? "border-l-4 !border-l-purple-500" : ""}`}
+                    } ${isReattemptRequest ? "border-l-4 !border-l-purple-500" : ""} ${notification.link || notification.type === "practical_assigned" ? "cursor-pointer" : ""}`}
                   style={{ animationDelay: `${index * 30}ms` }}
                 >
                   <div className="flex gap-4">
@@ -394,9 +515,16 @@ export default function NotificationsPage() {
                       {notification.link && (
                         <Link
                           href={notification.link}
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            handleNotificationClick(notification);
+                          }}
                           className="inline-flex items-center gap-1 mt-3 text-sm font-medium text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 transition-colors"
                         >
-                          View details →
+                          {notification.type === "practical_assigned"
+                            ? "Open in practicals →"
+                            : "View details →"}
                         </Link>
                       )}
                     </div>

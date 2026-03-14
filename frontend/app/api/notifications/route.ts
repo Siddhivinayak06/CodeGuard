@@ -44,10 +44,16 @@ export async function GET(request: NextRequest) {
     if (data) {
       // Collect all practical_ids that need enrichment
       const practicalNotifications = data.filter(
-        (n: any) => n.type === "practical_assigned" && n.metadata?.practical_id
+        (n: any) =>
+          n.type === "practical_assigned" &&
+          (n.metadata?.practical_id || n.metadata?.practicalId)
       );
       const practicalIds = [
-        ...new Set(practicalNotifications.map((n: any) => n.metadata.practical_id)),
+        ...new Set(
+          practicalNotifications
+            .map((n: any) => n.metadata?.practical_id ?? n.metadata?.practicalId)
+            .filter(Boolean),
+        ),
       ];
 
       // Batch query 1: Fetch all student_practicals for these practical_ids in ONE call
@@ -112,12 +118,23 @@ export async function GET(request: NextRequest) {
       }
 
       // Enrich in-memory (no more DB calls)
-      const enriched = data.map((n: any) => {
-        if (n.type === "practical_assigned" && n.metadata?.practical_id) {
-          const spRecord = spMap.get(String(n.metadata.practical_id));
-          if (spRecord) {
+      const staleNotificationIds: string[] = [];
+
+      const enriched = data
+        .map((n: any) => {
+          const practicalId = n.metadata?.practical_id ?? n.metadata?.practicalId;
+
+          if (n.type === "practical_assigned" && practicalId) {
+            const spRecord = spMap.get(String(practicalId));
+
+            // Practical no longer exists/assigned to this user -> mark stale for server-side cleanup.
+            if (!spRecord) {
+              staleNotificationIds.push(n.id);
+              return null;
+            }
+
             const practical = spRecord.practicals;
-            const link = `/editor?practicalId=${n.metadata.practical_id}${practical?.subject_id ? `&subject=${practical.subject_id}` : ""}${practical?.language ? `&language=${practical.language}` : ""}`;
+            const link = `/student/practicals?notificationPracticalId=${practicalId}`;
             n.link = link;
 
             const isStrictLocked = spRecord.is_locked;
@@ -157,13 +174,26 @@ export async function GET(request: NextRequest) {
               }
             }
           }
+          return n;
+        })
+        .filter(Boolean);
+
+      if (staleNotificationIds.length > 0) {
+        const { error: cleanupError } = await supabase
+          .from("notifications")
+          .delete()
+          .eq("user_id", user.id)
+          .in("id", staleNotificationIds);
+
+        if (cleanupError) {
+          // Non-fatal: keep responding with sanitized list even if deletion fails.
+          console.error("Stale notification cleanup error:", cleanupError);
         }
-        return n;
-      });
+      }
 
       return NextResponse.json({
         data: enriched,
-        total: count,
+        total: count ? count - staleNotificationIds.length : count,
         hasMore: count ? offset + limit < count : false,
       });
     }
