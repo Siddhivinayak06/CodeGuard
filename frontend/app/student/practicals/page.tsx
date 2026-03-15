@@ -743,7 +743,7 @@ export default function StudentPracticals() {
     }
 
     const scrollTimer = window.setTimeout(() => {
-      const el = document.querySelector(`[data-practical-id=\"${practicalId}\"]`);
+      const el = document.querySelector(`[data-practical-id="${practicalId}"]`);
       el?.scrollIntoView({ behavior: "smooth", block: "center" });
     }, 250);
 
