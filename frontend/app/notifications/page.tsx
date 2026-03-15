@@ -32,6 +32,38 @@ interface Notification {
   metadata: Record<string, any> | null;
 }
 
+function getReattemptDedupKey(notification: Notification): string | null {
+  if (notification.title !== "Re-attempt Granted") return null;
+
+  const practicalId =
+    notification.metadata?.practical_id ?? notification.metadata?.practicalId;
+  if (practicalId) {
+    return `pid:${String(practicalId)}`;
+  }
+
+  const msg = notification.message || "";
+  // Fallback for legacy records: message includes practical title in double quotes.
+  const quoted = msg.match(/"([^"]+)"/);
+  if (quoted?.[1]) {
+    return `title:${quoted[1].trim().toLowerCase()}`;
+  }
+
+  return `id:${notification.id}`;
+}
+
+function isExamNotification(notification: Notification): boolean {
+  const haystack = [
+    notification.type,
+    notification.title,
+    notification.message || "",
+    notification.link || "",
+  ]
+    .join(" ")
+    .toLowerCase();
+
+  return haystack.includes("exam");
+}
+
 const NON_HIGHLIGHTABLE_STATUSES = new Set([
   "submitted",
   "completed",
@@ -40,6 +72,7 @@ const NON_HIGHLIGHTABLE_STATUSES = new Set([
 ]);
 
 const notificationIcons: Record<string, React.ReactNode> = {
+  exam_assigned: <GraduationCap className="w-6 h-6 text-violet-500" />,
   practical_assigned: <FileCode className="w-6 h-6 text-blue-500" />,
   submission_graded: <GraduationCap className="w-6 h-6 text-emerald-500" />,
   deadline_reminder: <Clock className="w-6 h-6 text-amber-500" />,
@@ -48,6 +81,8 @@ const notificationIcons: Record<string, React.ReactNode> = {
 };
 
 const notificationColors: Record<string, string> = {
+  exam_assigned:
+    "bg-violet-100 dark:bg-violet-900/30 border-violet-200 dark:border-violet-800",
   practical_assigned:
     "bg-blue-100 dark:bg-blue-900/30 border-blue-200 dark:border-blue-800",
   submission_graded:
@@ -88,86 +123,42 @@ export default function NotificationsPage() {
 
     setLoading(true);
     try {
-      let query = supabase
-        .from("notifications")
-        .select("*")
-        .eq("user_id", userId)
-        .order("created_at", { ascending: false });
+      const params = new URLSearchParams();
+      params.set("limit", "200");
+      if (filter === "unread") params.set("unread", "true");
 
-      if (filter === "unread") {
-        query = query.eq("is_read", false);
-      }
+      const res = await fetch(`/api/notifications?${params.toString()}`, {
+        cache: "no-store",
+      });
 
-      const { data, error } = await query;
-
-      if (error) {
-        console.error("Failed to fetch notifications:", error);
+      if (!res.ok) {
+        const payload = await res.json().catch(() => ({}));
+        console.error("Failed to fetch notifications:", payload?.error || res.statusText);
         return;
       }
 
-      let sanitizedNotifications = (data as unknown as Notification[]) || [];
+      const payload = await res.json();
+      const apiNotifications = (payload?.data as Notification[]) || [];
 
-      const practicalNotifications = sanitizedNotifications.filter(
-        (n) => n.type === "practical_assigned",
-      );
+      // Keep only latest Re-attempt Granted notification per practical/title key.
+      const dedupedNotifications = apiNotifications.filter((n, idx, arr) => {
+        const key = getReattemptDedupKey(n);
+        if (!key) return true;
 
-      if (practicalNotifications.length > 0) {
-        try {
-          const practicalRes = await fetch("/api/student/practicals", {
-            cache: "no-store",
-          });
+        const firstIndex = arr.findIndex((candidate) => {
+          const candidateKey = getReattemptDedupKey(candidate);
+          return candidateKey === key;
+        });
+        return idx === firstIndex;
+      });
 
-          if (practicalRes.ok) {
-            const payload = await practicalRes.json();
-            const studentPracticals = Array.isArray(payload?.data)
-              ? payload.data
-              : [];
-            const activePracticalIds = new Set(
-              studentPracticals
-                .map((p: any) => Number(p?.id))
-                .filter((id: number) => Number.isFinite(id) && id > 0),
-            );
-
-            const staleNotificationIds = practicalNotifications
-              .filter((notification) => {
-                const rawPracticalId =
-                  notification.metadata?.practical_id ??
-                  notification.metadata?.practicalId;
-                const practicalId = Number(rawPracticalId);
-
-                return (
-                  Number.isFinite(practicalId) &&
-                  practicalId > 0 &&
-                  !activePracticalIds.has(practicalId)
-                );
-              })
-              .map((n) => n.id);
-
-            if (staleNotificationIds.length > 0) {
-              await Promise.all(
-                staleNotificationIds.map((id) =>
-                  fetch(`/api/notifications?id=${id}`, { method: "DELETE" }),
-                ),
-              );
-
-              const staleSet = new Set(staleNotificationIds);
-              sanitizedNotifications = sanitizedNotifications.filter(
-                (n) => !staleSet.has(n.id),
-              );
-            }
-          }
-        } catch (cleanupErr) {
-          console.error("Failed to cleanup stale practical notifications:", cleanupErr);
-        }
-      }
-
-      setNotifications(sanitizedNotifications);
+      setNotifications(dedupedNotifications);
     } catch (err) {
       console.error("Notification fetch error:", err);
     } finally {
       setLoading(false);
     }
-  }, [supabase, userId, filter]);
+  }, [userId, filter]);
 
   useEffect(() => {
     if (userId) {
@@ -248,6 +239,11 @@ export default function NotificationsPage() {
 
   const handleNotificationClick = async (notification: Notification) => {
     await markAsRead(notification.id);
+
+    if (isExamNotification(notification)) {
+      router.push("/student/exams");
+      return;
+    }
 
     if (notification.type !== "practical_assigned") {
       if (notification.link) {

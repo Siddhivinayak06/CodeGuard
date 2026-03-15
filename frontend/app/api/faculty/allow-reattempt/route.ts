@@ -77,13 +77,28 @@ export async function POST(req: Request) {
         .eq("id", practicalId)
         .single();
 
+      const practicalTitle = (practical as any)?.title || "a practical";
+
+      // Remove older grant notifications for the same practical to avoid duplicates.
+      await (supabase
+        .from("notifications") as any)
+        .delete()
+        .eq("user_id", studentId)
+        .eq("title", "Re-attempt Granted")
+        .ilike("message", `%"${practicalTitle}"%`);
+
       await supabase.from("notifications").insert({
         user_id: studentId,
         type: "submission_graded",
         title: "Re-attempt Granted",
-        message: `Your faculty has granted a re-attempt for "${(practical as any)?.title || "a practical"}". You now have ${newMax} total attempts.`,
-        link: "/student/practicals",
+        message: `Your faculty has granted a re-attempt for "${practicalTitle}". You now have ${newMax} total attempts.`,
+        link: `/student/practicals?notificationPracticalId=${practicalId}`,
         is_read: false,
+        metadata: {
+          practical_id: practicalId,
+          practicalId,
+          newMaxAttempts: newMax,
+        },
       } as any);
     } catch (notifErr) {
       console.error("Failed to send re-attempt notification:", notifErr);

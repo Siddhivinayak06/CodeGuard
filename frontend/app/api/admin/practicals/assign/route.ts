@@ -297,13 +297,27 @@ export async function POST(request: Request) {
 
     // Create notifications for assigned students
     try {
+      const { data: examForNotification } = await (supabase
+        .from("exams") as any)
+        .select("id")
+        .eq("practical_id", practical_id)
+        .maybeSingle();
+
+      const isExamPractical = Boolean(examForNotification?.id);
+
       const notifications = newAssignments.map((student_id) => ({
         user_id: student_id,
-        type: "practical_assigned" as const,
-        title: "New Practical Assigned",
-        message: `You have been assigned practical: ${practical.title}`,
-        link: `/editor?practicalId=${practical_id}${practical.subject_id ? `&subject=${practical.subject_id}` : ""}${practical.language ? `&language=${practical.language}` : ""}`,
-        metadata: { practical_id, subject_id: practical.subject_id },
+        type: isExamPractical ? "exam_assigned" : "practical_assigned",
+        title: isExamPractical ? "New Exam Assigned" : "New Practical Assigned",
+        message: isExamPractical
+          ? `You have been assigned exam: ${practical.title}`
+          : `You have been assigned practical: ${practical.title}`,
+        link: isExamPractical
+          ? "/student/exams"
+          : `/editor?practicalId=${practical_id}${practical.subject_id ? `&subject=${practical.subject_id}` : ""}${practical.language ? `&language=${practical.language}` : ""}`,
+        metadata: isExamPractical
+          ? { practical_id, exam_id: examForNotification.id, subject_id: practical.subject_id }
+          : { practical_id, subject_id: practical.subject_id },
       }));
 
       await supabase.from("notifications").insert(notifications as any);
@@ -454,6 +468,8 @@ export async function DELETE(request: Request) {
         | undefined;
 
       if (deletedAssignment?.student_id && deletedAssignment?.practical_id) {
+        const practicalIdToken = String(deletedAssignment.practical_id);
+
         const { data: exam } = await (supabase
           .from("exams") as any)
           .select("id")
@@ -466,6 +482,39 @@ export async function DELETE(request: Request) {
             .delete()
             .eq("exam_id", exam.id)
             .eq("student_id", deletedAssignment.student_id);
+        }
+
+        // Remove assignment notifications (both practical and exam) for this student+practical.
+        const { data: userNotifications } = await (supabase
+          .from("notifications") as any)
+          .select("id, link, metadata")
+          .eq("user_id", deletedAssignment.student_id);
+
+        const relatedNotificationIds = (userNotifications || [])
+          .filter((n: any) => {
+            const metadata = n?.metadata || {};
+            const metadataPracticalId =
+              metadata?.practical_id ?? metadata?.practicalId;
+
+            if (
+              metadataPracticalId !== undefined &&
+              metadataPracticalId !== null &&
+              String(metadataPracticalId) === practicalIdToken
+            ) {
+              return true;
+            }
+
+            const link = String(n?.link || "").toLowerCase();
+            return link.includes(`practicalid=${practicalIdToken}`.toLowerCase());
+          })
+          .map((n: any) => n.id)
+          .filter(Boolean);
+
+        if (relatedNotificationIds.length > 0) {
+          await (supabase
+            .from("notifications") as any)
+            .delete()
+            .in("id", relatedNotificationIds);
         }
       }
     } catch (cleanupErr) {

@@ -4,6 +4,50 @@ import { supabaseAdmin } from "@/lib/supabase/service";
 
 export const dynamic = "force-dynamic";
 
+async function pickSetRoundRobin(supabase: any, examId: string): Promise<string | null> {
+  const { data: sets } = (await (supabase
+    .from("exam_question_sets") as any)
+    .select("id, set_order")
+    .eq("exam_id", examId)
+    .order("set_order", { ascending: true })) as any as {
+      data: Array<{ id: string; set_order: number }> | null;
+    };
+
+  if (!sets || sets.length === 0) return null;
+
+  const { data: sessions } = (await (supabase
+    .from("exam_sessions") as any)
+    .select("assigned_set_id")
+    .eq("exam_id", examId)
+    .not("assigned_set_id", "is", null)) as any as {
+      data: Array<{ assigned_set_id: string | null }> | null;
+    };
+
+  const countMap = new Map<string, number>();
+  sets.forEach((s) => countMap.set(String(s.id), 0));
+
+  (sessions || []).forEach((s) => {
+    const sid = String(s.assigned_set_id || "");
+    if (sid && countMap.has(sid)) {
+      countMap.set(sid, (countMap.get(sid) || 0) + 1);
+    }
+  });
+
+  let minCount = Infinity;
+  let pickedSetId: string | null = null;
+
+  for (const s of sets) {
+    const sid = String(s.id);
+    const count = countMap.get(sid) || 0;
+    if (count < minCount) {
+      minCount = count;
+      pickedSetId = sid;
+    }
+  }
+
+  return pickedSetId;
+}
+
 /** GET: get assigned practicals for the current student */
 export async function GET() {
   try {
@@ -149,6 +193,7 @@ export async function GET() {
 
     // Resolve assigned set -> allowed level_ids per practical for this student.
     const allowedLevelIdsByPractical = new Map<number, Set<number>>();
+    const assignedSetNameByPractical = new Map<number, string>();
     const examIdByPractical = new Map<number, string>();
     const examWindowByPractical = new Map<number, { start_time?: string | null; end_time?: string | null }>();
     if (practicalIds.length > 0) {
@@ -174,11 +219,16 @@ export async function GET() {
       if (examIds.length > 0) {
         const { data: sessionsData } = (await supabase
           .from("exam_sessions")
-          .select("exam_id, assigned_set_id")
+          .select("id, exam_id, assigned_set_id")
           .eq("student_id", userId)
           .in("exam_id", examIds)) as any as {
-            data: Array<{ exam_id: string; assigned_set_id: string | null }> | null;
+            data: Array<{ id: string; exam_id: string; assigned_set_id: string | null }> | null;
           };
+
+        const sessionByExamId = new Map<string, { id: string; exam_id: string; assigned_set_id: string | null }>();
+        (sessionsData || []).forEach((row) => {
+          sessionByExamId.set(String(row.exam_id), row);
+        });
 
         const assignedSetByExamId = new Map<string, string>();
         (sessionsData || []).forEach((row) => {
@@ -187,15 +237,62 @@ export async function GET() {
           }
         });
 
+        // Ensure every exam card has exactly one assigned set for this student.
+        for (const examId of examIds) {
+          if (assignedSetByExamId.has(examId)) continue;
+
+          const pickedSetId = await pickSetRoundRobin(supabase, examId);
+          if (!pickedSetId) continue;
+
+          const existingSession = sessionByExamId.get(examId);
+          if (existingSession?.id) {
+            await (supabase
+              .from("exam_sessions") as any)
+              .update({ assigned_set_id: pickedSetId })
+              .eq("id", existingSession.id);
+          } else {
+            const practicalId = practicalByExamId.get(examId);
+            const examRow = (examsData || []).find((e) => String(e.id) === examId);
+            const fallbackExpiry = examRow?.end_time
+              ? new Date(examRow.end_time).toISOString()
+              : new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString();
+
+            if (practicalId) {
+              await (supabaseAdmin.from("exam_sessions") as any).insert({
+                exam_id: examId,
+                student_id: userId,
+                started_at: null,
+                expires_at: fallbackExpiry,
+                is_active: true,
+                assigned_set_id: pickedSetId,
+              });
+            }
+          }
+
+          assignedSetByExamId.set(examId, pickedSetId);
+        }
+
         const assignedSetIds = Array.from(new Set(Array.from(assignedSetByExamId.values())));
 
         if (assignedSetIds.length > 0) {
+          const { data: assignedSetsData } = (await supabase
+            .from("exam_question_sets")
+            .select("id, set_name")
+            .in("id", assignedSetIds)) as any as {
+              data: Array<{ id: string; set_name: string }> | null;
+            };
+
           const { data: setLevelsData } = (await supabase
             .from("exam_set_levels")
             .select("question_set_id, level_id")
             .in("question_set_id", assignedSetIds)) as any as {
               data: Array<{ question_set_id: string; level_id: number }> | null;
             };
+
+          const setNameBySetId = new Map<string, string>();
+          (assignedSetsData || []).forEach((row) => {
+            setNameBySetId.set(String(row.id), String(row.set_name || "").trim());
+          });
 
           const levelIdsBySetId = new Map<string, Set<number>>();
           (setLevelsData || []).forEach((row) => {
@@ -208,8 +305,12 @@ export async function GET() {
           assignedSetByExamId.forEach((setId, examId) => {
             const practicalId = practicalByExamId.get(examId);
             const allowed = levelIdsBySetId.get(setId);
+            const setName = setNameBySetId.get(setId);
             if (practicalId && allowed && allowed.size > 0) {
               allowedLevelIdsByPractical.set(practicalId, allowed);
+            }
+            if (practicalId && setName) {
+              assignedSetNameByPractical.set(practicalId, setName);
             }
           });
         }
@@ -245,11 +346,26 @@ export async function GET() {
       const examId = examIdByPractical.get(Number(p.id));
       const examWindow = examWindowByPractical.get(Number(p.id));
       const allowedLevelIds = allowedLevelIdsByPractical.get(Number(p.id));
-      const visibleLevels = allowedLevelIds
+      const assignedSetName = assignedSetNameByPractical.get(Number(p.id));
+
+      let visibleLevels = allowedLevelIds
         ? (p.practical_levels || []).filter((lvl: any) =>
             allowedLevelIds.has(Number(lvl.id)),
           )
         : (p.practical_levels || []);
+
+      // Defensive fallback: if level mappings are missing, infer by level title prefix.
+      // Example title format: "Set A - Task 1".
+      if ((!allowedLevelIds || allowedLevelIds.size === 0) && assignedSetName) {
+        const normalizedSet = assignedSetName.toLowerCase().trim();
+        const bySetPrefix = (p.practical_levels || []).filter((lvl: any) => {
+          const title = String(lvl?.title || "").toLowerCase().trim();
+          return title.startsWith(`${normalizedSet} -`) || title.startsWith(`${normalizedSet}:`) || title === normalizedSet;
+        });
+        if (bySetPrefix.length > 0) {
+          visibleLevels = bySetPrefix;
+        }
+      }
 
       // Determine final status
       // Priority: Passed -> Completed (Manual) -> Submission Status -> Assigned Status

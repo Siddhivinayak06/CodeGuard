@@ -48,6 +48,28 @@ async function pickSetRoundRobin(supabase: any, examId: string): Promise<string 
     return pickedSetId;
 }
 
+async function ensureAssignedSetId(
+    supabase: any,
+    session: any,
+    examId: string,
+): Promise<string | null> {
+    if (session?.assigned_set_id) {
+        return String(session.assigned_set_id);
+    }
+
+    const pickedSetId = await pickSetRoundRobin(supabase, examId);
+    if (!pickedSetId || !session?.id) {
+        return pickedSetId;
+    }
+
+    await (supabase
+        .from("exam_sessions") as any)
+        .update({ assigned_set_id: pickedSetId })
+        .eq("id", session.id);
+
+    return pickedSetId;
+}
+
 /**
  * Fetches the assigned set details (set info + level IDs) for a session.
  */
@@ -227,8 +249,9 @@ export async function POST(req: Request) {
             const expiresAt = new Date(existingSession.expires_at);
             const remainingMs = Math.max(0, expiresAt.getTime() - now.getTime());
 
-            // Fetch assigned set info
-            const assignedSet = await fetchAssignedSet(supabase, existingSession.assigned_set_id);
+            // Backfill legacy sessions that don't have an assigned set yet.
+            const assignedSetId = await ensureAssignedSetId(supabase, existingSession, examId);
+            const assignedSet = await fetchAssignedSet(supabase, assignedSetId);
 
             return NextResponse.json({
                 session: existingSession,

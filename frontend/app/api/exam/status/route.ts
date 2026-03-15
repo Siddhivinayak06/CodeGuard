@@ -1,6 +1,46 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 
+async function pickSetRoundRobin(supabase: any, examId: string): Promise<string | null> {
+    const { data: sets } = await (supabase
+        .from("exam_question_sets") as any)
+        .select("id, set_order")
+        .eq("exam_id", examId)
+        .order("set_order", { ascending: true });
+
+    if (!sets || sets.length === 0) return null;
+
+    const { data: sessions } = await (supabase
+        .from("exam_sessions") as any)
+        .select("assigned_set_id")
+        .eq("exam_id", examId)
+        .not("assigned_set_id", "is", null);
+
+    const countMap = new Map<string, number>();
+    sets.forEach((s: any) => countMap.set(String(s.id), 0));
+
+    (sessions || []).forEach((sess: any) => {
+        const sid = String(sess.assigned_set_id || "");
+        if (sid && countMap.has(sid)) {
+            countMap.set(sid, (countMap.get(sid) || 0) + 1);
+        }
+    });
+
+    let minCount = Infinity;
+    let pickedSetId: string | null = null;
+
+    for (const s of sets) {
+        const sid = String(s.id);
+        const count = countMap.get(sid) || 0;
+        if (count < minCount) {
+            minCount = count;
+            pickedSetId = sid;
+        }
+    }
+
+    return pickedSetId;
+}
+
 async function fetchAssignedSet(supabase: any, assignedSetId: string | null) {
     if (!assignedSetId) return null;
 
@@ -63,8 +103,20 @@ export async function POST(req: Request) {
         const remainingMs = Math.max(0, expiresAt.getTime() - now.getTime());
         const isExpired = remainingMs <= 0;
 
-        // Fetch assigned set details
-        const assignedSet = await fetchAssignedSet(supabase, session.assigned_set_id);
+        // Backfill legacy sessions with no assigned set so editor only shows one set.
+        let assignedSetId = session.assigned_set_id ? String(session.assigned_set_id) : null;
+        if (!assignedSetId) {
+            assignedSetId = await pickSetRoundRobin(supabase, examId);
+            if (assignedSetId) {
+                await (supabase
+                    .from("exam_sessions") as any)
+                    .update({ assigned_set_id: assignedSetId })
+                    .eq("id", session.id);
+                (session as any).assigned_set_id = assignedSetId;
+            }
+        }
+
+        const assignedSet = await fetchAssignedSet(supabase, assignedSetId);
 
         return NextResponse.json({
             session: {

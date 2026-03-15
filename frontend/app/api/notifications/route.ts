@@ -3,6 +3,23 @@ import { NextRequest, NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
 
+function getPracticalAssignedDedupKey(notification: any): string | null {
+  if (notification?.type !== "practical_assigned") return null;
+
+  const practicalId =
+    notification?.metadata?.practical_id ?? notification?.metadata?.practicalId;
+  if (practicalId) {
+    return `pid:${String(practicalId)}`;
+  }
+
+  const message = String(notification?.message || "").trim().toLowerCase();
+  if (message) {
+    return `msg:${message}`;
+  }
+
+  return `id:${String(notification?.id || "")}`;
+}
+
 // GET - Fetch user's notifications
 export async function GET(request: NextRequest) {
   try {
@@ -178,6 +195,15 @@ export async function GET(request: NextRequest) {
         })
         .filter(Boolean);
 
+      const seenPracticalAssigned = new Set<string>();
+      const deduped = enriched.filter((n: any) => {
+        const key = getPracticalAssignedDedupKey(n);
+        if (!key) return true;
+        if (seenPracticalAssigned.has(key)) return false;
+        seenPracticalAssigned.add(key);
+        return true;
+      });
+
       if (staleNotificationIds.length > 0) {
         const { error: cleanupError } = await supabase
           .from("notifications")
@@ -192,8 +218,8 @@ export async function GET(request: NextRequest) {
       }
 
       return NextResponse.json({
-        data: enriched,
-        total: count ? count - staleNotificationIds.length : count,
+        data: deduped,
+        total: deduped.length,
         hasMore: count ? offset + limit < count : false,
       });
     }

@@ -17,12 +17,14 @@ import {
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
 export interface Notification {
   id: string;
   user_id: string;
   type:
+  | "exam_assigned"
   | "practical_assigned"
   | "submission_graded"
   | "deadline_reminder"
@@ -37,6 +39,7 @@ export interface Notification {
 }
 
 const notificationIcons: Record<string, React.ReactNode> = {
+  exam_assigned: <GraduationCap className="w-5 h-5 text-violet-500" />,
   practical_assigned: <FileCode className="w-5 h-5 text-blue-500" />,
   submission_graded: <GraduationCap className="w-5 h-5 text-emerald-500" />,
   deadline_reminder: <Clock className="w-5 h-5 text-amber-500" />,
@@ -45,6 +48,7 @@ const notificationIcons: Record<string, React.ReactNode> = {
 };
 
 const notificationColors: Record<string, string> = {
+  exam_assigned: "bg-violet-100 dark:bg-violet-900/30",
   practical_assigned: "bg-blue-100 dark:bg-blue-900/30",
   submission_graded: "bg-emerald-100 dark:bg-emerald-900/30",
   deadline_reminder: "bg-amber-100 dark:bg-amber-900/30",
@@ -52,7 +56,21 @@ const notificationColors: Record<string, string> = {
   submission_received: "bg-indigo-100 dark:bg-indigo-900/30",
 };
 
+function isExamNotification(notification: Notification): boolean {
+  const haystack = [
+    notification.type,
+    notification.title,
+    notification.message || "",
+    notification.link || "",
+  ]
+    .join(" ")
+    .toLowerCase();
+
+  return haystack.includes("exam");
+}
+
 export default function NotificationPanel() {
+  const router = useRouter();
   const supabase = useMemo(() => createClient(), []);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
@@ -79,25 +97,24 @@ export default function NotificationPanel() {
 
     setLoading(true);
     try {
-      const { data, error } = await supabase
-        .from("notifications")
-        .select("*")
-        .eq("user_id", userId)
-        .order("created_at", { ascending: false })
-        .limit(20);
+      const res = await fetch("/api/notifications?limit=20", {
+        cache: "no-store",
+      });
 
-      if (error) {
-        console.error("Failed to fetch notifications:", error);
+      if (!res.ok) {
+        const payload = await res.json().catch(() => ({}));
+        console.error("Failed to fetch notifications:", payload?.error || res.statusText);
         return;
       }
 
-      setNotifications((data as unknown as Notification[]) || []);
+      const payload = await res.json();
+      setNotifications((payload?.data as Notification[]) || []);
     } catch (err) {
       console.error("Notification fetch error:", err);
     } finally {
       setLoading(false);
     }
-  }, [supabase, userId]);
+  }, [userId]);
 
   useEffect(() => {
     if (userId) {
@@ -330,8 +347,16 @@ export default function NotificationPanel() {
                           if (!notification.is_read && !isReattemptRequest) {
                             markAsRead(notification.id);
                           }
+
+                          if (isExamNotification(notification)) {
+                            setIsOpen(false);
+                            router.push("/student/exams");
+                            return;
+                          }
+
                           if (notification.link) {
                             setIsOpen(false);
+                            router.push(notification.link);
                           }
                         }}
                       >
