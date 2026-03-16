@@ -25,8 +25,9 @@ export async function GET(request: Request) {
         // 1. Fetch Practicals
         const { data: practicals, error: pracError } = (await supabase
             .from("practicals")
-            .select("id, title, subject_id, practical_number")
+            .select("id, title, subject_id, practical_number, is_exam")
             .eq("subject_id", id)
+            .eq("is_exam", false)
             .order("id", { ascending: true })) as any as { data: any[] | null, error: any };
 
         if (pracError) throw pracError;

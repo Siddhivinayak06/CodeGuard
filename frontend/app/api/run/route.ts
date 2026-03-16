@@ -32,6 +32,52 @@ export async function POST(req: Request) {
       );
     }
 
+    // --- Required Checks (Attempts, Locks, Deadlines) ---
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const { data: spRecord } = (await supabase
+      .from("student_practicals")
+      .select("attempt_count, max_attempts, is_locked, lock_reason, assigned_deadline")
+      .eq("student_id", user.id)
+      .eq("practical_id", pid)
+      .single()) as any;
+
+    if (!spRecord) {
+      return NextResponse.json({ error: "Allocation not found" }, { status: 404 });
+    }
+
+    if (spRecord.is_locked) {
+      return NextResponse.json({ error: spRecord.lock_reason || "Session locked" }, { status: 403 });
+    }
+
+    if (mode === "submit") {
+      const attempts = spRecord.attempt_count || 0;
+      const maxAttempts = spRecord.max_attempts || 1;
+      if (attempts > maxAttempts) {
+        return NextResponse.json({ error: "Attempt limit exceeded" }, { status: 403 });
+      }
+    }
+
+    // Deadline check for exams
+    const { data: examData } = (await supabase
+      .from("exams")
+      .select("end_time")
+      .eq("practical_id", pid)
+      .maybeSingle()) as any;
+
+    if (examData?.end_time) {
+      const now = new Date();
+      const endTime = new Date(examData.end_time);
+      // 5-min grace
+      if (now.getTime() > endTime.getTime() + 300000) {
+        return NextResponse.json({ error: "Exam has ended" }, { status: 403 });
+      }
+    }
+    // --- End Required Checks ---
+
     // Determine max marks and level filter
     let maxMarks = 10; // Default
     let levelId: string | null = null;

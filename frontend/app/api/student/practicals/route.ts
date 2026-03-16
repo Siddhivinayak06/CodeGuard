@@ -105,6 +105,7 @@ export async function GET() {
           language,
           max_marks,
           practical_number,
+          is_exam,
           subject_id,
           subjects (
             subject_name,
@@ -185,6 +186,7 @@ export async function GET() {
         id: p.id,
         assignment_id: sp.id,
         practical_number: p.practical_number,
+        is_exam: p.is_exam,
         title: p.title,
         description: p.description,
         language: p.language,

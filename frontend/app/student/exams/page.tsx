@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useMemo, useRef } from "react";
+import { useEffect, useState, useMemo, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import axios from "axios";
@@ -10,7 +10,6 @@ import type { User } from "@supabase/supabase-js";
 import {
   BookOpen,
   Clock,
-  Code,
   CheckCircle2,
   AlertCircle,
   FileCode,
@@ -21,17 +20,22 @@ import {
   Loader2,
   Code2,
   FileText,
-  RefreshCw,
-  AlertTriangle,
   Layout,
-  ChevronRight,
   List,
-  Lock,
+  AlertTriangle,
+  RefreshCw,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Tables } from "@/lib/supabase/database.types";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+
+// Optimized Imports
+import StatusBadge from "@/components/student/exams/StatusBadge";
+import ProgressRing from "@/components/student/exams/ProgressRing";
+import FilterTabs from "@/components/student/exams/FilterTabs";
+import PracticalCard from "@/components/student/exams/PracticalCard";
+import PracticalListItem from "@/components/student/exams/PracticalListItem";
+import { FormattedPractical, FilterType, Submission, TestCase } from "@/components/student/exams/types";
 
 // ============================================================================
 // ANIMATION VARIANTS
@@ -62,129 +66,14 @@ const itemVariants = {
 } as const;
 
 // ============================================================================
-// TYPES
+// HELPER FUNCTIONS
 // ============================================================================
-
-interface Submission {
-  id: number;
-  practical_id: number;
-  practical_title: string;
-  code: string;
-  output: string;
-  language: string;
-  status: string;
-  created_at: string;
-  marks_obtained: number | null;
-  testCaseResults: TestCaseResult[];
-}
-
-interface TestCase {
-  id: number;
-  input: string;
-  expected_output: string;
-  is_hidden: boolean | null;
-}
-
-interface TestCaseResult {
-  test_case_id: number;
-  status: string;
-  stdout: string;
-  stderr: string;
-  execution_time_ms: number;
-  memory_used_kb: number;
-}
-
-interface FormattedPractical {
-  id: number;
-  exam_id?: string;
-  exam_start_time?: string | null;
-  exam_end_time?: string | null;
-  subject_id: number | null;
-  practical_id: number;
-  practical_number?: number | null;
-  title: string;
-  description: string | null;
-
-  status:
-  | "assigned"
-  | "in_progress"
-  | "completed"
-  | "overdue"
-  | "passed"
-  | "failed"
-  | "submitted"
-  | "pending";
-  subject_name: string;
-  subject_code?: string;
-  subject_semester?: string | number | null;
-  language: string | null;
-  hasLevels: boolean;
-  attempt_count: number;
-  max_attempts: number;
-  is_locked: boolean;
-  lock_reason?: string | null;
-  marks_obtained?: number;
-  max_marks?: number;
-  notes?: string | null;
-  levels?: {
-    id: number;
-    level: "easy" | "medium" | "hard";
-    title: string | null;
-    description: string | null;
-    max_marks: number;
-  }[];
-  schedule_date?: string | null;
-  schedule_time?: string | null;
-}
-
-type FilterType = "all" | "pending" | "overdue" | "completed";
 
 function hasExamEnded(practical: FormattedPractical) {
   if (!practical.exam_end_time) return false;
   const endTime = new Date(practical.exam_end_time);
   if (Number.isNaN(endTime.getTime())) return false;
   return Date.now() > endTime.getTime();
-}
-
-// ============================================================================
-// HELPER FUNCTIONS
-// ============================================================================
-
-
-
-function getLanguageGradient(lang: string) {
-  switch (lang?.toLowerCase()) {
-    case "python":
-      return "from-yellow-400 via-amber-500 to-orange-500";
-    case "java":
-      return "from-orange-500 via-red-500 to-rose-600";
-    case "c":
-      return "from-blue-400 via-blue-500 to-indigo-600";
-    case "c++":
-    case "cpp":
-      return "from-purple-500 via-violet-500 to-fuchsia-500";
-    case "javascript":
-      return "from-yellow-300 via-amber-400 to-orange-400";
-    default:
-      return "from-indigo-500 via-purple-500 to-pink-500";
-  }
-}
-
-function getLanguageColor(lang: string) {
-  switch (lang?.toLowerCase()) {
-    case "python":
-      return "from-yellow-400 to-blue-500";
-    case "java":
-      return "from-red-500 to-orange-500";
-    case "c":
-      return "from-blue-500 to-cyan-500";
-    case "cpp":
-      return "from-blue-600 to-blue-400";
-    case "javascript":
-      return "from-yellow-300 to-yellow-500";
-    default:
-      return "from-indigo-400 to-indigo-600";
-  }
 }
 
 function getStatusGradient(status: string) {
@@ -200,173 +89,21 @@ function getStatusGradient(status: string) {
     case "overdue":
       return "from-orange-400 to-red-500";
     default:
-      // Pending / Assigned
       return "from-blue-400 to-indigo-600";
   }
 }
 
-function StatusBadge({ status }: { status: string }) {
-  const styles: Record<
-    string,
-    { bg: string; text: string; icon: React.ReactNode }
-  > = {
-    passed: {
-      bg: "bg-emerald-100 dark:bg-emerald-900/30 border-emerald-200 dark:border-emerald-800",
-      text: "text-emerald-700 dark:text-emerald-400",
-      icon: <CheckCircle2 className="w-3.5 h-3.5" />,
-    },
-    failed: {
-      bg: "bg-red-100 dark:bg-red-900/30 border-red-200 dark:border-red-800",
-      text: "text-red-700 dark:text-red-400",
-      icon: <AlertCircle className="w-3.5 h-3.5" />,
-    },
-    pending: {
-      bg: "bg-slate-100 dark:bg-slate-900/30 border-slate-200 dark:border-slate-700",
-      text: "text-slate-700 dark:text-slate-400",
-      icon: <Loader2 className="w-3.5 h-3.5 animate-spin" />,
-    },
-  };
-
-  const style = styles[status?.toLowerCase()] || styles.pending;
-
-  return (
-    <span
-      className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-lg border ${style.bg} ${style.text}`}
-    >
-      {style.icon}
-      <span className="capitalize">
-        {status?.replace(/_/g, " ") || "Unknown"}
-      </span>
-    </span>
-  );
+function getLanguageColor(lang: string) {
+  switch (lang?.toLowerCase()) {
+    case "python": return "from-yellow-400 to-blue-500";
+    case "java": return "from-red-500 to-orange-500";
+    case "c": return "from-blue-500 to-cyan-500";
+    case "cpp": return "from-blue-600 to-blue-400";
+    case "javascript": return "from-yellow-300 to-yellow-500";
+    default: return "from-indigo-400 to-indigo-600";
+  }
 }
 
-// ============================================================================
-// COMPONENTS
-// ============================================================================
-
-function ProgressRing({
-  progress,
-  size = 80,
-  strokeWidth = 8,
-  showLabel = true,
-}: {
-  progress: number;
-  size?: number;
-  strokeWidth?: number;
-  showLabel?: boolean;
-}) {
-  const radius = (size - strokeWidth) / 2;
-  const circumference = radius * 2 * Math.PI;
-  const safeProgress = Math.min(100, Math.max(0, progress));
-
-  return (
-    <div className="relative" style={{ width: size, height: size }}>
-      <svg width={size} height={size} className="progress-ring -rotate-90">
-        <circle
-          className="stroke-gray-200 dark:stroke-gray-700"
-          fill="transparent"
-          strokeWidth={strokeWidth}
-          r={radius}
-          cx={size / 2}
-          cy={size / 2}
-        />
-        <motion.circle
-          className="progress-ring-circle"
-          stroke="url(#gradient)"
-          fill="transparent"
-          strokeWidth={strokeWidth}
-          strokeLinecap="round"
-          strokeDasharray={circumference}
-          initial={{ strokeDashoffset: circumference }}
-          animate={{
-            strokeDashoffset:
-              circumference - (safeProgress / 100) * circumference,
-          }}
-          transition={{ duration: 1.5, ease: "easeOut", delay: 0.5 }}
-          r={radius}
-          cx={size / 2}
-          cy={size / 2}
-        />
-        <defs>
-          <linearGradient id="gradient" x1="0%" y1="0%" x2="100%" y2="0%">
-            <stop offset="0%" stopColor="#6366f1" />
-            <stop offset="50%" stopColor="#8b5cf6" />
-            <stop offset="100%" stopColor="#ec4899" />
-          </linearGradient>
-        </defs>
-      </svg>
-      {showLabel && (
-        <div className="absolute inset-0 flex items-center justify-center">
-          <motion.span
-            initial={{ opacity: 0, scale: 0.5 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.5, delay: 0.8 }}
-            className="text-lg font-bold text-gray-900 dark:text-white"
-          >
-            {safeProgress}%
-          </motion.span>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function FilterTabs({
-  activeFilter,
-  onFilterChange,
-  counts,
-}: {
-  activeFilter: FilterType;
-  onFilterChange: (filter: FilterType) => void;
-  counts: { all: number; pending: number; overdue: number; completed: number };
-}) {
-  const filters: { key: FilterType; label: string; count: number }[] = [
-    { key: "all", label: "All", count: counts.all },
-    { key: "pending", label: "Time Left", count: counts.pending },
-    { key: "overdue", label: "Overdue", count: counts.overdue },
-    { key: "completed", label: "Completed", count: counts.completed },
-  ];
-
-  return (
-    <div className="flex p-1 space-x-1 bg-white/50 dark:bg-gray-800/50 backdrop-blur-md rounded-xl border border-gray-200/50 dark:border-gray-700/50 overflow-x-auto">
-      {filters.map((f) => {
-        const isActive = activeFilter === f.key;
-        return (
-          <button
-            key={f.key}
-            onClick={() => onFilterChange(f.key)}
-            className={`
-                            relative flex items-center gap-2 px-4 py-2 text-sm font-bold rounded-lg transition-all duration-200 whitespace-nowrap
-                            ${isActive
-                ? "text-gray-900 dark:text-white"
-                : "text-gray-500 dark:text-gray-400 font-medium hover:text-gray-700 dark:hover:text-gray-200 hover:bg-white/40 dark:hover:bg-gray-700/40"
-              }
-                        `}
-          >
-            {isActive && (
-              <motion.div
-                layoutId="activeFilter"
-                className="absolute inset-0 bg-white dark:bg-gray-700 shadow-md ring-1 ring-black/5 dark:ring-white/10 rounded-lg"
-                style={{ zIndex: -1 }}
-                transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
-              />
-            )}
-            <span>{f.label}</span>
-            <span
-              className={`px-1.5 py-0.5 text-xs rounded-md ${isActive
-                ? "bg-gray-100 dark:bg-gray-600 text-gray-900 dark:text-white"
-                : "bg-gray-200/50 dark:bg-gray-800 text-gray-500 dark:text-gray-400"
-                }`}
-            >
-              {f.count}
-            </span>
-          </button>
-        );
-      })}
-    </div>
-  );
-}
 
 // ============================================================================
 // MAIN COMPONENT
@@ -660,7 +397,6 @@ export default function StudentExams() {
 
   // Derived Stats (Filtered)
   const stats = useMemo(() => {
-    // Filter practicals for stats based on selected subject
     const relevantPracticals = selectedSubjectId === "all"
       ? sequencedPracticals
       : sequencedPracticals.filter(p => p.subject_id == selectedSubjectId);
@@ -680,12 +416,10 @@ export default function StudentExams() {
   const filteredPracticals = useMemo(() => {
     let result = sequencedPracticals;
 
-    // 1. Subject Filter (Robust)
     if (selectedSubjectId !== "all") {
       result = result.filter(p => p.subject_id == selectedSubjectId);
     }
 
-    // 2. Search
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
       result = result.filter(
@@ -696,7 +430,6 @@ export default function StudentExams() {
       );
     }
 
-    // 3. Status Tabs
     const doneStatuses = ["passed", "failed", "completed"];
     switch (activeFilter) {
       case "pending":
@@ -710,8 +443,8 @@ export default function StudentExams() {
     }
   }, [sequencedPracticals, activeFilter, searchQuery, selectedSubjectId]);
 
-  // Handle View Result, Start Practical, Navigate...
-  const handleViewResult = async (
+  // Memoized Handlers
+  const handleViewResult = useCallback(async (
     practicalId: number,
     practicalTitle: string,
   ) => {
@@ -756,9 +489,19 @@ export default function StudentExams() {
     } finally {
       setLoadingDetails(false);
     }
-  };
+  }, [user, supabase]);
 
-  const handleStartPractical = (practical: FormattedPractical) => {
+  const navigateToPractical = useCallback((practical: FormattedPractical) => {
+    const examParams = practical.exam_id
+      ? `&isExam=true&examId=${encodeURIComponent(practical.exam_id)}`
+      : "";
+
+    router.push(
+      `/editor?practicalId=${practical.id}&subject=${practical.subject_id || 0}&language=${practical.language || "java"}${practical.hasLevels ? "&hasLevels=true" : ""}${examParams}`,
+    );
+  }, [router]);
+
+  const handleStartPractical = useCallback((practical: FormattedPractical) => {
     if (hasExamEnded(practical)) {
       toast.error("This exam is closed.");
       return;
@@ -768,10 +511,6 @@ export default function StudentExams() {
       toast.warning("This practical is locked. " + (practical.lock_reason || "Please complete the previous practical first."));
       return;
     }
-
-    // Deadline check removed to allow late submissions
-    //   return;
-    // }
 
     const remainingAttempts = practical.max_attempts - practical.attempt_count;
 
@@ -786,21 +525,10 @@ export default function StudentExams() {
     }
 
     navigateToPractical(practical);
-  };
+  }, [navigateToPractical]);
 
-  const navigateToPractical = (practical: FormattedPractical) => {
-    const examParams = practical.exam_id
-      ? `&isExam=true&examId=${encodeURIComponent(practical.exam_id)}`
-      : "";
-
-    router.push(
-      `/editor?practicalId=${practical.id}&subject=${practical.subject_id || 0}&language=${practical.language || "java"}${practical.hasLevels ? "&hasLevels=true" : ""}${examParams}`,
-    );
-  };
-
-  const handleRequestReattempt = async (practical: FormattedPractical) => {
+  const handleRequestReattempt = useCallback(async (practical: FormattedPractical) => {
     try {
-      // Optimistic Update
       setPracticals(prev => prev.map(p => {
         if (p.id === practical.id) {
           return {
@@ -816,19 +544,16 @@ export default function StudentExams() {
       });
 
       toast.success("Re-attempt request sent successfully!");
-      router.refresh();
     } catch (err: any) {
       console.error("Re-attempt request failed:", err);
       toast.error(err.response?.data?.error || "Failed to send request.");
-      router.refresh(); // Revert optimistic update by refetching
     }
-  };
+  }, []);
 
   const groupedPracticals = useMemo(() => {
     const groups: { [key: number]: FormattedPractical[] } = {};
     const others: FormattedPractical[] = [];
 
-    // Sort practicals by ID/Number first
     const sorted = [...filteredPracticals].sort((a, b) =>
       (a.practical_number || a.id) - (b.practical_number || b.id)
     );
@@ -845,400 +570,43 @@ export default function StudentExams() {
     return { groups, others };
   }, [filteredPracticals]);
 
-  const renderPracticalCard = (p: FormattedPractical) => {
-    const isDone = ["passed", "failed", "completed"].includes(p.status);
-    const isSubmitted = p.status === "submitted";
-    const isUrgent = false;
-    const showLocked = p.is_locked && !isDone && !isSubmitted;
-    const examClosed = hasExamEnded(p);
-    const hasNoAttemptsLeft = p.attempt_count >= p.max_attempts;
+  // Debounced search
+  const [debouncedSearch, setDebouncedSearch] = useState(searchQuery);
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(searchQuery), 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
 
-    // Status accent colors
-    const accentMap: Record<string, string> = {
-      passed: "from-emerald-500 to-green-400",
-      completed: "from-emerald-500 to-green-400",
-      failed: "from-red-500 to-rose-400",
-      in_progress: "from-amber-500 to-orange-400",
-      submitted: "from-blue-500 to-cyan-400",
-    };
-    const accent = accentMap[p.status] || "from-indigo-500 to-purple-500";
+  // Update filtered content to use debouncedSearch
+  const filteredContent = useMemo(() => {
+    let result = sequencedPracticals;
 
-    const scorePercent = (p.marks_obtained !== undefined && p.max_marks)
-      ? Math.round((p.marks_obtained / p.max_marks) * 100)
-      : null;
+    if (selectedSubjectId !== "all") {
+      result = result.filter(p => p.subject_id == selectedSubjectId);
+    }
 
-    // Format schedule time (strip seconds): "09:00:00" → "09:00"
-    const formatTime = (t: string) => t?.replace(/:(\d{2})$/, "").replace(/(\d{2}:\d{2}:\d{2})\s*-\s*(\d{2}:\d{2}:\d{2})/, (_, a, b) =>
-      `${a.slice(0, 5)} – ${b.slice(0, 5)}`
-    );
+    if (debouncedSearch.trim()) {
+      const q = debouncedSearch.toLowerCase();
+      result = result.filter(
+        (p) =>
+          p.title.toLowerCase().includes(q) ||
+          p.language?.toLowerCase().includes(q) ||
+          p.subject_name.toLowerCase().includes(q),
+      );
+    }
 
-    return (
-      <motion.div
-        variants={itemVariants}
-        key={p.id}
-        className={cn(
-          "group relative rounded-2xl transition-all duration-300 hover:shadow-2xl hover:shadow-indigo-500/10 hover:-translate-y-1 flex flex-col h-full overflow-hidden",
-          "bg-white dark:bg-gray-900/80 backdrop-blur-xl border border-gray-200/60 dark:border-gray-700/50",
-          isUrgent && "ring-2 ring-red-500/30",
-        )}
-      >
-        {/* Top Accent Bar */}
-        <div className={`h-1.5 w-full bg-gradient-to-r ${accent}`} />
-
-        {/* Card Body */}
-        <div className="p-5 flex flex-col flex-1">
-
-          {/* Header: Number Badge + Title */}
-          <div className="flex items-start gap-3 mb-4">
-            <div
-              className={`w-11 h-11 shrink-0 rounded-xl bg-gradient-to-br ${accent} flex items-center justify-center shadow-lg group-hover:scale-105 transition-transform duration-300`}
-            >
-              <span className="text-lg font-black text-white drop-shadow-sm">
-                {p.practical_number ?? p.id}
-              </span>
-            </div>
-            <div className="min-w-0 flex-1">
-              <h4 className="text-[15px] font-bold text-gray-900 dark:text-white line-clamp-2 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors leading-snug" title={p.title}>
-                {p.title}
-              </h4>
-            </div>
-          </div>
-
-          {/* Tags Row */}
-          <div className="flex flex-wrap items-center gap-1.5 mb-3">
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wide bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400">
-              <Code2 className="w-2.5 h-2.5" />
-              {p.language || "Any"}
-            </span>
-            {p.hasLevels && (
-              <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wide bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400">
-                Multi-Level
-              </span>
-            )}
-            <StatusBadge status={p.status} />
-            {showLocked && (
-              <span className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wide bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400">
-                <Lock className="w-2.5 h-2.5" />
-                Locked
-              </span>
-            )}
-          </div>
-
-          {/* Schedule Pill */}
-          {p.schedule_date && (
-            <div className="flex items-center gap-2 mb-3 text-xs font-medium text-indigo-600/80 dark:text-indigo-400/80 bg-indigo-50/60 dark:bg-indigo-900/10 px-2.5 py-1.5 rounded-lg w-fit">
-              <Clock className="w-3 h-3 shrink-0" />
-              <span>
-                {new Date(p.schedule_date).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}
-                {p.schedule_time && ` · ${formatTime(p.schedule_time)}`}
-              </span>
-            </div>
-          )}
-
-          {/* Description / Levels */}
-          <div className="flex-1 mb-1">
-            {p.description ? (
-              <p className="text-[13px] text-gray-500 dark:text-gray-400 line-clamp-2 leading-relaxed">
-                {p.description.replace(/^Problem Statement:?\s*/i, "")}
-              </p>
-            ) : p.hasLevels && p.levels && p.levels.length > 0 ? (
-              <div className="space-y-1">
-                {p.levels.map((lvl) => {
-                  const levelColors: Record<string, string> = {
-                    easy: "text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20",
-                    medium: "text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20",
-                    hard: "text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20",
-                  };
-                  return (
-                    <div key={lvl.id} className="flex items-center gap-2 text-[13px]">
-                      <span className={`shrink-0 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wide ${levelColors[lvl.level] || "text-gray-500 bg-gray-100"}`}>
-                        {lvl.level}
-                      </span>
-                      <span className="text-gray-500 dark:text-gray-400 line-clamp-1">
-                        {lvl.title || lvl.description?.replace(/^Problem Statement:?\s*/i, "")?.slice(0, 50) || "—"}
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
-            ) : (
-              <p className="text-[13px] text-gray-400 dark:text-gray-500 italic">
-                No description available.
-              </p>
-            )}
-          </div>
-
-          {/* Attempts Progress */}
-          {p.max_attempts > 1 && (
-            <div className="mt-3 pt-3 border-t border-gray-100 dark:border-gray-800/50">
-              <div className="flex items-center justify-between mb-1.5">
-                <span className="text-[10px] text-gray-400 uppercase font-bold tracking-wider">
-                  Attempts
-                </span>
-                <span className={cn(
-                  "text-xs font-bold",
-                  p.max_attempts - p.attempt_count <= 1 ? "text-red-500" : "text-gray-500 dark:text-gray-400"
-                )}>
-                  {p.attempt_count}/{p.max_attempts}
-                </span>
-              </div>
-              <div className="w-full h-1 rounded-full bg-gray-100 dark:bg-gray-800 overflow-hidden">
-                <div
-                  className={cn(
-                    "h-full rounded-full transition-all duration-500",
-                    p.max_attempts - p.attempt_count <= 1
-                      ? "bg-gradient-to-r from-red-500 to-rose-400"
-                      : "bg-gradient-to-r from-indigo-500 to-purple-500"
-                  )}
-                  style={{ width: `${Math.min((p.attempt_count / p.max_attempts) * 100, 100)}%` }}
-                />
-              </div>
-            </div>
-          )}
-
-          {/* Footer */}
-          <div className={cn(
-            "mt-auto pt-4 border-t border-gray-100 dark:border-gray-800/50",
-            p.max_attempts <= 1 ? "mt-4" : "mt-3",
-            (isDone || isSubmitted || p.status === "failed") ? "flex items-center justify-between gap-3" : ""
-          )}>
-            {!isDone && !isSubmitted && p.status !== "failed" ? (
-              <Button
-                className={cn(
-                  "w-full transition-all duration-300 shadow-md font-semibold",
-                  isUrgent
-                    ? "bg-red-600 hover:bg-red-700 shadow-red-500/20"
-                    : "bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 shadow-indigo-500/25"
-                )}
-                size="sm"
-                onClick={() => handleStartPractical(p)}
-                disabled={p.is_locked || hasNoAttemptsLeft || examClosed}
-              >
-                <span className="flex items-center gap-2">
-                  {p.is_locked
-                    ? "Locked"
-                    : examClosed
-                      ? "Closed"
-                    : hasNoAttemptsLeft
-                      ? "Attempts Exhausted"
-                    : p.status === "in_progress"
-                      ? "Continue Exam"
-                      : "Start Exam"}
-                  {!p.is_locked && !hasNoAttemptsLeft && !examClosed && (
-                    <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
-                  )}
-                </span>
-              </Button>
-            ) : (
-              <>
-                {/* Score Ring */}
-                {p.marks_obtained !== undefined && scorePercent !== null && (
-                  <div className="flex items-center gap-2.5">
-                    <div className="relative w-11 h-11">
-                      <svg className="w-11 h-11 -rotate-90" viewBox="0 0 44 44">
-                        <circle cx="22" cy="22" r="18" fill="none" stroke="currentColor" strokeWidth="3" className="text-gray-100 dark:text-gray-800" />
-                        <circle
-                          cx="22" cy="22" r="18" fill="none"
-                          strokeWidth="3" strokeLinecap="round"
-                          strokeDasharray={`${(scorePercent / 100) * 113} 113`}
-                          className={cn(
-                            p.status === "passed" ? "text-emerald-500" : p.status === "failed" ? "text-red-500" : "text-indigo-500",
-                            "transition-all duration-700"
-                          )}
-                          stroke="currentColor"
-                        />
-                      </svg>
-                      <span className={cn(
-                        "absolute inset-0 flex items-center justify-center text-[10px] font-black",
-                        p.status === "passed" ? "text-emerald-600" : p.status === "failed" ? "text-red-600" : "text-gray-900 dark:text-white"
-                      )}>
-                        {scorePercent}%
-                      </span>
-                    </div>
-                    <div className="flex flex-col">
-                      <span className="text-[10px] text-gray-400 uppercase font-bold tracking-wider leading-none mb-0.5">Score</span>
-                      <span className={cn("text-base font-black leading-none", p.status === "passed" ? "text-emerald-600" : "text-gray-900 dark:text-white")}>
-                        {p.marks_obtained}<span className="text-xs font-medium text-gray-400">/{p.max_marks}</span>
-                      </span>
-                    </div>
-                  </div>
-                )}
-
-                <div className="flex gap-1.5 ml-auto">
-                  {/* Retry */}
-                  {p.status === "failed" && p.attempt_count < p.max_attempts && (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => handleStartPractical(p)}
-                      className="gap-1 text-xs text-orange-600 border-orange-200 hover:bg-orange-50 bg-orange-50/50 dark:border-orange-800/50 dark:bg-orange-900/10 dark:hover:bg-orange-900/20 dark:text-orange-400"
-                      title={p.is_locked ? "Practical Locked" : "Try Again"}
-                      disabled={p.is_locked}
-                    >
-                      <RefreshCw className="w-3 h-3" />
-                      Retry
-                    </Button>
-                  )}
-
-                  {/* Request Reattempt */}
-                  {p.status === "failed" && p.attempt_count >= p.max_attempts && (
-                    (p.lock_reason?.includes("Re-attempt Requested")) ? (
-                      <div className="flex items-center gap-1 px-2.5 py-1.5 bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400 rounded-lg text-[11px] font-bold">
-                        <Loader2 className="w-3 h-3 animate-spin" />
-                        Requested
-                      </div>
-                    ) : (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => handleRequestReattempt(p)}
-                        className="gap-1 text-xs text-purple-600 border-purple-200 hover:bg-purple-50 bg-purple-50/50 dark:border-purple-800/50 dark:bg-purple-900/10 dark:hover:bg-purple-900/20 dark:text-purple-400"
-                        title="Request Re-attempt from Faculty"
-                      >
-                        <AlertTriangle className="w-3 h-3" />
-                        Request
-                      </Button>
-                    )
-                  )}
-
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-gray-300 font-medium"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleViewResult(p.id, p.title);
-                    }}
-                  >
-                    {isSubmitted ? "View Submission" : "View Result"}
-                  </Button>
-                </div>
-              </>
-            )}
-          </div>
-        </div>
-      </motion.div>
-    );
-  };
-
-  const renderPracticalListItem = (p: FormattedPractical) => {
-    const isDone = ["passed", "failed", "completed"].includes(p.status);
-    const isSubmitted = p.status === "submitted";
-    const isUrgent = false;
-    const examClosed = hasExamEnded(p);
-
-    return (
-      <motion.div
-        variants={itemVariants}
-        key={p.id}
-        className={cn(
-          "group w-full glass-card rounded-xl p-4 transition-all duration-300 hover:bg-white/60 dark:hover:bg-gray-900/60 border border-white/50 dark:border-gray-700/50 flex flex-col md:flex-row items-start md:items-center gap-4 bg-white/40 dark:bg-gray-900/40 backdrop-blur-md",
-          isUrgent && "border-l-4 border-l-red-500 dark:border-l-red-500"
-        )}
-      >
-        <div className="flex items-center gap-4 flex-1 w-full min-w-0">
-          <div
-            className={`w-10 h-10 shrink-0 rounded-xl bg-gradient-to-br ${getStatusGradient(
-              p.status,
-            )} flex items-center justify-center shadow-md`}
-          >
-            <span className="text-sm font-black text-white">
-              {p.practical_number ?? p.id}
-            </span>
-          </div>
-
-          <div className="flex-1 min-w-0">
-            <div className="flex flex-wrap items-center gap-2 mb-1">
-              <h4 className="text-sm font-bold text-gray-900 dark:text-white truncate" title={p.title}>
-                {p.title}
-              </h4>
-              <div className="flex items-center gap-1.5">
-                {(p.is_locked) && (
-                  <span className="px-1.5 py-0.5 rounded text-[9px] bg-gray-100 text-gray-500 border border-gray-200 uppercase font-bold tracking-wider">Locked</span>
-                )}
-                {isUrgent && <span className="px-1.5 py-0.5 rounded text-[9px] bg-red-100 text-red-600 border border-red-200 uppercase font-bold tracking-wider">Urgent</span>}
-              </div>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-3 text-xs text-gray-500 dark:text-gray-400">
-              <span className="flex items-center gap-1">
-                <Code2 className="w-3 h-3" />
-                {p.language || "Any"}
-              </span>
-
-              {p.schedule_date && (
-                <span className="flex items-center gap-1 text-indigo-600 dark:text-indigo-400">
-                  <Clock className="w-3 h-3" />
-                  {new Date(p.schedule_date).toLocaleDateString()}
-                  {p.schedule_time && <span className="text-gray-400">•</span>}
-                  {p.schedule_time}
-                </span>
-              )}
-
-              {(!isDone && p.max_attempts > 1) && (
-                <span className="flex items-center gap-1">
-                  <Sparkles className="w-3 h-3 text-amber-500" />
-                  {p.max_attempts - p.attempt_count} attempts
-                </span>
-              )}
-            </div>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-3 w-full md:w-auto mt-2 md:mt-0 justify-end">
-          {isDone || isSubmitted || p.status === "failed" ? (
-            <div className="flex items-center gap-3">
-              {p.marks_obtained !== undefined && (
-                <div className="text-right">
-                  <div className="text-[10px] text-gray-400 uppercase font-bold">Score</div>
-                  <div className={cn("text-lg font-black leading-none", p.status === "passed" ? "text-emerald-600" : "text-gray-900 dark:text-white")}>
-                    {p.marks_obtained}/{p.max_marks}
-                  </div>
-                </div>
-              )}
-
-              <div className="flex gap-2">
-                {/* Retry Button - Show if attempts are available */}
-                {p.status === "failed" && p.attempt_count < p.max_attempts && (
-                  <Button size="icon" variant="outline" className="w-8 h-8 text-orange-600 border-orange-200 bg-orange-50/50" onClick={() => handleStartPractical(p)} disabled={p.is_locked || examClosed}>
-                    <RefreshCw className="w-3.5 h-3.5" />
-                  </Button>
-                )}
-
-                {/* Request Reattempt - Only if attempts exhausted */}
-                {p.status === "failed" && p.attempt_count >= p.max_attempts && (
-                  (p.lock_reason?.includes("Re-attempt Requested")) ? (
-                    <div className="flex items-center gap-1.5 px-3 py-1 bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400 rounded-lg border border-purple-100 dark:border-purple-800/50 text-xs font-bold animate-pulse">
-                      <Loader2 className="w-3 h-3 animate-spin" />
-                      <span>Pending</span>
-                    </div>
-                  ) : (
-                    <Button size="icon" variant="outline" className="w-8 h-8 text-purple-600 border-purple-200 bg-purple-50/50" onClick={() => handleRequestReattempt(p)}>
-                      <AlertTriangle className="w-3.5 h-3.5" />
-                    </Button>
-                  )
-                )}
-
-                <Button variant="secondary" size="sm" className="h-8 text-xs" onClick={(e) => { e.stopPropagation(); handleViewResult(p.id, p.title); }}>
-                  {isSubmitted ? "View Submission" : "Result"}
-                </Button>
-              </div>
-            </div>
-          ) : (
-            <Button
-              size="sm"
-              className={cn("h-8 text-xs px-4", isUrgent ? "bg-red-600 hover:bg-red-700" : "bg-indigo-600 hover:bg-indigo-700")}
-              onClick={() => handleStartPractical(p)}
-              disabled={p.is_locked || examClosed}
-            >
-              {p.is_locked ? "Locked" : examClosed ? "Closed" : "Start"}
-              {!p.is_locked && !examClosed && <ArrowRight className="w-3 h-3 ml-1.5" />}
-            </Button>
-          )}
-        </div>
-      </motion.div>
-    );
-  };
+    const doneStatuses = ["passed", "failed", "completed"];
+    switch (activeFilter) {
+      case "pending":
+        return result.filter((p) => !doneStatuses.includes(p.status));
+      case "overdue":
+        return result.filter(p => p.status === "overdue");
+      case "completed":
+        return result.filter((p) => doneStatuses.includes(p.status));
+      default:
+        return result;
+    }
+  }, [sequencedPracticals, activeFilter, debouncedSearch, selectedSubjectId]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50/30 to-purple-50/30 dark:from-gray-950 dark:via-indigo-950/10 dark:to-purple-950/10">
@@ -1352,7 +720,6 @@ export default function StudentExams() {
               animate="visible"
               className="grid grid-cols-2 lg:grid-cols-4 gap-4"
             >
-              {/* Simplified Stats for cleaner look */}
               <div className="glass-card rounded-2xl p-4 flex flex-col gap-1 items-start">
                 <p className="text-xs text-gray-400 font-bold uppercase">Total</p>
                 <div className="text-2xl font-black text-gray-900 dark:text-white flex items-center gap-2">
@@ -1391,7 +758,7 @@ export default function StudentExams() {
               <div className="flex items-center gap-4">
                 <h2 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
                   <span className="w-1.5 h-6 bg-indigo-500 rounded-full"></span>
-                  {selectedSubjectId === "all" ? "Assignment Overview" : subjects.find(s => s.id === selectedSubjectId)?.name || "Assignments"}
+                  {selectedSubjectId === "all" ? "Assignment Overview" : subjects.find(s => s.id === selectedSubjectId)?.name}
                 </h2>
                 <div className="flex p-0.5 rounded-lg bg-gray-200 dark:bg-gray-800 border border-gray-300 dark:border-gray-700">
                   <button
@@ -1402,7 +769,6 @@ export default function StudentExams() {
                         ? "bg-white dark:bg-gray-700 shadow-sm text-indigo-600 dark:text-indigo-400"
                         : "text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
                     )}
-                    title="Grid View"
                   >
                     <Layout className="w-4 h-4" />
                   </button>
@@ -1414,7 +780,6 @@ export default function StudentExams() {
                         ? "bg-white dark:bg-gray-700 shadow-sm text-indigo-600 dark:text-indigo-400"
                         : "text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
                     )}
-                    title="List View"
                   >
                     <List className="w-4 h-4" />
                   </button>
@@ -1433,7 +798,7 @@ export default function StudentExams() {
             </div>
 
             {/* Practicals Grid */}
-            {filteredPracticals.length === 0 ? (
+            {filteredContent.length === 0 ? (
               <motion.div
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -1449,13 +814,9 @@ export default function StudentExams() {
               </motion.div>
             ) : (
               <AnimatePresence mode="popLayout">
-                {Object.keys(groupedPracticals.groups).map((subjectId) => {
+                {Object.entries(groupedPracticals.groups).map(([subjectId, items]) => {
                   const sId = Number(subjectId);
-                  const subject = subjects.find(s => s.id === sId) || { name: "Unknown Subject", code: "" };
-                  const practicals = groupedPracticals.groups[sId];
-
-                  // If subject filter is active, we don't need group headers if there's only one.
-                  // But if "All Subjects" is active, we definitely want headers.
+                  const subject = subjects.find(s => s.id === sId) || { name: "Unknown Subject" };
                   const showHeader = selectedSubjectId === "all";
 
                   return (
@@ -1475,9 +836,6 @@ export default function StudentExams() {
                             <h3 className="text-lg font-bold text-gray-900 dark:text-white">
                               {subject.name}
                             </h3>
-                            <p className="text-xs text-gray-500 font-medium">
-                              {practicals.length} assignment{practicals.length !== 1 ? 's' : ''}
-                            </p>
                           </div>
                         </div>
                       )}
@@ -1488,28 +846,33 @@ export default function StudentExams() {
                           ? "grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5"
                           : "grid-cols-1"
                       )}>
-                        {practicals.map(viewMode === "grid" ? renderPracticalCard : renderPracticalListItem)}
+                        {items.map(p => viewMode === "grid" ? (
+                          <PracticalCard 
+                            key={p.id} 
+                            p={p} 
+                            onStart={handleStartPractical} 
+                            onViewResult={handleViewResult} 
+                            onRequestReattempt={handleRequestReattempt}
+                            itemVariants={itemVariants}
+                          />
+                        ) : (
+                          <PracticalListItem 
+                            key={p.id} 
+                            p={p} 
+                            onStart={handleStartPractical} 
+                            onViewResult={handleViewResult} 
+                            onRequestReattempt={handleRequestReattempt}
+                            itemVariants={itemVariants}
+                            getStatusGradient={getStatusGradient}
+                          />
+                        ))}
                       </div>
                     </motion.div>
                   )
                 })}
-
-                {/* Others / Uncategorized */}
-                {groupedPracticals.others.length > 0 && (
-                  <motion.div className="space-y-4">
-                    <h3 className="text-lg font-bold text-gray-500 uppercase tracking-wider mt-8">Uncategorized</h3>
-                    <div className={cn(
-                      "grid gap-4",
-                      viewMode === "grid"
-                        ? "grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5"
-                        : "grid-cols-1"
-                    )}>
-                      {groupedPracticals.others.map(viewMode === "grid" ? renderPracticalCard : renderPracticalListItem)}
-                    </div>
-                  </motion.div>
-                )}
               </AnimatePresence>
             )}
+
 
           </div>
         </div>
@@ -1543,7 +906,7 @@ export default function StudentExams() {
                           <span className="text-gray-300">•</span>
                           <span className="flex items-center gap-1 font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/20 px-2 py-0.5 rounded-md border border-indigo-100 dark:border-indigo-800/50">
                             <Sparkles className="w-3.5 h-3.5" />
-                            {viewingSubmission.marks_obtained} / {filteredPracticals.find(p => p.id === viewingSubmission.practical_id)?.max_marks || 10}
+                            {viewingSubmission.marks_obtained} / {sequencedPracticals.find(p => p.id === viewingSubmission.practical_id)?.max_marks || 10}
                           </span>
                         </>
                       )}
@@ -1570,7 +933,7 @@ export default function StudentExams() {
                   <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 overflow-hidden shadow-sm flex-1 flex flex-col group hover:shadow-md transition-shadow">
                     <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-900/50 flex items-center justify-between flex-shrink-0">
                       <h4 className="font-semibold text-gray-700 dark:text-gray-200 flex items-center gap-2">
-                        <Code className="w-4 h-4 text-indigo-500" /> Submitted Code
+                        <Code2 className="w-4 h-4 text-indigo-500" /> Submitted Code
                       </h4>
                       <span className="text-[10px] font-bold tracking-wider px-2 py-1 rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 uppercase border border-gray-200 dark:border-gray-600">
                         {viewingSubmission.language}

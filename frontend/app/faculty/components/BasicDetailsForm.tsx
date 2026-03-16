@@ -124,7 +124,7 @@ export default function BasicDetailsForm({
         transition={{ delay: 0.2 }}
         className="flex gap-4 mb-5"
       >
-        {showNumberField && (
+        {showNumberField && !isExam && (
           <div className="w-32 shrink-0">
             <FormInput label={isExam ? "Exam No" : "Practical No"} required>
               <input

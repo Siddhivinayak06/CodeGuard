@@ -94,11 +94,20 @@ export async function POST(req: Request) {
         // Fetch exam config
         const { data: exam } = await (supabase
             .from("exams") as any)
-            .select("duration_minutes, max_violations, allow_copy_paste, require_fullscreen, show_test_results")
+            .select("duration_minutes, max_violations, allow_copy_paste, require_fullscreen, show_test_results, end_time")
             .eq("id", examId)
             .single();
 
         const now = new Date();
+
+        if (exam?.end_time) {
+            const endTime = new Date(exam.end_time);
+            // 5-min grace
+            if (now.getTime() > endTime.getTime() + 300000) {
+                return NextResponse.json({ error: "Exam window has closed" }, { status: 403 });
+            }
+        }
+
         const expiresAt = new Date(session.expires_at);
         const remainingMs = Math.max(0, expiresAt.getTime() - now.getTime());
         const isExpired = remainingMs <= 0;

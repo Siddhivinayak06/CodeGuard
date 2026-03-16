@@ -1462,9 +1462,9 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
 
     setSaving(true);
     try {
-      let resolvedPracticalNumber = Number(form.practical_number) || 0;
+      let resolvedPracticalNumber: number | null = isExam ? null : (Number(form.practical_number) || 0);
 
-      if (!resolvedPracticalNumber && form.subject_id) {
+      if (!isExam && !resolvedPracticalNumber && form.subject_id) {
         const { data: subjectPracticals, error: numErr } = await supabase
           .from("practicals")
           .select("practical_number")

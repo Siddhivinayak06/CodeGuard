@@ -367,7 +367,7 @@ int main() {
         if (!isExamMode) {
           await axios.post(
             "/api/practical/start",
-            { practicalId: Number(practicalId) },
+             { practicalId: Number(practicalId) },
             { validateStatus: () => true },
           );
         }
@@ -381,6 +381,17 @@ int main() {
           marks_obtained: 0,
           test_cases_passed: "0/0",
         });
+
+        // Finalize exam session on auto-submit
+        if (isExamMode) {
+          const examIdToSubmit = examIdParam || examSession?.exam_id;
+          if (examIdToSubmit) {
+             await axios.post("/api/exam/submit", { 
+               examId: examIdToSubmit, 
+               practicalId: Number(practicalId)
+             });
+          }
+        }
         console.log("Code auto-submitted due to session invalidation");
       } catch (err) {
         console.error("Auto-submit failed:", err);
@@ -1048,55 +1059,66 @@ int main() {
       let totalTests = 0;
       let overallVerdict = "passed";
 
-      for (const levelData of levelsToSubmit) {
-        // Get code for this level
-        const levelCode = hasLevelsParam
-          ? (taskCodeMapRef.current[levelData.level] || getStarterCode(lang))
-          : code;
+      setLoading(true);
+      try {
+        // Evaluate levels
+        for (const levelData of levelsToSubmit) {
+          try {
+            // Get code for this level
+            const levelCode = hasLevelsParam
+              ? (taskCodeMapRef.current[levelData.level] || getStarterCode(lang))
+              : code;
 
-        if (!levelCode) continue;
+            if (!levelCode) continue;
 
-        // Create submission for this level
-        const submissionRes = await axios.post("/api/submission/create", {
-          student_id: user.id,
-          practical_id: Number(practicalId),
-          code: levelCode,
-          language: lang,
-          status: "pending",
-          marks_obtained: 0,
-          test_cases_passed: "0/0",
-        });
+            // Create submission for this level
+            const submissionRes = await axios.post("/api/submission/create", {
+              student_id: user.id,
+              practical_id: Number(practicalId),
+              code: levelCode,
+              language: lang,
+              status: "pending",
+              marks_obtained: 0,
+              test_cases_passed: "0/0",
+            });
 
-        const submission = submissionRes.data.submission;
-        if (!submission?.id) {
-          console.error(`Failed to create submission for ${levelData.level}`);
-          continue;
+            const submission = submissionRes.data.submission;
+            if (!submission?.id) {
+              console.error(`Failed to create submission for ${levelData.level}`);
+              continue;
+            }
+
+            // Run tests for this level
+            const runRes = await axios.post("/api/run", {
+              code: levelCode,
+              lang,
+              practicalId,
+              submissionId: submission.id,
+              mode: "submit",
+              level: levelData.level,
+            });
+
+            const levelMarks = runRes.data.marksObtained ?? 0;
+            const levelPassed = runRes.data.passedTestCases ?? 0;
+            const levelTotal = runRes.data.totalTestCases ?? 0;
+            const levelVerdict = runRes.data.verdict || "pending";
+
+            totalMarks += levelMarks;
+            totalPassed += levelPassed;
+            totalTests += levelTotal;
+
+            if (levelVerdict === "failed" || levelVerdict === "pending") {
+              overallVerdict = "failed";
+            }
+
+            console.log(`[Submit] ${levelData.level}: ${levelVerdict} (${levelMarks} marks, ${levelPassed}/${levelTotal} tests)`);
+          } catch (levelErr) {
+            console.error(`Error processing level ${levelData.level}:`, levelErr);
+            // Continue to next level instead of failing everything
+          }
         }
-
-        // Run tests for this level
-        const runRes = await axios.post("/api/run", {
-          code: levelCode,
-          lang,
-          practicalId,
-          submissionId: submission.id,
-          mode: "submit",
-          level: levelData.level,
-        });
-
-        const levelMarks = runRes.data.marksObtained ?? 0;
-        const levelPassed = runRes.data.passedTestCases ?? 0;
-        const levelTotal = runRes.data.totalTestCases ?? 0;
-        const levelVerdict = runRes.data.verdict || "pending";
-
-        totalMarks += levelMarks;
-        totalPassed += levelPassed;
-        totalTests += levelTotal;
-
-        if (levelVerdict === "failed" || levelVerdict === "pending") {
-          overallVerdict = "failed";
-        }
-
-        console.log(`[Submit] ${levelData.level}: ${levelVerdict} (${levelMarks} marks, ${levelPassed}/${levelTotal} tests)`);
+      } catch (loopErr) {
+        console.error("Critical error in evaluation loop:", loopErr);
       }
 
       setSubmissionStatus("evaluated");
@@ -1108,6 +1130,22 @@ int main() {
       // Exit fullscreen gracefully before navigation
       if (document.fullscreenElement) {
         try { await document.exitFullscreen(); } catch { /* ignore */ }
+      }
+
+      // If exam mode, finalize the exam session using the new API
+      if (isExamMode && practicalId) {
+        try {
+           const examIdToSubmit = examIdParam || examSession?.exam_id;
+           if (examIdToSubmit) {
+             await axios.post("/api/exam/submit", { 
+               examId: examIdToSubmit, 
+               practicalId: Number(practicalId)
+             });
+             console.log("Exam finalized and attempt consumed.");
+           }
+        } catch (submitErr) {
+           console.error("Failed to finalize exam:", submitErr);
+        }
       }
 
       const maxTotal = levelsToSubmit.reduce((sum, l) => sum + (l.max_marks || 10), 0);

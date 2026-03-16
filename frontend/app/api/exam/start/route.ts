@@ -141,9 +141,11 @@ async function reserveAttemptOnStart(
         .eq("id", spRecord.id);
 
     if (updateErr) {
+        console.error("Failed to reserve attempt:", updateErr);
         return { ok: false, status: 500, error: "Failed to reserve attempt" };
     }
 
+    console.log(`[Exam Start] Attempt reserved for user ${userId}, practical ${practicalId}. New count: ${attempts + 1}`);
     return { ok: true };
 }
 

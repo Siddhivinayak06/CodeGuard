@@ -24,11 +24,12 @@ export async function GET(request: Request) {
       .select(
         `
         *,
-        practicals (id, title),
+        practicals!inner (id, title, is_exam),
         schedule_allocations (count),
         faculty:users!faculty_id (uid, name, email, role)
       `,
       )
+      .eq("practicals.is_exam", false)
       .gte("date", startDate)
       .lte("date", endDate)
       .order("date", { ascending: true })

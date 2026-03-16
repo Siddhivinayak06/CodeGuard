@@ -82,63 +82,124 @@ export async function POST(req: Request) {
             return NextResponse.json({ error: "Missing examId or sets array" }, { status: 400 });
         }
 
-        // Validate: no empty set names, each set must have at least 1 level
+        // Validate: no empty set names, each set must have at least 1 level, and set names must be unique
+        const setNames = new Set<string>();
         for (const s of sets) {
-            if (!s.set_name || !s.set_name.trim()) {
+            const trimmedName = s.set_name?.trim();
+            if (!trimmedName) {
                 return NextResponse.json({ error: "Set name cannot be empty" }, { status: 400 });
             }
+            if (setNames.has(trimmedName.toLowerCase())) {
+                return NextResponse.json(
+                    { error: `Duplicate set name "${trimmedName}" is not allowed` },
+                    { status: 400 }
+                );
+            }
+            setNames.add(trimmedName.toLowerCase());
+
             if (!Array.isArray(s.level_ids) || s.level_ids.length === 0) {
                 return NextResponse.json(
-                    { error: `Set "${s.set_name}" must have at least one sub-question` },
+                    { error: `Set "${trimmedName}" must have at least one sub-question` },
                     { status: 400 }
                 );
             }
         }
 
-        // Delete existing sets (cascade will delete exam_set_levels too)
-        await (supabase
+        // Fetch existing sets
+        const { data: existingSets, error: fetchErr } = await (supabase
             .from("exam_question_sets") as any)
-            .delete()
+            .select("id, set_name")
             .eq("exam_id", examId);
+
+        if (fetchErr) {
+            console.error("Error fetching existing sets:", fetchErr);
+            return NextResponse.json({ error: "Failed to fetch existing sets" }, { status: 500 });
+        }
+
+        const existingSetMap = new Map((existingSets || []).map((s: any) => [s.set_name.toLowerCase(), s.id]));
+        const incomingSetNames = new Set(sets.map((s: any) => s.set_name.trim().toLowerCase()));
+
+        // 1. Delete sets that are no longer in the new payload (and unassign sessions)
+        const setsToDelete = (existingSets || []).filter((s: any) => !incomingSetNames.has(s.set_name.toLowerCase()));
+        if (setsToDelete.length > 0) {
+            const deleteSetIds = setsToDelete.map((s: any) => s.id);
+            
+            // Unassign sessions mapped to these deleted sets
+            await (supabase
+                .from("exam_sessions") as any)
+                .update({ assigned_set_id: null })
+                .in("assigned_set_id", deleteSetIds);
+                
+            // Delete levels for these sets
+            await (supabase
+                .from("exam_set_levels") as any)
+                .delete()
+                .in("question_set_id", deleteSetIds);
+                
+            // Delete the sets themselves
+            await (supabase
+                .from("exam_question_sets") as any)
+                .delete()
+                .in("id", deleteSetIds);
+        }
 
         if (sets.length === 0) {
             return NextResponse.json({ success: true, sets: [] });
         }
 
-        // Insert new sets
-        const setInserts = sets.map((s: any, idx: number) => ({
-            exam_id: examId,
-            set_name: s.set_name.trim(),
-            set_order: idx,
-        }));
+        const insertedSets = [];
 
-        const { data: insertedSets, error: insertErr } = await (supabase
-            .from("exam_question_sets") as any)
-            .insert(setInserts)
-            .select("*");
+        // 2. Upsert sets one by one
+        for (let idx = 0; idx < sets.length; idx++) {
+            const s = sets[idx];
+            const trimmedName = s.set_name.trim();
+            const lowerName = trimmedName.toLowerCase();
+            let setId = existingSetMap.get(lowerName);
 
-        if (insertErr) throw insertErr;
-
-        // Insert level mappings
-        const levelInserts: any[] = [];
-        sets.forEach((s: any, idx: number) => {
-            const insertedSet = insertedSets[idx];
-            if (insertedSet) {
-                s.level_ids.forEach((levelId: number, sortIdx: number) => {
-                    levelInserts.push({
-                        question_set_id: insertedSet.id,
-                        level_id: levelId,
-                        sort_order: sortIdx,
-                    });
-                });
+            if (setId) {
+                // Update existing set order
+                const { error: updateSetErr } = await (supabase
+                    .from("exam_question_sets") as any)
+                    .update({ set_order: idx })
+                    .eq("id", setId);
+                if (updateSetErr) throw updateSetErr;
+            } else {
+                // Insert new set
+                const { data: newSet, error: insertSetErr } = await (supabase
+                    .from("exam_question_sets") as any)
+                    .insert({
+                        exam_id: examId,
+                        set_name: trimmedName,
+                        set_order: idx,
+                    })
+                    .select("id")
+                    .single();
+                if (insertSetErr) throw insertSetErr;
+                setId = newSet.id;
             }
-        });
 
-        if (levelInserts.length > 0) {
-            const { error: levelInsertErr } = await (supabase
+            insertedSets.push({ id: setId, set_name: trimmedName, set_order: idx });
+
+            // 3. Sync level mappings for this set
+            // First, delete old level mappings for this set
+            await (supabase
                 .from("exam_set_levels") as any)
-                .insert(levelInserts);
-            if (levelInsertErr) throw levelInsertErr;
+                .delete()
+                .eq("question_set_id", setId);
+
+            // Then, insert new level mappings
+            const levelInserts = s.level_ids.map((levelId: number, sortIdx: number) => ({
+                question_set_id: setId,
+                level_id: levelId,
+                sort_order: sortIdx,
+            }));
+
+            if (levelInserts.length > 0) {
+                const { error: levelInsertErr } = await (supabase
+                    .from("exam_set_levels") as any)
+                    .insert(levelInserts);
+                if (levelInsertErr) throw levelInsertErr;
+            }
         }
 
         // Return the full result
@@ -173,6 +234,19 @@ export async function DELETE(req: Request) {
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
 
+        // 1. Unassign sessions mapped to this set
+        await (supabase
+            .from("exam_sessions") as any)
+            .update({ assigned_set_id: null })
+            .eq("assigned_set_id", setId);
+
+        // 2. Delete level mappings
+        await (supabase
+            .from("exam_set_levels") as any)
+            .delete()
+            .eq("question_set_id", setId);
+
+        // 3. Delete the set itself
         const { error } = await (supabase
             .from("exam_question_sets") as any)
             .delete()
