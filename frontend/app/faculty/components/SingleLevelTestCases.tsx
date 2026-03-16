@@ -3,7 +3,7 @@
 import React from "react";
 import dynamic from "next/dynamic";
 import { useTheme } from "next-themes";
-import { FileText, Code as CodeIcon } from "lucide-react";
+import { FileText, Code as CodeIcon, Sparkles, Loader2 } from "lucide-react";
 import { oneDark } from "@codemirror/theme-one-dark";
 import { Extension } from "@codemirror/state";
 import { TestCase, Practical } from "../types";
@@ -39,6 +39,8 @@ interface SingleLevelTestCasesProps {
   generateTestCases: () => Promise<void>;
   generatingTests: boolean;
   isExam?: boolean;
+  onGenerateCode?: () => Promise<void>;
+  isGeneratingCode?: boolean;
 }
 
 export default function SingleLevelTestCases({
@@ -58,35 +60,13 @@ export default function SingleLevelTestCases({
   generateTestCases,
   generatingTests,
   isExam,
+  onGenerateCode,
+  isGeneratingCode = false,
 }: SingleLevelTestCasesProps) {
   const { theme } = useTheme();
 
   return (
     <>
-      {/* Description */}
-      <div className="glass-card-premium rounded-2xl p-5 shadow-sm">
-        <div className="flex items-center gap-3 pb-3 border-b border-gray-200 dark:border-gray-700 mb-4">
-          <div className="p-2 bg-gradient-to-br from-blue-500 to-cyan-500 rounded-xl text-white shadow-lg shadow-blue-500/25">
-            <FileText size={18} />
-          </div>
-          <div>
-            <h3 className="font-bold text-gray-900 dark:text-white">
-              Problem Description
-            </h3>
-            <p className="text-xs text-gray-500 dark:text-gray-400">
-              Detailed explanation of the {isExam ? "exam" : "practical"} task
-            </p>
-          </div>
-        </div>
-        <textarea
-          name="description"
-          value={form.description || ""}
-          onChange={handleInput}
-          className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent min-h-[150px] text-sm"
-          placeholder="Describe the problem, requirements, and constraints..."
-        />
-      </div>
-
       {/* Starter Code */}
       <div className="glass-card-premium rounded-2xl p-5 shadow-sm mb-6">
         <div className="flex items-center justify-between pb-3 border-b border-gray-200 dark:border-gray-700 mb-4">
@@ -103,9 +83,26 @@ export default function SingleLevelTestCases({
               </p>
             </div>
           </div>
-          <span className="text-xs px-3 py-1.5 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-700 dark:text-gray-300">
-            {String(sampleLanguage || "c").toUpperCase()}
-          </span>
+          <div className="flex items-center gap-2">
+            {onGenerateCode && (
+              <button
+                type="button"
+                onClick={onGenerateCode}
+                disabled={isGeneratingCode || !form.description?.trim()}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white rounded-lg text-[10px] font-bold shadow-md shadow-indigo-500/20 transition-all disabled:opacity-50"
+              >
+                {isGeneratingCode ? (
+                  <Loader2 size={12} className="animate-spin" />
+                ) : (
+                  <Sparkles size={12} />
+                )}
+                ✨ Generate with AI
+              </button>
+            )}
+            <span className="text-xs px-3 py-1.5 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-700 dark:text-gray-300">
+              {String(sampleLanguage || "c").toUpperCase()}
+            </span>
+          </div>
         </div>
         <div className="rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700">
           <CodeMirror

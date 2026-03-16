@@ -60,6 +60,42 @@ export async function POST(req: Request) {
 
     if (updateError) throw updateError;
 
+    // --- NEW: Reset exam sessions & submissions if this is an exam ---
+    const { data: practical } = (await supabase
+      .from("practicals")
+      .select("id, is_exam, title")
+      .eq("id", practicalId)
+      .single()) as any;
+
+    if (practical?.is_exam) {
+      // 1. Delete existing exam session so they get a fresh start
+      // Note: We need to find the exam_id using practical_id first
+      const { data: examData } = (await supabase
+        .from("exams")
+        .select("id")
+        .eq("practical_id", practicalId)
+        .single()) as any;
+        
+      if (examData?.id) {
+        await supabase
+          .from("exam_sessions")
+          .delete()
+          .eq("exam_id", examData.id)
+          .eq("student_id", studentId);
+      }
+
+      // 2. Clear old submissions to allow starting from scratch 
+      //    (otherwise start screen may block them or old code will persist)
+      await supabase
+        .from("submissions")
+        .delete()
+        .eq("practical_id", practicalId)
+        .eq("student_id", studentId);
+        
+      console.log(`Reset exam session & submissions for student ${studentId} on exam practical ${practicalId}`);
+    }
+    // -----------------------------------------------------------------
+
     // Log action
     await supabase.from("audit_logs").insert({
       user_id: user.id,
@@ -71,12 +107,6 @@ export async function POST(req: Request) {
 
     // Notify student about the re-attempt
     try {
-      const { data: practical } = await supabase
-        .from("practicals")
-        .select("title")
-        .eq("id", practicalId)
-        .single();
-
       const practicalTitle = (practical as any)?.title || "a practical";
 
       // Remove older grant notifications for the same practical to avoid duplicates.

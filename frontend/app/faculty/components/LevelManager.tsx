@@ -7,10 +7,12 @@ import {
   Plus as PlusIcon,
   Trash2 as TrashIcon,
   Code as CodeIcon,
+  Loader2,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { TestCase, Level } from "../types";
 import TestCaseManager from "./TestCaseManager";
+import MarkdownEditor from "./MarkdownEditor";
 import dynamic from "next/dynamic";
 import { cpp } from "@codemirror/lang-cpp";
 import { python } from "@codemirror/lang-python";
@@ -49,6 +51,11 @@ interface LevelManagerProps {
   sampleCode: string;
   setSampleCode: (code: string) => void;
   sampleLanguage: string;
+  onMarkdownChange: (level: string, value: string) => void;
+  onGenerateCode: (level: string) => Promise<void>;
+  onMagicFormat: (text: string, callback: (formatted: string) => void) => Promise<void>;
+  isFormatting: boolean;
+  isGeneratingCode: boolean;
 }
 
 function cx(...parts: Array<string | false | null | undefined>) {
@@ -70,6 +77,11 @@ export default function LevelManager({
   sampleLanguage,
   onAddLevel,
   onRemoveLevel,
+  onMarkdownChange,
+  onGenerateCode,
+  onMagicFormat,
+  isFormatting,
+  isGeneratingCode,
 }: LevelManagerProps) {
   const { theme } = useTheme();
   const getCurrentLevel = () => levels.find((l) => l.level === activeLevel)!;
@@ -228,16 +240,13 @@ export default function LevelManager({
           </div>
 
           <div>
-            <label className="block text-xs font-bold uppercase tracking-wide text-gray-600 dark:text-gray-400 mb-2">
-              Problem Description
-            </label>
-            <textarea
+            <MarkdownEditor
+              label="Problem Description"
               value={getCurrentLevel().description || ""}
-              onChange={(e) =>
-                updateLevelField(activeLevel, "description", e.target.value)
-              }
-              className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent min-h-[120px]"
+              onChange={(val) => onMarkdownChange(activeLevel, val)}
               placeholder={`Describe the ${activeLevel} problem...`}
+              onMagicFormat={() => onMagicFormat(getCurrentLevel().description || "", (val) => onMarkdownChange(activeLevel, val))}
+              isFormatting={isFormatting}
             />
           </div>
 
@@ -257,9 +266,24 @@ export default function LevelManager({
                   </p>
                 </div>
               </div>
-              <span className="text-xs px-3 py-1.5 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-700 dark:text-gray-300">
-                {String(sampleLanguage || "c").toUpperCase()}
-              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => onGenerateCode(activeLevel)}
+                  disabled={isGeneratingCode || !getCurrentLevel().description?.trim()}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white rounded-lg text-[10px] font-bold shadow-md shadow-indigo-500/20 transition-all disabled:opacity-50"
+                >
+                  {isGeneratingCode ? (
+                    <Loader2 size={12} className="animate-spin" />
+                  ) : (
+                    <Sparkles size={12} />
+                  )}
+                  ✨ Generate with AI
+                </button>
+                <span className="text-xs px-3 py-1.5 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-700 dark:text-gray-300">
+                  {String(sampleLanguage || "c").toUpperCase()}
+                </span>
+              </div>
             </div>
             <div className="rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700">
               <CodeMirror

@@ -18,6 +18,7 @@ export async function POST(req: Request) {
       status = "pending",
       marks_obtained = 0,
       execution_details,
+      level_id = null,
     } = await req.json();
 
     if (!student_id || !practical_id || !code || !language) {
@@ -76,13 +77,20 @@ export async function POST(req: Request) {
       }
     }
 
-    // Check if submission already exists
-    const { data: existingSubmission } = await supabase
+    // Check if submission already exists (per student + practical + level)
+    let existingQuery = supabase
       .from("submissions")
       .select("*")
       .eq("student_id", student_id)
-      .eq("practical_id", practical_id)
-      .single();
+      .eq("practical_id", practical_id);
+
+    if (level_id) {
+      existingQuery = existingQuery.eq("level_id", level_id);
+    } else {
+      existingQuery = existingQuery.is("level_id", null);
+    }
+
+    const { data: existingSubmission } = await existingQuery.single();
 
     if (existingSubmission) {
       const existingMarks = (existingSubmission as any).marks_obtained ?? 0;
@@ -146,6 +154,7 @@ export async function POST(req: Request) {
         output: "",
         marks_obtained: marks_obtained || 0,
         execution_details: execution_details || null,
+        level_id: level_id || null,
       } as never)
       .select("*")
       .single();

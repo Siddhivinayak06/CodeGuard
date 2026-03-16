@@ -372,15 +372,35 @@ int main() {
           );
         }
 
-        await axios.post("/api/submission/create", {
-          student_id: user.id,
-          practical_id: Number(practicalId),
-          code,
-          language: lang,
-          status: "pending",
-          marks_obtained: 0,
-          test_cases_passed: "0/0",
-        });
+        // Save the active task's code to the map first
+        if (hasLevelsParam && practicalLevels.length > 0) {
+          taskCodeMapRef.current[activeLevel] = code;
+
+          // Submit each task level separately
+          for (const level of practicalLevels) {
+            const levelCode = taskCodeMapRef.current[level.level];
+            if (!levelCode) continue;
+            await axios.post("/api/submission/create", {
+              student_id: user.id,
+              practical_id: Number(practicalId),
+              code: levelCode,
+              language: lang,
+              status: "pending",
+              marks_obtained: 0,
+              level_id: level.id || null,
+            });
+          }
+        } else {
+          // Single-level practical — submit as before
+          await axios.post("/api/submission/create", {
+            student_id: user.id,
+            practical_id: Number(practicalId),
+            code,
+            language: lang,
+            status: "pending",
+            marks_obtained: 0,
+          });
+        }
 
         // Finalize exam session on auto-submit
         if (isExamMode) {
@@ -1079,7 +1099,7 @@ int main() {
               language: lang,
               status: "pending",
               marks_obtained: 0,
-              test_cases_passed: "0/0",
+              level_id: levelData.id || null,
             });
 
             const submission = submissionRes.data.submission;

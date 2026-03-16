@@ -4,6 +4,7 @@ import React, { useState } from "react";
 import { Info as InfoIcon, Sparkles, Calendar, Code2, BookOpen } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Practical, Subject, Level } from "../types";
+import MarkdownEditor from "./MarkdownEditor";
 
 interface BasicDetailsFormProps {
   form: Practical;
@@ -20,6 +21,9 @@ interface BasicDetailsFormProps {
   isExam?: boolean;
   showAssessmentControls?: boolean;
   showNumberField?: boolean;
+  onMarkdownChange?: (value: string) => void;
+  onMagicFormat?: (text: string, callback: (formatted: string) => void) => Promise<void>;
+  isFormatting?: boolean;
 }
 
 function cx(...parts: Array<string | false | null | undefined>) {
@@ -65,6 +69,9 @@ export default function BasicDetailsForm({
   isExam,
   showAssessmentControls = true,
   showNumberField = true,
+  onMarkdownChange,
+  onMagicFormat,
+  isFormatting,
 }: BasicDetailsFormProps) {
   const [focusedField, setFocusedField] = useState<string | null>(null);
 
@@ -153,7 +160,7 @@ export default function BasicDetailsForm({
             <input
               type="text"
               name="title"
-              value={form.title}
+              value={form.title || ""}
               onChange={handleInput}
               onFocus={() => setFocusedField("title")}
               onBlur={() => setFocusedField(null)}
@@ -277,6 +284,25 @@ export default function BasicDetailsForm({
               />
             </motion.button>
           </motion.div>
+        </motion.div>
+      )}
+
+      {/* Description Field (Only when not in multi-level mode) */}
+      {!enableLevels && (
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.35 }}
+          className="mt-6 pt-5 border-t border-gray-100 dark:border-gray-800"
+        >
+          <MarkdownEditor
+            label="Problem Description"
+            value={form.description || ""}
+            onChange={(val) => onMarkdownChange?.(val)}
+            placeholder="Describe the challenge..."
+            onMagicFormat={onMagicFormat ? () => onMagicFormat(form.description || "", onMarkdownChange!) : undefined}
+            isFormatting={isFormatting}
+          />
         </motion.div>
       )}
     </motion.div>

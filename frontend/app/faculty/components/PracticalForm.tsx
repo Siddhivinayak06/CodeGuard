@@ -434,7 +434,6 @@ export default function PracticalForm({
   // set initial state when practical prop changes
   // set initial state when practical prop changes
   useEffect(() => {
-    if (!isOpen) return;
     if (practical) {
       setStep(isExam ? initialStep : 1);
       setForm({
@@ -607,7 +606,7 @@ export default function PracticalForm({
       setActiveLevel(isExam ? "" : "Task 1");
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, practical, subjects, defaultSubjectId, isExam, initialStep]);
+  }, [practical, subjects, defaultSubjectId, isExam, initialStep]);
 
   useEffect(() => {
     if (!isExam) return;
@@ -1238,7 +1237,7 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
 
   // Validate form data
   const validateForm = useCallback(() => {
-    if (!isExam && !form.practical_number) {
+    if (!form.practical_number) {
       alert("Please enter a Practical Number");
       return false;
     }
@@ -1463,9 +1462,9 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
 
     setSaving(true);
     try {
-      let resolvedPracticalNumber: number | null = isExam ? null : (Number(form.practical_number) || 0);
+      let resolvedPracticalNumber = Number(form.practical_number) || 0;
 
-      if (!isExam && !resolvedPracticalNumber && form.subject_id) {
+      if (!resolvedPracticalNumber && form.subject_id) {
         const { data: subjectPracticals, error: numErr } = await supabase
           .from("practicals")
           .select("practical_number")
@@ -2701,6 +2700,13 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
                         sampleLanguage={sampleLanguage || "c"}
                         onAddLevel={handleAddLevel}
                         onRemoveLevel={handleRemoveLevel}
+                        onMarkdownChange={(level, value) => {
+                          updateLevelField(level, "description", value);
+                        }}
+                        onGenerateCode={async () => {}}
+                        onMagicFormat={async () => {}}
+                        isFormatting={false}
+                        isGeneratingCode={false}
                       />
                     )}
 
@@ -3079,6 +3085,14 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
                                 const originalLevel = originalLevelByDisplay.get(displayLevel);
                                 if (originalLevel) removeTaskFromSetByLevel(originalLevel);
                               }}
+                              onMarkdownChange={(level, value) => {
+                                const originalLevel = originalLevelByDisplay.get(level);
+                                if (originalLevel) updateLevelField(originalLevel, "description", value);
+                              }}
+                              onGenerateCode={async () => {}}
+                              onMagicFormat={async () => {}}
+                              isFormatting={false}
+                              isGeneratingCode={false}
                             />
                           );
                         })() : (
