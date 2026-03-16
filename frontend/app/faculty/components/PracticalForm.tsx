@@ -434,6 +434,7 @@ export default function PracticalForm({
   // set initial state when practical prop changes
   // set initial state when practical prop changes
   useEffect(() => {
+    if (!isOpen) return;
     if (practical) {
       setStep(isExam ? initialStep : 1);
       setForm({
@@ -606,7 +607,7 @@ export default function PracticalForm({
       setActiveLevel(isExam ? "" : "Task 1");
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [practical, subjects, defaultSubjectId, isExam, initialStep]);
+  }, [isOpen, practical, subjects, defaultSubjectId, isExam, initialStep]);
 
   useEffect(() => {
     if (!isExam) return;
@@ -1237,7 +1238,7 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
 
   // Validate form data
   const validateForm = useCallback(() => {
-    if (!form.practical_number) {
+    if (!isExam && !form.practical_number) {
       alert("Please enter a Practical Number");
       return false;
     }
