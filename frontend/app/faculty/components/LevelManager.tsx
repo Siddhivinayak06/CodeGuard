@@ -52,7 +52,7 @@ interface LevelManagerProps {
   setSampleCode: (code: string) => void;
   sampleLanguage: string;
   onMarkdownChange: (level: string, value: string) => void;
-  onGenerateCode: (level: string) => Promise<void>;
+  onGenerateCode: (level: string, type: 'starter' | 'reference') => Promise<void>;
   onMagicFormat: (text: string, callback: (formatted: string) => void) => Promise<void>;
   isFormatting: boolean;
   isGeneratingCode: boolean;
@@ -269,7 +269,7 @@ export default function LevelManager({
               <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  onClick={() => onGenerateCode(activeLevel)}
+                  onClick={() => onGenerateCode(activeLevel, 'starter')}
                   disabled={isGeneratingCode || !getCurrentLevel().description?.trim()}
                   className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white rounded-lg text-[10px] font-bold shadow-md shadow-indigo-500/20 transition-all disabled:opacity-50"
                 >
@@ -315,9 +315,24 @@ export default function LevelManager({
                   </p>
                 </div>
               </div>
-              <span className="text-xs px-3 py-1.5 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-700 dark:text-gray-300">
-                {String(sampleLanguage || "c").toUpperCase()}
-              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => onGenerateCode(activeLevel, 'reference')}
+                  disabled={isGeneratingCode || !getCurrentLevel().description?.trim()}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-pink-500 to-rose-600 hover:from-pink-600 hover:to-rose-700 text-white rounded-lg text-[10px] font-bold shadow-md shadow-pink-500/20 transition-all disabled:opacity-50"
+                >
+                  {isGeneratingCode ? (
+                    <Loader2 size={12} className="animate-spin" />
+                  ) : (
+                    <Sparkles size={12} />
+                  )}
+                  ✨ Generate Solution
+                </button>
+                <span className="text-xs px-3 py-1.5 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-700 dark:text-gray-300">
+                  {String(sampleLanguage || "c").toUpperCase()}
+                </span>
+              </div>
             </div>
             <div className="rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700">
               <CodeMirror

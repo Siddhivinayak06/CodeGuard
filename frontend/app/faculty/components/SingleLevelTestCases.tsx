@@ -39,7 +39,7 @@ interface SingleLevelTestCasesProps {
   generateTestCases: () => Promise<void>;
   generatingTests: boolean;
   isExam?: boolean;
-  onGenerateCode?: () => Promise<void>;
+  onGenerateCode?: (type: 'starter' | 'reference') => Promise<void>;
   isGeneratingCode?: boolean;
 }
 
@@ -87,7 +87,7 @@ export default function SingleLevelTestCases({
             {onGenerateCode && (
               <button
                 type="button"
-                onClick={onGenerateCode}
+                onClick={() => onGenerateCode('starter')}
                 disabled={isGeneratingCode || !form.description?.trim()}
                 className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white rounded-lg text-[10px] font-bold shadow-md shadow-indigo-500/20 transition-all disabled:opacity-50"
               >
@@ -132,15 +132,32 @@ export default function SingleLevelTestCases({
               </p>
             </div>
           </div>
-          <select
-            value={sampleLanguage}
-            onChange={(e) => setSampleLanguage(e.target.value)}
-            className="text-xs px-3 py-1.5 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-700 dark:text-gray-300"
-          >
-            <option value="c">C / C++</option>
-            <option value="python">Python</option>
-            <option value="java">Java</option>
-          </select>
+          <div className="flex items-center gap-2">
+            {onGenerateCode && (
+              <button
+                type="button"
+                onClick={() => onGenerateCode('reference')}
+                disabled={isGeneratingCode || !form.description?.trim()}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-pink-500 to-rose-600 hover:from-pink-600 hover:to-rose-700 text-white rounded-lg text-[10px] font-bold shadow-md shadow-pink-500/20 transition-all disabled:opacity-50"
+              >
+                {isGeneratingCode ? (
+                  <Loader2 size={12} className="animate-spin" />
+                ) : (
+                  <Sparkles size={12} />
+                )}
+                ✨ Generate Solution
+              </button>
+            )}
+            <select
+              value={sampleLanguage}
+              onChange={(e) => setSampleLanguage(e.target.value)}
+              className="text-xs px-3 py-1.5 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-700 dark:text-gray-300"
+            >
+              <option value="c">C / C++</option>
+              <option value="python">Python</option>
+              <option value="java">Java</option>
+            </select>
+          </div>
         </div>
         <div className="rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700">
           <CodeMirror

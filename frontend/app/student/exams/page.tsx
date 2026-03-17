@@ -245,10 +245,10 @@ export default function StudentExams() {
   const semesterFilteredPracticals = useMemo(() => {
     let result = practicals;
     if (userSemester) {
-      result = result.filter(p => !p.subject_semester || String(p.subject_semester) == String(userSemester));
+      result = result.filter(p => p.is_exam || !p.subject_semester || String(p.subject_semester) == String(userSemester));
     }
-    // Only show practicals that have been scheduled
-    result = result.filter(p => !!p.schedule_date);
+    // Only show practicals that have been scheduled (exams use exam time window instead)
+    result = result.filter(p => !!p.schedule_date || p.is_exam);
     return result;
   }, [practicals, userSemester]);
 

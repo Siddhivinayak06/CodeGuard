@@ -211,6 +211,8 @@ export default function PracticalForm({
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [generatingTests, setGeneratingTests] = useState(false);
+  const [isGeneratingCode, setIsGeneratingCode] = useState(false);
+  const [isFormatting, setIsFormatting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const [filters, setFilters] = useState({
@@ -1549,20 +1551,44 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
           .single();
         if (error) throw error;
         practicalId = data.id;
-        // delete old reference codes, test cases, and levels then re-insert below
-        // NOTE: reference_codes must be deleted BEFORE practical_levels (FK dependency)
-        await supabase
-          .from("reference_codes")
-          .delete()
-          .eq("practical_id", practicalId);
-        await supabase
-          .from("test_cases")
-          .delete()
-          .eq("practical_id", practicalId);
-        await supabase
-          .from("practical_levels")
-          .delete()
-          .eq("practical_id", practicalId);
+
+        // Delete old test cases and reference codes (they will be re-inserted below)
+        await supabase.from("reference_codes").delete().eq("practical_id", practicalId);
+        await supabase.from("test_cases").delete().eq("practical_id", practicalId);
+
+        // For levels: identify which levels to keep vs remove
+        if (enableLevels) {
+          const currentLevelNames = levels.map(l => l.level);
+          // Fetch existing levels
+          const { data: existingLevels } = await supabase
+            .from("practical_levels")
+            .select("id, level")
+            .eq("practical_id", practicalId);
+
+          // Remove levels that are no longer in the form
+          if (existingLevels && existingLevels.length > 0) {
+            const levelsToRemove = existingLevels.filter(
+              (el: any) => !currentLevelNames.includes(el.level)
+            );
+            if (levelsToRemove.length > 0) {
+              const removeIds = levelsToRemove.map((l: any) => l.id);
+              // Clean up exam_set_levels first
+              await supabase.from("exam_set_levels").delete().in("level_id", removeIds);
+              await supabase.from("practical_levels").delete().in("id", removeIds);
+            }
+          }
+        } else {
+          // Single level mode: remove all levels
+          const { data: existingLevels } = await supabase
+            .from("practical_levels")
+            .select("id")
+            .eq("practical_id", practicalId);
+          if (existingLevels && existingLevels.length > 0) {
+            const removeIds = existingLevels.map((l: any) => l.id);
+            await supabase.from("exam_set_levels").delete().in("level_id", removeIds);
+            await supabase.from("practical_levels").delete().in("id", removeIds);
+          }
+        }
       } else {
         const { data, error } = await supabase
           .from("practicals")
@@ -1574,18 +1600,17 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
       }
 
       if (enableLevels) {
-        // Save levels with their test cases
+        // Save levels with their test cases (upsert to handle both create and update)
         for (const level of levels) {
-          // Insert level
           const { data: levelData, error: levelErr } = await supabase
             .from("practical_levels")
-            .insert({
+            .upsert({
               practical_id: practicalId,
               level: level.level,
               title: level.title,
               description: level.description,
               max_marks: level.max_marks,
-            })
+            }, { onConflict: "practical_id,level" })
             .select()
             .single();
 
@@ -2680,8 +2705,43 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
                       setEnableLevels={setEnableLevels}
                       levels={levels}
                       isExam={isExam}
-                      showAssessmentControls={false}
+                      showAssessmentControls={true}
                       showNumberField={false}
+                      onMarkdownChange={(val) => setForm(prev => ({ ...prev, description: val }))}
+                      onMagicFormat={async (text, callback) => {
+                        setIsFormatting(true);
+                        try {
+                          const savedSettings = localStorage.getItem("ai_settings");
+                          const config = savedSettings ? JSON.parse(savedSettings) : {};
+                          const apiUrl = process.env.NEXT_PUBLIC_AI_API_URL || "http://localhost:5002/ai";
+                          const { data: { session } } = await supabase.auth.getSession();
+                          const prompt = `You are a markdown formatting expert. Take the following problem description and format it beautifully using markdown. Keep the content the same but improve the formatting with headers, lists, code blocks, bold/italic where appropriate. Return ONLY the formatted markdown, no explanations.\n\n${text}`;
+                          const res = await fetch(`${apiUrl}/chat`, {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json", "Authorization": `Bearer ${session?.access_token || ""}` },
+                            body: JSON.stringify({ messages: [{ role: "user", parts: [{ text: prompt }] }], config }),
+                          });
+                          if (!res.ok || !res.body) throw new Error("API error");
+                          const reader = res.body.getReader();
+                          const decoder = new TextDecoder();
+                          let fullText = "";
+                          while (true) {
+                            const { done, value } = await reader.read();
+                            if (done) break;
+                            const chunk = decoder.decode(value, { stream: true });
+                            for (const line of chunk.split("\n\n")) {
+                              if (line.startsWith("data: ")) {
+                                const dataStr = line.slice(6);
+                                if (dataStr === "[DONE]") break;
+                                try { const parsed = JSON.parse(dataStr); if (parsed.text) fullText += parsed.text; } catch {}
+                              }
+                            }
+                          }
+                          callback(fullText.trim());
+                        } catch (err) { console.error("Magic format error:", err); alert("Failed to format. Try again."); }
+                        finally { setIsFormatting(false); }
+                      }}
+                      isFormatting={isFormatting}
                     />
 
                     {enableLevels && (
@@ -2700,13 +2760,82 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
                         sampleLanguage={sampleLanguage || "c"}
                         onAddLevel={handleAddLevel}
                         onRemoveLevel={handleRemoveLevel}
-                        onMarkdownChange={(level, value) => {
-                          updateLevelField(level, "description", value);
+                        onMarkdownChange={(level, val) => updateLevelField(level, "description", val)}
+                        onGenerateCode={async (level, type) => {
+                          const currentLvl = levels.find(l => l.level === level);
+                          if (!currentLvl?.description?.trim()) { alert("Please enter a description first."); return; }
+                          setIsGeneratingCode(true);
+                          try {
+                            const savedSettings = localStorage.getItem("ai_settings");
+                            const config = savedSettings ? JSON.parse(savedSettings) : {};
+                            const apiUrl = process.env.NEXT_PUBLIC_AI_API_URL || "http://localhost:5002/ai";
+                            const { data: { session } } = await supabase.auth.getSession();
+                            const lang = sampleLanguage || form.language || "c";
+                            const prompt = type === 'starter'
+                              ? `Generate a starter code template in ${lang} for the following problem. Include function signatures, input/output handling, and helpful comments. Return ONLY the code, no explanations.\n\n${currentLvl.description}`
+                              : `Generate a complete solution in ${lang} for the following problem. The code should compile and produce correct output. Return ONLY the code, no explanations.\n\n${currentLvl.description}`;
+                            const res = await fetch(`${apiUrl}/chat`, {
+                              method: "POST",
+                              headers: { "Content-Type": "application/json", "Authorization": `Bearer ${session?.access_token || ""}` },
+                              body: JSON.stringify({ messages: [{ role: "user", parts: [{ text: prompt }] }], config }),
+                            });
+                            if (!res.ok || !res.body) throw new Error("API error");
+                            const reader = res.body.getReader();
+                            const decoder = new TextDecoder();
+                            let fullText = "";
+                            while (true) {
+                              const { done, value } = await reader.read();
+                              if (done) break;
+                              const chunk = decoder.decode(value, { stream: true });
+                              for (const line of chunk.split("\n\n")) {
+                                if (line.startsWith("data: ")) {
+                                  const dataStr = line.slice(6);
+                                  if (dataStr === "[DONE]") break;
+                                  try { const parsed = JSON.parse(dataStr); if (parsed.text) fullText += parsed.text; } catch {}
+                                }
+                              }
+                            }
+                            let code = fullText.trim();
+                            code = code.replace(/^```[a-zA-Z]*\n?/, "").replace(/\n?```$/, "").trim();
+                            updateLevelField(level, type === 'starter' ? 'starter_code' : 'reference_code', code);
+                          } catch (err) { console.error("Code gen error:", err); alert("Failed to generate code. Try again."); }
+                          finally { setIsGeneratingCode(false); }
                         }}
-                        onGenerateCode={async () => {}}
-                        onMagicFormat={async () => {}}
-                        isFormatting={false}
-                        isGeneratingCode={false}
+                        onMagicFormat={async (text, callback) => {
+                          setIsFormatting(true);
+                          try {
+                            const savedSettings = localStorage.getItem("ai_settings");
+                            const config = savedSettings ? JSON.parse(savedSettings) : {};
+                            const apiUrl = process.env.NEXT_PUBLIC_AI_API_URL || "http://localhost:5002/ai";
+                            const { data: { session } } = await supabase.auth.getSession();
+                            const prompt = `You are a markdown formatting expert. Take the following problem description and format it beautifully using markdown. Keep the content the same but improve the formatting. Return ONLY the formatted markdown, no explanations.\n\n${text}`;
+                            const res = await fetch(`${apiUrl}/chat`, {
+                              method: "POST",
+                              headers: { "Content-Type": "application/json", "Authorization": `Bearer ${session?.access_token || ""}` },
+                              body: JSON.stringify({ messages: [{ role: "user", parts: [{ text: prompt }] }], config }),
+                            });
+                            if (!res.ok || !res.body) throw new Error("API error");
+                            const reader = res.body.getReader();
+                            const decoder = new TextDecoder();
+                            let fullText = "";
+                            while (true) {
+                              const { done, value } = await reader.read();
+                              if (done) break;
+                              const chunk = decoder.decode(value, { stream: true });
+                              for (const line of chunk.split("\n\n")) {
+                                if (line.startsWith("data: ")) {
+                                  const dataStr = line.slice(6);
+                                  if (dataStr === "[DONE]") break;
+                                  try { const parsed = JSON.parse(dataStr); if (parsed.text) fullText += parsed.text; } catch {}
+                                }
+                              }
+                            }
+                            callback(fullText.trim());
+                          } catch (err) { console.error("Magic format error:", err); alert("Failed to format. Try again."); }
+                          finally { setIsFormatting(false); }
+                        }}
+                        isFormatting={isFormatting}
+                        isGeneratingCode={isGeneratingCode}
                       />
                     )}
 
@@ -2728,6 +2857,47 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
                         generateTestCases={generateTestCases}
                         generatingTests={generatingTests}
                         isExam={isExam}
+                        onGenerateCode={async (type) => {
+                          if (!form.description?.trim()) { alert("Please enter a description first."); return; }
+                          setIsGeneratingCode(true);
+                          try {
+                            const savedSettings = localStorage.getItem("ai_settings");
+                            const config = savedSettings ? JSON.parse(savedSettings) : {};
+                            const apiUrl = process.env.NEXT_PUBLIC_AI_API_URL || "http://localhost:5002/ai";
+                            const { data: { session } } = await supabase.auth.getSession();
+                            const lang = sampleLanguage || form.language || "c";
+                            const prompt = type === 'starter'
+                              ? `Generate a starter code template in ${lang} for the following problem. Include function signatures, input/output handling, and helpful comments. Return ONLY the code, no explanations.\n\n${form.description}`
+                              : `Generate a complete solution in ${lang} for the following problem. The code should compile and produce correct output. Return ONLY the code, no explanations.\n\n${form.description}`;
+                            const res = await fetch(`${apiUrl}/chat`, {
+                              method: "POST",
+                              headers: { "Content-Type": "application/json", "Authorization": `Bearer ${session?.access_token || ""}` },
+                              body: JSON.stringify({ messages: [{ role: "user", parts: [{ text: prompt }] }], config }),
+                            });
+                            if (!res.ok || !res.body) throw new Error("API error");
+                            const reader = res.body.getReader();
+                            const decoder = new TextDecoder();
+                            let fullText = "";
+                            while (true) {
+                              const { done, value } = await reader.read();
+                              if (done) break;
+                              const chunk = decoder.decode(value, { stream: true });
+                              for (const line of chunk.split("\n\n")) {
+                                if (line.startsWith("data: ")) {
+                                  const dataStr = line.slice(6);
+                                  if (dataStr === "[DONE]") break;
+                                  try { const parsed = JSON.parse(dataStr); if (parsed.text) fullText += parsed.text; } catch {}
+                                }
+                              }
+                            }
+                            let code = fullText.trim();
+                            code = code.replace(/^```[a-zA-Z]*\n?/, "").replace(/\n?```$/, "").trim();
+                            if (type === 'starter') setStarterCode(code);
+                            else setSampleCode(code);
+                          } catch (err) { console.error("Code gen error:", err); alert("Failed to generate code. Try again."); }
+                          finally { setIsGeneratingCode(false); }
+                        }}
+                        isGeneratingCode={isGeneratingCode}
                       />
                     )}
                   </div>
@@ -3085,14 +3255,87 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
                                 const originalLevel = originalLevelByDisplay.get(displayLevel);
                                 if (originalLevel) removeTaskFromSetByLevel(originalLevel);
                               }}
-                              onMarkdownChange={(level, value) => {
-                                const originalLevel = originalLevelByDisplay.get(level);
-                                if (originalLevel) updateLevelField(originalLevel, "description", value);
+                              onMarkdownChange={(displayLevel, val) => {
+                                const originalLevel = originalLevelByDisplay.get(displayLevel);
+                                if (originalLevel) updateLevelField(originalLevel, "description", val);
                               }}
-                              onGenerateCode={async () => {}}
-                              onMagicFormat={async () => {}}
-                              isFormatting={false}
-                              isGeneratingCode={false}
+                              onGenerateCode={async (displayLevel, type) => {
+                                const originalLevel = originalLevelByDisplay.get(displayLevel);
+                                if (!originalLevel) return;
+                                const currentLvl = levels.find(l => l.level === originalLevel);
+                                if (!currentLvl?.description?.trim()) { alert("Please enter a description first."); return; }
+                                setIsGeneratingCode(true);
+                                try {
+                                  const savedSettings = localStorage.getItem("ai_settings");
+                                  const config = savedSettings ? JSON.parse(savedSettings) : {};
+                                  const apiUrl = process.env.NEXT_PUBLIC_AI_API_URL || "http://localhost:5002/ai";
+                                  const { data: { session } } = await supabase.auth.getSession();
+                                  const lang = sampleLanguage || form.language || "c";
+                                  const prompt = type === 'starter'
+                                    ? `Generate a starter code template in ${lang} for the following problem. Include function signatures, input/output handling, and helpful comments. Return ONLY the code, no explanations.\n\n${currentLvl.description}`
+                                    : `Generate a complete solution in ${lang} for the following problem. The code should compile and produce correct output. Return ONLY the code, no explanations.\n\n${currentLvl.description}`;
+                                  const res = await fetch(`${apiUrl}/chat`, {
+                                    method: "POST",
+                                    headers: { "Content-Type": "application/json", "Authorization": `Bearer ${session?.access_token || ""}` },
+                                    body: JSON.stringify({ messages: [{ role: "user", parts: [{ text: prompt }] }], config }),
+                                  });
+                                  if (!res.ok || !res.body) throw new Error("API error");
+                                  const reader = res.body.getReader();
+                                  const decoder = new TextDecoder();
+                                  let fullText = "";
+                                  while (true) {
+                                    const { done, value } = await reader.read();
+                                    if (done) break;
+                                    const chunk = decoder.decode(value, { stream: true });
+                                    for (const line of chunk.split("\n\n")) {
+                                      if (line.startsWith("data: ")) {
+                                        const dataStr = line.slice(6);
+                                        if (dataStr === "[DONE]") break;
+                                        try { const parsed = JSON.parse(dataStr); if (parsed.text) fullText += parsed.text; } catch {}
+                                      }
+                                    }
+                                  }
+                                  let code = fullText.trim();
+                                  code = code.replace(/^```[a-zA-Z]*\n?/, "").replace(/\n?```$/, "").trim();
+                                  updateLevelField(originalLevel, type === 'starter' ? 'starter_code' : 'reference_code', code);
+                                } catch (err) { console.error("Code gen error:", err); alert("Failed to generate code. Try again."); }
+                                finally { setIsGeneratingCode(false); }
+                              }}
+                              onMagicFormat={async (text, callback) => {
+                                setIsFormatting(true);
+                                try {
+                                  const savedSettings = localStorage.getItem("ai_settings");
+                                  const config = savedSettings ? JSON.parse(savedSettings) : {};
+                                  const apiUrl = process.env.NEXT_PUBLIC_AI_API_URL || "http://localhost:5002/ai";
+                                  const { data: { session } } = await supabase.auth.getSession();
+                                  const prompt = `You are a markdown formatting expert. Take the following problem description and format it beautifully using markdown. Keep the content the same but improve the formatting. Return ONLY the formatted markdown, no explanations.\n\n${text}`;
+                                  const res = await fetch(`${apiUrl}/chat`, {
+                                    method: "POST",
+                                    headers: { "Content-Type": "application/json", "Authorization": `Bearer ${session?.access_token || ""}` },
+                                    body: JSON.stringify({ messages: [{ role: "user", parts: [{ text: prompt }] }], config }),
+                                  });
+                                  if (!res.ok || !res.body) throw new Error("API error");
+                                  const reader = res.body.getReader();
+                                  const decoder = new TextDecoder();
+                                  let fullText = "";
+                                  while (true) {
+                                    const { done, value } = await reader.read();
+                                    if (done) break;
+                                    const chunk = decoder.decode(value, { stream: true });
+                                    for (const line of chunk.split("\n\n")) {
+                                      if (line.startsWith("data: ")) {
+                                        const dataStr = line.slice(6);
+                                        if (dataStr === "[DONE]") break;
+                                        try { const parsed = JSON.parse(dataStr); if (parsed.text) fullText += parsed.text; } catch {}
+                                      }
+                                    }
+                                  }
+                                  callback(fullText.trim());
+                                } catch (err) { console.error("Magic format error:", err); alert("Failed to format. Try again."); }
+                                finally { setIsFormatting(false); }
+                              }}
+                              isFormatting={isFormatting}
+                              isGeneratingCode={isGeneratingCode}
                             />
                           );
                         })() : (
@@ -3113,6 +3356,47 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
                             generateTestCases={generateTestCases}
                             generatingTests={generatingTests}
                             isExam={isExam}
+                            onGenerateCode={async (type) => {
+                              if (!form.description?.trim()) { alert("Please enter a description first."); return; }
+                              setIsGeneratingCode(true);
+                              try {
+                                const savedSettings = localStorage.getItem("ai_settings");
+                                const config = savedSettings ? JSON.parse(savedSettings) : {};
+                                const apiUrl = process.env.NEXT_PUBLIC_AI_API_URL || "http://localhost:5002/ai";
+                                const { data: { session } } = await supabase.auth.getSession();
+                                const lang = sampleLanguage || form.language || "c";
+                                const prompt = type === 'starter'
+                                  ? `Generate a starter code template in ${lang} for the following problem. Include function signatures, input/output handling, and helpful comments. Return ONLY the code, no explanations.\n\n${form.description}`
+                                  : `Generate a complete solution in ${lang} for the following problem. The code should compile and produce correct output. Return ONLY the code, no explanations.\n\n${form.description}`;
+                                const res = await fetch(`${apiUrl}/chat`, {
+                                  method: "POST",
+                                  headers: { "Content-Type": "application/json", "Authorization": `Bearer ${session?.access_token || ""}` },
+                                  body: JSON.stringify({ messages: [{ role: "user", parts: [{ text: prompt }] }], config }),
+                                });
+                                if (!res.ok || !res.body) throw new Error("API error");
+                                const reader = res.body.getReader();
+                                const decoder = new TextDecoder();
+                                let fullText = "";
+                                while (true) {
+                                  const { done, value } = await reader.read();
+                                  if (done) break;
+                                  const chunk = decoder.decode(value, { stream: true });
+                                  for (const line of chunk.split("\n\n")) {
+                                    if (line.startsWith("data: ")) {
+                                      const dataStr = line.slice(6);
+                                      if (dataStr === "[DONE]") break;
+                                      try { const parsed = JSON.parse(dataStr); if (parsed.text) fullText += parsed.text; } catch {}
+                                    }
+                                  }
+                                }
+                                let code = fullText.trim();
+                                code = code.replace(/^```[a-zA-Z]*\n?/, "").replace(/\n?```$/, "").trim();
+                                if (type === 'starter') setStarterCode(code);
+                                else setSampleCode(code);
+                              } catch (err) { console.error("Code gen error:", err); alert("Failed to generate code. Try again."); }
+                              finally { setIsGeneratingCode(false); }
+                            }}
+                            isGeneratingCode={isGeneratingCode}
                           />
                         )}
 
