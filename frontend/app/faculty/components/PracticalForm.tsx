@@ -833,13 +833,13 @@ export default function PracticalForm({
         prev.map((set, setIdx) => {
           if (setIdx !== activeSetIdx) return set;
 
-          // Replace only the first matched task in the active set to avoid
-          // accidentally renaming other tasks that may have a similar label.
+          // Replace matched task in the active set (case-insensitive and trimmed)
           const names = [...set.level_names];
-          const replaceIdx = names.findIndex((name) => name === previousDisplayName);
+          const lowerPrevious = previousDisplayName!.trim().toLowerCase();
+          const replaceIdx = names.findIndex((name) => name.trim().toLowerCase() === lowerPrevious);
           if (replaceIdx >= 0) {
             names[replaceIdx] = nextDisplayName!;
-          } else if (!names.includes(nextDisplayName!)) {
+          } else if (!names.map(n => n.trim().toLowerCase()).includes(nextDisplayName!.trim().toLowerCase())) {
             // Fallback: if prior label cannot be found (e.g., after rapid edits),
             // keep the renamed task linked to the active set.
             names.push(nextDisplayName!);
@@ -1372,20 +1372,28 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
 
     const levelIdByName = new Map<string, number>();
     (persistedLevels || []).forEach((lvl: any) => {
-      levelIdByName.set(lvl.title || lvl.level, lvl.id);
+      const name = (lvl.title || lvl.level || "").trim().toLowerCase();
+      if (name) levelIdByName.set(name, lvl.id);
     });
 
     const setsPayload = questionSets.map((set) => {
       const resolvedItems = resolveSetLevels(set);
       const resolvedNames = resolvedItems.map((item) =>
-        getLevelDisplayName(item.level, item.idx),
+        getLevelDisplayName(item.level, item.idx).trim().toLowerCase()
       );
+
+      const levelIds = resolvedNames
+        .map((name) => levelIdByName.get(name))
+        .filter((id): id is number => typeof id === "number");
+
+      console.log(`[SaveExam] Set "${set.set_name}": resolved ${resolvedNames.length} names, found ${levelIds.length} IDs in DB mapping`, {
+        resolvedNames,
+        dbMappingKeys: Array.from(levelIdByName.keys())
+      });
 
       return {
         set_name: set.set_name,
-        level_ids: resolvedNames
-          .map((name) => levelIdByName.get(name))
-          .filter((id): id is number => typeof id === "number"),
+        level_ids: levelIds,
       };
     });
 
@@ -2408,29 +2416,22 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
                           return;
                         }
 
-                        const itemsToConfigure = savedPracticals.length > 0
-                          ? savedPracticals
-                          : [];
-
-                        let resolvedItems = itemsToConfigure;
-
-                        if (resolvedItems.length === 0) {
-                          if (isMultiDraftMode) {
-                            const savedData = await handleSaveAll();
-                            if (!savedData || savedData.length === 0) {
-                              return;
-                            }
-                            setSavedPracticals(savedData);
-                            resolvedItems = savedData;
-                          } else {
-                            const savedPracticalId = await handleSave();
-                            if (!savedPracticalId) {
-                              return;
-                            }
-                            const singleSaved = [{ id: savedPracticalId as number }];
-                            setSavedPracticals(singleSaved);
-                            resolvedItems = singleSaved;
+                        let resolvedItems = [];
+                        if (isMultiDraftMode) {
+                          const savedData = await handleSaveAll();
+                          if (!savedData || savedData.length === 0) {
+                            return;
                           }
+                          setSavedPracticals(savedData);
+                          resolvedItems = savedData;
+                        } else {
+                          const savedPracticalId = await handleSave();
+                          if (!savedPracticalId) {
+                            return;
+                          }
+                          const singleSaved = [{ id: savedPracticalId as number }];
+                          setSavedPracticals(singleSaved);
+                          resolvedItems = singleSaved;
                         }
 
                         if (resolvedItems.length === 0) return;
