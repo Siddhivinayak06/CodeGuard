@@ -108,8 +108,17 @@ const PracticalCard = memo(({
           )}
         </div>
 
-        {p.schedule_date && (
-          <div className="flex items-center gap-2 mb-3 text-xs font-medium text-indigo-600/80 dark:text-indigo-400/80 bg-indigo-50/60 dark:bg-indigo-900/10 px-2.5 py-1.5 rounded-lg w-fit">
+        {p.is_exam && p.exam_start_time ? (
+          <div className="flex items-center gap-2 mb-3 text-[11px] font-medium text-indigo-600/80 dark:text-indigo-400/80 bg-indigo-50/60 dark:bg-indigo-900/10 px-2.5 py-1.5 rounded-lg w-fit">
+            <Clock className="w-3 h-3 shrink-0" />
+            <span>
+              {new Date(p.exam_start_time).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}
+              {` · ${new Date(p.exam_start_time).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}`}
+              {p.exam_end_time && ` – ${new Date(p.exam_end_time).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}`}
+            </span>
+          </div>
+        ) : p.schedule_date && (
+          <div className="flex items-center gap-2 mb-3 text-[11px] font-medium text-indigo-600/80 dark:text-indigo-400/80 bg-indigo-50/60 dark:bg-indigo-900/10 px-2.5 py-1.5 rounded-lg w-fit">
             <Clock className="w-3 h-3 shrink-0" />
             <span>
               {new Date(p.schedule_date).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}

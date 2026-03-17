@@ -20,12 +20,15 @@ import {
   Sparkles,
   LayoutGrid,
   Menu,
+  ChevronDown,
+  ChevronRight,
 } from "lucide-react";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import SubmissionsSidebar from "../../faculty/submissions/SubmissionsSidebar";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
 import StatCard from "@/components/dashboard/student/StatCard";
+import { cn } from "@/lib/utils";
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -77,10 +80,27 @@ interface Submission {
   created_at: string;
   marks_obtained: number | null;
   max_marks: number;
+  level_id?: number | null;
+  level_title?: string | null;
+  level_max_marks?: number | null;
   testCaseResults: TestCaseResult[];
   attempt_count?: number;
   max_attempts?: number;
   is_locked?: boolean;
+}
+
+interface GroupedSubmission {
+  practical_id: number;
+  practical_title: string;
+  subject_id: number | null;
+  subject_name?: string;
+  subject_code?: string;
+  language: string;
+  created_at: string;
+  submissions: Submission[];
+  totalMarks: number | null;
+  totalMaxMarks: number;
+  overallStatus: string;
 }
 
 interface TestCase {
@@ -200,6 +220,14 @@ function StudentSubmissionsPageContent() {
   const [selectedPracticalId, setSelectedPracticalId] = useState<number | null>(null);
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState<string>("");
+  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
+
+  const toggleGroupExpansion = (key: string) => {
+    setExpandedGroups(prev => ({
+      ...prev,
+      [key]: !prev[key]
+    }));
+  };
 
   // Request Reattempt State
   const [requestingReattempt, setRequestingReattempt] = useState<number | null>(null);
@@ -257,6 +285,7 @@ function StudentSubmissionsPageContent() {
             created_at,
             practical_id,
             marks_obtained,
+            level_id,
             practicals (
               title,
               max_marks,
@@ -266,6 +295,10 @@ function StudentSubmissionsPageContent() {
                 subject_name,
                 subject_code
               )
+            ),
+            practical_levels (
+              title,
+              max_marks
             ),
             execution_details
           `)
@@ -290,6 +323,9 @@ function StudentSubmissionsPageContent() {
           created_at: s.created_at,
           marks_obtained: s.marks_obtained,
           max_marks: s.practicals?.max_marks || 10,
+          level_id: s.level_id,
+          level_title: s.practical_levels?.title,
+          level_max_marks: s.practical_levels?.max_marks,
           testCaseResults: s.execution_details?.results || [],
         }));
 
@@ -443,6 +479,80 @@ function StudentSubmissionsPageContent() {
     pending: submissions.filter(s => ['pending', 'submitted'].includes(s.status)).length
   }), [submissions]);
 
+  const groupedSubmissions = useMemo(() => {
+    const map = new Map<number, GroupedSubmission>();
+
+    filteredSubmissions.forEach(sub => {
+      const pId = sub.practical_id;
+
+      if (!map.has(pId)) {
+        map.set(pId, {
+          practical_id: pId,
+          practical_title: sub.practical_title,
+          subject_id: sub.subject_id,
+          subject_name: sub.subject_name,
+          subject_code: sub.subject_code,
+          language: sub.language,
+          created_at: sub.created_at,
+          submissions: [],
+          totalMarks: 0,
+          totalMaxMarks: 0,
+          overallStatus: "pending"
+        });
+      }
+
+      const group = map.get(pId)!;
+      group.submissions.push(sub);
+      
+      if (new Date(sub.created_at) > new Date(group.created_at)) {
+        group.created_at = sub.created_at;
+      }
+    });
+
+    map.forEach(group => {
+      let isAllGraded = true;
+      let totalObtained = 0;
+      let totalMax = 0;
+      let hasFailed = false;
+      let hasPending = false;
+
+      const levelMap = new Map<number | null, Submission>();
+      group.submissions.forEach(sub => {
+        const k = sub.level_id ?? null;
+        if (!levelMap.has(k)) {
+          levelMap.set(k, sub);
+        }
+      });
+      
+      const uniqueSubmissions = Array.from(levelMap.values());
+      group.submissions = uniqueSubmissions.sort((a,b) => (a.level_id ?? 0) - (b.level_id ?? 0));
+
+      uniqueSubmissions.forEach(sub => {
+        if (sub.status !== "passed" && sub.status !== "completed") {
+            if (sub.status === "failed") hasFailed = true;
+            else hasPending = true;
+        }
+        
+        if (sub.marks_obtained !== null) {
+          totalObtained += sub.marks_obtained;
+        } else {
+          isAllGraded = false;
+        }
+        
+        totalMax += sub.level_max_marks || sub.max_marks || 10;
+      });
+
+      group.totalMarks = isAllGraded ? totalObtained : null;
+      group.totalMaxMarks = totalMax;
+      
+      if (hasFailed) group.overallStatus = "failed";
+      else if (hasPending) group.overallStatus = "pending";
+      else group.overallStatus = "passed";
+    });
+
+    return Array.from(map.values());
+  }, [filteredSubmissions]);
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50/30 to-purple-50/30 dark:from-gray-950 dark:via-indigo-950/10 dark:to-purple-950/10 flex flex-col md:flex-row pt-16">
       {/* Sidebar - Master View */}
@@ -594,7 +704,7 @@ function StudentSubmissionsPageContent() {
                 <tbody className="divide-y divide-gray-100/50 dark:divide-gray-800/50">
                   {loading ? (
                     [1, 2, 3, 4, 5].map(i => <SkeletonRow key={i} />)
-                  ) : filteredSubmissions.length === 0 ? (
+                  ) : groupedSubmissions.length === 0 ? (
                     <tr><td colSpan={7} className="p-12 text-center text-gray-500">
                       <div className="flex flex-col items-center justify-center gap-3 opacity-60">
                         <LayoutGrid className="w-10 h-10" />
@@ -602,68 +712,145 @@ function StudentSubmissionsPageContent() {
                       </div>
                     </td></tr>
                   ) : (
-                    filteredSubmissions.map((sub) => {
+                    groupedSubmissions.map((group) => {
+                      const isMultiLevel = group.submissions.length > 1;
+                      const isExpanded = expandedGroups[group.practical_id.toString()];
+                      
                       let statusColor = "bg-gray-300 dark:bg-gray-600";
-                      if (sub.status === 'passed') statusColor = "bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.3)]";
-                      else if (sub.status === 'failed') statusColor = "bg-red-500 shadow-[0_0_10px_rgba(239,68,68,0.3)]";
-                      else if (sub.status === 'pending' || sub.status === 'submitted') statusColor = "bg-amber-500 shadow-[0_0_10px_rgba(245,158,11,0.3)]";
+                      if (group.overallStatus === 'passed') statusColor = "bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.3)]";
+                      else if (group.overallStatus === 'failed') statusColor = "bg-red-500 shadow-[0_0_10px_rgba(239,68,68,0.3)]";
+                      else if (group.overallStatus === 'pending' || group.overallStatus === 'submitted') statusColor = "bg-amber-500 shadow-[0_0_10px_rgba(245,158,11,0.3)]";
 
                       return (
-                        <tr key={sub.id} className="group hover:bg-indigo-50/30 dark:hover:bg-indigo-900/10 transition-all duration-300 relative cursor-pointer" onClick={() => handleView(sub)}>
-                          <td className={`absolute left-0 top-2 bottom-2 w-1 rounded-r-full transition-all ${statusColor}`} />
+                        <React.Fragment key={`group-${group.practical_id}`}>
+                          <tr className={cn("group transition-all duration-300 relative", isMultiLevel ? "cursor-pointer hover:bg-gray-50/50 dark:hover:bg-gray-800/20" : "hover:bg-indigo-50/30 dark:hover:bg-indigo-900/10 cursor-pointer")} onClick={() => isMultiLevel ? toggleGroupExpansion(group.practical_id.toString()) : handleView(group.submissions[0])}>
+                            <td className={`absolute left-0 top-2 bottom-2 w-1 rounded-r-full transition-all ${statusColor}`} />
 
-                          <td className="px-6 py-4 font-mono text-xs text-gray-500">
-                            {new Date(sub.created_at).toLocaleDateString()}
-                          </td>
-                          <td className="px-6 py-4 font-medium text-gray-900 dark:text-gray-200">
-                            {sub.subject_code || "—"}
-                          </td>
-                          <td className="px-6 py-4 max-w-[200px]" title={sub.practical_title}>
-                            <div className="font-medium text-gray-800 dark:text-gray-200 truncate group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">{sub.practical_title}</div>
-                          </td>
-                          <td className="px-6 py-4">
-                            <div className="flex items-center gap-1.5">
-                              <div className={`w-2 h-2 rounded-full bg-gradient-to-br ${getLanguageColor(sub.language)}`}></div>
-                              <span className="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide">
-                                {sub.language}
-                              </span>
-                            </div>
-                          </td>
-                          <td className="px-6 py-4">
-                            <StatusBadge status={sub.status} />
-                          </td>
-                          <td className="px-6 py-4">
-                            {sub.marks_obtained !== null ? (
-                              <span className="flex items-center gap-1.5 text-xs font-bold text-indigo-700 dark:text-indigo-300 bg-indigo-100 dark:bg-indigo-900/30 px-2.5 py-1 rounded-lg border border-indigo-200 dark:border-indigo-800 w-fit shadow-sm">
-                                <Sparkles className="w-3.5 h-3.5 text-indigo-500" />
-                                {sub.marks_obtained}/{sub.max_marks}
-                              </span>
-                            ) : (
-                              <span className="text-gray-400 text-xs">—</span>
-                            )}
-                          </td>
-                          <td className="px-6 py-4 text-right">
-                            <div className="flex items-center justify-end gap-2 opacity-80 group-hover:opacity-100 transition-opacity">
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-8 w-8 p-0 rounded-full text-gray-400 hover:text-indigo-600 hover:bg-white dark:hover:bg-indigo-900/30 hover:shadow-md transition-all"
-                                onClick={(e) => { e.stopPropagation(); handleDownloadPdf(sub); }}
-                                disabled={pdfLoading}
-                                title="Download Report"
-                              >
-                                {pdfLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-8 px-3 rounded-full text-xs font-semibold text-indigo-600 bg-indigo-50/50 dark:bg-indigo-900/10 hover:bg-indigo-500 hover:text-white transition-all shadow-sm hover:shadow-indigo-500/25"
-                              >
-                                View
-                              </Button>
-                            </div>
-                          </td>
-                        </tr>
+                            <td className="px-6 py-4 font-mono text-xs text-gray-500 flex items-center gap-2">
+                              {isMultiLevel && (
+                                <span className={cn("text-gray-400 transition-transform duration-200", isExpanded ? "rotate-180" : "rotate-0")}>
+                                  <ChevronDown className="w-4 h-4" />
+                                </span>
+                              )}
+                              {new Date(group.created_at).toLocaleDateString()}
+                            </td>
+                            <td className="px-6 py-4 font-medium text-gray-900 dark:text-gray-200">
+                              {group.subject_code || "—"}
+                            </td>
+                            <td className="px-6 py-4 max-w-[200px]" title={group.practical_title}>
+                              <div className="font-medium text-gray-800 dark:text-gray-200 truncate group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
+                                {group.practical_title}
+                                {isMultiLevel && <span className="ml-2 text-[10px] items-center gap-1 font-bold uppercase tracking-wider text-purple-600 bg-purple-100 dark:bg-purple-900/30 px-1.5 py-0.5 rounded">Multi-Task</span>}
+                              </div>
+                            </td>
+                            <td className="px-6 py-4">
+                              <div className="flex items-center gap-1.5">
+                                <div className={`w-2 h-2 rounded-full bg-gradient-to-br ${getLanguageColor(group.language)}`}></div>
+                                <span className="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide">
+                                  {group.language}
+                                </span>
+                              </div>
+                            </td>
+                            <td className="px-6 py-4">
+                              <StatusBadge status={group.overallStatus} />
+                            </td>
+                            <td className="px-6 py-4">
+                              {group.totalMarks !== null ? (
+                                <span className="flex items-center gap-1.5 text-xs font-bold text-indigo-700 dark:text-indigo-300 bg-indigo-100 dark:bg-indigo-900/30 px-2.5 py-1 rounded-lg border border-indigo-200 dark:border-indigo-800 w-fit shadow-sm">
+                                  <Sparkles className="w-3.5 h-3.5 text-indigo-500" />
+                                  {group.totalMarks}/{group.totalMaxMarks}
+                                </span>
+                              ) : (
+                                <span className="text-gray-400 text-xs">—</span>
+                              )}
+                            </td>
+                            <td className="px-6 py-4 text-right">
+                              {!isMultiLevel && (
+                                <div className="flex items-center justify-end gap-2 opacity-80 group-hover:opacity-100 transition-opacity">
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-8 w-8 p-0 rounded-full text-gray-400 hover:text-indigo-600 hover:bg-white dark:hover:bg-indigo-900/30 hover:shadow-md transition-all"
+                                    onClick={(e) => { e.stopPropagation(); handleDownloadPdf(group.submissions[0]); }}
+                                    disabled={pdfLoading}
+                                    title="Download Report"
+                                  >
+                                    {pdfLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-8 px-3 rounded-full text-xs font-semibold text-indigo-600 bg-indigo-50/50 dark:bg-indigo-900/10 hover:bg-indigo-500 hover:text-white transition-all shadow-sm hover:shadow-indigo-500/25"
+                                  >
+                                    View
+                                  </Button>
+                                </div>
+                              )}
+                            </td>
+                          </tr>
+
+                          {/* Render Sub-rows if multi-level and expanded */}
+                          {isMultiLevel && isExpanded && group.submissions.map((sub, idx) => (
+                            <motion.tr
+                              key={sub.id}
+                              initial={{ opacity: 0, height: 0 }}
+                              animate={{ opacity: 1, height: 'auto' }}
+                              exit={{ opacity: 0, height: 0 }}
+                              className="bg-gray-50/30 dark:bg-gray-800/10 hover:bg-indigo-50/30 dark:hover:bg-indigo-900/10 transition-colors cursor-pointer"
+                              onClick={() => handleView(sub)}
+                            >
+                              <td colSpan={1} className="pl-12 py-3 border-l-2 border-indigo-200 dark:border-indigo-800 leading-none">
+                                <div className="w-4 h-4 rounded-bl-xl border-b-2 border-l-2 border-gray-200 dark:border-gray-700 -mt-4"></div>
+                              </td>
+                              <td colSpan={2} className="py-3 px-6">
+                                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                                  {sub.level_title || `Task ${idx + 1}`}
+                                </span>
+                              </td>
+                              <td className="py-3 px-6 text-xs text-gray-500 font-mono">
+                                {new Date(sub.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                              </td>
+                              <td className="py-3 px-6 text-xs">
+                                <span className="text-gray-500 dark:text-gray-400 uppercase tracking-wider font-semibold">
+                                  {sub.language}
+                                </span>
+                              </td>
+                              <td className="py-3 px-6">
+                                <StatusBadge status={sub.status} />
+                              </td>
+                              <td className="py-3 px-6">
+                                {sub.marks_obtained !== null ? (
+                                  <span className="text-xs font-bold text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-800 px-2 py-0.5 rounded border border-gray-200 dark:border-gray-700 w-fit block">
+                                    {sub.marks_obtained}/{sub.level_max_marks || sub.max_marks}
+                                  </span>
+                                ) : (
+                                  <span className="text-gray-400 text-xs">—</span>
+                                )}
+                              </td>
+                              <td className="py-3 px-6 text-right w-full">
+                                <div className="flex items-center justify-end gap-2 outline-none">
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-8 w-8 p-0 rounded-full text-gray-400 hover:text-indigo-600 hover:bg-white dark:hover:bg-indigo-900/30 hover:shadow-md transition-all"
+                                    onClick={(e) => { e.stopPropagation(); handleDownloadPdf(sub); }}
+                                    disabled={pdfLoading}
+                                    title="Download Report"
+                                  >
+                                    {pdfLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-7 px-3 rounded-full text-[11px] font-semibold text-gray-600 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 dark:text-gray-300 transition-all"
+                                  >
+                                    View
+                                  </Button>
+                                </div>
+                              </td>
+                            </motion.tr>
+                          ))}
+                        </React.Fragment>
                       );
                     })
                   )}

@@ -282,7 +282,25 @@ export default function StudentExams() {
         const now = new Date();
         let scheduleLocked = false;
 
-        if (p.schedule_date) {
+        if (p.is_exam) {
+          if (p.exam_start_time) {
+            const startDate = new Date(p.exam_start_time);
+            if (now < startDate) {
+              p.is_locked = true;
+              p.lock_reason = `Exam starts on ${startDate.toLocaleDateString()} at ${startDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+              scheduleLocked = true;
+            }
+          }
+          if (p.exam_end_time) {
+            const endDate = new Date(p.exam_end_time);
+            if (now > endDate && !["submitted", "completed", "passed", "failed"].includes(p.status)) {
+              p.status = "overdue";
+              p.is_locked = true;
+              p.lock_reason = "Exam has ended";
+              scheduleLocked = true; // reusing variable concept to skip sequence lock override
+            }
+          }
+        } else if (p.schedule_date) {
           const schedDate = new Date(p.schedule_date);
           if (p.schedule_time) {
             const [hours, minutes] = p.schedule_time.split(":").map(Number);
@@ -337,7 +355,25 @@ export default function StudentExams() {
         const now = new Date();
         let scheduleLocked = false;
 
-        if (p.schedule_date) {
+        if (p.is_exam) {
+          if (p.exam_start_time) {
+            const startDate = new Date(p.exam_start_time);
+            if (now < startDate) {
+              p.is_locked = true;
+              p.lock_reason = `Exam starts on ${startDate.toLocaleDateString()} at ${startDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+              scheduleLocked = true;
+            }
+          }
+          if (p.exam_end_time) {
+            const endDate = new Date(p.exam_end_time);
+            if (now > endDate && !["submitted", "completed", "passed", "failed"].includes(p.status)) {
+              p.status = "overdue";
+              p.is_locked = true;
+              p.lock_reason = "Exam has ended";
+              scheduleLocked = true;
+            }
+          }
+        } else if (p.schedule_date) {
           const schedDate = new Date(p.schedule_date);
           if (p.schedule_time) {
             const [hours, minutes] = p.schedule_time.split(":").map(Number);
