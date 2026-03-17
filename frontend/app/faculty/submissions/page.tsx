@@ -4,6 +4,7 @@ import React, {
   useEffect,
   useState,
   useCallback,
+  useMemo,
   Suspense,
 } from "react";
 import { createClient } from "@/lib/supabase/client";
@@ -18,6 +19,8 @@ import {
   LayoutGrid,
   BarChart3,
   RotateCcw,
+  ChevronDown,
+  ChevronRight,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { motion } from "framer-motion";
@@ -86,6 +89,23 @@ interface Submission {
   attempt_count?: number;
   max_attempts?: number;
   testCaseResults?: any[];
+  level_id?: number | null;
+  level_title?: string | null;
+  level_max_marks?: number | null;
+}
+
+interface GroupedSubmission {
+  key: string; // student_id + practical_id
+  student_id: string;
+  student_name: string;
+  roll_no: string;
+  practical_id: number;
+  practical_title: string;
+  submissions: Submission[];
+  totalMarks: number | null;
+  totalMaxMarks: number;
+  overallStatus: string;
+  latestDate: string;
 }
 
 interface TestCase {
@@ -123,6 +143,9 @@ function FacultySubmissionsContentInner() {
 
   // Inline Grading State
   const [, setGradingLoadingId] = useState<number | null>(null);
+
+  // Expanded Groups State (for grouped submissions)
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
 
   // Report Generation State
   const [reportLoading, setReportLoading] = useState(false);
@@ -218,6 +241,7 @@ function FacultySubmissionsContentInner() {
             id,
             student_id,
             practical_id,
+            level_id,
             code,
             language,
             status,
@@ -225,7 +249,8 @@ function FacultySubmissionsContentInner() {
             created_at,
             output,
             execution_details,
-            practicals ( title, subject_id )
+            practicals ( title, subject_id ),
+            practical_levels ( title, max_marks )
         `)
         .order("created_at", { ascending: false });
 
@@ -283,6 +308,9 @@ function FacultySubmissionsContentInner() {
         marks_obtained: s.marks_obtained,
         created_at: s.created_at,
         testCaseResults: s.execution_details?.results || [],
+        level_id: s.level_id,
+        level_title: s.practical_levels?.title || null,
+        level_max_marks: s.practical_levels?.max_marks || null,
       }));
 
       setSubmissions(formatted);
@@ -555,12 +583,91 @@ function FacultySubmissionsContentInner() {
   };
 
   // Filter Submissions locally
-  const filteredSubmissions = submissions.filter((s) => {
-    const matchesQuery = s.student_name.toLowerCase().includes(query.toLowerCase()) ||
-      s.roll_no?.toLowerCase().includes(query.toLowerCase());
-    const matchesStatus = filterStatus === 'all' || s.status === filterStatus;
-    return matchesQuery && matchesStatus;
-  });
+  const filteredSubmissions = useMemo(() => {
+    return submissions.filter((s) => {
+      const matchesQuery = s.student_name.toLowerCase().includes(query.toLowerCase()) ||
+        s.roll_no?.toLowerCase().includes(query.toLowerCase());
+      const matchesStatus = filterStatus === 'all' || s.status === filterStatus;
+      return matchesQuery && matchesStatus;
+    });
+  }, [submissions, query, filterStatus]);
+
+  // Group submissions by student + practical
+  const groupedSubmissions = useMemo<GroupedSubmission[]>(() => {
+    const map = new Map<string, GroupedSubmission>();
+
+    filteredSubmissions.forEach((sub) => {
+      const key = `${sub.student_id}_${sub.practical_id}`;
+      if (!map.has(key)) {
+        map.set(key, {
+          key,
+          student_id: sub.student_id,
+          student_name: sub.student_name,
+          roll_no: sub.roll_no || 'N/A',
+          practical_id: sub.practical_id,
+          practical_title: sub.practical_title,
+          submissions: [],
+          totalMarks: null,
+          totalMaxMarks: 0,
+          overallStatus: 'pending',
+          latestDate: sub.created_at,
+        });
+      }
+      const group = map.get(key)!;
+      group.submissions.push(sub);
+      if (sub.created_at > group.latestDate) {
+        group.latestDate = sub.created_at;
+      }
+    });
+
+    // Calculate aggregated status and marks
+    map.forEach((group) => {
+      const subs = group.submissions;
+      // Sort by level title
+      subs.sort((a, b) => (a.level_title || '').localeCompare(b.level_title || ''));
+
+      const hasLevels = subs.some(s => s.level_id);
+      if (hasLevels) {
+        // Multi-task: aggregate marks
+        let totalMarks = 0;
+        let totalMaxMarks = 0;
+        let allPassed = true;
+        let anyFailed = false;
+        let allGraded = true;
+
+        subs.forEach(s => {
+          totalMaxMarks += s.level_max_marks || 10;
+          if (s.marks_obtained !== null && s.marks_obtained !== undefined) {
+            totalMarks += s.marks_obtained;
+          }
+          if (s.status !== 'passed') allPassed = false;
+          if (s.status === 'failed') anyFailed = true;
+          if (s.status === 'pending' || s.status === 'submitted') allGraded = false;
+        });
+
+        group.totalMarks = allGraded ? totalMarks : null;
+        group.totalMaxMarks = totalMaxMarks;
+        group.overallStatus = allPassed ? 'passed' : anyFailed ? 'failed' : 'pending';
+      } else {
+        // Single submission
+        const s = subs[0];
+        group.totalMarks = s.marks_obtained;
+        group.totalMaxMarks = 10;
+        group.overallStatus = s.status;
+      }
+    });
+
+    return Array.from(map.values());
+  }, [filteredSubmissions]);
+
+  const toggleGroupExpansion = (key: string) => {
+    setExpandedGroups(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
 
   const stats = {
     total: submissions.length,
@@ -814,101 +921,213 @@ function FacultySubmissionsContentInner() {
                         Loading...
                       </td>
                     </tr>
-                  ) : filteredSubmissions.length === 0 ? (
+                  ) : groupedSubmissions.length === 0 ? (
                     <tr>
                       <td colSpan={6} className="p-8 text-center text-gray-500">
                         No submissions found
                       </td>
                     </tr>
                   ) : (
-                    filteredSubmissions.map((sub) => (
-                      <motion.tr
-                        key={sub.id}
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        className="group hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors cursor-pointer"
-                        onClick={() => handleOpenSheet(sub)}
-                      >
-                        <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
-                          <Checkbox
-                            checked={selectedSubmissionIds.has(sub.id)}
-                            onCheckedChange={() => toggleSelection(sub.id)}
-                          />
-                        </td>
-                        <td className="px-4 py-3">
-                          <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 rounded-full bg-indigo-100 dark:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400 flex items-center justify-center font-bold text-xs ring-2 ring-white dark:ring-gray-900">
-                              {/* Initials could be better */}
-                              {sub.student_name.slice(0, 2).toUpperCase()}
-                            </div>
-                            <div>
-                              <div className="font-medium text-gray-900 dark:text-white">{sub.student_name}</div>
-                              <div className="text-xs text-gray-500 font-mono">{sub.roll_no}</div>
-                            </div>
-                          </div>
-                        </td>
-                        {!selectedPracticalId && (
-                          <td className="px-4 py-3 text-gray-600 dark:text-gray-300 max-w-[200px] truncate" title={sub.practical_title}>
-                            {sub.practical_title}
-                          </td>
-                        )}
-                        <td className="px-4 py-3">
-                          {/* Traffic Light Status Bar */}
-                          <div className="flex items-center gap-2">
-                            <div className={`w-1.5 h-8 rounded-full ${sub.status === 'passed' ? 'bg-emerald-500' :
-                              sub.status === 'failed' ? 'bg-red-500' :
-                                'bg-amber-400'
-                              }`} />
-                            <span className={`text-xs font-semibold px-2 py-0.5 rounded uppercase ${sub.status === 'passed' ? 'text-emerald-700 bg-emerald-50 dark:text-emerald-400 dark:bg-emerald-900/20' :
-                              sub.status === 'failed' ? 'text-red-700 bg-red-50 dark:text-red-400 dark:bg-red-900/20' :
-                                'text-amber-700 bg-amber-50 dark:text-amber-400 dark:bg-amber-900/20'
-                              }`}>
-                              {sub.status}
-                            </span>
-                          </div>
-                        </td>
-                        <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
-                          {/* Marks Input / Display */}
-                          {sub.status === 'passed' || sub.status === 'failed' ? (
-                            <span className="font-mono font-bold text-gray-900 dark:text-white">
-                              {sub.marks_obtained}/10
-                            </span>
-                          ) : (
-                            <input
-                              className="w-12 px-2 py-1 text-sm border border-gray-200 dark:border-gray-700 rounded bg-white dark:bg-gray-900 focus:ring-2 focus:ring-indigo-500 outline-none"
-                              placeholder="-"
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter') {
-                                  handleInlineGrade(sub.id, e.currentTarget.value);
-                                }
-                              }}
-                            />
-                          )}
-                        </td>
-                        <td className="px-4 py-3 text-right" onClick={e => e.stopPropagation()}>
-                          <div className="flex items-center justify-end gap-2">
-                            {sub.status === 'failed' && (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="gap-1.5 text-xs bg-amber-50 text-amber-700 hover:bg-amber-100 dark:bg-amber-900/20 dark:text-amber-400 dark:hover:bg-amber-900/40"
-                                onClick={() => handleAllowReattempt(sub)}
-                              >
-                                <RotateCcw className="w-3.5 h-3.5" />
-                                Re-attempt
-                              </Button>
+                    groupedSubmissions.map((group) => {
+                      const isMultiTask = group.submissions.length > 1 && group.submissions.some(s => s.level_id);
+                      const isExpanded = expandedGroups.has(group.key);
+
+                      return (
+                        <React.Fragment key={group.key}>
+                          {/* Group Header Row */}
+                          <motion.tr
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            className={`group hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors ${isMultiTask ? 'cursor-pointer' : ''}`}
+                            onClick={() => {
+                              if (isMultiTask) {
+                                toggleGroupExpansion(group.key);
+                              } else {
+                                handleOpenSheet(group.submissions[0]);
+                              }
+                            }}
+                          >
+                            <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                              <Checkbox
+                                checked={group.submissions.every(s => selectedSubmissionIds.has(s.id))}
+                                onCheckedChange={(checked) => {
+                                  const next = new Set(selectedSubmissionIds);
+                                  group.submissions.forEach(s => {
+                                    if (checked) next.add(s.id);
+                                    else next.delete(s.id);
+                                  });
+                                  setSelectedSubmissionIds(next);
+                                }}
+                              />
+                            </td>
+                            <td className="px-4 py-3">
+                              <div className="flex items-center gap-3">
+                                {isMultiTask && (
+                                  <div className="text-gray-400">
+                                    {isExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                                  </div>
+                                )}
+                                <div className="w-8 h-8 rounded-full bg-indigo-100 dark:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400 flex items-center justify-center font-bold text-xs ring-2 ring-white dark:ring-gray-900">
+                                  {group.student_name.slice(0, 2).toUpperCase()}
+                                </div>
+                                <div>
+                                  <div className="font-medium text-gray-900 dark:text-white">{group.student_name}</div>
+                                  <div className="text-xs text-gray-500 font-mono">{group.roll_no}</div>
+                                </div>
+                              </div>
+                            </td>
+                            {!selectedPracticalId && (
+                              <td className="px-4 py-3 text-gray-600 dark:text-gray-300 max-w-[200px] truncate" title={group.practical_title}>
+                                <div className="flex items-center gap-2">
+                                  {group.practical_title}
+                                  {isMultiTask && (
+                                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400">
+                                      {group.submissions.length} tasks
+                                    </span>
+                                  )}
+                                </div>
+                              </td>
                             )}
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="bg-indigo-50 text-indigo-600 hover:bg-indigo-100 dark:bg-indigo-900/20 dark:text-indigo-400 dark:hover:bg-indigo-900/40"
+                            <td className="px-4 py-3">
+                              <div className="flex items-center gap-2">
+                                <div className={`w-1.5 h-8 rounded-full ${group.overallStatus === 'passed' ? 'bg-emerald-500' :
+                                  group.overallStatus === 'failed' ? 'bg-red-500' :
+                                    'bg-amber-400'
+                                  }`} />
+                                <span className={`text-xs font-semibold px-2 py-0.5 rounded uppercase ${group.overallStatus === 'passed' ? 'text-emerald-700 bg-emerald-50 dark:text-emerald-400 dark:bg-emerald-900/20' :
+                                  group.overallStatus === 'failed' ? 'text-red-700 bg-red-50 dark:text-red-400 dark:bg-red-900/20' :
+                                    'text-amber-700 bg-amber-50 dark:text-amber-400 dark:bg-amber-900/20'
+                                  }`}>
+                                  {group.overallStatus}
+                                </span>
+                              </div>
+                            </td>
+                            <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
+                              {group.totalMarks !== null ? (
+                                <span className="font-mono font-bold text-gray-900 dark:text-white">
+                                  {group.totalMarks}/{group.totalMaxMarks}
+                                </span>
+                              ) : (
+                                !isMultiTask ? (
+                                  <input
+                                    className="w-12 px-2 py-1 text-sm border border-gray-200 dark:border-gray-700 rounded bg-white dark:bg-gray-900 focus:ring-2 focus:ring-indigo-500 outline-none"
+                                    placeholder="-"
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter') {
+                                        handleInlineGrade(group.submissions[0].id, e.currentTarget.value);
+                                      }
+                                    }}
+                                  />
+                                ) : (
+                                  <span className="text-xs text-gray-400">—</span>
+                                )
+                              )}
+                            </td>
+                            <td className="px-4 py-3 text-right" onClick={e => e.stopPropagation()}>
+                              <div className="flex items-center justify-end gap-2">
+                                {group.overallStatus === 'failed' && (
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="gap-1.5 text-xs bg-amber-50 text-amber-700 hover:bg-amber-100 dark:bg-amber-900/20 dark:text-amber-400 dark:hover:bg-amber-900/40"
+                                    onClick={() => handleAllowReattempt(group.submissions[0])}
+                                  >
+                                    <RotateCcw className="w-3.5 h-3.5" />
+                                    Re-attempt
+                                  </Button>
+                                )}
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="bg-indigo-50 text-indigo-600 hover:bg-indigo-100 dark:bg-indigo-900/20 dark:text-indigo-400 dark:hover:bg-indigo-900/40"
+                                  onClick={() => {
+                                    if (isMultiTask) {
+                                      toggleGroupExpansion(group.key);
+                                    } else {
+                                      handleOpenSheet(group.submissions[0]);
+                                    }
+                                  }}
+                                >
+                                  {isMultiTask ? (isExpanded ? 'Collapse' : 'Expand') : 'Grade'}
+                                </Button>
+                              </div>
+                            </td>
+                          </motion.tr>
+
+                          {/* Expanded Sub-rows for multi-task */}
+                          {isMultiTask && isExpanded && group.submissions.map((sub) => (
+                            <motion.tr
+                              key={sub.id}
+                              initial={{ opacity: 0, height: 0 }}
+                              animate={{ opacity: 1, height: 'auto' }}
+                              exit={{ opacity: 0, height: 0 }}
+                              className="bg-gray-50/50 dark:bg-gray-800/30 hover:bg-gray-100/50 dark:hover:bg-gray-800/50 transition-colors cursor-pointer"
+                              onClick={() => handleOpenSheet(sub)}
                             >
-                              Grade
-                            </Button>
-                          </div>
-                        </td>
-                      </motion.tr>
-                    ))
+                              <td className="px-4 py-2" onClick={(e) => e.stopPropagation()}>
+                                <Checkbox
+                                  checked={selectedSubmissionIds.has(sub.id)}
+                                  onCheckedChange={() => toggleSelection(sub.id)}
+                                />
+                              </td>
+                              <td className="px-4 py-2">
+                                <div className="flex items-center gap-3 pl-7">
+                                  <div className="w-1 h-6 rounded-full bg-indigo-200 dark:bg-indigo-800" />
+                                  <div>
+                                    <div className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                                      {sub.level_title || `Task`}
+                                    </div>
+                                    <div className="text-[10px] text-gray-400">
+                                      max: {sub.level_max_marks || 10} marks
+                                    </div>
+                                  </div>
+                                </div>
+                              </td>
+                              {!selectedPracticalId && <td className="px-4 py-2" />}
+                              <td className="px-4 py-2">
+                                <div className="flex items-center gap-2">
+                                  <div className={`w-1 h-5 rounded-full ${sub.status === 'passed' ? 'bg-emerald-500' :
+                                    sub.status === 'failed' ? 'bg-red-500' : 'bg-amber-400'
+                                    }`} />
+                                  <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded uppercase ${sub.status === 'passed' ? 'text-emerald-700 bg-emerald-50 dark:text-emerald-400 dark:bg-emerald-900/20' :
+                                    sub.status === 'failed' ? 'text-red-700 bg-red-50 dark:text-red-400 dark:bg-red-900/20' :
+                                      'text-amber-700 bg-amber-50 dark:text-amber-400 dark:bg-amber-900/20'
+                                    }`}>
+                                    {sub.status}
+                                  </span>
+                                </div>
+                              </td>
+                              <td className="px-4 py-2" onClick={e => e.stopPropagation()}>
+                                {sub.status === 'passed' || sub.status === 'failed' ? (
+                                  <span className="font-mono text-sm font-bold text-gray-900 dark:text-white">
+                                    {sub.marks_obtained}/{sub.level_max_marks || 10}
+                                  </span>
+                                ) : (
+                                  <input
+                                    className="w-12 px-2 py-1 text-xs border border-gray-200 dark:border-gray-700 rounded bg-white dark:bg-gray-900 focus:ring-2 focus:ring-indigo-500 outline-none"
+                                    placeholder="-"
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter') {
+                                        handleInlineGrade(sub.id, e.currentTarget.value);
+                                      }
+                                    }}
+                                  />
+                                )}
+                              </td>
+                              <td className="px-4 py-2 text-right" onClick={e => e.stopPropagation()}>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="text-xs bg-indigo-50 text-indigo-600 hover:bg-indigo-100 dark:bg-indigo-900/20 dark:text-indigo-400"
+                                >
+                                  Grade
+                                </Button>
+                              </td>
+                            </motion.tr>
+                          ))}
+                        </React.Fragment>
+                      );
+                    })
                   )}
                 </tbody>
               </table>
