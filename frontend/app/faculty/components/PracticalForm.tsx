@@ -1074,6 +1074,10 @@ export default function PracticalForm({
       ? getCurrentLevel().description
       : form.description;
 
+    const sourceReferenceCode = enableLevels
+      ? getCurrentLevel().reference_code
+      : sampleCode;
+
     if (!sourceDescription || sourceDescription.length < 10) {
       alert("Please enter a detailed description first.");
       return;
@@ -1086,15 +1090,15 @@ export default function PracticalForm({
 ## Problem Description:
 ${sourceDescription}
 
-${sampleCode ? `## Reference Code:
+${sourceReferenceCode ? `## Reference Code:
 \`\`\`
-${sampleCode}
+${sourceReferenceCode}
 \`\`\`
 
 IMPORTANT: Study the reference code carefully to understand:
-1. What input format it expects (stdin format, data types, multiple inputs, etc.)
-2. What the code actually does with the input (the algorithm/logic)
-3. What output format it produces (stdout format)
+1. What input format it expects (e.g. standard input reading, arrays vs individual variables)
+2. What the code actually does with the input
+3. What exact output format it produces (e.g. printed text output, returned array representations)
 ` : ""}
 
 ## Your Task:
@@ -2023,22 +2027,24 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
             }
           }
 
-          // 3) Remove students that were unselected.
-          for (const assignment of toRemove) {
-            const removeResp = await fetch(
-              `/api/admin/practicals/assign?assignment_id=${assignment.id}`,
-              { method: "DELETE" },
-            );
-
-            const removeResult = await removeResp.json();
-            if (removeResp.ok && removeResult?.success) {
-              removedCount += 1;
-              itemChanged = true;
-            } else {
-              console.error(
-                `Failed to remove assignment ${assignment.id} for practical ${item.id}:`,
-                removeResult?.error,
+          // 3) Remove students that were unselected via a single bulk DELETE request.
+          if (toRemove.length > 0) {
+            try {
+              const assignmentIds = toRemove.map(a => a.id).join(",");
+              const removeResp = await fetch(
+                `/api/admin/practicals/assign?assignment_ids=${assignmentIds}`,
+                { method: "DELETE" },
               );
+              const removeResult = await removeResp.json();
+              if (removeResp.ok && removeResult?.success) {
+                removedCount += removeResult.deleted || toRemove.length;
+                itemChanged = true;
+              } else {
+                console.error(`Failed to bulk remove assignments for practical ${item.id}:`, removeResult?.error);
+                failCount++;
+              }
+            } catch (err) {
+              console.error(`Error bulk removing assignments:`, err);
               failCount++;
             }
           }
@@ -2772,9 +2778,14 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
                             const apiUrl = process.env.NEXT_PUBLIC_AI_API_URL || "http://localhost:5002/ai";
                             const { data: { session } } = await supabase.auth.getSession();
                             const lang = sampleLanguage || form.language || "c";
-                            const prompt = type === 'starter'
-                              ? `Generate a starter code template in ${lang} for the following problem. Include function signatures, input/output handling, and helpful comments. Return ONLY the code, no explanations.\n\n${currentLvl.description}`
-                              : `Generate a complete solution in ${lang} for the following problem. The code should compile and produce correct output. Return ONLY the code, no explanations.\n\n${currentLvl.description}`;
+                            const ioInstructions = "CRITICAL REQUIREMENT: Provide complete competitive programming style standard input/output handling. The code MUST read all inputs from standard input (stdin) and print strictly the expected output to standard output (stdout). Do NOT just write a function! For Java, write a class with a public static void main method that uses a Scanner or BufferedReader. For C/C++, use standard main reading from cin/scanf. For Python, use input() or sys.stdin.read().";
+                            let prompt = "";
+                            if (type === 'starter') {
+                              prompt = `Generate a simple, incomplete starter code template in ${lang} for the following problem.\n\n${ioInstructions}\n\nInclude the full boilerplate for reading inputs and printing outputs, but leave the core algorithm logic incomplete (e.g., an empty function) for the student to solve. Return ONLY the raw code, NO markdown blocks (\`\`\`), NO explanations.\n\nProblem Description:\n${currentLvl.description}`;
+                            } else {
+                              const baseContext = currentLvl.starter_code ? `\n\nUse the following starter code as the exact structural template (DO NOT change class or function names, just fill in the missing logic):\n\n${currentLvl.starter_code}` : "";
+                              prompt = `Generate a simple, complete working solution in ${lang} for the following problem.\n\n${ioInstructions}\n\nThe code should compile, read from stdin, execute the logic, and print to stdout correctly. Return ONLY the raw code, NO markdown blocks (\`\`\`), NO formatting, NO explanations.${baseContext}\n\nProblem Description:\n\n${currentLvl.description}`;
+                            }
                             const res = await fetch(`${apiUrl}/chat`, {
                               method: "POST",
                               headers: { "Content-Type": "application/json", "Authorization": `Bearer ${session?.access_token || ""}` },
@@ -2867,9 +2878,14 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
                             const apiUrl = process.env.NEXT_PUBLIC_AI_API_URL || "http://localhost:5002/ai";
                             const { data: { session } } = await supabase.auth.getSession();
                             const lang = sampleLanguage || form.language || "c";
-                            const prompt = type === 'starter'
-                              ? `Generate a starter code template in ${lang} for the following problem. Include function signatures, input/output handling, and helpful comments. Return ONLY the code, no explanations.\n\n${form.description}`
-                              : `Generate a complete solution in ${lang} for the following problem. The code should compile and produce correct output. Return ONLY the code, no explanations.\n\n${form.description}`;
+                            const ioInstructions = "CRITICAL REQUIREMENT: Provide complete competitive programming style standard input/output handling. The code MUST read all inputs from standard input (stdin) and print strictly the expected output to standard output (stdout). Do NOT just write a function! For Java, write a class with a public static void main method that uses a Scanner or BufferedReader. For C/C++, use standard main reading from cin/scanf. For Python, use input() or sys.stdin.read().";
+                            let prompt = "";
+                            if (type === 'starter') {
+                              prompt = `Generate a simple, incomplete starter code template in ${lang} for the following problem.\n\n${ioInstructions}\n\nInclude the full boilerplate for reading inputs and printing outputs, but leave the core algorithm logic incomplete (e.g., an empty function) for the student to solve. Return ONLY the raw code, NO markdown blocks (\`\`\`), NO explanations.\n\nProblem Description:\n${form.description}`;
+                            } else {
+                              const baseContext = starterCode ? `\n\nUse the following starter code as the exact structural template (DO NOT change class or function names, just fill in the missing logic):\n\n${starterCode}` : "";
+                              prompt = `Generate a simple, complete working solution in ${lang} for the following problem.\n\n${ioInstructions}\n\nThe code should compile, read from stdin, execute the logic, and print to stdout correctly. Return ONLY the raw code, NO markdown blocks (\`\`\`), NO formatting, NO explanations.${baseContext}\n\nProblem Description:\n\n${form.description}`;
+                            }
                             const res = await fetch(`${apiUrl}/chat`, {
                               method: "POST",
                               headers: { "Content-Type": "application/json", "Authorization": `Bearer ${session?.access_token || ""}` },
@@ -3272,9 +3288,14 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
                                   const apiUrl = process.env.NEXT_PUBLIC_AI_API_URL || "http://localhost:5002/ai";
                                   const { data: { session } } = await supabase.auth.getSession();
                                   const lang = sampleLanguage || form.language || "c";
-                                  const prompt = type === 'starter'
-                                    ? `Generate a starter code template in ${lang} for the following problem. Include function signatures, input/output handling, and helpful comments. Return ONLY the code, no explanations.\n\n${currentLvl.description}`
-                                    : `Generate a complete solution in ${lang} for the following problem. The code should compile and produce correct output. Return ONLY the code, no explanations.\n\n${currentLvl.description}`;
+                                  const ioInstructions = "CRITICAL REQUIREMENT: Provide complete competitive programming style standard input/output handling. The code MUST read all inputs from standard input (stdin) and print strictly the expected output to standard output (stdout). Do NOT just write a function! For Java, write a class with a public static void main method that uses a Scanner or BufferedReader. For C/C++, use standard main reading from cin/scanf. For Python, use input() or sys.stdin.read().";
+                                  let prompt = "";
+                                  if (type === 'starter') {
+                                    prompt = `Generate a simple, incomplete starter code template in ${lang} for the following problem.\n\n${ioInstructions}\n\nInclude the full boilerplate for reading inputs and printing outputs, but leave the core algorithm logic incomplete (e.g., an empty function) for the student to solve. Return ONLY the raw code, NO markdown blocks (\`\`\`), NO explanations.\n\nProblem Description:\n${currentLvl.description}`;
+                                  } else {
+                                    const baseContext = currentLvl.starter_code ? `\n\nUse the following starter code as the exact structural template (DO NOT change class or function names, just fill in the missing logic):\n\n${currentLvl.starter_code}` : "";
+                                    prompt = `Generate a simple, complete working solution in ${lang} for the following problem.\n\n${ioInstructions}\n\nThe code should compile, read from stdin, execute the logic, and print to stdout correctly. Return ONLY the raw code, NO markdown blocks (\`\`\`), NO formatting, NO explanations.${baseContext}\n\nProblem Description:\n\n${currentLvl.description}`;
+                                  }
                                   const res = await fetch(`${apiUrl}/chat`, {
                                     method: "POST",
                                     headers: { "Content-Type": "application/json", "Authorization": `Bearer ${session?.access_token || ""}` },
@@ -3366,9 +3387,14 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
                                 const apiUrl = process.env.NEXT_PUBLIC_AI_API_URL || "http://localhost:5002/ai";
                                 const { data: { session } } = await supabase.auth.getSession();
                                 const lang = sampleLanguage || form.language || "c";
-                                const prompt = type === 'starter'
-                                  ? `Generate a starter code template in ${lang} for the following problem. Include function signatures, input/output handling, and helpful comments. Return ONLY the code, no explanations.\n\n${form.description}`
-                                  : `Generate a complete solution in ${lang} for the following problem. The code should compile and produce correct output. Return ONLY the code, no explanations.\n\n${form.description}`;
+                                const ioInstructions = "CRITICAL REQUIREMENT: Provide complete competitive programming style standard input/output handling. The code MUST read all inputs from standard input (stdin) and print strictly the expected output to standard output (stdout). Do NOT just write a function! For Java, write a class with a public static void main method that uses a Scanner or BufferedReader. For C/C++, use standard main reading from cin/scanf. For Python, use input() or sys.stdin.read().";
+                                let prompt = "";
+                                  if (type === 'starter') {
+                                    prompt = `Generate a simple, incomplete starter code template in ${lang} for the following problem.\n\n${ioInstructions}\n\nInclude the full boilerplate for reading inputs and printing outputs, but leave the core algorithm logic incomplete (e.g., an empty function) for the student to solve. Return ONLY the raw code, NO markdown blocks (\`\`\`), NO explanations.\n\nProblem Description:\n${form.description}`;
+                                  } else {
+                                    const baseContext = starterCode ? `\n\nUse the following starter code as the exact structural template (DO NOT change class or function names, just fill in the missing logic):\n\n${starterCode}` : "";
+                                    prompt = `Generate a simple, complete working solution in ${lang} for the following problem.\n\n${ioInstructions}\n\nThe code should compile, read from stdin, execute the logic, and print to stdout correctly. Return ONLY the raw code, NO markdown blocks (\`\`\`), NO formatting, NO explanations.${baseContext}\n\nProblem Description:\n\n${form.description}`;
+                                  }
                                 const res = await fetch(`${apiUrl}/chat`, {
                                   method: "POST",
                                   headers: { "Content-Type": "application/json", "Authorization": `Bearer ${session?.access_token || ""}` },

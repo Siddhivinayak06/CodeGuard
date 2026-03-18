@@ -159,12 +159,14 @@ OUTPUT JSON:
       "description": "DETAILED problem statement. Include ALL constraints and requirements.",
       "max_marks": 10,
       "enableLevels": true, // ALWAYS SET TO TRUE. Every practical MUST have 2 tasks.
+      "language": "c", // Must be "c" or other detected language
       "levels": [
         { 
           "level": "Task 1", 
           "title": "Task 1 Title", 
           "description": "Description for Task 1 (Standard Implementation of the concept)", 
           "max_marks": 5, 
+          "starter_code": "...", 
           "reference_code": "...", 
           "testCases": [{ "input": "...", "expected_output": "..." }] 
         },
@@ -173,11 +175,11 @@ OUTPUT JSON:
           "title": "Task 2 Title", 
           "description": "Description for Task 2 (ADVANCED/HARD version). Must include complex constraints, edge cases, or performance requirements.", 
           "max_marks": 5, 
+          "starter_code": "...", 
           "reference_code": "...", 
           "testCases": [{ "input": "...", "expected_output": "..." }] 
         }
-      ],
-      "language": "c"
+      ]
     }
   ]
 }
@@ -189,12 +191,14 @@ RULES:
    - **Task 2:** **SIGNIFICANTLY HARDER**. It must involve complex logic, edge cases, input validation, or optimization. It should challenge the student.
 3. **NUMBERING:** Use "Exp No" from text.
 4. **JSON ONLY:** No markdown.
-5. **REFERENCE CODE:** Generate COMPLETE, WORKING C solutions for BOTH tasks.
-6. **TEST CASES:** Generate EXACTLY 2 test cases per Task.
-7. 
-8. TEXT:
-9. ${chunkText}
-10. `;
+5. **CODE RULES:** Both starter_code and reference_code MUST use competitive-programming style standard input and output (e.g., standard int main() reading with scanf and printing with printf).
+6. **STARTER CODE:** Generate an incomplete boilerplate (including int main and scanf/printf calls) but leave the core logic empty for the student to solve.
+7. **REFERENCE CODE:** Generate COMPLETE, WORKING solutions using the exact inputs/outputs described in the test cases.
+8. **TEST CASES:** Generate EXACTLY 2 test cases per Task.
+9. 
+10. TEXT:
+11. ${chunkText}
+12. `;
 
         try {
           const messages = [{ role: 'user', parts: [{ text: prompt }] }];

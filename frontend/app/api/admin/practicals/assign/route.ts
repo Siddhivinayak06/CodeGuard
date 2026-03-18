@@ -432,7 +432,7 @@ export async function GET(request: Request) {
   }
 }
 
-/** DELETE: remove assignment */
+/** DELETE: remove assignments */
 export async function DELETE(request: Request) {
   try {
     const supabase = await createClient();
@@ -444,86 +444,154 @@ export async function DELETE(request: Request) {
     }
 
     const url = new URL(request.url);
-    const assignmentId = url.searchParams.get("assignment_id");
+    const assignmentIdStr = url.searchParams.get("assignment_id");
+    const assignmentIdsStr = url.searchParams.get("assignment_ids");
 
-    if (!assignmentId) {
+    let idsToDelete: number[] = [];
+    if (assignmentIdStr) idsToDelete.push(Number(assignmentIdStr));
+    if (assignmentIdsStr) {
+      idsToDelete = idsToDelete.concat(
+        assignmentIdsStr.split(",").map(id => Number(id)).filter(id => !isNaN(id))
+      );
+    }
+
+    if (idsToDelete.length === 0) {
       return NextResponse.json(
-        { success: false, error: "Missing assignment_id parameter" },
+        { success: false, error: "Missing assignment_id or assignment_ids parameter" },
         { status: 400 },
       );
     }
 
-    const { data, error } = await supabase
+    // Get current user and role for authorization
+    const { data: userData } = await supabase.auth.getUser();
+    const userId = userData?.user?.id;
+    if (!userId) {
+      return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+    }
+
+    const { data: userRole } = await supabase.from("users").select("role").eq("uid", userId).single();
+    
+    // Check if faculty has access to the subject(s) of the practicals being unassigned
+    if ((userRole as any)?.role === "faculty") {
+      const { data: assignmentsToVerify } = await supabase
+        .from("student_practicals")
+        .select("practical_id, practicals(subject_id)")
+        .in("id", idsToDelete);
+
+      if (!assignmentsToVerify || assignmentsToVerify.length === 0) {
+        return NextResponse.json({ success: true, deleted: 0 });
+      }
+
+      const subjectIds = Array.from(new Set(assignmentsToVerify.map((a: any) => a.practicals?.subject_id).filter(Boolean)));
+      
+      if (subjectIds.length > 0) {
+        const { data: facultySubjects } = await supabase
+          .from("subject_faculty_batches")
+          .select("subject_id")
+          .eq("faculty_id", userId)
+          .in("subject_id", subjectIds);
+
+        const allowedSubjectIds = new Set((facultySubjects || []).map((fs: any) => fs.subject_id));
+        const hasAccessToAll = subjectIds.every(id => allowedSubjectIds.has(id));
+
+        if (!hasAccessToAll) {
+          return NextResponse.json(
+            { success: false, error: "You can only remove assignments for subjects you teach" },
+            { status: 403 },
+          );
+        }
+      }
+    }
+
+    const { data: rawDeletedAssignments, error } = await supabase
       .from("student_practicals")
       .delete()
-      .eq("id", Number(assignmentId))
+      .in("id", idsToDelete)
       .select("id, student_id, practical_id");
 
     if (error) throw error;
+    
+    const deletedAssignments = (rawDeletedAssignments || []) as any[];
 
-    // If this assignment belongs to an exam practical, remove related exam session too.
+    // If these assignments belong to exam practicals, remove related exam sessions too.
     try {
-      const deletedAssignment = (data || [])[0] as
-        | { student_id?: string; practical_id?: number }
-        | undefined;
+      if (deletedAssignments.length > 0) {
+        // Find distinct practicals affected
+        const practicalIds = Array.from(new Set<number>(deletedAssignments.map(a => Number(a.practical_id)).filter(Boolean)));
+        
+        // Find which practicals are exams
+        const { data: exams } = await (supabase.from("exams") as any)
+          .select("id, practical_id")
+          .in("practical_id", practicalIds);
+          
+        const examMap = new Map<number, number>((exams || []).map((e: any) => [Number(e.practical_id), Number(e.id)]));
+        
+        // Group student IDs by exam_id
+        const studentsByExam = new Map<number, Set<string>>();
+        const allStudentIdsAffected = new Set<string>();
 
-      if (deletedAssignment?.student_id && deletedAssignment?.practical_id) {
-        const practicalIdToken = String(deletedAssignment.practical_id);
-
-        const { data: exam } = await (supabase
-          .from("exams") as any)
-          .select("id")
-          .eq("practical_id", deletedAssignment.practical_id)
-          .maybeSingle();
-
-        if (exam?.id) {
-          await (supabase
-            .from("exam_sessions") as any)
-            .delete()
-            .eq("exam_id", exam.id)
-            .eq("student_id", deletedAssignment.student_id);
+        for (const assignment of deletedAssignments) {
+          if (!assignment.student_id || !assignment.practical_id) continue;
+          allStudentIdsAffected.add(assignment.student_id);
+          
+          const examId = examMap.get(assignment.practical_id);
+          if (examId) {
+            if (!studentsByExam.has(examId)) studentsByExam.set(examId, new Set());
+            studentsByExam.get(examId)!.add(assignment.student_id);
+          }
         }
 
-        // Remove assignment notifications (both practical and exam) for this student+practical.
-        const { data: userNotifications } = await (supabase
-          .from("notifications") as any)
-          .select("id, link, metadata")
-          .eq("user_id", deletedAssignment.student_id);
+        // Bulk delete exam_sessions for each exam
+        for (const [examId, studentSet] of studentsByExam.entries()) {
+          const studentIds = Array.from(studentSet);
+          if (studentIds.length > 0) {
+            await (supabase.from("exam_sessions") as any)
+              .delete()
+              .eq("exam_id", examId)
+              .in("student_id", studentIds);
+          }
+        }
 
-        const relatedNotificationIds = (userNotifications || [])
-          .filter((n: any) => {
-            const metadata = n?.metadata || {};
-            const metadataPracticalId =
-              metadata?.practical_id ?? metadata?.practicalId;
-
-            if (
-              metadataPracticalId !== undefined &&
-              metadataPracticalId !== null &&
-              String(metadataPracticalId) === practicalIdToken
-            ) {
-              return true;
-            }
-
-            const link = String(n?.link || "").toLowerCase();
-            return link.includes(`practicalid=${practicalIdToken}`.toLowerCase());
-          })
-          .map((n: any) => n.id)
-          .filter(Boolean);
-
-        if (relatedNotificationIds.length > 0) {
-          await (supabase
+        // Bulk delete assignment notifications
+        const studentIdsList = Array.from(allStudentIdsAffected);
+        if (studentIdsList.length > 0) {
+          const { data: userNotifications } = await (supabase
             .from("notifications") as any)
-            .delete()
-            .in("id", relatedNotificationIds);
+            .select("id, link, metadata")
+            .in("user_id", studentIdsList);
+
+          const practicalIdsSet = new Set<string>(practicalIds.map(String));
+
+          const relatedNotificationIds = (userNotifications || [])
+            .filter((n: any) => {
+              const metadata = n?.metadata || {};
+              const metadataPracticalId = String(metadata?.practical_id ?? metadata?.practicalId ?? "");
+
+              if (metadataPracticalId && practicalIdsSet.has(metadataPracticalId)) {
+                return true;
+              }
+
+              const link = String(n?.link || "").toLowerCase();
+              return Array.from(practicalIdsSet).some(pid => link.includes(`practicalid=${pid}`));
+            })
+            .map((n: any) => n.id)
+            .filter(Boolean);
+
+          if (relatedNotificationIds.length > 0) {
+            await (supabase
+              .from("notifications") as any)
+              .delete()
+              .in("id", relatedNotificationIds);
+          }
         }
       }
     } catch (cleanupErr) {
       console.error("Error cleaning up exam session after assignment delete:", cleanupErr);
     }
 
-    return NextResponse.json({ success: true, deleted: data?.length ?? 0 });
+    return NextResponse.json({ success: true, deleted: deletedAssignments?.length ?? 0 });
   } catch (err: any) {
-    console.error("Error deleting assignment:", err);
+    console.error("Error deleting assignments:", err);
     return NextResponse.json(
       { success: false, error: err.message ?? "Server error" },
       { status: 500 },
