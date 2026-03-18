@@ -106,6 +106,8 @@ interface GroupedSubmission {
   totalMaxMarks: number;
   overallStatus: string;
   latestDate: string;
+  attempt_count: number;
+  max_attempts: number;
 }
 
 interface TestCase {
@@ -293,6 +295,19 @@ function FacultySubmissionsContentInner() {
 
       const studentMap = new Map((students as any[])?.map(s => [s.uid, s]));
 
+      // Fetch student_practicals for attempt counts
+      const practicalIdsForSps = [...new Set(((data || []) as any[]).map(s => s.practical_id).filter(id => id !== null))];
+      let spMap = new Map();
+      if (studentIds.length > 0 && practicalIdsForSps.length > 0) {
+        const { data: sps } = await supabase
+          .from("student_practicals")
+          .select("student_id, practical_id, attempt_count, max_attempts")
+          .in("student_id", studentIds)
+          .in("practical_id", practicalIdsForSps);
+        
+        spMap = new Map((sps as any[])?.map(sp => [`${sp.student_id}_${sp.practical_id}`, sp]));
+      }
+
       const formatted: Submission[] = ((data || []) as any[]).map((s: any) => ({
         id: s.id,
         submission_id: s.id,
@@ -301,6 +316,8 @@ function FacultySubmissionsContentInner() {
         roll_no: studentMap.get(s.student_id)?.roll_no || "N/A",
         practical_id: s.practical_id,
         practical_title: s.practicals?.title || "Unknown",
+        attempt_count: spMap.get(`${s.student_id}_${s.practical_id}`)?.attempt_count || 0,
+        max_attempts: spMap.get(`${s.student_id}_${s.practical_id}`)?.max_attempts || 1,
         code: s.code,
         output: s.output,
         language: s.language,
@@ -611,6 +628,8 @@ function FacultySubmissionsContentInner() {
           totalMaxMarks: 0,
           overallStatus: 'pending',
           latestDate: sub.created_at,
+          attempt_count: sub.attempt_count || 0,
+          max_attempts: sub.max_attempts || 1,
         });
       }
       const group = map.get(key)!;
@@ -1025,7 +1044,7 @@ function FacultySubmissionsContentInner() {
                             </td>
                             <td className="px-4 py-3 text-right" onClick={e => e.stopPropagation()}>
                               <div className="flex items-center justify-end gap-2">
-                                {group.overallStatus === 'failed' && (
+                                {group.overallStatus === 'failed' && group.attempt_count >= group.max_attempts && (
                                   <Button
                                     variant="ghost"
                                     size="sm"
