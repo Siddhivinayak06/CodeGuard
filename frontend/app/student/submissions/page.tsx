@@ -4,7 +4,7 @@ import React, { useEffect, useState, useMemo, useRef, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
-import { generatePdfClient } from "@/lib/ClientPdf";
+import { generatePdfClient, generateCombinedPdfClient } from "@/lib/ClientPdf";
 import type { User } from "@supabase/supabase-js";
 import {
   FileText,
@@ -449,6 +449,33 @@ function StudentSubmissionsPageContent() {
     }
   };
 
+  // Downloads all tasks of a multi-level practical as ONE combined PDF
+  const handleDownloadGroupPdf = async (group: GroupedSubmission) => {
+    setPdfLoading(true);
+    try {
+      await generateCombinedPdfClient({
+        studentName: studentDetails?.name || "Student",
+        rollNumber: studentDetails?.roll_number || "N/A",
+        practicalTitle: group.practical_title,
+        tasks: group.submissions.map((sub) => ({
+          taskTitle: sub.level_title || sub.practical_title,
+          code: sub.code,
+          language: sub.language,
+          submissionDate: new Date(sub.created_at).toLocaleDateString(),
+          status: sub.status,
+          marks: sub.marks_obtained ?? undefined,
+          maxMarks: sub.level_max_marks ?? sub.max_marks ?? undefined,
+          output: sub.output,
+        })),
+        filename: `${group.practical_title.replace(/\s+/g, "_")}_Combined_Report.pdf`,
+      });
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setPdfLoading(false);
+    }
+  };
+
   const getLanguageColor = (lang: string) => {
     switch (lang?.toLowerCase()) {
       case "python": return "from-yellow-400 to-blue-500";
@@ -765,18 +792,25 @@ function StudentSubmissionsPageContent() {
                               )}
                             </td>
                             <td className="px-6 py-4 text-right">
-                              {!isMultiLevel && (
-                                <div className="flex items-center justify-end gap-2 opacity-80 group-hover:opacity-100 transition-opacity">
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    className="h-8 w-8 p-0 rounded-full text-gray-400 hover:text-indigo-600 hover:bg-white dark:hover:bg-indigo-900/30 hover:shadow-md transition-all"
-                                    onClick={(e) => { e.stopPropagation(); handleDownloadPdf(group.submissions[0]); }}
-                                    disabled={pdfLoading}
-                                    title="Download Report"
-                                  >
-                                    {pdfLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-                                  </Button>
+                              <div className="flex items-center justify-end gap-2 opacity-80 group-hover:opacity-100 transition-opacity">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-8 w-8 p-0 rounded-full text-gray-400 hover:text-indigo-600 hover:bg-white dark:hover:bg-indigo-900/30 hover:shadow-md transition-all"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (isMultiLevel) {
+                                      handleDownloadGroupPdf(group);
+                                    } else {
+                                      handleDownloadPdf(group.submissions[0]);
+                                    }
+                                  }}
+                                  disabled={pdfLoading}
+                                  title="Download Report"
+                                >
+                                  {pdfLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                                </Button>
+                                {!isMultiLevel && (
                                   <Button
                                     variant="ghost"
                                     size="sm"
@@ -784,8 +818,8 @@ function StudentSubmissionsPageContent() {
                                   >
                                     View
                                   </Button>
-                                </div>
-                              )}
+                                )}
+                              </div>
                             </td>
                           </tr>
 
@@ -829,16 +863,6 @@ function StudentSubmissionsPageContent() {
                               </td>
                               <td className="py-3 px-6 text-right w-full">
                                 <div className="flex items-center justify-end gap-2 outline-none">
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    className="h-8 w-8 p-0 rounded-full text-gray-400 hover:text-indigo-600 hover:bg-white dark:hover:bg-indigo-900/30 hover:shadow-md transition-all"
-                                    onClick={(e) => { e.stopPropagation(); handleDownloadPdf(sub); }}
-                                    disabled={pdfLoading}
-                                    title="Download Report"
-                                  >
-                                    {pdfLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-                                  </Button>
                                   <Button
                                     variant="ghost"
                                     size="sm"

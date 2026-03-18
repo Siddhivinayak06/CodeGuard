@@ -535,8 +535,8 @@ export default function PracticalForm({
               setEndTime(
                 toLocalDateTimeInputValue(existingExam.end_time)
               );
-  setAssignmentDeadline(toLocalDateTimeInputValue(new Date().toISOString()));
-  setAssignmentDeadline(toLocalDateTimeInputValue(new Date().toISOString()));
+              setAssignmentDeadline(toLocalDateTimeInputValue(new Date().toISOString()));
+              setAssignmentDeadline(toLocalDateTimeInputValue(new Date().toISOString()));
 
               const setsRes = await fetch(`/api/exam/sets?examId=${existingExam.id}`);
               const setsJson = await setsRes.json();
@@ -2334,12 +2334,12 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
                             ? "Assign Exam"
                             : "Exam Details")
                         : isExam
-                        ? (step === 1
-                          ? "Step 1: Exam Details & Settings"
-                          : step === 2
-                            ? "Step 2: Questions & Sets"
-                            : "Step 3: Assign Students")
-                        : "Practical Details"}
+                          ? (step === 1
+                            ? "Step 1: Exam Details & Settings"
+                            : step === 2
+                              ? "Step 2: Questions & Sets"
+                              : "Step 3: Assign Students")
+                          : "Practical Details"}
                     </div>
                     <div className="text-xs text-gray-500 dark:text-gray-400">
                       {isExam && singleStep
@@ -2349,12 +2349,12 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
                             ? "Select students and finalize assignment"
                             : "Title, subject, language, duration, and exam window")
                         : isExam
-                        ? (step === 1
-                          ? "Title, subject, language, duration, and exam window"
-                          : step === 2
-                            ? "Manage questions and set-wise sub-question mapping"
-                            : "Select students and finalize assignment")
-                        : "Fill details & test cases"}
+                          ? (step === 1
+                            ? "Title, subject, language, duration, and exam window"
+                            : step === 2
+                              ? "Manage questions and set-wise sub-question mapping"
+                              : "Select students and finalize assignment")
+                          : "Fill details & test cases"}
                     </div>
                   </div>
                 </div>
@@ -2740,7 +2740,7 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
                               if (line.startsWith("data: ")) {
                                 const dataStr = line.slice(6);
                                 if (dataStr === "[DONE]") break;
-                                try { const parsed = JSON.parse(dataStr); if (parsed.text) fullText += parsed.text; } catch {}
+                                try { const parsed = JSON.parse(dataStr); if (parsed.text) fullText += parsed.text; } catch (e) { /* ignore parse error */ }
                               }
                             }
                           }
@@ -2803,7 +2803,7 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
                                 if (line.startsWith("data: ")) {
                                   const dataStr = line.slice(6);
                                   if (dataStr === "[DONE]") break;
-                                  try { const parsed = JSON.parse(dataStr); if (parsed.text) fullText += parsed.text; } catch {}
+                                  try { const parsed = JSON.parse(dataStr); if (parsed.text) fullText += parsed.text; } catch (e) { /* ignore parse error */ }
                                 }
                               }
                             }
@@ -2838,7 +2838,7 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
                                 if (line.startsWith("data: ")) {
                                   const dataStr = line.slice(6);
                                   if (dataStr === "[DONE]") break;
-                                  try { const parsed = JSON.parse(dataStr); if (parsed.text) fullText += parsed.text; } catch {}
+                                  try { const parsed = JSON.parse(dataStr); if (parsed.text) fullText += parsed.text; } catch (e) { /* ignore parse error */ }
                                 }
                               }
                             }
@@ -2903,7 +2903,7 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
                                 if (line.startsWith("data: ")) {
                                   const dataStr = line.slice(6);
                                   if (dataStr === "[DONE]") break;
-                                  try { const parsed = JSON.parse(dataStr); if (parsed.text) fullText += parsed.text; } catch {}
+                                  try { const parsed = JSON.parse(dataStr); if (parsed.text) fullText += parsed.text; } catch (e) { /* ignore parse error */ }
                                 }
                               }
                             }
@@ -3313,7 +3313,7 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
                                       if (line.startsWith("data: ")) {
                                         const dataStr = line.slice(6);
                                         if (dataStr === "[DONE]") break;
-                                        try { const parsed = JSON.parse(dataStr); if (parsed.text) fullText += parsed.text; } catch {}
+                                        try { const parsed = JSON.parse(dataStr); if (parsed.text) fullText += parsed.text; } catch (e) { /* ignore parse error */ }
                                       }
                                     }
                                   }
@@ -3348,7 +3348,7 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
                                       if (line.startsWith("data: ")) {
                                         const dataStr = line.slice(6);
                                         if (dataStr === "[DONE]") break;
-                                        try { const parsed = JSON.parse(dataStr); if (parsed.text) fullText += parsed.text; } catch {}
+                                        try { const parsed = JSON.parse(dataStr); if (parsed.text) fullText += parsed.text; } catch (e) { /* ignore parse error */ }
                                       }
                                     }
                                   }
@@ -3389,12 +3389,12 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
                                 const lang = sampleLanguage || form.language || "c";
                                 const ioInstructions = "CRITICAL REQUIREMENT: Provide complete competitive programming style standard input/output handling. The code MUST read all inputs from standard input (stdin) and print strictly the expected output to standard output (stdout). Do NOT just write a function! For Java, write a class with a public static void main method that uses a Scanner or BufferedReader. For C/C++, use standard main reading from cin/scanf. For Python, use input() or sys.stdin.read().";
                                 let prompt = "";
-                                  if (type === 'starter') {
-                                    prompt = `Generate a simple, incomplete starter code template in ${lang} for the following problem.\n\n${ioInstructions}\n\nInclude the full boilerplate for reading inputs and printing outputs, but leave the core algorithm logic incomplete (e.g., an empty function) for the student to solve. Return ONLY the raw code, NO markdown blocks (\`\`\`), NO explanations.\n\nProblem Description:\n${form.description}`;
-                                  } else {
-                                    const baseContext = starterCode ? `\n\nUse the following starter code as the exact structural template (DO NOT change class or function names, just fill in the missing logic):\n\n${starterCode}` : "";
-                                    prompt = `Generate a simple, complete working solution in ${lang} for the following problem.\n\n${ioInstructions}\n\nThe code should compile, read from stdin, execute the logic, and print to stdout correctly. Return ONLY the raw code, NO markdown blocks (\`\`\`), NO formatting, NO explanations.${baseContext}\n\nProblem Description:\n\n${form.description}`;
-                                  }
+                                if (type === 'starter') {
+                                  prompt = `Generate a simple, incomplete starter code template in ${lang} for the following problem.\n\n${ioInstructions}\n\nInclude the full boilerplate for reading inputs and printing outputs, but leave the core algorithm logic incomplete (e.g., an empty function) for the student to solve. Return ONLY the raw code, NO markdown blocks (\`\`\`), NO explanations.\n\nProblem Description:\n${form.description}`;
+                                } else {
+                                  const baseContext = starterCode ? `\n\nUse the following starter code as the exact structural template (DO NOT change class or function names, just fill in the missing logic):\n\n${starterCode}` : "";
+                                  prompt = `Generate a simple, complete working solution in ${lang} for the following problem.\n\n${ioInstructions}\n\nThe code should compile, read from stdin, execute the logic, and print to stdout correctly. Return ONLY the raw code, NO markdown blocks (\`\`\`), NO formatting, NO explanations.${baseContext}\n\nProblem Description:\n\n${form.description}`;
+                                }
                                 const res = await fetch(`${apiUrl}/chat`, {
                                   method: "POST",
                                   headers: { "Content-Type": "application/json", "Authorization": `Bearer ${session?.access_token || ""}` },
@@ -3412,7 +3412,7 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
                                     if (line.startsWith("data: ")) {
                                       const dataStr = line.slice(6);
                                       if (dataStr === "[DONE]") break;
-                                      try { const parsed = JSON.parse(dataStr); if (parsed.text) fullText += parsed.text; } catch {}
+                                      try { const parsed = JSON.parse(dataStr); if (parsed.text) fullText += parsed.text; } catch (e) { /* ignore parse error */ }
                                     }
                                   }
                                 }
