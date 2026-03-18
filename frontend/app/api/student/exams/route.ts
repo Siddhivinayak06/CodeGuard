@@ -92,8 +92,8 @@ export async function GET() {
       .map((s: any) => s.assigned_set_id)
       .filter(Boolean);
 
-    let setLevelsMap = new Map<string, Set<number>>();
-    let setNameMap = new Map<string, string>();
+    const setLevelsMap = new Map<string, Set<number>>();
+    const setNameMap = new Map<string, string>();
 
     if (assignedSetIds.length > 0) {
       const { data: setsData } = await supabase
@@ -122,7 +122,7 @@ export async function GET() {
       .map((s: any) => (s.exams as any)?.practicals?.id)
       .filter(Boolean);
 
-    let submissionMap = new Map<number, any>();
+    const submissionMap = new Map<number, any>();
     if (practicalIds.length > 0) {
       const { data: submissions } = await supabase
         .from("submissions")
@@ -136,7 +136,7 @@ export async function GET() {
     }
 
     // Also get student_practicals data for attempt tracking
-    let studentPracticalMap = new Map<number, any>();
+    const studentPracticalMap = new Map<number, any>();
     if (practicalIds.length > 0) {
       const { data: spData } = await supabase
         .from("student_practicals")
