@@ -70,10 +70,20 @@ export async function POST(req: Request) {
     try {
         const supabase = await createClient();
 
-        // Auth check
+        // Auth + role check
         const { data: { user }, error: authErr } = await supabase.auth.getUser();
         if (authErr || !user) {
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+        }
+
+        const { data: callerRow } = await supabase
+            .from("users")
+            .select("role")
+            .eq("uid", user.id)
+            .maybeSingle() as any;
+
+        if (!callerRow || !["faculty", "admin"].includes(callerRow.role)) {
+            return NextResponse.json({ error: "Forbidden: faculty/admin only" }, { status: 403 });
         }
 
         const { examId, sets } = await req.json();
@@ -232,6 +242,16 @@ export async function DELETE(req: Request) {
         const { data: { user }, error: authErr } = await supabase.auth.getUser();
         if (authErr || !user) {
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+        }
+
+        const { data: callerRow } = await supabase
+            .from("users")
+            .select("role")
+            .eq("uid", user.id)
+            .maybeSingle() as any;
+
+        if (!callerRow || !["faculty", "admin"].includes(callerRow.role)) {
+            return NextResponse.json({ error: "Forbidden: faculty/admin only" }, { status: 403 });
         }
 
         // 1. Unassign sessions mapped to this set

@@ -252,6 +252,20 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    // Only admin/faculty can create notifications for other users
+    const { data: callerRow } = await supabase
+      .from("users")
+      .select("role")
+      .eq("uid", user.id)
+      .maybeSingle() as any;
+
+    if (!callerRow || !["faculty", "admin"].includes(callerRow.role)) {
+      return NextResponse.json(
+        { error: "Forbidden: only faculty/admin can create notifications" },
+        { status: 403 },
+      );
+    }
+
     const body = await request.json();
     const { user_id, type, title, message, link, metadata } = body;
 

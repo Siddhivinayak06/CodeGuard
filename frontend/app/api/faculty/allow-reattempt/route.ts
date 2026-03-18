@@ -24,8 +24,19 @@ export async function POST(req: Request) {
       );
     }
 
-    // Verify faculty role (optional but recommended)
-    // Here we assume only faculty can access this route (middleware or check)
+    // Verify faculty/admin role
+    const { data: callerRow } = await supabase
+      .from("users")
+      .select("role")
+      .eq("uid", user.id)
+      .maybeSingle() as any;
+
+    if (!callerRow || !["faculty", "admin"].includes(callerRow.role)) {
+      return NextResponse.json(
+        { success: false, error: "Forbidden: faculty/admin only" },
+        { status: 403 },
+      );
+    }
 
     // Find the record
     const { data: record, error: findError } = await supabase

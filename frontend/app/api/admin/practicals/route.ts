@@ -58,6 +58,12 @@ async function isFacultyOrAdmin(supabase: any) {
 export async function GET() {
   try {
     const supabase = await createClient();
+    if (!(await isFacultyOrAdmin(supabase))) {
+      return NextResponse.json(
+        { success: false, error: "Forbidden: faculty/admin only" },
+        { status: 403 },
+      );
+    }
 
     const { data, error } = await supabase
       .from("practicals")
