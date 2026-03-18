@@ -50,7 +50,22 @@ export async function POST(req: Request) {
     }
 
     if (spRecord.is_locked) {
-      return NextResponse.json({ error: spRecord.lock_reason || "Session locked" }, { status: 403 });
+      // For multi-level practicals, skip the lock check when running a specific level.
+      // The lock may have been set by a sibling task passing in the same submission batch.
+      let skipLock = false;
+      if (level) {
+        const { count } = await supabase
+          .from("practical_levels")
+          .select("*", { count: "exact", head: true })
+          .eq("practical_id", pid);
+        if (count && count > 0) {
+          skipLock = true;
+        }
+      }
+
+      if (!skipLock) {
+        return NextResponse.json({ error: spRecord.lock_reason || "Session locked" }, { status: 403 });
+      }
     }
 
     if (mode === "submit") {
