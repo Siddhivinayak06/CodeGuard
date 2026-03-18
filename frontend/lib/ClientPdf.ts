@@ -140,29 +140,51 @@ function drawCodeBlock(
   width: number,
   pageHeight: number,
   margin: number,
-  cap = 900 // characters cap so code doesn't run hundreds of pages
+  cap = 10000 // characters cap so code doesn't run hundreds of pages
 ): number {
   const safe = cleanText((code || "No code submitted").slice(0, cap));
-  const lines = doc.splitTextToSize(safe, width - 20);
+  const lines = doc.splitTextToSize(safe, width - 20) as string[];
 
   const lineH = 11;
-  const blockH = Math.min(lines.length * lineH + 16, pageHeight - y - margin - 20);
+  let cy = y;
+  const remainingLines = [...lines];
 
-  doc.setFillColor(...CODE_BG);
-  doc.roundedRect(x, y, width, blockH, 4, 4, "F");
+  while (remainingLines.length > 0) {
+    const availableH = pageHeight - cy - margin - 20;
+    const linesToDrawCount = Math.floor(availableH / lineH);
 
-  doc.setFont("courier", "normal");
-  doc.setFontSize(8.5);
-  doc.setTextColor(148, 163, 184); // slate-400
+    // If we can't fit even 3 lines, start on a new page
+    if (linesToDrawCount < 3 && remainingLines.length > 0) {
+      doc.addPage();
+      cy = margin + 10;
+      continue;
+    }
 
-  let cy = y + 12;
-  for (const line of lines) {
-    if (cy + lineH > y + blockH - 4) break;
-    doc.text(line, x + 10, cy);
-    cy += lineH;
+    const batch = remainingLines.splice(0, linesToDrawCount);
+    const batchH = batch.length * lineH + 16;
+
+    doc.setFillColor(...CODE_BG);
+    doc.roundedRect(x, cy, width, batchH, 4, 4, "F");
+
+    doc.setFont("courier", "normal");
+    doc.setFontSize(8.5);
+    doc.setTextColor(148, 163, 184); // slate-400
+
+    let lineY = cy + 12;
+    for (const line of batch) {
+      doc.text(line, x + 10, lineY);
+      lineY += lineH;
+    }
+
+    cy += batchH;
+
+    if (remainingLines.length > 0) {
+      doc.addPage();
+      cy = margin + 10;
+    }
   }
 
-  return y + blockH + 10;
+  return cy + 10;
 }
 
 function drawOutputBlock(
@@ -172,29 +194,52 @@ function drawOutputBlock(
   y: number,
   width: number,
   pageHeight: number,
-  margin: number
+  margin: number,
+  cap = 5000
 ): number {
   // eslint-disable-next-line no-control-regex
-  const safe = cleanText(output.replace(/\x1B\[[0-9;]*[A-Za-z]/g, "")).slice(0, 600);
-  const lines = doc.splitTextToSize(safe, width - 20);
+  const safe = cleanText(output.replace(/\x1B\[[0-9;]*[A-Za-z]/g, "")).slice(0, cap);
+  const lines = doc.splitTextToSize(safe, width - 20) as string[];
   const lineH = 11;
-  const blockH = Math.min(lines.length * lineH + 16, pageHeight - y - margin - 20);
+  
+  let cy = y;
+  const remainingLines = [...lines];
 
-  doc.setFillColor(30, 41, 59); // slate-800
-  doc.roundedRect(x, y, width, blockH, 4, 4, "F");
+  while (remainingLines.length > 0) {
+    const availableH = pageHeight - cy - margin - 20;
+    const linesToDrawCount = Math.floor(availableH / lineH);
 
-  doc.setFont("courier", "normal");
-  doc.setFontSize(8.5);
-  doc.setTextColor(134, 239, 172); // green-300
+    if (linesToDrawCount < 3 && remainingLines.length > 0) {
+      doc.addPage();
+      cy = margin + 10;
+      continue;
+    }
 
-  let cy = y + 12;
-  for (const line of lines) {
-    if (cy + lineH > y + blockH - 4) break;
-    doc.text(line, x + 10, cy);
-    cy += lineH;
+    const batch = remainingLines.splice(0, linesToDrawCount);
+    const batchH = batch.length * lineH + 16;
+
+    doc.setFillColor(30, 41, 59); // slate-800
+    doc.roundedRect(x, cy, width, batchH, 4, 4, "F");
+
+    doc.setFont("courier", "normal");
+    doc.setFontSize(8.5);
+    doc.setTextColor(134, 239, 172); // green-300
+
+    let lineY = cy + 12;
+    for (const line of batch) {
+      doc.text(line, x + 10, lineY);
+      lineY += lineH;
+    }
+
+    cy += batchH;
+
+    if (remainingLines.length > 0) {
+      doc.addPage();
+      cy = margin + 10;
+    }
   }
 
-  return y + blockH + 10;
+  return cy + 10;
 }
 
 function addFooters(doc: jsPDF, pageWidth: number, pageHeight: number) {
@@ -293,9 +338,9 @@ export async function generatePdfClient({
     }
   }
 
-  // ── Source code ───────────────────────────────────────────────────
+  // ── Submitted code ───────────────────────────────────────────────
   need(50);
-  drawSectionLabel(doc, `Source Code  ·  ${language}`, margin, y, usableW);
+  drawSectionLabel(doc, `Submitted Code  ·  ${language}`, margin, y, usableW);
   y += 10;
   y = drawCodeBlock(doc, code, margin, y, usableW, pageHeight, margin);
 
@@ -435,9 +480,9 @@ export async function generateCombinedPdfClient({
       }
     }
 
-    // Source code
+    // Submitted code
     need(50);
-    drawSectionLabel(doc, `Source Code  ·  ${task.language}`, margin, y, usableW);
+    drawSectionLabel(doc, `Submitted Code  ·  ${task.language}`, margin, y, usableW);
     y += 10;
     y = drawCodeBlock(doc, task.code, margin, y, usableW, pageHeight, margin);
 
