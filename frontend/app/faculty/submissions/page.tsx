@@ -304,7 +304,7 @@ function FacultySubmissionsContentInner() {
           .select("student_id, practical_id, attempt_count, max_attempts")
           .in("student_id", studentIds)
           .in("practical_id", practicalIdsForSps);
-        
+
         spMap = new Map((sps as any[])?.map(sp => [`${sp.student_id}_${sp.practical_id}`, sp]));
       }
 
@@ -926,6 +926,7 @@ function FacultySubmissionsContentInner() {
                       />
                     </th>
                     <th className="px-4 py-3">Student</th>
+                    <th className="px-4 py-3">Time</th>
                     {/* Conditionally hide Practical column if single practical selected */}
                     {!selectedPracticalId && <th className="px-4 py-3">Practical</th>}
                     <th className="px-4 py-3">Status</th>
@@ -936,13 +937,13 @@ function FacultySubmissionsContentInner() {
                 <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
                   {loading ? (
                     <tr>
-                      <td colSpan={6} className="p-8 text-center text-gray-500">
+                      <td colSpan={7} className="p-8 text-center text-gray-500">
                         Loading...
                       </td>
                     </tr>
                   ) : groupedSubmissions.length === 0 ? (
                     <tr>
-                      <td colSpan={6} className="p-8 text-center text-gray-500">
+                      <td colSpan={7} className="p-8 text-center text-gray-500">
                         No submissions found
                       </td>
                     </tr>
@@ -994,6 +995,9 @@ function FacultySubmissionsContentInner() {
                                   <div className="text-xs text-gray-500 font-mono">{group.roll_no}</div>
                                 </div>
                               </div>
+                            </td>
+                            <td className="px-4 py-3 font-mono text-xs text-gray-500">
+                              {new Date(group.latestDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                             </td>
                             {!selectedPracticalId && (
                               <td className="px-4 py-3 text-gray-600 dark:text-gray-300 max-w-[200px] truncate" title={group.practical_title}>
@@ -1102,6 +1106,7 @@ function FacultySubmissionsContentInner() {
                                   </div>
                                 </div>
                               </td>
+                              <td className="px-4 py-2" />
                               {!selectedPracticalId && <td className="px-4 py-2" />}
                               <td className="px-4 py-2">
                                 <div className="flex items-center gap-2">

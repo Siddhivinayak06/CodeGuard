@@ -87,6 +87,7 @@ interface Submission {
   attempt_count?: number;
   max_attempts?: number;
   is_locked?: boolean;
+  is_exam: boolean;
 }
 
 interface GroupedSubmission {
@@ -101,6 +102,7 @@ interface GroupedSubmission {
   totalMarks: number | null;
   totalMaxMarks: number;
   overallStatus: string;
+  is_exam: boolean;
 }
 
 interface TestCase {
@@ -290,6 +292,7 @@ function StudentSubmissionsPageContent() {
               title,
               max_marks,
               subject_id,
+              is_exam,
               subjects (
                 id,
                 subject_name,
@@ -327,6 +330,7 @@ function StudentSubmissionsPageContent() {
           level_title: s.practical_levels?.title,
           level_max_marks: s.practical_levels?.max_marks,
           testCaseResults: s.execution_details?.results || [],
+          is_exam: s.practicals?.is_exam ?? false,
         }));
 
         if (mountedRef.current) setSubmissions(processedSubmissions);
@@ -440,6 +444,7 @@ function StudentSubmissionsPageContent() {
         submissionDate: new Date(sub.created_at).toLocaleDateString(),
         status: sub.status,
         marks: sub.marks_obtained ?? undefined,
+        showMarks: !sub.is_exam,
         filename: `${sub.practical_title.replace(/\s+/g, "_")}_Report.pdf`
       });
     } catch (e) {
@@ -467,6 +472,7 @@ function StudentSubmissionsPageContent() {
           maxMarks: sub.level_max_marks ?? sub.max_marks ?? undefined,
           output: sub.output,
         })),
+        showMarks: !group.is_exam,
         filename: `${group.practical_title.replace(/\s+/g, "_")}_Combined_Report.pdf`,
       });
     } catch (e) {
@@ -524,13 +530,14 @@ function StudentSubmissionsPageContent() {
           submissions: [],
           totalMarks: 0,
           totalMaxMarks: 0,
-          overallStatus: "pending"
+          overallStatus: "pending",
+          is_exam: sub.is_exam
         });
       }
 
       const group = map.get(pId)!;
       group.submissions.push(sub);
-      
+
       if (new Date(sub.created_at) > new Date(group.created_at)) {
         group.created_at = sub.created_at;
       }
@@ -550,28 +557,28 @@ function StudentSubmissionsPageContent() {
           levelMap.set(k, sub);
         }
       });
-      
+
       const uniqueSubmissions = Array.from(levelMap.values());
-      group.submissions = uniqueSubmissions.sort((a,b) => (a.level_id ?? 0) - (b.level_id ?? 0));
+      group.submissions = uniqueSubmissions.sort((a, b) => (a.level_id ?? 0) - (b.level_id ?? 0));
 
       uniqueSubmissions.forEach(sub => {
         if (sub.status !== "passed" && sub.status !== "completed") {
-            if (sub.status === "failed") hasFailed = true;
-            else hasPending = true;
+          if (sub.status === "failed") hasFailed = true;
+          else hasPending = true;
         }
-        
+
         if (sub.marks_obtained !== null) {
           totalObtained += sub.marks_obtained;
         } else {
           isAllGraded = false;
         }
-        
+
         totalMax += sub.level_max_marks || sub.max_marks || 10;
       });
 
       group.totalMarks = isAllGraded ? totalObtained : null;
       group.totalMaxMarks = totalMax;
-      
+
       if (hasFailed) group.overallStatus = "failed";
       else if (hasPending) group.overallStatus = "pending";
       else group.overallStatus = "passed";
@@ -720,11 +727,11 @@ function StudentSubmissionsPageContent() {
                 <thead className="text-xs text-gray-500 uppercase bg-gray-50/30 dark:bg-gray-800/30 border-b border-gray-100 dark:border-gray-800">
                   <tr>
                     <th className="px-6 py-4 font-semibold tracking-wider">Date</th>
+                    <th className="px-6 py-4 font-semibold tracking-wider">Time</th>
                     <th className="px-6 py-4 font-semibold tracking-wider">Subject</th>
                     <th className="px-6 py-4 font-semibold tracking-wider">Practical</th>
                     <th className="px-6 py-4 font-semibold tracking-wider">Language</th>
-                    <th className="px-6 py-4 font-semibold tracking-wider">Status</th>
-                    <th className="px-6 py-4 font-semibold tracking-wider">Marks</th>
+                    <th className="px-6 py-4 font-semibold tracking-wider text-center">Status</th>
                     <th className="px-6 py-4 font-semibold tracking-wider text-right">Actions</th>
                   </tr>
                 </thead>
@@ -742,7 +749,7 @@ function StudentSubmissionsPageContent() {
                     groupedSubmissions.map((group) => {
                       const isMultiLevel = group.submissions.length > 1;
                       const isExpanded = expandedGroups[group.practical_id.toString()];
-                      
+
                       let statusColor = "bg-gray-300 dark:bg-gray-600";
                       if (group.overallStatus === 'passed') statusColor = "bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.3)]";
                       else if (group.overallStatus === 'failed') statusColor = "bg-red-500 shadow-[0_0_10px_rgba(239,68,68,0.3)]";
@@ -761,6 +768,9 @@ function StudentSubmissionsPageContent() {
                               )}
                               {new Date(group.created_at).toLocaleDateString()}
                             </td>
+                            <td className="px-6 py-4 font-mono text-xs text-gray-600 dark:text-gray-400">
+                              {new Date(group.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            </td>
                             <td className="px-6 py-4 font-medium text-gray-900 dark:text-gray-200">
                               {group.subject_code || "—"}
                             </td>
@@ -778,18 +788,8 @@ function StudentSubmissionsPageContent() {
                                 </span>
                               </div>
                             </td>
-                            <td className="px-6 py-4">
+                            <td className="px-6 py-4 text-center">
                               <StatusBadge status={group.overallStatus} />
-                            </td>
-                            <td className="px-6 py-4">
-                              {group.totalMarks !== null ? (
-                                <span className="flex items-center gap-1.5 text-xs font-bold text-indigo-700 dark:text-indigo-300 bg-indigo-100 dark:bg-indigo-900/30 px-2.5 py-1 rounded-lg border border-indigo-200 dark:border-indigo-800 w-fit shadow-sm">
-                                  <Sparkles className="w-3.5 h-3.5 text-indigo-500" />
-                                  {group.totalMarks}/{group.totalMaxMarks}
-                                </span>
-                              ) : (
-                                <span className="text-gray-400 text-xs">—</span>
-                              )}
                             </td>
                             <td className="px-6 py-4 text-right">
                               <div className="flex items-center justify-end gap-2 opacity-80 group-hover:opacity-100 transition-opacity">
@@ -836,30 +836,19 @@ function StudentSubmissionsPageContent() {
                               <td colSpan={1} className="pl-12 py-3 border-l-2 border-indigo-200 dark:border-indigo-800 leading-none">
                                 <div className="w-4 h-4 rounded-bl-xl border-b-2 border-l-2 border-gray-200 dark:border-gray-700 -mt-4"></div>
                               </td>
+                              <td className="py-3 px-6"></td>
                               <td colSpan={2} className="py-3 px-6">
                                 <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
                                   {sub.level_title || `Task ${idx + 1}`}
                                 </span>
-                              </td>
-                              <td className="py-3 px-6 text-xs text-gray-500 font-mono">
-                                {new Date(sub.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                               </td>
                               <td className="py-3 px-6 text-xs">
                                 <span className="text-gray-500 dark:text-gray-400 uppercase tracking-wider font-semibold">
                                   {sub.language}
                                 </span>
                               </td>
-                              <td className="py-3 px-6">
+                              <td className="py-3 px-6 text-center">
                                 <StatusBadge status={sub.status} />
-                              </td>
-                              <td className="py-3 px-6">
-                                {sub.marks_obtained !== null ? (
-                                  <span className="text-xs font-bold text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-800 px-2 py-0.5 rounded border border-gray-200 dark:border-gray-700 w-fit block">
-                                    {sub.marks_obtained}/{sub.level_max_marks || sub.max_marks}
-                                  </span>
-                                ) : (
-                                  <span className="text-gray-400 text-xs">—</span>
-                                )}
                               </td>
                               <td className="py-3 px-6 text-right w-full">
                                 <div className="flex items-center justify-end gap-2 outline-none">
@@ -908,7 +897,7 @@ function StudentSubmissionsPageContent() {
                   </h3>
                   <div className="flex items-center gap-3 text-sm text-gray-500 mt-1">
                     <StatusBadge status={viewingSubmission.status} />
-                    {viewingSubmission.marks_obtained !== null && (
+                    {!viewingSubmission.is_exam && viewingSubmission.marks_obtained !== null && (
                       <>
                         <span className="text-gray-300">•</span>
                         <span className="flex items-center gap-1 font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/20 px-2 py-0.5 rounded-md border border-indigo-100 dark:border-indigo-800/50">

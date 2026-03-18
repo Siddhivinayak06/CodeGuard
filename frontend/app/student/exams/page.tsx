@@ -937,19 +937,7 @@ export default function StudentExams() {
                     </h3>
                     <div className="flex items-center gap-3 text-sm text-gray-500 mt-1">
                       <StatusBadge status={viewingSubmission.status} />
-                      {viewingSubmission.marks_obtained !== null && (
-                        <>
-                          <span className="text-gray-300">•</span>
-                          <span className="flex items-center gap-1 font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/20 px-2 py-0.5 rounded-md border border-indigo-100 dark:border-indigo-800/50">
-                            <Sparkles className="w-3.5 h-3.5" />
-                            {viewingSubmission.marks_obtained} / {sequencedPracticals.find(p => p.id === viewingSubmission.practical_id)?.max_marks || 10}
-                          </span>
-                        </>
-                      )}
-                      <span className="text-gray-300">•</span>
-                      <span className="font-mono text-xs bg-gray-100 dark:bg-gray-800 px-2 py-0.5 rounded text-gray-600 dark:text-gray-400">
-                        {new Date(viewingSubmission.created_at).toLocaleString()}
-                      </span>
+                      {/* Marks hidden for exams per user request */}
                     </div>
                   </div>
                 </div>

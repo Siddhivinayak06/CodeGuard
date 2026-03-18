@@ -41,6 +41,8 @@ interface TestCaseResult {
     status: string;
     stdout: string;
     stderr: string;
+    input?: string;
+    expected?: string;
     execution_time_ms: number;
     memory_used_kb: number;
 }
@@ -281,8 +283,13 @@ export default function GradingSheet({
                             <div className="grid gap-3">
                                 {submission.testCaseResults && submission.testCaseResults.length > 0 ? (
                                     submission.testCaseResults.map((result, idx) => {
-                                        const tc = testCases.find(t => t.id === result.test_case_id);
+                                        const tc = testCases.find(t => Number(t.id) === Number(result.test_case_id));
                                         const isPassed = result.status.toLowerCase() === 'passed';
+                                        
+                                        // Use result.input/expected if available (embedded in execution_details), otherwise fallback to tc
+                                        const displayInput = result.input || tc?.input || "-";
+                                        const displayExpected = result.expected || tc?.expected_output || "-";
+
                                         return (
                                             <div key={idx} className={`p-4 rounded-xl border ${isPassed ? 'bg-emerald-50/50 border-emerald-100 dark:bg-emerald-900/10 dark:border-emerald-900/50' : 'bg-red-50/50 border-red-100 dark:bg-red-900/10 dark:border-red-900/50'}`}>
                                                 <div className="flex items-center justify-between mb-2">
@@ -296,14 +303,14 @@ export default function GradingSheet({
                                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs font-mono mt-2">
                                                     <div>
                                                         <div className="text-gray-500 mb-1">Input</div>
-                                                        <div className="bg-white dark:bg-gray-950 p-2 rounded border border-gray-100 dark:border-gray-800 truncate">
-                                                            {tc?.input || "-"}
+                                                        <div className="bg-white dark:bg-gray-950 p-2 rounded border border-gray-100 dark:border-gray-800 whitespace-pre-wrap max-h-32 overflow-y-auto">
+                                                            {displayInput}
                                                         </div>
                                                     </div>
                                                     <div>
                                                         <div className="text-gray-500 mb-1">Expected</div>
-                                                        <div className="bg-white dark:bg-gray-950 p-2 rounded border border-gray-100 dark:border-gray-800 truncate">
-                                                            {tc?.expected_output || "-"}
+                                                        <div className="bg-white dark:bg-gray-950 p-2 rounded border border-gray-100 dark:border-gray-800 whitespace-pre-wrap max-h-32 overflow-y-auto">
+                                                            {displayExpected}
                                                         </div>
                                                     </div>
                                                 </div>

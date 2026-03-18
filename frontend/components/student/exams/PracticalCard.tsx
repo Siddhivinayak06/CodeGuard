@@ -220,7 +220,7 @@ const PracticalCard = memo(({
             </Button>
           ) : (
             <>
-              {p.marks_obtained !== undefined && scorePercent !== null && (
+              {(!p.is_exam) && p.marks_obtained !== undefined && scorePercent !== null && (
                 <div className="flex items-center gap-2.5">
                   <div className="relative w-11 h-11">
                     <svg className="w-11 h-11 -rotate-90" viewBox="0 0 44 44">

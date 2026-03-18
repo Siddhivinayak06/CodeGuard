@@ -228,6 +228,7 @@ export async function generatePdfClient({
   marks,
   output,
   plotImages,
+  showMarks,
   filename = "submission_report.pdf",
 }: {
   studentName: string;
@@ -240,6 +241,7 @@ export async function generatePdfClient({
   marks?: number;
   output?: string;
   plotImages?: string[];
+  showMarks?: boolean;
   filename?: string;
 }) {
   const doc = createDoc();
@@ -268,7 +270,9 @@ export async function generatePdfClient({
   // Right column
   const rx = margin + usableW / 2 + 10;
   drawKV(doc, "Submission Date", submissionDate, rx, y + 18);
-  drawKV(doc, "Marks", marks !== undefined ? String(marks) : "—", rx, y + 34);
+  if (showMarks !== false) {
+    drawKV(doc, "Marks", marks !== undefined ? String(marks) : "—", rx, y + 34);
+  }
 
   // Status pill (top-right of card)
   drawStatusPill(doc, status, margin + usableW - 80, y + 16);
@@ -314,6 +318,7 @@ export async function generateCombinedPdfClient({
   rollNumber,
   practicalTitle,
   tasks,
+  showMarks,
   filename = "submission_report.pdf",
 }: {
   studentName: string;
@@ -330,6 +335,7 @@ export async function generateCombinedPdfClient({
     output?: string;
     plotImages?: string[];
   }[];
+  showMarks?: boolean;
   filename?: string;
 }) {
   const doc = createDoc();
@@ -402,10 +408,12 @@ export async function generateCombinedPdfClient({
     const meta = [
       task.language,
       task.submissionDate,
-      task.marks !== undefined
-        ? `Marks: ${task.marks}${task.maxMarks !== undefined ? ` / ${task.maxMarks}` : ""}`
-        : "Not graded",
-    ].join("   ·   ");
+      showMarks !== false ? (
+        task.marks !== undefined
+          ? `Marks: ${task.marks}${task.maxMarks !== undefined ? ` / ${task.maxMarks}` : ""}`
+          : "Not graded"
+      ) : null,
+    ].filter(Boolean).join("   ·   ");
     doc.text(meta, margin + 18, y + 32);
 
     // Status pill

@@ -102,7 +102,7 @@ const PracticalListItem = memo(({
       <div className="flex items-center gap-3 w-full md:w-auto mt-2 md:mt-0 justify-end">
         {isDone || isSubmitted || p.status === "failed" ? (
           <div className="flex items-center gap-3">
-            {p.marks_obtained !== undefined && (
+            {(!p.is_exam) && p.marks_obtained !== undefined && (
               <div className="text-right">
                 <div className="text-[10px] text-gray-400 uppercase font-bold">Score</div>
                 <div className={cn("text-lg font-black leading-none", p.status === "passed" ? "text-emerald-600" : "text-gray-900 dark:text-white")}>
