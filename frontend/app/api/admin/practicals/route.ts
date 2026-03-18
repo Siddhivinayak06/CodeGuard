@@ -249,6 +249,15 @@ export async function DELETE(request: Request) {
     const examIds = ((examsData as any[]) || []).map((e) => String(e.id));
 
     if (examIds.length > 0) {
+      // Log the bulk deletion for audit purposes
+      const { count: sessionCount } = await swallowMissingRelation(() =>
+        (supabase.from("exam_sessions") as any)
+          .select("id", { count: "exact", head: true })
+          .in("exam_id", examIds),
+      ) as any;
+
+      console.warn(`[Practical DELETE] Deleting ${sessionCount ?? '?'} exam_sessions for exam IDs: ${examIds.join(', ')} (practical ${practicalId})`);
+
       await swallowMissingRelation(() =>
         (supabase.from("exam_sessions") as any)
           .delete()

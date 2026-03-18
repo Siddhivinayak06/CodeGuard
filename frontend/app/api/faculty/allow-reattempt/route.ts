@@ -88,22 +88,24 @@ export async function POST(req: Request) {
         .single()) as any;
         
       if (examData?.id) {
-        await supabase
+        const { count: deletedSessionCount } = await supabase
           .from("exam_sessions")
-          .delete()
+          .delete({ count: "exact" })
           .eq("exam_id", examData.id)
-          .eq("student_id", studentId);
+          .eq("student_id", studentId) as any;
+
+        console.warn(`[Allow Re-attempt] Deleted ${deletedSessionCount ?? '?'} exam_session(s) for student ${studentId}, exam ${examData.id}, practical ${practicalId}. Initiated by faculty ${user.id}`);
       }
 
       // 2. Clear old submissions to allow starting from scratch 
       //    (otherwise start screen may block them or old code will persist)
-      await supabase
+      const { count: deletedSubmissionCount } = await supabase
         .from("submissions")
-        .delete()
+        .delete({ count: "exact" })
         .eq("practical_id", practicalId)
-        .eq("student_id", studentId);
+        .eq("student_id", studentId) as any;
         
-      console.log(`Reset exam session & submissions for student ${studentId} on exam practical ${practicalId}`);
+      console.warn(`[Allow Re-attempt] Deleted ${deletedSubmissionCount ?? '?'} submission(s) for student ${studentId}, practical ${practicalId}. Initiated by faculty ${user.id}`);
     }
     // -----------------------------------------------------------------
 
