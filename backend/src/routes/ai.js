@@ -99,7 +99,7 @@ router.post(
         originalname: req.file?.originalname,
         mimetype: req.file?.mimetype,
         size: req.file?.size,
-        hasBuffer: !!req.file?.buffer
+        hasBuffer: !!req.file?.buffer,
       });
       if (!req.file) {
         return res.status(400).json({ error: 'No PDF file uploaded' });
@@ -151,7 +151,9 @@ router.post(
       }
 
       const processChunk = async (chunkText, index) => {
-        const itemType = isExam ? 'exam questions and sets' : 'practical experiments';
+        const itemType = isExam
+          ? 'exam questions and sets'
+          : 'practical experiments';
         const prompt = `
 You are a precision PDF-to-Code mapping bot for a competitive programming platform.
 Analyze the provided text and extract ALL coding problems/tasks into a valid JSON object.
@@ -234,7 +236,7 @@ ${chunkText}
               // 2. Fix common AI JSON errors
               // Fix unescaped backslashes (very common in code)
               cleaned = cleaned.replace(/\\([^"\\/bfnrtu])/g, '\\\\$1');
-              
+
               try {
                 return JSON.parse(cleaned);
               } catch (e2) {
@@ -248,15 +250,22 @@ ${chunkText}
 
           logger.info(`Raw AI Response for chunk ${index}:\n${fullResponse}`);
           const parsed = repairJson(fullResponse);
-          
+
           // Flexible extraction: find 'practicals' array wherever it is
           let practicals = [];
           if (Array.isArray(parsed)) {
             practicals = parsed;
           } else if (parsed && typeof parsed === 'object') {
-            practicals = parsed.practicals || parsed.questions || parsed.exams || parsed.experiments || parsed.tasks || Object.values(parsed).find(v => Array.isArray(v)) || [];
+            practicals =
+              parsed.practicals ||
+              parsed.questions ||
+              parsed.exams ||
+              parsed.experiments ||
+              parsed.tasks ||
+              Object.values(parsed).find((v) => Array.isArray(v)) ||
+              [];
           }
-          
+
           if (practicals.length > 0) {
             return practicals;
           }
@@ -295,12 +304,15 @@ ${chunkText}
           practicalsMap.set(key, { ...p });
         } else {
           const existing = practicalsMap.get(key);
-          
+
           // Merge levels (deduplicate by level key to avoid partial chunk overlap duplicates)
           const levelMap = new Map();
-          [...(existing.levels || []), ...(p.levels || [])].forEach(l => {
+          [...(existing.levels || []), ...(p.levels || [])].forEach((l) => {
             const lKey = l.level || l.title;
-            if (!levelMap.has(lKey) || (l.reference_code && !levelMap.get(lKey).reference_code)) {
+            if (
+              !levelMap.has(lKey) ||
+              (l.reference_code && !levelMap.get(lKey).reference_code)
+            ) {
               levelMap.set(lKey, l);
             }
           });
@@ -308,29 +320,39 @@ ${chunkText}
 
           // Merge testCases (for top-level practicals if they exist)
           if (p.testCases && p.testCases.length > 0) {
-            existing.testCases = [...(existing.testCases || []), ...p.testCases];
+            existing.testCases = [
+              ...(existing.testCases || []),
+              ...p.testCases,
+            ];
           }
 
           // Merge sets
           if (p.sets && p.sets.length > 0) {
             const setMap = new Map();
-            [...(existing.sets || []), ...(p.sets || [])].forEach(s => {
+            [...(existing.sets || []), ...(p.sets || [])].forEach((s) => {
               const sKey = s.set_name;
               if (!setMap.has(sKey)) {
                 setMap.set(sKey, s);
               } else {
                 // Merge level_names for existing set
                 const existingSet = setMap.get(sKey);
-                existingSet.level_names = Array.from(new Set([...(existingSet.level_names || []), ...(s.level_names || [])]));
+                existingSet.level_names = Array.from(
+                  new Set([
+                    ...(existingSet.level_names || []),
+                    ...(s.level_names || []),
+                  ])
+                );
               }
             });
             existing.sets = Array.from(setMap.values());
           }
 
           // Update other fields if they were missing
-          if (!existing.description && p.description) existing.description = p.description;
+          if (!existing.description && p.description)
+            existing.description = p.description;
           if (!existing.language && p.language) existing.language = p.language;
-          if (!existing.max_marks && p.max_marks) existing.max_marks = p.max_marks;
+          if (!existing.max_marks && p.max_marks)
+            existing.max_marks = p.max_marks;
         }
       });
 
