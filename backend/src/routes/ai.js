@@ -95,6 +95,12 @@ router.post(
   upload.single('pdf'),
   async (req, res) => {
     try {
+      console.log('File upload:', {
+        originalname: req.file?.originalname,
+        mimetype: req.file?.mimetype,
+        size: req.file?.size,
+        hasBuffer: !!req.file?.buffer
+      });
       if (!req.file) {
         return res.status(400).json({ error: 'No PDF file uploaded' });
       }
@@ -120,8 +126,8 @@ router.post(
       }
 
       // 2. Chunking Strategy
-      const CHUNK_SIZE = 15000; // Characters per chunk
-      const OVERLAP = 1000;
+      const CHUNK_SIZE = 8000; // Characters per chunk (increased for better global context)
+      const OVERLAP = 2000;
       const chunks = [];
 
       for (let i = 0; i < text.length; i += CHUNK_SIZE - OVERLAP) {
@@ -132,6 +138,7 @@ router.post(
 
       // 3. Process Chunks Concurrently
       const config = req.body.config ? JSON.parse(req.body.config) : {};
+      const isExam = req.body.isExam === 'true' || req.body.isExam === true;
 
       // Inject secondary API Key for Gemini if needed for higher rate limits
       const configOverrides = { ...config };
@@ -144,61 +151,55 @@ router.post(
       }
 
       const processChunk = async (chunkText, index) => {
+        const itemType = isExam ? 'exam questions and sets' : 'practical experiments';
         const prompt = `
-You are an expert curriculum designer. Extract ALL practical experiments from the text below as JSON.
+You are a precision PDF-to-Code mapping bot for a competitive programming platform.
+Analyze the provided text and extract ALL coding problems/tasks into a valid JSON object.
 
-INPUT TEXT:
-This is chunk ${index + 1}.
-
-OUTPUT JSON:
+OUTPUT JSON STRUCTURE (STRICT):
 {
   "practicals": [
     {
-      "practical_number": 1, 
-      "title": "Title", 
-      "description": "DETAILED problem statement. Include ALL constraints and requirements.",
-      "max_marks": 10,
-      "enableLevels": true, // ALWAYS SET TO TRUE. Every practical MUST have 2 tasks.
-      "language": "c", // Must be "c" or other detected language
+      "practical_number": {Actual number (e.g. 1)}, 
+      "title": "{Actual Set Name (e.g. Set A)}", 
+      "description": "{General context for this set from PDF}",
+      "max_marks": {Actual total marks for this set from PDF},
+      "duration_minutes": {Actual time},
+      "enableLevels": true,
+      "language": "c",
       "levels": [
         { 
           "level": "Task 1", 
-          "title": "Task 1 Title", 
-          "description": "Description for Task 1 (Standard Implementation of the concept)", 
-          "max_marks": 5, 
-          "starter_code": "...", 
-          "reference_code": "...", 
-          "testCases": [{ "input": "...", "expected_output": "..." }] 
-        },
-        { 
-          "level": "Task 2", 
-          "title": "Task 2 Title", 
-          "description": "Description for Task 2 (ADVANCED/HARD version). Must include complex constraints, edge cases, or performance requirements.", 
-          "max_marks": 5, 
-          "starter_code": "...", 
-          "reference_code": "...", 
-          "testCases": [{ "input": "...", "expected_output": "..." }] 
+          "title": "{Actual Problem 1 Name}", 
+          "description": "{Full statement...}\\n\\nSample Input: {input}\\nSample Output: {output}", 
+          "max_marks": {Actual marks for this task},
+          "reference_code": "MANDATORY: Complete solution code that reads from stdin and writes to stdout.", 
+          "testCases": [{ "input": "{input}", "expected_output": "{output}" }] 
         }
+      ],
+      "sets": [
+        { "set_name": "{Actual Set Name}", "level_names": ["{Actual Problem Name}"] }
       ]
+    },
+    {
+      "practical_number": {Actual number (e.g. 2)}, 
+      "title": "{Actual Set Name (e.g. Set B)}", 
+      "max_marks": {Actual total marks for this set},
+      "levels": [ { "level": "Task 1", "title": "{Problem name}", "max_marks": {marks}, "reference_code": "...", "testCases": [...] } ],
+      "sets": [ { "set_name": "{Set Name}", "level_names": ["{Problem Name}"] } ]
     }
   ]
 }
 
-RULES:
-1. **EXTRACT ALL:** Do not skip any experiment found in the text.
-2. **ALWAYS 2 TASKS:** 
-   - **Task 1:** Standard, straightforward implementation of the core concept.
-   - **Task 2:** **SIGNIFICANTLY HARDER**. It must involve complex logic, edge cases, input validation, or optimization. It should challenge the student.
-3. **NUMBERING:** Use "Exp No" from text.
-4. **JSON ONLY:** No markdown.
-5. **CODE RULES:** Both starter_code and reference_code MUST use competitive-programming style standard input and output (e.g., standard int main() reading with scanf and printing with printf).
-6. **STARTER CODE:** Generate an incomplete boilerplate (including int main and scanf/printf calls) but leave the core logic empty for the student to solve.
-7. **REFERENCE CODE:** Generate COMPLETE, WORKING solutions using the exact inputs/outputs described in the test cases.
-8. **TEST CASES:** Generate EXACTLY 2 test cases per Task.
-9. 
-10. TEXT:
-11. ${chunkText}
-12. `;
+CRITICAL EXECUTION RULES:
+1. **LITERAL MARKS & COUNTS:** You MUST extract the exact Marks and number of Sets exactly as they appear in the PDF. Do NOT use default values or perform your own calculations.
+2. **DISTINCT SETS:** Every distinct "Set X" or "Task X" section in the PDF MUST be a separate entry in the 'practicals' array. Do NOT merge 8 sets into one.
+3. **STRICT I/O CONSISTENCY:** The 'Sample Input' and 'Sample Output' in the description MUST exactly match the first 'testCase'.
+4. **NO HALLUCINATIONS:** Use only actual data from the provided text.
+
+TEXT:
+${chunkText}
+`;
 
         try {
           const messages = [{ role: 'user', parts: [{ text: prompt }] }];
@@ -227,27 +228,37 @@ RULES:
                 return JSON.parse(cleaned);
               } catch (_e) {
                 // Formatting failed, try fixing
+                logger.debug(`JSON.parse failed, attempting repair...`);
               }
 
               // 2. Fix common AI JSON errors
-              // Escape unescaped newlines in strings
-              cleaned = cleaned.replace(/\n/g, '\\n');
-
-              // 3. Fix unescaped backslashes (very common in code)
-              // This regex looks for backslashes that are NOT followed by valid escape chars
-              // Valid JSON escapes: \", \\, \/, \b, \f, \n, \r, \t, \uXXXX
-              // We want to escape invalid ones, e.g., \include -> \\include
+              // Fix unescaped backslashes (very common in code)
               cleaned = cleaned.replace(/\\([^"\\/bfnrtu])/g, '\\\\$1');
-
-              return JSON.parse(cleaned);
+              
+              try {
+                return JSON.parse(cleaned);
+              } catch (e2) {
+                logger.debug(`Repair step 1 failed: ${e2.message}`);
+                return null;
+              }
             } catch (_e) {
               return null;
             }
           };
 
+          logger.info(`Raw AI Response for chunk ${index}:\n${fullResponse}`);
           const parsed = repairJson(fullResponse);
-          if (parsed && parsed.practicals) {
-            return parsed.practicals;
+          
+          // Flexible extraction: find 'practicals' array wherever it is
+          let practicals = [];
+          if (Array.isArray(parsed)) {
+            practicals = parsed;
+          } else if (parsed && typeof parsed === 'object') {
+            practicals = parsed.practicals || parsed.questions || parsed.exams || parsed.experiments || parsed.tasks || Object.values(parsed).find(v => Array.isArray(v)) || [];
+          }
+          
+          if (practicals.length > 0) {
+            return practicals;
           }
 
           logger.error(
@@ -276,22 +287,50 @@ RULES:
       const practicalsMap = new Map();
 
       results.forEach((p) => {
-        // Key by practical number if available, else title
         const key = p.practical_number
           ? `num-${p.practical_number}`
-          : `title-${p.title?.trim()}`;
+          : `title-${p.title?.trim().toLowerCase()}`;
 
         if (!practicalsMap.has(key)) {
-          practicalsMap.set(key, p);
+          practicalsMap.set(key, { ...p });
         } else {
-          // If exists, prefer the one with more information (e.g. levels or test cases)
           const existing = practicalsMap.get(key);
-          if (
-            (p.levels?.length || 0) > (existing.levels?.length || 0) ||
-            (p.testCases?.length || 0) > (existing.testCases?.length || 0)
-          ) {
-            practicalsMap.set(key, p);
+          
+          // Merge levels (deduplicate by level key to avoid partial chunk overlap duplicates)
+          const levelMap = new Map();
+          [...(existing.levels || []), ...(p.levels || [])].forEach(l => {
+            const lKey = l.level || l.title;
+            if (!levelMap.has(lKey) || (l.reference_code && !levelMap.get(lKey).reference_code)) {
+              levelMap.set(lKey, l);
+            }
+          });
+          existing.levels = Array.from(levelMap.values());
+
+          // Merge testCases (for top-level practicals if they exist)
+          if (p.testCases && p.testCases.length > 0) {
+            existing.testCases = [...(existing.testCases || []), ...p.testCases];
           }
+
+          // Merge sets
+          if (p.sets && p.sets.length > 0) {
+            const setMap = new Map();
+            [...(existing.sets || []), ...(p.sets || [])].forEach(s => {
+              const sKey = s.set_name;
+              if (!setMap.has(sKey)) {
+                setMap.set(sKey, s);
+              } else {
+                // Merge level_names for existing set
+                const existingSet = setMap.get(sKey);
+                existingSet.level_names = Array.from(new Set([...(existingSet.level_names || []), ...(s.level_names || [])]));
+              }
+            });
+            existing.sets = Array.from(setMap.values());
+          }
+
+          // Update other fields if they were missing
+          if (!existing.description && p.description) existing.description = p.description;
+          if (!existing.language && p.language) existing.language = p.language;
+          if (!existing.max_marks && p.max_marks) existing.max_marks = p.max_marks;
         }
       });
 

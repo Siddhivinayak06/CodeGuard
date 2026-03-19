@@ -114,7 +114,7 @@ export default function BasicDetailsForm({
         >
           <InfoIcon size={20} />
         </motion.div>
-        <div>
+        <div className="flex-1">
           <h3 className="font-bold text-lg text-gray-900 dark:text-white">
             Basic Information
           </h3>
@@ -122,6 +122,8 @@ export default function BasicDetailsForm({
             Essential details for the {isExam ? "exam" : "practical"}
           </p>
         </div>
+
+
       </motion.div>
 
       {/* Title & Practical No */}

@@ -8,6 +8,8 @@ import { SupabaseClient } from "@supabase/supabase-js";
 import {
   Check as CheckIcon,
   Loader2,
+  Zap,
+  Sparkles,
   Plus,
   FileText,
   Trash2,
@@ -213,6 +215,7 @@ export default function PracticalForm({
   const [generatingTests, setGeneratingTests] = useState(false);
   const [isGeneratingCode, setIsGeneratingCode] = useState(false);
   const [isFormatting, setIsFormatting] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const [filters, setFilters] = useState({
@@ -1228,6 +1231,211 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
       );
     } finally {
       setGeneratingTests(false);
+    }
+  };
+  const handleUploadPdf = async (file: File) => {
+    if (!file) return;
+    setIsUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append("pdf", file);
+      formData.append("isExam", String(isExam));
+
+      const apiUrl = process.env.NEXT_PUBLIC_AI_API_URL || "http://localhost:5002/ai";
+      const { data: { session } } = await supabase.auth.getSession();
+
+      const res = await fetch(`${apiUrl}/generate-bulk-practicals-from-pdf`, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${session?.access_token || ""}`
+        },
+        body: formData,
+      });
+
+      if (!res.ok) {
+        let errorMsg = `Failed to autofill from PDF.`;
+        try {
+          const errData = await res.json();
+          // The backend error middleware sends { error: { message, code } }
+          errorMsg = errData.error?.message || errData.error || errorMsg;
+        } catch (e) {
+          errorMsg = `Server error (${res.status}): ${res.statusText}`;
+        }
+        throw new Error(errorMsg);
+      }
+
+      const data = await res.json();
+      const practicals = Array.isArray(data) ? data : (data.practicals || []);
+      
+      if (practicals.length === 0) {
+        throw new Error(isExam ? "No exam questions or sets found in the PDF. Please try a clearer document." : "No practicals found in the PDF.");
+      }
+
+      // Combine ALL levels and sets from all practicals found in the PDF
+      let allMappedLevels: any[] = [];
+      let allMappedSets: any[] = [];
+      const firstPractical = practicals[0];
+
+      practicals.forEach((p: any, pIdx: number) => {
+        // 1. Extract Levels (Tasks)
+        let currentPracticalLevels: any[] = [];
+        
+        if (p.levels && p.levels.length > 0) {
+          currentPracticalLevels = p.levels.map((l: any, idx: number) => ({
+            id: 0,
+            practical_id: 0,
+            created_at: "",
+            updated_at: "",
+            level: l.level || `Set${pIdx + 1}_Task${idx + 1}`,
+            title: l.title || `Task ${idx + 1}`,
+            description: l.description || "",
+            max_marks: Number(l.max_marks || p.max_marks) || 5, // Fallback to practical max_marks
+            reference_code: l.reference_code || p.reference_code || "",
+            starter_code: l.starter_code || p.starter_code || "",
+            testCases: (l.testCases || p.testCases || []).map((tc: any) => ({
+              id: 0,
+              practical_id: null,
+              level_id: null,
+              created_at: "",
+              input: typeof tc.input === 'object' ? JSON.stringify(tc.input, null, 2) : (tc.input || ""),
+              expected_output: typeof tc.expected_output === 'object' ? JSON.stringify(tc.expected_output, null, 2) : (tc.expected_output || ""),
+              is_hidden: false,
+              time_limit_ms: 2000,
+              memory_limit_kb: 65536,
+            }))
+          }));
+        } else if (p.description || (p.testCases && p.testCases.length > 0)) {
+          // Practical itself IS a task (top-level structure)
+          currentPracticalLevels = [{
+            id: 0,
+            practical_id: 0,
+            created_at: "",
+            updated_at: "",
+            level: p.title || `Set ${pIdx + 1} Task 1`,
+            title: p.title || `Set ${pIdx + 1} Task 1`,
+            description: p.description || "",
+            max_marks: Number(p.max_marks) || 10,
+            reference_code: p.reference_code || "",
+            starter_code: p.starter_code || "",
+            testCases: (p.testCases || []).map((tc: any) => ({
+              id: 0,
+              practical_id: null,
+              level_id: null,
+              created_at: "",
+              input: typeof tc.input === 'object' ? JSON.stringify(tc.input, null, 2) : (tc.input || ""),
+              expected_output: typeof tc.expected_output === 'object' ? JSON.stringify(tc.expected_output, null, 2) : (tc.expected_output || ""),
+              is_hidden: false,
+              time_limit_ms: 2000,
+              memory_limit_kb: 65536,
+            }))
+          }];
+        }
+        
+        allMappedLevels = [...allMappedLevels, ...currentPracticalLevels];
+
+        // 2. Extract/Create Sets
+        if (isExam) {
+          if (p.sets && p.sets.length > 0) {
+            allMappedSets = [...allMappedSets, ...p.sets.map((s: any) => ({
+              set_name: s.set_name || `Set ${pIdx + 1}`,
+              level_names: s.level_names || currentPracticalLevels.map(l => l.title || l.level)
+            }))];
+          } else {
+            // Create a set for this practical
+            const setName = p.title?.startsWith("Set") ? p.title : `Set ${p.practical_number || pIdx + 1}`;
+            allMappedSets.push({
+              set_name: setName,
+              level_names: currentPracticalLevels.map(l => l.title || l.level)
+            });
+          }
+        }
+      });
+
+      // Update basic details from the first practical
+      console.log("[Autofill] Found practicals count:", practicals.length);
+      console.log("[Autofill] allMappedLevels count:", allMappedLevels.length);
+      console.log("[Autofill] allMappedSets count:", allMappedSets.length);
+
+      // Update basic details from the first practical
+      const newFormState = {
+        ...form,
+        title: firstPractical.title || form.title,
+        description: firstPractical.description || form.description,
+        language: firstPractical.language || form.language || "c",
+        max_marks: Number(firstPractical.max_marks || (allMappedLevels.reduce((s, l) => s + l.max_marks, 0))) || form.max_marks,
+        practical_number: firstPractical.practical_number || form.practical_number,
+        is_exam: isExam
+      };
+
+      setForm(newFormState);
+
+      if (isExam && (firstPractical.duration_minutes || firstPractical.duration)) {
+        setDurationMinutes(Number(firstPractical.duration_minutes || firstPractical.duration));
+      }
+
+      if (allMappedLevels.length > 0) {
+        setEnableLevels(true);
+        setLevels(allMappedLevels);
+        setActiveLevel(allMappedLevels[0].level);
+      }
+
+      if (isExam && allMappedSets.length > 0) {
+        setEnableSets(true);
+        setQuestionSets(allMappedSets);
+      }
+
+      // Update single-level fields from the first practical if no levels
+      let finalTestCases = testCases;
+      if (allMappedLevels.length === 0) {
+        if (firstPractical.language) setSampleLanguage(firstPractical.language);
+        if (firstPractical.reference_code) setSampleCode(firstPractical.reference_code);
+        if (firstPractical.starter_code) setStarterCode(firstPractical.starter_code);
+        
+        if (firstPractical.testCases && firstPractical.testCases.length > 0) {
+          finalTestCases = firstPractical.testCases.map((tc: any) => ({
+            id: 0,
+            practical_id: null,
+            level_id: null,
+            created_at: "",
+            input: typeof tc.input === 'object' ? JSON.stringify(tc.input, null, 2) : (tc.input || ""),
+            expected_output: typeof tc.expected_output === 'object' ? JSON.stringify(tc.expected_output, null, 2) : (tc.expected_output || ""),
+            is_hidden: false,
+            time_limit_ms: 2000,
+            memory_limit_kb: 65536,
+          }));
+          setTestCases(finalTestCases);
+        }
+      }
+
+      // CRITICAL: Directly update the draft to avoid stale closures
+      if (!practical && draftPracticals.length > 0) {
+        setDraftPracticals(prev => {
+          const copy = [...prev];
+          if (copy[activeDraftIndex]) {
+            copy[activeDraftIndex] = {
+              ...copy[activeDraftIndex],
+              form: newFormState,
+              testCases: [...finalTestCases],
+              levels: JSON.parse(JSON.stringify(allMappedLevels)),
+              enableLevels: allMappedLevels.length > 0,
+              sampleCode: allMappedLevels.length === 0 ? (firstPractical.reference_code || "") : "",
+              starterCode: allMappedLevels.length === 0 ? (firstPractical.starter_code || "") : "",
+              sampleLanguage: firstPractical.language || form.language || "c",
+            };
+          }
+          return copy;
+        });
+      }
+
+      alert(`Magic Autofill Success!\n- Extracted: ${allMappedLevels.length} Tasks\n- Created: ${allMappedSets.length} Sets\n\nCheck Step 2 to review the questions.`);
+    } catch (err: any) {
+      console.error("Autofill error:", err);
+      const errorMessage = typeof err === 'string' 
+        ? err 
+        : (err.message || "Failed to autofill from PDF. Check backend logs.");
+      alert(errorMessage);
+    } finally {
+      setIsUploading(false);
     }
   };
 
@@ -3003,6 +3211,41 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
                   <div className="space-y-6">
                     <div className="grid grid-cols-1 xl:grid-cols-[320px_1fr] gap-6 items-start">
                       <aside className="space-y-4 xl:sticky xl:top-24">
+                        {/* Magic Autofill Section */}
+                        <div className="bg-white dark:bg-gray-900 rounded-2xl border border-indigo-100 dark:border-indigo-900/50 p-4 shadow-sm shadow-indigo-100/30 dark:shadow-none space-y-3">
+                          <div className="flex items-center gap-2 mb-1">
+                            <Sparkles className="w-4 h-4 text-indigo-500" />
+                            <h3 className="text-sm font-bold text-gray-900 dark:text-white">AI Tools</h3>
+                          </div>
+                          <p className="text-[11px] text-gray-500 dark:text-gray-400">
+                            Upload your exam PDF to automatically generate all sets and questions.
+                          </p>
+                          <input
+                            type="file"
+                            id="step2-pdf-autofill"
+                            className="hidden"
+                            accept=".pdf"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (file) handleUploadPdf(file);
+                            }}
+                            disabled={isUploading}
+                          />
+                          <button
+                            type="button"
+                            disabled={isUploading}
+                            onClick={() => document.getElementById("step2-pdf-autofill")?.click()}
+                            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-indigo-500/20"
+                          >
+                            {isUploading ? (
+                              <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                            ) : (
+                              <Sparkles size={14} />
+                            )}
+                            {isUploading ? "Magic in Progress..." : "Magic Autofill (PDF)"}
+                          </button>
+                        </div>
+
                         <div className="bg-white dark:bg-gray-900 rounded-2xl border border-indigo-100 dark:border-indigo-900/50 p-4 shadow-sm shadow-indigo-100/30 dark:shadow-none space-y-4">
                           <div className="rounded-xl bg-gradient-to-r from-indigo-50 to-blue-50 dark:from-indigo-950/30 dark:to-blue-950/20 border border-indigo-100 dark:border-indigo-900/40 p-3">
                             <div className="flex items-start gap-2">
