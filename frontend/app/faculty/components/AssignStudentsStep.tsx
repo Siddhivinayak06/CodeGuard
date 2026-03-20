@@ -6,6 +6,8 @@ import {
   Users as UsersIcon,
   Check as CheckIcon,
   Search as SearchIcon,
+  UserCheck,
+  XCircle,
 } from "lucide-react";
 import { Student } from "../types";
 
@@ -40,15 +42,24 @@ export default function AssignStudentsStep({
       new Set(students.map((s) => s.batch).filter((b): b is string => !!b)),
     ).sort();
 
-  const filteredStudents = students.filter((s) => {
-    const q = (filters.query || "").toLowerCase();
-    const matchesQuery =
-      !q ||
-      (s.name || "").toLowerCase().includes(q) ||
-      (s.roll_no || "").toLowerCase().includes(q);
-    const matchesBatch = !filters.batch || s.batch === filters.batch;
-    return matchesQuery && matchesBatch;
-  });
+  const filteredStudents = students
+    .filter((s) => {
+      const q = (filters.query || "").toLowerCase();
+      const matchesQuery =
+        !q ||
+        (s.name || "").toLowerCase().includes(q) ||
+        (s.roll_no || "").toLowerCase().includes(q);
+      const matchesBatch = !filters.batch || s.batch === filters.batch;
+      return matchesQuery && matchesBatch;
+    })
+    .sort((a, b) => {
+      const rollA = String(a.roll_no || "");
+      const rollB = String(b.roll_no || "");
+      return rollA.localeCompare(rollB, undefined, {
+        numeric: true,
+        sensitivity: "base",
+      });
+    });
 
   const toggleStudent = (student: Student) => {
     setSelectedStudents((prev) =>
@@ -58,6 +69,37 @@ export default function AssignStudentsStep({
     );
   };
 
+  const allFilteredSelected =
+    filteredStudents.length > 0 &&
+    filteredStudents.every((s) =>
+      selectedStudents.some((sel) => sel.uid === s.uid)
+    );
+
+  const someFilteredSelected =
+    !allFilteredSelected &&
+    filteredStudents.some((s) =>
+      selectedStudents.some((sel) => sel.uid === s.uid)
+    );
+
+  const toggleSelectAll = () => {
+    if (allFilteredSelected) {
+      // Deselect only the filtered students
+      const filteredUids = new Set(filteredStudents.map((s) => s.uid));
+      setSelectedStudents((prev) =>
+        prev.filter((s) => !filteredUids.has(s.uid))
+      );
+    } else {
+      // Select all filtered students (merge with already selected)
+      setSelectedStudents((prev) => {
+        const existingUids = new Set(prev.map((s) => s.uid));
+        const newStudents = filteredStudents.filter(
+          (s) => !existingUids.has(s.uid)
+        );
+        return [...prev, ...newStudents];
+      });
+    }
+  };
+
   return (
     <motion.div
       key="step2"
@@ -65,15 +107,16 @@ export default function AssignStudentsStep({
       animate={{ opacity: 1, x: 0 }}
       exit={{ opacity: 0, x: -20 }}
       transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
-      className="space-y-6"
+      className="space-y-5"
     >
+      {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="p-3 bg-gradient-to-br from-emerald-600 to-blue-600 rounded-xl text-white">
-            <UsersIcon />
+          <div className="p-3 bg-gradient-to-br from-indigo-600 to-violet-600 rounded-xl text-white shadow-lg shadow-indigo-500/25">
+            <UsersIcon size={22} />
           </div>
           <div>
-            <h3 className="text-2xl font-bold text-gray-900 dark:text-white">
+            <h3 className="text-xl font-bold text-gray-900 dark:text-white">
               Assign to Students
             </h3>
             <p className="text-sm text-gray-500 dark:text-gray-400">
@@ -82,18 +125,43 @@ export default function AssignStudentsStep({
           </div>
         </div>
 
-        <div className="flex items-center gap-2 px-4 py-2 bg-blue-50 dark:bg-blue-900/30 rounded-full border border-blue-200 dark:border-blue-800">
-          <CheckIcon />
-          <span className="text-sm font-bold text-blue-700 dark:text-blue-200">
+        <motion.div
+          key={selectedStudents.length}
+          initial={{ scale: 0.9 }}
+          animate={{ scale: 1 }}
+          className={cx(
+            "flex items-center gap-2 px-4 py-2 rounded-full border transition-colors",
+            selectedStudents.length > 0
+              ? "bg-indigo-50 dark:bg-indigo-900/30 border-indigo-200 dark:border-indigo-800"
+              : "bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700"
+          )}
+        >
+          <UserCheck
+            size={16}
+            className={cx(
+              selectedStudents.length > 0
+                ? "text-indigo-600 dark:text-indigo-400"
+                : "text-gray-400"
+            )}
+          />
+          <span
+            className={cx(
+              "text-sm font-bold",
+              selectedStudents.length > 0
+                ? "text-indigo-700 dark:text-indigo-200"
+                : "text-gray-500 dark:text-gray-400"
+            )}
+          >
             {selectedStudents.length} selected
           </span>
-        </div>
+        </motion.div>
       </div>
 
-      <div className="flex flex-col md:flex-row gap-4">
+      {/* Search & Filter Bar + Actions */}
+      <div className="bg-white dark:bg-gray-800/60 rounded-xl border border-gray-200 dark:border-gray-700 p-3 flex flex-col md:flex-row gap-3 items-stretch md:items-center">
         <div className="relative flex-1">
-          <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-            <SearchIcon className="text-gray-400" size={18} />
+          <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+            <SearchIcon className="text-gray-400" size={16} />
           </div>
           <input
             type="text"
@@ -102,17 +170,17 @@ export default function AssignStudentsStep({
             onChange={(e) =>
               setFilters((prev) => ({ ...prev, query: e.target.value }))
             }
-            className="w-full pl-11 pr-4 py-3 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all text-gray-900 dark:text-white placeholder-gray-400"
+            className="w-full pl-10 pr-4 py-2.5 bg-gray-50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-400 transition-all text-sm text-gray-900 dark:text-white placeholder-gray-400 outline-none"
           />
         </div>
 
-        <div className="md:w-48">
+        <div className="md:w-44">
           <select
             value={filters.batch}
             onChange={(e) =>
               setFilters((prev) => ({ ...prev, batch: e.target.value }))
             }
-            className="w-full px-4 py-3 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all text-gray-900 dark:text-white appearance-none cursor-pointer"
+            className="w-full px-3.5 py-2.5 bg-gray-50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-400 transition-all text-sm text-gray-900 dark:text-white appearance-none cursor-pointer outline-none"
           >
             {batches.length === 1 ? (
               <option value={batches[0]}>Batch {batches[0]}</option>
@@ -128,124 +196,207 @@ export default function AssignStudentsStep({
             )}
           </select>
         </div>
-      </div>
 
-      {filteredStudents.length > 0 && (
-        <div className="flex items-center gap-3">
-          <motion.button
-            onClick={() => {
-              if (selectedStudents.length === filteredStudents.length)
-                setSelectedStudents([]);
-              else setSelectedStudents([...filteredStudents]);
-            }}
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
-            className="px-4 py-2 text-sm font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
-          >
-            {selectedStudents.length === filteredStudents.length
-              ? "Deselect All"
-              : `Select All (${filteredStudents.length})`}
-          </motion.button>
-          {selectedStudents.length > 0 && (
-            <motion.button
-              onClick={() => setSelectedStudents([])}
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-              className="px-4 py-2 text-sm font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+        {/* Inline actions */}
+        <div className="flex items-center gap-2 md:border-l md:border-gray-200 md:dark:border-gray-700 md:pl-3">
+          {filteredStudents.length > 0 && (
+            <button
+              type="button"
+              onClick={toggleSelectAll}
+              className={cx(
+                "px-3 py-2 text-xs font-semibold rounded-lg transition-colors whitespace-nowrap",
+                allFilteredSelected
+                  ? "text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/20 hover:bg-amber-100 dark:hover:bg-amber-900/30"
+                  : "text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-900/20 hover:bg-indigo-100 dark:hover:bg-indigo-900/30"
+              )}
             >
-              Clear Selection
-            </motion.button>
+              {allFilteredSelected ? "Deselect All" : `Select All (${filteredStudents.length})`}
+            </button>
+          )}
+          {selectedStudents.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setSelectedStudents([])}
+              className="flex items-center gap-1 px-3 py-2 text-xs font-semibold text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/30 rounded-lg transition-colors whitespace-nowrap"
+            >
+              <XCircle size={13} />
+              Clear
+            </button>
           )}
         </div>
-      )}
+      </div>
 
-      {/* Student Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 max-h-[500px] overflow-y-auto pr-2 custom-scrollbar">
-        <AnimatePresence>
-          {filteredStudents.map((student) => {
-            const isSelected = selectedStudents.some(
-              (s) => s.uid === student.uid,
-            );
-            return (
-              <motion.div
-                key={student.uid}
-                layout
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.9 }}
-                onClick={() => toggleStudent(student)}
-                className={cx(
-                  "cursor-pointer group relative overflow-hidden rounded-xl border p-4 transition-all duration-200",
-                  isSelected
-                    ? "bg-blue-50/50 dark:bg-blue-900/20 border-blue-500 ring-1 ring-blue-500 shadow-md"
-                    : "bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 hover:border-blue-300 dark:hover:border-blue-700 hover:shadow-md",
-                )}
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex items-center gap-3">
-                    <div
-                      className={cx(
-                        "w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold transition-colors",
-                        isSelected
-                          ? "bg-blue-600 text-white"
-                          : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 group-hover:bg-blue-100 dark:group-hover:bg-blue-900/50 group-hover:text-blue-600 dark:group-hover:text-blue-400",
-                      )}
-                    >
-                      {(student.name || "S").charAt(0).toUpperCase()}
-                    </div>
-                    <div>
-                      <h4
-                        className={cx(
-                          "font-semibold text-sm transition-colors",
-                          isSelected
-                            ? "text-blue-700 dark:text-blue-300"
-                            : "text-gray-900 dark:text-white",
-                        )}
-                      >
-                        {student.name}
-                      </h4>
-                      <p className="text-xs text-gray-500 dark:text-gray-400">
-                        {student.roll_no}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div
+      {/* Student Table */}
+      <div className="rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden bg-white dark:bg-gray-800">
+        <div className="max-h-[460px] overflow-y-auto custom-scrollbar">
+          <table className="w-full text-left">
+            <thead className="sticky top-0 z-10 bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
+              <tr>
+                <th className="px-4 py-3 w-12 text-center">
+                  {/* Select-all checkbox in header */}
+                  <button
+                    type="button"
+                    onClick={toggleSelectAll}
                     className={cx(
-                      "w-6 h-6 rounded-full border flex items-center justify-center transition-all",
-                      isSelected
-                        ? "bg-blue-600 border-blue-600 text-white scale-100"
-                        : "border-gray-300 dark:border-gray-600 bg-transparent text-transparent scale-90 opacity-0 group-hover:opacity-100 placeholder-shown:opacity-100", // placeholder-shown is hack, just rely on group-hover
+                      "w-5 h-5 mx-auto rounded flex items-center justify-center transition-all border-2",
+                      allFilteredSelected
+                        ? "bg-indigo-600 border-indigo-600 text-white"
+                        : someFilteredSelected
+                          ? "bg-indigo-200 dark:bg-indigo-800 border-indigo-400 text-indigo-600 dark:text-indigo-200"
+                          : "border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-transparent hover:border-indigo-400"
                     )}
                   >
-                    <CheckIcon size={14} strokeWidth={3} />
-                  </div>
-                </div>
+                    {(allFilteredSelected || someFilteredSelected) && (
+                      <CheckIcon size={12} strokeWidth={3} />
+                    )}
+                  </button>
+                </th>
+                <th className="px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider w-20">
+                  #
+                </th>
+                <th className="px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider w-28">
+                  Roll No.
+                </th>
+                <th className="px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  Student
+                </th>
+                <th className="px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider hidden md:table-cell">
+                  Email
+                </th>
+                <th className="px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider w-24 text-center">
+                  Batch
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100 dark:divide-gray-700/50">
+              <AnimatePresence>
+                {filteredStudents.map((student, index) => {
+                  const isSelected = selectedStudents.some(
+                    (s) => s.uid === student.uid
+                  );
+                  return (
+                    <motion.tr
+                      key={student.uid}
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      transition={{ duration: 0.15 }}
+                      onClick={() => toggleStudent(student)}
+                      className={cx(
+                        "cursor-pointer group transition-colors duration-150",
+                        isSelected
+                          ? "bg-indigo-50/60 dark:bg-indigo-950/30 hover:bg-indigo-100/60 dark:hover:bg-indigo-950/50"
+                          : "hover:bg-gray-50 dark:hover:bg-gray-700/40"
+                      )}
+                    >
+                      {/* Checkbox */}
+                      <td className="px-4 py-3 text-center">
+                        <div
+                          className={cx(
+                            "w-[18px] h-[18px] mx-auto rounded flex items-center justify-center transition-all duration-150 border-2",
+                            isSelected
+                              ? "bg-indigo-600 border-indigo-600 text-white shadow-sm shadow-indigo-500/30"
+                              : "border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-transparent group-hover:border-indigo-400"
+                          )}
+                        >
+                          <CheckIcon size={11} strokeWidth={3} />
+                        </div>
+                      </td>
+                      {/* Serial No */}
+                      <td className="px-4 py-3 text-xs text-gray-400 dark:text-gray-500 font-mono tabular-nums">
+                        {index + 1}
+                      </td>
+                      {/* Roll No */}
+                      <td className="px-4 py-3">
+                        <span
+                          className={cx(
+                            "text-sm font-semibold tabular-nums",
+                            isSelected
+                              ? "text-indigo-700 dark:text-indigo-300"
+                              : "text-gray-900 dark:text-white"
+                          )}
+                        >
+                          {student.roll_no || "-"}
+                        </span>
+                      </td>
+                      {/* Name */}
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-3">
+                          <div
+                            className={cx(
+                              "w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold shrink-0 transition-colors duration-150",
+                              isSelected
+                                ? "bg-indigo-600 text-white"
+                                : "bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-700 dark:to-gray-600 text-gray-600 dark:text-gray-300 group-hover:from-indigo-100 group-hover:to-blue-100 dark:group-hover:from-indigo-900/40 dark:group-hover:to-blue-900/30 group-hover:text-indigo-600 dark:group-hover:text-indigo-400"
+                            )}
+                          >
+                            {(student.name || "S").charAt(0).toUpperCase()}
+                          </div>
+                          <span
+                            className={cx(
+                              "text-sm font-medium truncate",
+                              isSelected
+                                ? "text-indigo-700 dark:text-indigo-200"
+                                : "text-gray-800 dark:text-gray-200"
+                            )}
+                          >
+                            {student.name}
+                          </span>
+                        </div>
+                      </td>
+                      {/* Email */}
+                      <td
+                        className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400 hidden md:table-cell truncate max-w-[220px]"
+                        title={student.email}
+                      >
+                        {student.email}
+                      </td>
+                      {/* Batch */}
+                      <td className="px-4 py-3 text-center">
+                        <span className="inline-block bg-gray-100 dark:bg-gray-700/60 px-2.5 py-0.5 rounded-md text-xs font-medium text-gray-600 dark:text-gray-300 whitespace-nowrap">
+                          {student.batch
+                            ? `Batch ${student.batch}`
+                            : student.semester}
+                        </span>
+                      </td>
+                    </motion.tr>
+                  );
+                })}
+              </AnimatePresence>
 
-                <div className="mt-3 pt-3 border-t border-gray-100 dark:border-gray-700/50 flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
-                  <span>{student.email}</span>
-                  <span className="bg-gray-100 dark:bg-gray-700/50 px-2 py-0.5 rounded text-xs font-medium">
-                    {student.batch
-                      ? `Batch ${student.batch}`
-                      : student.semester}
-                  </span>
-                </div>
-              </motion.div>
-            );
-          })}
-        </AnimatePresence>
+              {filteredStudents.length === 0 && (
+                <tr>
+                  <td colSpan={6} className="py-16 text-center">
+                    <div className="flex flex-col items-center gap-3 opacity-60">
+                      <div className="w-14 h-14 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center">
+                        <SearchIcon className="text-gray-400" size={24} />
+                      </div>
+                      <div>
+                        <p className="text-gray-900 dark:text-white font-medium text-sm">
+                          No students found
+                        </p>
+                        <p className="text-xs text-gray-500 mt-1">
+                          Try adjusting your search or filter
+                        </p>
+                      </div>
+                    </div>
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
 
-        {filteredStudents.length === 0 && (
-          <div className="col-span-full py-12 flex flex-col items-center justify-center text-center opacity-60">
-            <div className="w-16 h-16 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center mb-4">
-              <SearchIcon className="text-gray-400" size={32} />
-            </div>
-            <p className="text-gray-900 dark:text-white font-medium">
-              No students found
-            </p>
-            <p className="text-sm text-gray-500">
-              Try adjusting your search terms
-            </p>
+        {/* Table footer summary */}
+        {filteredStudents.length > 0 && (
+          <div className="px-4 py-2.5 bg-gray-50 dark:bg-gray-900/60 border-t border-gray-200 dark:border-gray-700 flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
+            <span>
+              Showing <strong className="text-gray-700 dark:text-gray-300">{filteredStudents.length}</strong>{" "}
+              of <strong className="text-gray-700 dark:text-gray-300">{students.length}</strong> students
+            </span>
+            <span>
+              <strong className="text-indigo-600 dark:text-indigo-400">{selectedStudents.length}</strong> selected
+            </span>
           </div>
         )}
       </div>

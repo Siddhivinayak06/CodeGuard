@@ -3776,18 +3776,7 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
 
                 {isExam && step === 3 && (
                   <div className="space-y-6">
-                    <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-700 p-5 grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
-                          Assignment Deadline
-                        </label>
-                        <input
-                          type="datetime-local"
-                          value={assignmentDeadline}
-                          onChange={(e) => setAssignmentDeadline(e.target.value)}
-                          className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500/40 outline-none"
-                        />
-                      </div>
+                    <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-700 p-5">
                       <div>
                         <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
                           Notes (Optional)
