@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import Link from "next/link";
 import { motion, Variants } from "framer-motion";
 import { FileText, ChevronRight, ChevronDown } from "lucide-react";
@@ -147,10 +147,9 @@ export default function RecentSubmissionsList({
                                 const date = new Date(group.created_at);
 
                                 return (
-                                    <> 
+                                    <Fragment key={`group-${group.practical_id}`}>
                                         {/* Group header row */}
                                         <tr
-                                            key={`group-${group.practical_id}`}
                                             className={`group transition-all duration-200 relative ${isMulti ? "cursor-pointer hover:bg-gray-50/50 dark:hover:bg-gray-800/20" : "hover:bg-indigo-50/30 dark:hover:bg-indigo-900/10 cursor-pointer"}`}
                                             onClick={() => isMulti ? toggleGroup(group.practical_id.toString()) : window.location.href = "/student/submissions"}
                                         >
@@ -217,7 +216,7 @@ export default function RecentSubmissionsList({
                                                 </td>
                                             </tr>
                                         ))}
-                                    </>
+                                    </Fragment>
                                 );
                             })}
                         </tbody>
