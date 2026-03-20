@@ -1430,13 +1430,24 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
       console.log("[Autofill] allMappedSets count:", allMappedSets.length);
 
       // Update basic details from the first practical
+      let updatedTitle = firstPractical.title || form.title;
+      let updatedDescription = firstPractical.description || form.description;
+      let updatedLanguage = firstPractical.language || form.language || "c";
+      
+      if (isExam) {
+        // Do not overwrite explicitly provided details from Step 1
+        updatedTitle = form.title || updatedTitle;
+        updatedDescription = form.description || updatedDescription;
+        updatedLanguage = form.language || updatedLanguage;
+      }
+
       const newFormState = {
         ...form,
-        title: firstPractical.title || form.title,
-        description: firstPractical.description || form.description,
-        language: firstPractical.language || form.language || "c",
+        title: updatedTitle,
+        description: updatedDescription,
+        language: updatedLanguage,
         max_marks: Number(firstPractical.max_marks || (allMappedLevels.reduce((s: number, l: any) => s + l.max_marks, 0))) || form.max_marks,
-        practical_number: firstPractical.practical_number || form.practical_number,
+        practical_number: form.practical_number, // Ignore AI-extracted practical number to allow safe auto-increment
         is_exam: isExam
       };
 
@@ -1524,7 +1535,7 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
 
   // Validate form data
   const validateForm = useCallback(() => {
-    if (!form.practical_number) {
+    if (!isExam && !form.practical_number) {
       alert("Please enter a Practical Number");
       return false;
     }
@@ -1757,46 +1768,51 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
 
     setSaving(true);
     try {
-      let resolvedPracticalNumber = Number(form.practical_number) || 0;
+      // Exams don't use practical numbers
+      let resolvedPracticalNumber: number | null = null;
 
-      if (!resolvedPracticalNumber && form.subject_id) {
-        const { data: subjectPracticals, error: numErr } = await supabase
-          .from("practicals")
-          .select("practical_number")
-          .eq("subject_id", form.subject_id);
+      if (!isExam) {
+        resolvedPracticalNumber = Number(form.practical_number) || 0;
 
-        if (numErr) throw numErr;
+        if (!resolvedPracticalNumber && form.subject_id) {
+          const { data: subjectPracticals, error: numErr } = await supabase
+            .from("practicals")
+            .select("practical_number")
+            .eq("subject_id", form.subject_id);
 
-        const maxExisting = Math.max(
-          0,
-          ...((subjectPracticals || [])
-            .map((p: any) => Number(p.practical_number) || 0)
-            .filter((n: number) => n > 0))
-        );
-        resolvedPracticalNumber = maxExisting + 1;
-      }
+          if (numErr) throw numErr;
 
-      // Check for duplicate practical number in the same subject
-      if (form.subject_id && resolvedPracticalNumber) {
-        let query = supabase
-          .from("practicals")
-          .select("id")
-          .eq("subject_id", form.subject_id)
-          .eq("practical_number", resolvedPracticalNumber);
-
-        const practicalId = Number(form.id) || 0;
-        if (practicalId > 0) {
-          query = query.neq("id", practicalId);
+          const maxExisting = Math.max(
+            0,
+            ...((subjectPracticals || [])
+              .map((p: any) => Number(p.practical_number) || 0)
+              .filter((n: number) => n > 0))
+          );
+          resolvedPracticalNumber = maxExisting + 1;
         }
 
-        const { data: existing, error: checkError } = await query;
+        // Check for duplicate practical number in the same subject
+        if (form.subject_id && resolvedPracticalNumber) {
+          let query = supabase
+            .from("practicals")
+            .select("id")
+            .eq("subject_id", form.subject_id)
+            .eq("practical_number", resolvedPracticalNumber);
 
-        if (checkError) throw checkError;
+          const practicalId = Number(form.id) || 0;
+          if (practicalId > 0) {
+            query = query.neq("id", practicalId);
+          }
 
-        if (existing && existing.length > 0) {
-          alert(`Practical Number ${resolvedPracticalNumber} already exists for this subject.`);
-          setSaving(false);
-          return false;
+          const { data: existing, error: checkError } = await query;
+
+          if (checkError) throw checkError;
+
+          if (existing && existing.length > 0) {
+            alert(`Practical Number ${resolvedPracticalNumber} already exists for this subject.`);
+            setSaving(false);
+            return false;
+          }
         }
       }
 
@@ -2017,25 +2033,6 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
           const draftTestCases = draft.testCases;
           const draftForm = draft.form;
 
-          let resolvedPracticalNumber = Number(draftForm.practical_number) || 0;
-
-          if (!resolvedPracticalNumber && draftForm.subject_id) {
-            const { data: subjectPracticals, error: numErr } = await supabase
-              .from("practicals")
-              .select("practical_number")
-              .eq("subject_id", draftForm.subject_id);
-
-            if (numErr) throw numErr;
-
-            const maxExisting = Math.max(
-              0,
-              ...((subjectPracticals || [])
-                .map((p: any) => Number(p.practical_number) || 0)
-                .filter((n: number) => n > 0))
-            );
-            resolvedPracticalNumber = maxExisting + 1;
-          }
-
           // Validate this draft
           if (!draftForm.title?.trim()) {
             console.info(`Skipping empty draft without title: ${draft.id}`);
@@ -2044,21 +2041,47 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
           if (!draftForm.subject_id) {
             console.warn(`Skipping draft without subject: ${draft.id}`);
             failCount++;
+            if (!firstErrorMessage) firstErrorMessage = `Subject is required for draft: ${draftForm.title || "Untitled"}`;
             continue;
           }
 
-          // Check for duplicate practical number
-          if (draftForm.subject_id && resolvedPracticalNumber) {
-            const { data: existing } = await supabase
-              .from("practicals")
-              .select("id")
-              .eq("subject_id", draftForm.subject_id)
-              .eq("practical_number", resolvedPracticalNumber);
+          // Exams don't use practical numbers — skip number resolution and duplicate checks
+          let resolvedPracticalNumber: number | null = null;
 
-            if (existing && existing.length > 0) {
-              console.warn(`Skipping draft with duplicate practical_number: ${resolvedPracticalNumber}`);
-              failCount++;
-              continue;
+          if (!isExam) {
+            resolvedPracticalNumber = Number(draftForm.practical_number) || 0;
+
+            if (!resolvedPracticalNumber && draftForm.subject_id) {
+              const { data: subjectPracticals, error: numErr } = await supabase
+                .from("practicals")
+                .select("practical_number")
+                .eq("subject_id", draftForm.subject_id);
+
+              if (numErr) throw numErr;
+
+              const maxExisting = Math.max(
+                0,
+                ...((subjectPracticals || [])
+                  .map((p: any) => Number(p.practical_number) || 0)
+                  .filter((n: number) => n > 0))
+              );
+              resolvedPracticalNumber = maxExisting + 1;
+            }
+
+            // Check for duplicate practical number
+            if (draftForm.subject_id && resolvedPracticalNumber) {
+              const { data: existing } = await supabase
+                .from("practicals")
+                .select("id")
+                .eq("subject_id", draftForm.subject_id)
+                .eq("practical_number", resolvedPracticalNumber);
+
+              if (existing && existing.length > 0) {
+                console.warn(`Skipping draft with duplicate practical_number: ${resolvedPracticalNumber}`);
+                failCount++;
+                if (!firstErrorMessage) firstErrorMessage = `Practical Number ${resolvedPracticalNumber} already exists.`;
+                continue;
+              }
             }
           }
 
@@ -2667,6 +2690,8 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
                               return;
                             }
                             setSavedPracticals(savedData);
+                            // CRITICAL: Update form.id so that Step 2's handleSave does UPDATE, not INSERT
+                            setForm(prev => ({ ...prev, id: savedData[0].id }));
                             resolvedItems = savedData;
                           } else {
                             const savedPracticalId = await handleSave();
@@ -2703,23 +2728,15 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
                           return;
                         }
 
-                        let resolvedItems = [];
-                        if (isMultiDraftMode) {
-                          const savedData = await handleSaveAll();
-                          if (!savedData || savedData.length === 0) {
-                            return;
-                          }
-                          setSavedPracticals(savedData);
-                          resolvedItems = savedData;
-                        } else {
-                          const savedPracticalId = await handleSave();
-                          if (!savedPracticalId) {
-                            return;
-                          }
-                          const singleSaved = [{ id: savedPracticalId as number }];
-                          setSavedPracticals(singleSaved);
-                          resolvedItems = singleSaved;
+                        // Step 2: Save levels/test cases via handleSave (will UPDATE since form.id is set from Step 1),
+                        // then sync question sets via saveExamConfiguration.
+                        // handleSave updates levels & test cases in DB so saveExamConfiguration can resolve level IDs.
+                        const savedPracticalId = await handleSave();
+                        if (!savedPracticalId) {
+                          return;
                         }
+                        const resolvedItems = [{ id: savedPracticalId as number }];
+                        setSavedPracticals(resolvedItems);
 
                         if (resolvedItems.length === 0) return;
 

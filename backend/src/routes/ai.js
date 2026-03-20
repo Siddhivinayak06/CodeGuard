@@ -93,7 +93,7 @@ router.post(
   upload.single('pdf'),
   async (req, res) => {
     try {
-      console.log('File upload:', {
+      logger.info('File upload:', {
         originalname: req.file?.originalname,
         mimetype: req.file?.mimetype,
         size: req.file?.size,
@@ -192,10 +192,6 @@ router.post(
       // ─────────────────────────────────────────────────────────────────────────
 
       const processChunk = async (chunkText, index) => {
-        const itemType = isExam
-          ? 'exam questions and sets'
-          : 'practical experiments';
-
         const prompt = isExam
           ? `
 You are a precision PDF-to-Code mapping bot for a competitive programming / exam platform.
@@ -241,7 +237,7 @@ DESCRIPTION RULES:
 - R1: All sections are MANDATORY except "Constraints" (omit only when source has none).
 - R2: Sample Input/Output fenced-block content MUST exactly match testCases[0].
 - R3: Use only standard Markdown (##, ###, -, \`\`\`, **bold**). No HTML.
-- R4: Inside the JSON string value, escape double-quotes as \" and encode newlines as \\n.
+- R4: Inside the JSON string value, escape double-quotes as \\" and encode newlines as \\n.
 ════════════════════════════════════════════════
 
 OUTPUT JSON STRUCTURE (STRICT - return ONLY raw JSON, no markdown fences, no explanation):
@@ -337,7 +333,7 @@ DESCRIPTION RULES:
 - R1: All sections are MANDATORY except "Constraints" (omit only when source has none).
 - R2: Sample Input/Output fenced-block content MUST exactly match testCases[0].
 - R3: Use only standard Markdown (##, ###, -, \`\`\`, **bold**). No HTML.
-- R4: Inside the JSON string value, escape double-quotes as \" and encode newlines as \\n.
+- R4: Inside the JSON string value, escape double-quotes as \\" and encode newlines as \\n.
 ════════════════════════════════════════════════
 
 OUTPUT JSON STRUCTURE (STRICT - return ONLY raw JSON, no markdown fences, no explanation):
@@ -577,9 +573,7 @@ ${chunkText}
               const lKey = l.level || '';
               const dashIdx = lKey.indexOf(' - ');
               const groupName =
-                dashIdx > 0
-                  ? lKey.substring(0, dashIdx).trim()
-                  : 'Default Set';
+                dashIdx > 0 ? lKey.substring(0, dashIdx).trim() : 'Default Set';
               if (!setGroups.has(groupName)) setGroups.set(groupName, []);
               setGroups.get(groupName).push(l.title || l.level);
             });
