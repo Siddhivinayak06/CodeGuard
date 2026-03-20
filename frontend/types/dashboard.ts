@@ -13,9 +13,13 @@ export interface ProgressData {
 
 export interface DashboardSubmission {
     id: string;
+    practical_id: number;
     practical_title: string;
     language: string;
     status: string;
     marks_obtained: number | null;
     created_at: string;
+    subject_code?: string;
+    subject_name?: string;
+    level_title?: string;
 }

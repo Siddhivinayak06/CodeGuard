@@ -289,20 +289,24 @@ export default function StudentDashboard() {
         const { data: recentSubs } = await supabase
           .from("submissions")
           .select(
-            "id, practical_id, created_at, status, marks_obtained, language, practicals!inner(title)",
+            "id, practical_id, created_at, status, marks_obtained, language, level_id, practicals!inner(title, subjects(subject_name, subject_code)), practical_levels(title)",
           )
           .eq("student_id", user.id)
           .in("practical_id", filteredPidsList)
           .order("created_at", { ascending: false })
-          .limit(5);
+          .limit(20);
 
         const formattedSubs = (recentSubs || []).map((s: any) => ({
           id: s.id,
+          practical_id: s.practical_id,
           practical_title: s.practicals?.title || "Untitled Practical",
           language: s.language || "Unknown",
-          status: s.status, // type will be handled by UI
+          status: s.status,
           marks_obtained: s.marks_obtained,
           created_at: s.created_at,
+          subject_code: s.practicals?.subjects?.subject_code || "",
+          subject_name: s.practicals?.subjects?.subject_name || "",
+          level_title: s.practical_levels?.title || undefined,
         }));
 
         setSubmissions(formattedSubs);
