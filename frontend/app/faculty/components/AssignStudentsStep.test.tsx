@@ -8,6 +8,8 @@ jest.mock("lucide-react", () => ({
   Users: () => <div data-testid="users-icon" />,
   Check: () => <div data-testid="check-icon" />,
   Search: () => <div data-testid="search-icon" />,
+  UserCheck: () => <div data-testid="user-check-icon" />,
+  XCircle: () => <div data-testid="x-circle-icon" />,
 }));
 
 const mockStudents: Student[] = [
@@ -125,7 +127,7 @@ describe("AssignStudentsStep", () => {
     );
 
     fireEvent.click(screen.getByText(/Select All/i));
-    expect(setSelectedStudents).toHaveBeenCalledWith(expect.any(Array)); // Should check argument content if possible, but mock checks call
+    expect(setSelectedStudents).toHaveBeenCalledWith(expect.any(Function));
   });
 
   it("shows selected count", () => {
