@@ -1,10 +1,8 @@
 import type { Metadata } from "next";
 import { GeistSans } from "geist/font/sans";
 import { GeistMono } from "geist/font/mono";
-import { Analytics } from "@vercel/analytics/next";
 import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
-import { SpeedInsights } from "@vercel/speed-insights/next";
 import NavbarLayout from "@/components/layout/NavbarLayout";
 import PageTransition from "@/components/layout/PageTransition";
 import { LogoutProvider } from "@/context/LogoutContext";
@@ -40,13 +38,11 @@ export default function RootLayout({
             <PageTransition>
               <div className="h-full flex flex-col">
                 {children}
-                <SpeedInsights />
               </div>
             </PageTransition>
           </LogoutProvider>
         </ThemeProvider>
         <Toaster richColors position="top-center" />
-        {process.env.VERCEL && <Analytics />}
       </body>
     </html>
   );

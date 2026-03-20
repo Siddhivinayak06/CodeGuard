@@ -3,26 +3,18 @@
 import { useEffect, useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { Calendar } from "@/components/ui/calendar";
+const Calendar = dynamic(() => import("@/components/ui/calendar").then(mod => mod.Calendar), { ssr: false, loading: () => <div className="h-64 w-full bg-gray-100/50 dark:bg-gray-800/50 rounded-xl animate-pulse" /> });
+const ActivityChart = dynamic(() => import("../../faculty/components/ActivityChart"), { ssr: false, loading: () => <div className="h-full w-full bg-gray-100/50 dark:bg-gray-800/50 rounded-xl animate-pulse" /> });
+const StatusChart = dynamic(() => import("../../faculty/components/StatusChart"), { ssr: false, loading: () => <div className="h-full w-full bg-gray-100/50 dark:bg-gray-800/50 rounded-xl animate-pulse" /> });
 import { cn } from "@/lib/utils";
 import dynamic from "next/dynamic";
 import type { User } from "@supabase/supabase-js";
-import PracticalForm from "../../faculty/components/PracticalForm";
+
+const PracticalForm = dynamic(() => import("../../faculty/components/PracticalForm"), {
+  ssr: false,
+});
+
 import {
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  PieChart,
-  Pie,
-  Cell,
-  Legend,
-  AreaChart,
-  Area,
-} from "recharts";
-import {
-  Users,
   FileCheck,
   TrendingUp,
   Clock,
@@ -197,6 +189,13 @@ export default function FacultyDashboardPage() {
   const [submissions, setSubmissions] = useState<Submission[]>([]);
   const [selected, setSelected] = useState<Date>(new Date());
   const [modalOpen, setModalOpen] = useState(false);
+  const [modalHasMounted, setModalHasMounted] = useState(false);
+
+  useEffect(() => {
+    if (modalOpen) {
+      setModalHasMounted(true);
+    }
+  }, [modalOpen]);
 
   const [editingPractical, setEditingPractical] = useState<Practical | null>(
     null,
@@ -573,65 +572,7 @@ export default function FacultyDashboardPage() {
                 Submission Activity
               </h3>
               <div className="h-[200px] w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={activityData}>
-                    <defs>
-                      <linearGradient
-                        id="colorSubs"
-                        x1="0"
-                        y1="0"
-                        x2="0"
-                        y2="1"
-                      >
-                        <stop
-                          offset="5%"
-                          stopColor="#8b5cf6"
-                          stopOpacity={0.8}
-                        />
-                        <stop
-                          offset="95%"
-                          stopColor="#8b5cf6"
-                          stopOpacity={0}
-                        />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid
-                      strokeDasharray="3 3"
-                      vertical={false}
-                      stroke="rgba(156, 163, 175, 0.2)"
-                    />
-                    <XAxis
-                      dataKey="date"
-                      axisLine={false}
-                      tickLine={false}
-                      tick={{ fill: "#9ca3af", fontSize: 12 }}
-                    />
-                    <YAxis
-                      axisLine={false}
-                      tickLine={false}
-                      tick={{ fill: "#9ca3af", fontSize: 12 }}
-                    />
-                    <Tooltip
-                      contentStyle={{
-                        backgroundColor: "rgba(255, 255, 255, 0.8)",
-                        borderRadius: "12px",
-                        border: "none",
-                        boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.1)",
-                      }}
-                    />
-                    <Area
-                      type="monotone"
-                      dataKey="submissions"
-                      stroke="#8b5cf6"
-                      strokeWidth={3}
-                      fillOpacity={1}
-                      fill="url(#colorSubs)"
-                      isAnimationActive={true}
-                      animationDuration={1500}
-                      animationEasing="ease-in-out"
-                    />
-                  </AreaChart>
-                </ResponsiveContainer>
+                <ActivityChart data={activityData} />
               </div>
             </motion.div>
 
@@ -643,37 +584,8 @@ export default function FacultyDashboardPage() {
               <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">
                 Submission Status
               </h3>
-              <div className="flex-1 min-h-[200px] relative">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={statusData}
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={60}
-                      outerRadius={80}
-                      paddingAngle={5}
-                      dataKey="value"
-                      isAnimationActive={true}
-                      animationBegin={500}
-                      animationDuration={1200}
-                      animationEasing="ease-out"
-                    >
-                      {statusData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.color} />
-                      ))}
-                    </Pie>
-                    <Tooltip />
-                    <Legend verticalAlign="bottom" height={36} />
-                  </PieChart>
-                </ResponsiveContainer>
-                {/* Center Stat */}
-                <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none pb-8">
-                  <span className="text-3xl font-bold text-gray-900 dark:text-white">
-                    {submissions.length}
-                  </span>
-                  <span className="text-xs text-gray-500">Total</span>
-                </div>
+              <div className="flex-1 h-[200px] relative">
+                <StatusChart data={statusData} total={submissions.length} />
               </div>
             </motion.div>
 
@@ -779,8 +691,9 @@ export default function FacultyDashboardPage() {
         }
 
         {/* Practical Modal */}
-        <PracticalForm
-          isOpen={modalOpen}
+        {modalHasMounted && (
+          <PracticalForm
+            isOpen={modalOpen}
           practical={editingPractical}
           subjects={subjects}
           supabase={supabase}
@@ -796,6 +709,7 @@ export default function FacultyDashboardPage() {
             setModalOpen(false);
           }}
         />
+        )}
       </main >
     </div >
   );

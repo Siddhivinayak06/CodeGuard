@@ -7,6 +7,10 @@ const nextConfig = {
     // Image optimization enabled (default Next.js behavior)
   },
 
+  experimental: {
+    optimizePackageImports: ['lucide-react']
+  },
+
   turbopack: {},
   webpack: (config) => {
     // Monaco Editor webpack configuration
