@@ -178,9 +178,9 @@ OUTPUT JSON STRUCTURE (STRICT - return ONLY this JSON, no markdown, no explanati
         {
           "level": "{SetName} - Q{number}",
           "title": "{Unique descriptive title derived from the problem statement}",
-          "description": "{FULL problem statement copied verbatim from PDF, including all examples, constraints, and sub-parts}",
+          "description": "{FULL problem statement copied verbatim from PDF, including all examples, constraints, and sub-parts}\\n\\nSample Input: {Same as first testCase input}\\nSample Output: {Same as first testCase output}",
           "max_marks": {Exact marks from PDF},
-          "reference_code": "Complete working solution in C that reads from stdin and writes to stdout",
+          "reference_code": "COMPLETE WORKING SOLUTION in C. MUST read from stdin and write to stdout. NO HARDCODED INPUT VALUES.",
           "starter_code": "Incomplete template with function signature and TODO comments for student to fill in",
           "testCases": [{"input": "{sample input}", "expected_output": "{sample output}"}]
         }
@@ -206,10 +206,11 @@ CRITICAL RULES:
 4. **sets[].level_names MUST exactly match levels[].title:** The strings in level_names must be character-for-character identical to the corresponding level's "title" field. This is critical for the frontend mapping.
 5. **LITERAL MARKS:** Extract exact marks as they appear in the PDF.
 6. **Sub-parts:** If a question has sub-parts (a), (b), (c) with separate marks, combine them into ONE level. Include all sub-parts in the description. Sum their marks for max_marks.
-7. **Sample I/O:** Include ALL examples from the PDF in the description AND as testCases.
+7. **Sample I/O in Description:** Every level's 'description' MUST include at least one 'Sample Input' and 'Sample Output' pair. These MUST be character-for-character identical to the first entry in 'testCases'.
 8. **NO HALLUCINATIONS:** Use only actual data from the provided text.
-9. **reference_code:** Must be complete, compilable C code using stdin/stdout. For algorithm/dry-run questions, write a program that solves the core problem.
+9. **reference_code:** Must be complete, compilable C code. It MUST read input from stdin (e.g., 'scanf') and print to stdout ('printf'). NEVER initialize variables with sample input data inside the code.
 10. **starter_code:** Must be an incomplete template with the function signature and TODO placeholders.
+11. **I/O CONSISTENCY:** The 'expected_output' in 'testCases' MUST be the exact literal result of running the 'input' through the 'reference_code'.
 
 TEXT:
 ${chunkText}
@@ -228,7 +229,7 @@ OUTPUT JSON STRUCTURE (STRICT):
       "max_marks": {Actual marks},
       "enableLevels": false,
       "language": "c",
-      "reference_code": "MANDATORY: Complete solution code that reads from stdin and writes to stdout.",
+      "reference_code": "MANDATORY: Complete solution code. MUST read from stdin and write to stdout. NO HARDCODED INPUT.",
       "starter_code": "Incomplete template with function signature and TODO comments.",
       "testCases": [{ "input": "{input}", "expected_output": "{output}" }]
     }
@@ -238,10 +239,11 @@ OUTPUT JSON STRUCTURE (STRICT):
 CRITICAL EXECUTION RULES:
 1. **LITERAL MARKS & COUNTS:** Extract exact Marks as they appear in the PDF.
 2. **DISTINCT PROBLEMS:** Every distinct problem/experiment MUST be a separate entry.
-3. **STRICT I/O CONSISTENCY:** Sample Input/Output in description MUST match the first testCase.
+3. **STRICT I/O CONSISTENCY:** Every problem 'description' MUST include a 'Sample Input' and 'Sample Output' pair that exactly matches the FIRST 'testCase' entry.
 4. **NO HALLUCINATIONS:** Use only actual data from the provided text.
-5. **reference_code:** Must be complete, compilable C code using stdin/stdout.
+5. **reference_code:** Must be complete, compilable C code. It MUST read from stdin and print to stdout. NO HARDCODED INPUT.
 6. **starter_code:** Must be an incomplete template with TODO placeholders.
+7. **I/O CONSISTENCY:** The 'expected_output' MUST match the result of running the 'input' through 'reference_code'.
 
 TEXT:
 ${chunkText}
