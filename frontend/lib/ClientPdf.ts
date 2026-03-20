@@ -1,21 +1,14 @@
 // utils/ClientPdf.ts
 import { jsPDF } from "jspdf";
 
-// ─── Minimal Light Palette ──────────────────────────────────────────────────
-const PRIMARY  = [79,  70,  229] as [number, number, number]; // indigo-600
-const PRIMARY_L = [238, 242, 255] as [number, number, number]; // indigo-50
-const PASS_C   = [22,  163, 74 ] as [number, number, number]; // green-600
-const FAIL_C   = [220, 38,  38 ] as [number, number, number]; // red-600
-const PEND_C   = [217, 119, 6  ] as [number, number, number]; // amber-600
-const TEXT_D   = [31,  41,  55 ] as [number, number, number]; // gray-800
-const TEXT_M   = [107, 114, 128] as [number, number, number]; // gray-500
-const TEXT_L   = [156, 163, 175] as [number, number, number]; // gray-400
-const BG_CARD  = [249, 250, 251] as [number, number, number]; // gray-50
-const BORDER   = [229, 231, 235] as [number, number, number]; // gray-200
-const CODE_BG  = [243, 244, 246] as [number, number, number]; // gray-100
-const CODE_TXT = [55,  65,  81 ] as [number, number, number]; // gray-700
-const OUT_BG   = [240, 253, 244] as [number, number, number]; // green-50
-const OUT_TXT  = [21,  128, 61 ] as [number, number, number]; // green-700
+// ─── Monochrome Palette ─────────────────────────────────────────────────────
+const BLACK    = [0,   0,   0  ] as [number, number, number];
+const DARK     = [38,  38,  38 ] as [number, number, number]; // near-black
+const MEDIUM   = [115, 115, 115] as [number, number, number]; // mid-gray
+const LIGHT    = [180, 180, 180] as [number, number, number]; // light gray
+const RULE     = [210, 210, 210] as [number, number, number]; // rule lines
+const BG_ALT   = [247, 247, 247] as [number, number, number]; // very light bg
+const CODE_BG  = [245, 245, 245] as [number, number, number]; // code bg
 const WHITE    = [255, 255, 255] as [number, number, number];
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -28,21 +21,16 @@ function cleanText(str: string = ""): string {
     .trim();
 }
 
-function statusColor(status: string): [number, number, number] {
-  const s = status.toLowerCase();
-  if (s === "passed" || s === "completed") return PASS_C;
-  if (s === "failed") return FAIL_C;
-  return PEND_C;
+interface TestCaseResultPdf {
+  test_case_id?: number;
+  status: string;
+  stdout?: string;
+  stderr?: string;
+  execution_time_ms?: number;
+  memory_used_kb?: number;
 }
 
-function statusBgColor(status: string): [number, number, number] {
-  const s = status.toLowerCase();
-  if (s === "passed" || s === "completed") return [220, 252, 231]; // green-100
-  if (s === "failed") return [254, 226, 226]; // red-100
-  return [254, 243, 199]; // amber-100
-}
-
-// ─── Shared document builder ─────────────────────────────────────────────────
+// ─── Drawing primitives ─────────────────────────────────────────────────────
 
 function createDoc() {
   return new jsPDF({ unit: "pt", format: "a4" });
@@ -51,106 +39,206 @@ function createDoc() {
 function makeHeader(
   doc: jsPDF,
   pageWidth: number,
-  _pageHeight: number,
   margin: number,
   title: string,
   subtitle: string
 ): number {
-  // Thin accent line at top
-  doc.setFillColor(...PRIMARY);
-  doc.rect(0, 0, pageWidth, 3, "F");
-
-  // Clean white header area
-  let y = 28;
-
-  // Logo mark (small circle with "CG")  
-  const logoX = margin;
-  doc.setFillColor(...PRIMARY);
-  doc.circle(logoX + 12, y + 2, 12, "F");
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(9);
-  doc.setTextColor(...WHITE);
-  doc.text("CG", logoX + 12, y + 5, { align: "center" });
+  let y = 36;
 
   // Title
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(16);
-  doc.setTextColor(...TEXT_D);
-  doc.text(title, logoX + 30, y + 2);
+  doc.setFontSize(18);
+  doc.setTextColor(...BLACK);
+  doc.text(title, margin, y);
 
-  // Subtitle
+  // Subtitle line
+  y += 16;
   doc.setFont("helvetica", "normal");
   doc.setFontSize(9);
-  doc.setTextColor(...TEXT_M);
-  doc.text(subtitle, logoX + 30, y + 16);
+  doc.setTextColor(...MEDIUM);
+  doc.text(subtitle, margin, y);
 
-  // Separator line
-  const sepY = y + 28;
-  doc.setDrawColor(...BORDER);
+  // Thin rule
+  y += 10;
+  doc.setDrawColor(...RULE);
   doc.setLineWidth(0.5);
-  doc.line(margin, sepY, pageWidth - margin, sepY);
+  doc.line(margin, y, pageWidth - margin, y);
 
-  return sepY + 14;
+  return y + 14;
 }
 
-function drawSectionLabel(
-  doc: jsPDF,
-  label: string,
-  x: number,
-  y: number,
-  _width: number
-) {
+function drawLabel(doc: jsPDF, text: string, x: number, y: number) {
   doc.setFont("helvetica", "bold");
   doc.setFontSize(9);
-  doc.setTextColor(...PRIMARY);
-  doc.text(label.toUpperCase(), x, y);
-
-  // Small underline accent
-  const tw = doc.getTextWidth(label.toUpperCase());
-  doc.setDrawColor(...PRIMARY);
-  doc.setLineWidth(1);
-  doc.line(x, y + 3, x + tw, y + 3);
+  doc.setTextColor(...DARK);
+  doc.text(text, x, y);
+  // Small underline
+  const tw = doc.getTextWidth(text);
+  doc.setDrawColor(...RULE);
+  doc.setLineWidth(0.5);
+  doc.line(x, y + 4, x + tw, y + 4);
 }
 
-function drawKV(
+function drawField(
   doc: jsPDF,
   label: string,
   value: string,
   x: number,
   y: number,
-  labelW = 100
+  labelW = 90
 ) {
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8);
-  doc.setTextColor(...TEXT_L);
+  doc.setTextColor(...LIGHT);
   doc.text(label, x, y);
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(9.5);
-  doc.setTextColor(...TEXT_D);
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(9);
+  doc.setTextColor(...DARK);
   doc.text(cleanText(value), x + labelW, y);
 }
 
-function drawStatusPill(
-  doc: jsPDF,
-  status: string,
-  x: number,
-  y: number
-) {
-  const col = statusColor(status);
-  const bgCol = statusBgColor(status);
-  const text = status.toUpperCase();
-  const tw = doc.getTextWidth(text);
-  const pw = tw + 16;
-  const ph = 14;
+function drawStatusText(doc: jsPDF, status: string, x: number, y: number) {
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(8);
+  doc.setTextColor(...DARK);
+  doc.text(status.replace(/_/g, " ").toUpperCase(), x, y);
+}
 
-  // Light background pill
-  doc.setFillColor(...bgCol);
-  doc.roundedRect(x, y - 10, pw, ph, ph / 2, ph / 2, "F");
+function drawTestCaseTable(
+  doc: jsPDF,
+  results: TestCaseResultPdf[],
+  x: number,
+  y: number,
+  width: number,
+  pageHeight: number,
+  margin: number
+): number {
+  if (!results || results.length === 0) return y;
+
+  let cy = y;
+  const rowH = 16;
+  const headerH = 16;
+
+  if (cy + headerH + results.length * rowH > pageHeight - margin) {
+    if (cy + headerH + 3 * rowH > pageHeight - margin) {
+      doc.addPage();
+      cy = margin + 10;
+    }
+  }
+
+  // Determine which optional columns to show (only if at least one result has data)
+  const hasTime = results.some(r => r.execution_time_ms !== undefined && r.execution_time_ms !== null);
+  const hasMemory = results.some(r => r.memory_used_kb !== undefined && r.memory_used_kb !== null);
+
+  // Column positions
+  const c1 = x + 10;
+  const c2 = x + 40;
+  const c3 = hasTime ? x + width * 0.55 : 0;
+  const c4 = hasMemory ? x + width * 0.78 : 0;
+
+  // Header row
+  doc.setFillColor(...BG_ALT);
+  doc.rect(x, cy, width, headerH, "F");
+  doc.setDrawColor(...RULE);
+  doc.setLineWidth(0.3);
+  doc.line(x, cy + headerH, x + width, cy + headerH);
 
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(7.5);
-  doc.setTextColor(col[0], col[1], col[2]);
-  doc.text(text, x + 8, y);
+  doc.setFontSize(7);
+  doc.setTextColor(...MEDIUM);
+  doc.text("#", c1, cy + 11);
+  doc.text("RESULT", c2, cy + 11);
+  if (hasTime) doc.text("TIME", c3, cy + 11);
+  if (hasMemory) doc.text("MEMORY", c4, cy + 11);
+
+  cy += headerH;
+
+  // Rows
+  results.forEach((tc, idx) => {
+    if (cy + rowH > pageHeight - margin) {
+      doc.addPage();
+      cy = margin + 10;
+    }
+
+    if (idx % 2 === 1) {
+      doc.setFillColor(...BG_ALT);
+      doc.rect(x, cy, width, rowH, "F");
+    }
+
+    doc.setDrawColor(...RULE);
+    doc.setLineWidth(0.15);
+    doc.line(x, cy + rowH, x + width, cy + rowH);
+
+    const textY = cy + 11;
+
+    // Test number
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
+    doc.setTextColor(...DARK);
+    doc.text(String(idx + 1), c1, textY);
+
+    // Status
+    const isPassed = tc.status.toLowerCase() === "passed";
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(7.5);
+    doc.setTextColor(...DARK);
+    doc.text(
+      isPassed ? "PASS" : tc.status.replace(/_/g, " ").toUpperCase(),
+      c2,
+      textY
+    );
+
+    // Time (only if column is shown)
+    if (hasTime) {
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8);
+      doc.setTextColor(...MEDIUM);
+      doc.text(
+        tc.execution_time_ms !== undefined ? `${tc.execution_time_ms} ms` : "-",
+        c3,
+        textY
+      );
+    }
+
+    // Memory (only if column is shown)
+    if (hasMemory) {
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8);
+      doc.setTextColor(...MEDIUM);
+      doc.text(
+        tc.memory_used_kb !== undefined ? `${tc.memory_used_kb} KB` : "-",
+        c4,
+        textY
+      );
+    }
+
+    cy += rowH;
+  });
+
+  // Summary
+  cy += 8;
+  const passed = results.filter(r => r.status.toLowerCase() === "passed").length;
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(8);
+  doc.setTextColor(...MEDIUM);
+  doc.text(`Result: ${passed} / ${results.length} passed`, x + 10, cy + 4);
+
+  // Simple progress bar (monochrome)
+  const barX = x + width * 0.45;
+  const barW = width * 0.5;
+  const barH = 4;
+  const barY = cy;
+  const ratio = results.length > 0 ? passed / results.length : 0;
+
+  doc.setFillColor(...RULE);
+  doc.roundedRect(barX, barY, barW, barH, 2, 2, "F");
+
+  if (ratio > 0) {
+    doc.setFillColor(...DARK);
+    doc.roundedRect(barX, barY, barW * ratio, barH, 2, 2, "F");
+  }
+
+  return cy + 14;
 }
 
 function drawCodeBlock(
@@ -164,11 +252,12 @@ function drawCodeBlock(
   cap = 10000
 ): number {
   const safe = cleanText((code || "No code submitted").slice(0, cap));
-  const lines = doc.splitTextToSize(safe, width - 24) as string[];
+  const lines = doc.splitTextToSize(safe, width - 34) as string[];
 
-  const lineH = 11;
+  const lineH = 10;
   let cy = y;
   const remainingLines = [...lines];
+  let lineNum = 0;
 
   while (remainingLines.length > 0) {
     const availableH = pageHeight - cy - margin - 20;
@@ -181,29 +270,35 @@ function drawCodeBlock(
     }
 
     const batch = remainingLines.splice(0, linesToDrawCount);
-    const batchH = batch.length * lineH + 16;
+    const batchH = batch.length * lineH + 14;
 
-    // Light gray background
+    // Light background
     doc.setFillColor(...CODE_BG);
-    doc.roundedRect(x, cy, width, batchH, 4, 4, "F");
+    doc.rect(x, cy, width, batchH, "F");
 
-    // Subtle border
-    doc.setDrawColor(...BORDER);
-    doc.setLineWidth(0.3);
-    doc.roundedRect(x, cy, width, batchH, 4, 4, "S");
+    // Left border accent
+    doc.setDrawColor(...RULE);
+    doc.setLineWidth(0.5);
+    doc.line(x, cy, x, cy + batchH);
+    doc.line(x + width, cy, x + width, cy + batchH);
+    doc.line(x, cy, x + width, cy);
+    doc.line(x, cy + batchH, x + width, cy + batchH);
 
     doc.setFont("courier", "normal");
-    doc.setFontSize(8);
-    doc.setTextColor(...CODE_TXT);
+    doc.setFontSize(8.5);
 
-    let lineY = cy + 12;
+    let lineY = cy + 11;
     for (let i = 0; i < batch.length; i++) {
+      lineNum++;
       // Line number
-      doc.setTextColor(...TEXT_L);
-      const lineNum = String(i + 1).padStart(3, " ");
-      doc.text(lineNum, x + 6, lineY);
+      doc.setTextColor(...LIGHT);
+      doc.text(String(lineNum).padStart(3, " "), x + 5, lineY);
+      // Separator
+      doc.setDrawColor(230, 230, 230);
+      doc.setLineWidth(0.2);
+      doc.line(x + 24, cy, x + 24, cy + batchH);
       // Code
-      doc.setTextColor(...CODE_TXT);
+      doc.setTextColor(...BLACK);
       doc.text(batch[i], x + 28, lineY);
       lineY += lineH;
     }
@@ -216,7 +311,7 @@ function drawCodeBlock(
     }
   }
 
-  return cy + 8;
+  return cy + 16;
 }
 
 function drawOutputBlock(
@@ -231,9 +326,9 @@ function drawOutputBlock(
 ): number {
   // eslint-disable-next-line no-control-regex
   const safe = cleanText(output.replace(/\x1B\[[0-9;]*[A-Za-z]/g, "")).slice(0, cap);
-  const lines = doc.splitTextToSize(safe, width - 24) as string[];
-  const lineH = 11;
-  
+  const lines = doc.splitTextToSize(safe, width - 20) as string[];
+  const lineH = 10;
+
   let cy = y;
   const remainingLines = [...lines];
 
@@ -248,22 +343,21 @@ function drawOutputBlock(
     }
 
     const batch = remainingLines.splice(0, linesToDrawCount);
-    const batchH = batch.length * lineH + 16;
+    const batchH = batch.length * lineH + 14;
 
-    // Light green background
-    doc.setFillColor(...OUT_BG);
-    doc.roundedRect(x, cy, width, batchH, 4, 4, "F");
-    doc.setDrawColor(187, 247, 208); // green-200
+    doc.setFillColor(...BG_ALT);
+    doc.rect(x, cy, width, batchH, "F");
+    doc.setDrawColor(...RULE);
     doc.setLineWidth(0.3);
-    doc.roundedRect(x, cy, width, batchH, 4, 4, "S");
+    doc.rect(x, cy, width, batchH, "S");
 
     doc.setFont("courier", "normal");
-    doc.setFontSize(8);
-    doc.setTextColor(...OUT_TXT);
+    doc.setFontSize(7.5);
+    doc.setTextColor(...DARK);
 
-    let lineY = cy + 12;
+    let lineY = cy + 11;
     for (const line of batch) {
-      doc.text(line, x + 10, lineY);
+      doc.text(line, x + 8, lineY);
       lineY += lineH;
     }
 
@@ -275,7 +369,7 @@ function drawOutputBlock(
     }
   }
 
-  return cy + 8;
+  return cy + 16;
 }
 
 function addFooters(doc: jsPDF, pageWidth: number, pageHeight: number, margin: number) {
@@ -283,19 +377,18 @@ function addFooters(doc: jsPDF, pageWidth: number, pageHeight: number, margin: n
   for (let p = 1; p <= total; p++) {
     doc.setPage(p);
 
-    // Light separator
-    doc.setDrawColor(...BORDER);
+    doc.setDrawColor(...RULE);
     doc.setLineWidth(0.3);
-    doc.line(margin, pageHeight - 28, pageWidth - margin, pageHeight - 28);
+    doc.line(margin, pageHeight - 26, pageWidth - margin, pageHeight - 26);
 
     doc.setFont("helvetica", "normal");
     doc.setFontSize(7);
-    doc.setTextColor(...TEXT_L);
-    doc.text("CodeGuard", margin, pageHeight - 16);
+    doc.setTextColor(...LIGHT);
+    doc.text("CodeGuard", margin, pageHeight - 14);
     doc.text(
-      `Generated ${new Date().toLocaleDateString()}  ·  Page ${p} of ${total}`,
+      `Page ${p} / ${total}`,
       pageWidth - margin,
-      pageHeight - 16,
+      pageHeight - 14,
       { align: "right" }
     );
   }
@@ -312,9 +405,13 @@ export async function generatePdfClient({
   submissionDate,
   status,
   marks,
+  maxMarks,
   output,
   plotImages,
   showMarks,
+  subjectName,
+  subjectCode,
+  testCaseResults,
   filename = "submission_report.pdf",
 }: {
   studentName: string;
@@ -325,50 +422,71 @@ export async function generatePdfClient({
   submissionDate: string;
   status: string;
   marks?: number;
+  maxMarks?: number;
   output?: string;
   plotImages?: string[];
   showMarks?: boolean;
+  subjectName?: string;
+  subjectCode?: string;
+  testCaseResults?: TestCaseResultPdf[];
   filename?: string;
 }) {
   const doc = createDoc();
-  const margin = 40;
+  const margin = 42;
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
   const usableW = pageWidth - margin * 2;
 
-  let y = makeHeader(doc, pageWidth, pageHeight, margin, "Submission Report", practicalTitle);
+  let y = makeHeader(doc, pageWidth, margin, "Submission Report", practicalTitle);
 
   const newPage = () => { doc.addPage(); y = margin + 10; };
   const need = (h: number) => { if (y + h > pageHeight - margin) { newPage(); return true; } return false; };
 
-  // ── Student info card ────────────────────────────────────────────
-  doc.setFillColor(...BG_CARD);
-  doc.roundedRect(margin, y, usableW, 58, 4, 4, "F");
-  doc.setDrawColor(...BORDER);
-  doc.setLineWidth(0.3);
-  doc.roundedRect(margin, y, usableW, 58, 4, 4, "S");
+  // ── Details grid ───────────────────────────────────────────────
+  const col1 = margin;
+  const col2 = margin + usableW / 2;
 
-  // Left column
-  drawKV(doc, "Student", studentName, margin + 12, y + 18);
-  drawKV(doc, "Roll No.", rollNumber, margin + 12, y + 34);
-  drawKV(doc, "Language", language, margin + 12, y + 50);
+  drawField(doc, "Student", studentName, col1, y);
+  drawField(doc, "Date", submissionDate, col2, y);
+  y += 14;
 
-  // Right column
-  const rx = margin + usableW / 2 + 10;
-  drawKV(doc, "Date", submissionDate, rx, y + 18);
+  drawField(doc, "Roll No.", rollNumber, col1, y);
+  drawField(doc, "Language", language.toUpperCase(), col2, y);
+  y += 14;
+
+  if (subjectName || subjectCode) {
+    drawField(doc, "Subject", `${subjectName || ""}${subjectCode ? ` (${subjectCode})` : ""}`, col1, y);
+  }
+  drawField(doc, "Status", status.replace(/_/g, " ").toUpperCase(), col2, y);
+  y += 14;
+
   if (showMarks !== false) {
-    drawKV(doc, "Marks", marks !== undefined ? String(marks) : "—", rx, y + 34);
+    const marksStr = marks !== undefined
+      ? `${marks}${maxMarks !== undefined ? ` / ${maxMarks}` : ""}`
+      : "Not graded";
+    drawField(doc, "Marks", marksStr, col1, y);
+    y += 14;
   }
 
-  // Status pill
-  drawStatusPill(doc, status, margin + usableW - 80, y + 16);
+  // Separator
+  doc.setDrawColor(...RULE);
+  doc.setLineWidth(0.3);
+  doc.line(margin, y, pageWidth - margin, y);
+  y += 12;
 
-  y += 70;
+  // ── Test Case Results ──────────────────────────────────────────
+  if (testCaseResults && testCaseResults.length > 0) {
+    need(50);
+    drawLabel(doc, "Test Cases", margin, y);
+    y += 14;
+    y = drawTestCaseTable(doc, testCaseResults, margin, y, usableW, pageHeight, margin);
+    y += 4;
+  }
 
-  // ── Plot images ───────────────────────────────────────────────────
+  // ── Plot images ───────────────────────────────────────────────
   if (plotImages?.length) {
     need(30);
-    drawSectionLabel(doc, "Generated Plots", margin, y, usableW);
+    drawLabel(doc, "Generated Plots", margin, y);
     y += 14;
     for (const img of plotImages) {
       need(270);
@@ -379,16 +497,16 @@ export async function generatePdfClient({
     }
   }
 
-  // ── Submitted code ───────────────────────────────────────────────
+  // ── Submitted code ────────────────────────────────────────────
   need(50);
-  drawSectionLabel(doc, `Submitted Code  ·  ${language}`, margin, y, usableW);
+  drawLabel(doc, `Code (${language.toUpperCase()})`, margin, y);
   y += 14;
   y = drawCodeBlock(doc, code, margin, y, usableW, pageHeight, margin);
 
-  // ── Output ────────────────────────────────────────────────────────
+  // ── Output ────────────────────────────────────────────────────
   if (output) {
     need(50);
-    drawSectionLabel(doc, "Program Output", margin, y, usableW);
+    drawLabel(doc, "Output", margin, y);
     y += 14;
     y = drawOutputBlock(doc, output, margin, y, usableW, pageHeight, margin);
   }
@@ -405,6 +523,8 @@ export async function generateCombinedPdfClient({
   practicalTitle,
   tasks,
   showMarks,
+  subjectName,
+  subjectCode,
   filename = "submission_report.pdf",
 }: {
   studentName: string;
@@ -420,96 +540,177 @@ export async function generateCombinedPdfClient({
     maxMarks?: number;
     output?: string;
     plotImages?: string[];
+    testCaseResults?: TestCaseResultPdf[];
   }[];
   showMarks?: boolean;
+  subjectName?: string;
+  subjectCode?: string;
   filename?: string;
 }) {
   const doc = createDoc();
-  const margin = 40;
+  const margin = 42;
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
   const usableW = pageWidth - margin * 2;
 
-  let y = makeHeader(doc, pageWidth, pageHeight, margin, "Submission Report", practicalTitle);
+  let y = makeHeader(doc, pageWidth, margin, "Submission Report", practicalTitle);
 
   const newPage = () => { doc.addPage(); y = margin + 10; };
   const need = (h: number) => { if (y + h > pageHeight - margin) { newPage(); return true; } return false; };
 
-  // ── Shared info card ────────────────────────────────────────────
-  doc.setFillColor(...BG_CARD);
-  doc.roundedRect(margin, y, usableW, 42, 4, 4, "F");
-  doc.setDrawColor(...BORDER);
+  // ── Student details ────────────────────────────────────────────
+  const col1 = margin;
+  const col2 = margin + usableW / 2;
+
+  drawField(doc, "Student", studentName, col1, y);
+  drawField(doc, "Tasks", String(tasks.length), col2, y);
+  y += 14;
+
+  drawField(doc, "Roll No.", rollNumber, col1, y);
+  if (subjectName || subjectCode) {
+    drawField(doc, "Subject", `${subjectName || ""}${subjectCode ? ` (${subjectCode})` : ""}`, col2, y);
+  }
+  y += 14;
+
+  drawField(doc, "Language", tasks[0]?.language?.toUpperCase() || "-", col1, y);
+
+  // Total marks
+  if (showMarks !== false) {
+    const totalMarks = tasks.reduce((sum, t) => sum + (t.marks ?? 0), 0);
+    const totalMaxMarks = tasks.reduce((sum, t) => sum + (t.maxMarks ?? 0), 0);
+    const hasAny = tasks.some(t => t.marks !== undefined);
+    if (hasAny && totalMaxMarks > 0) {
+      drawField(doc, "Total", `${totalMarks} / ${totalMaxMarks}`, col2, y);
+    }
+  }
+  y += 6;
+
+  // Separator
+  doc.setDrawColor(...RULE);
   doc.setLineWidth(0.3);
-  doc.roundedRect(margin, y, usableW, 42, 4, 4, "S");
+  doc.line(margin, y, pageWidth - margin, y);
+  y += 12;
 
-  drawKV(doc, "Student", studentName, margin + 12, y + 16);
-  drawKV(doc, "Roll No.", rollNumber, margin + 12, y + 32);
-  drawKV(doc, "Tasks", String(tasks.length), margin + usableW / 2 + 10, y + 16);
+  // ── Task summary table ────────────────────────────────────────
+  need(30 + tasks.length * 18);
+  drawLabel(doc, "Summary", margin, y);
+  y += 14;
 
-  y += 52;
+  // Table header
+  const sc1 = margin + 8;
+  const sc2 = margin + usableW * 0.45;
+  const sc3 = margin + usableW * 0.65;
+  const sc4 = margin + usableW * 0.85;
 
-  // ── Task overview — minimal status dots ─────────────────────────
-  let cx = margin;
-  tasks.forEach((t, i) => {
-    const col = statusColor(t.status);
-    const bgCol = statusBgColor(t.status);
-    const label = `Task ${i + 1}`;
-    const tw = doc.getTextWidth(label) + 20;
+  doc.setFillColor(...BG_ALT);
+  doc.rect(margin, y, usableW, 16, "F");
+  doc.setDrawColor(...RULE);
+  doc.setLineWidth(0.3);
+  doc.line(margin, y + 16, margin + usableW, y + 16);
 
-    doc.setFillColor(...bgCol);
-    doc.roundedRect(cx, y, tw, 18, 3, 3, "F");
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(7);
+  doc.setTextColor(...MEDIUM);
+  doc.text("TASK", sc1, y + 11);
+  doc.text("LANGUAGE", sc2, y + 11);
+  doc.text("STATUS", sc3, y + 11);
+  if (showMarks !== false) doc.text("MARKS", sc4, y + 11);
+  y += 16;
+
+  tasks.forEach((t, idx) => {
+    const rowH = 16;
+    if (idx % 2 === 1) {
+      doc.setFillColor(...BG_ALT);
+      doc.rect(margin, y, usableW, rowH, "F");
+    }
+    doc.setDrawColor(...RULE);
+    doc.setLineWidth(0.15);
+    doc.line(margin, y + rowH, margin + usableW, y + rowH);
+
+    const textY = y + 11;
+
+    // Task name (truncated)
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
+    doc.setTextColor(...DARK);
+    const taskLabel = `${idx + 1}. ${cleanText(t.taskTitle)}`;
+    const maxLabelW = usableW * 0.4;
+    const truncLabel = doc.getTextWidth(taskLabel) > maxLabelW
+      ? taskLabel.slice(0, Math.floor(taskLabel.length * maxLabelW / doc.getTextWidth(taskLabel)) - 2) + "..."
+      : taskLabel;
+    doc.text(truncLabel, sc1, textY);
+
+    // Language
+    doc.setTextColor(...MEDIUM);
+    doc.text(t.language.toUpperCase(), sc2, textY);
+
+    // Status
     doc.setFont("helvetica", "bold");
     doc.setFontSize(7.5);
-    doc.setTextColor(col[0], col[1], col[2]);
-    doc.text(label, cx + 10, y + 12);
-    cx += tw + 6;
+    doc.setTextColor(...DARK);
+    doc.text(t.status.replace(/_/g, " ").toUpperCase(), sc3, textY);
+
+    // Marks
+    if (showMarks !== false) {
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8);
+      doc.setTextColor(...DARK);
+      const marksStr = t.marks !== undefined
+        ? `${t.marks}${t.maxMarks !== undefined ? ` / ${t.maxMarks}` : ""}`
+        : "-";
+      doc.text(marksStr, sc4, textY);
+    }
+
+    y += rowH;
   });
-  y += 28;
+  y += 12;
 
-  // ── Per-task sections ───────────────────────────────────────────
+  // ── Per-task detail sections ──────────────────────────────────
   tasks.forEach((task, idx) => {
-    need(60);
+    need(50);
 
-    // Task header — clean card with left accent
-    const col = statusColor(task.status);
-    doc.setFillColor(col[0], col[1], col[2]);
-    doc.roundedRect(margin, y, 3, 40, 1.5, 1.5, "F"); // left accent
-
-    doc.setFillColor(...BG_CARD);
-    doc.roundedRect(margin + 5, y, usableW - 5, 40, 4, 4, "F");
-    doc.setDrawColor(...BORDER);
-    doc.setLineWidth(0.3);
-    doc.roundedRect(margin + 5, y, usableW - 5, 40, 4, 4, "S");
+    // Task header — thin rule with title
+    doc.setDrawColor(...DARK);
+    doc.setLineWidth(0.8);
+    doc.line(margin, y, margin + usableW, y);
+    y += 14;
 
     doc.setFont("helvetica", "bold");
     doc.setFontSize(11);
-    doc.setTextColor(...TEXT_D);
-    doc.text(`Task ${idx + 1} — ${cleanText(task.taskTitle)}`, margin + 16, y + 16);
+    doc.setTextColor(...BLACK);
+    doc.text(`${idx + 1}. ${cleanText(task.taskTitle)}`, margin, y);
+    y += 6;
 
-    // Meta row
+    // Meta line
     doc.setFont("helvetica", "normal");
     doc.setFontSize(8);
-    doc.setTextColor(...TEXT_M);
+    doc.setTextColor(...MEDIUM);
     const meta = [
-      task.language,
+      task.language.toUpperCase(),
       task.submissionDate,
+      task.status.replace(/_/g, " ").toUpperCase(),
       showMarks !== false ? (
         task.marks !== undefined
-          ? `Marks: ${task.marks}${task.maxMarks !== undefined ? ` / ${task.maxMarks}` : ""}`
+          ? `${task.marks}${task.maxMarks !== undefined ? ` / ${task.maxMarks}` : ""} marks`
           : "Not graded"
       ) : null,
-    ].filter(Boolean).join("   ·   ");
-    doc.text(meta, margin + 16, y + 30);
+    ].filter(Boolean).join("  ·  ");
+    doc.text(meta, margin, y + 8);
+    y += 18;
 
-    // Status pill
-    drawStatusPill(doc, task.status, margin + usableW - 70, y + 18);
-
-    y += 50;
+    // Test case results
+    if (task.testCaseResults && task.testCaseResults.length > 0) {
+      need(50);
+      drawLabel(doc, "Test Cases", margin, y);
+      y += 14;
+      y = drawTestCaseTable(doc, task.testCaseResults, margin, y, usableW, pageHeight, margin);
+      y += 4;
+    }
 
     // Plot images
     if (task.plotImages?.length) {
       need(50);
-      drawSectionLabel(doc, "Generated Plots", margin, y, usableW);
+      drawLabel(doc, "Plots", margin, y);
       y += 14;
       for (const img of task.plotImages) {
         need(270);
@@ -520,27 +721,21 @@ export async function generateCombinedPdfClient({
       }
     }
 
-    // Submitted code
+    // Code
     need(50);
-    drawSectionLabel(doc, `Submitted Code  ·  ${task.language}`, margin, y, usableW);
+    drawLabel(doc, `Code (${task.language.toUpperCase()})`, margin, y);
     y += 14;
     y = drawCodeBlock(doc, task.code, margin, y, usableW, pageHeight, margin);
 
     // Output
     if (task.output) {
       need(50);
-      drawSectionLabel(doc, "Program Output", margin, y, usableW);
+      drawLabel(doc, "Output", margin, y);
       y += 14;
       y = drawOutputBlock(doc, task.output, margin, y, usableW, pageHeight, margin);
     }
 
-    // Separator between tasks
-    if (idx < tasks.length - 1) {
-      doc.setDrawColor(...BORDER);
-      doc.setLineWidth(0.3);
-      doc.line(margin + 20, y + 2, pageWidth - margin - 20, y + 2);
-      y += 12;
-    }
+    y += 6;
   });
 
   addFooters(doc, pageWidth, pageHeight, margin);

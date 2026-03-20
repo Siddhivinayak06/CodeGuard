@@ -444,7 +444,11 @@ function StudentSubmissionsPageContent() {
         submissionDate: new Date(sub.created_at).toLocaleDateString(),
         status: sub.status,
         marks: sub.marks_obtained ?? undefined,
+        maxMarks: sub.level_max_marks ?? sub.max_marks ?? undefined,
         showMarks: !sub.is_exam,
+        subjectName: sub.subject_name,
+        subjectCode: sub.subject_code,
+        testCaseResults: sub.testCaseResults,
         filename: `${sub.practical_title.replace(/\s+/g, "_")}_Report.pdf`
       });
     } catch (e) {
@@ -462,6 +466,8 @@ function StudentSubmissionsPageContent() {
         studentName: studentDetails?.name || "Student",
         rollNumber: studentDetails?.roll_number || "N/A",
         practicalTitle: group.practical_title,
+        subjectName: group.subject_name,
+        subjectCode: group.subject_code,
         tasks: group.submissions.map((sub) => ({
           taskTitle: sub.level_title || sub.practical_title,
           code: sub.code,
@@ -471,6 +477,7 @@ function StudentSubmissionsPageContent() {
           marks: sub.marks_obtained ?? undefined,
           maxMarks: sub.level_max_marks ?? sub.max_marks ?? undefined,
           output: sub.output,
+          testCaseResults: sub.testCaseResults,
         })),
         showMarks: !group.is_exam,
         filename: `${group.practical_title.replace(/\s+/g, "_")}_Combined_Report.pdf`,
