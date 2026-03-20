@@ -1289,7 +1289,7 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
             level: l.level || `Set${pIdx + 1}_Task${idx + 1}`,
             title: l.title || `Task ${idx + 1}`,
             description: l.description || "",
-            max_marks: Number(l.max_marks || p.max_marks) || 5, // Fallback to practical max_marks
+            max_marks: Number(l.max_marks || p.max_marks) || 5,
             reference_code: l.reference_code || p.reference_code || "",
             starter_code: l.starter_code || p.starter_code || "",
             testCases: (l.testCases || p.testCases || []).map((tc: any) => ({
@@ -1338,18 +1338,91 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
           if (p.sets && p.sets.length > 0) {
             allMappedSets = [...allMappedSets, ...p.sets.map((s: any) => ({
               set_name: s.set_name || `Set ${pIdx + 1}`,
-              level_names: s.level_names || currentPracticalLevels.map(l => l.title || l.level)
+              level_names: s.level_names || currentPracticalLevels.map((l: any) => l.title || l.level)
             }))];
           } else {
             // Create a set for this practical
             const setName = p.title?.startsWith("Set") ? p.title : `Set ${p.practical_number || pIdx + 1}`;
             allMappedSets.push({
               set_name: setName,
-              level_names: currentPracticalLevels.map(l => l.title || l.level)
+              level_names: currentPracticalLevels.map((l: any) => l.title || l.level)
             });
           }
         }
       });
+
+      // POST-PROCESSING: Ensure unique level titles and proper set↔level mapping
+      if (isExam && allMappedLevels.length > 0) {
+        // Step A: Ensure all level titles are globally unique
+        const titleCounts = new Map<string, number>();
+        allMappedLevels.forEach((l: any) => {
+          const t = (l.title || "").trim().toLowerCase();
+          titleCounts.set(t, (titleCounts.get(t) || 0) + 1);
+        });
+
+        const titleSeen = new Map<string, number>();
+        const oldTitleToNew = new Map<string, string>(); // Track renames for set sync
+        allMappedLevels = allMappedLevels.map((l: any) => {
+          const t = (l.title || "").trim();
+          const tLower = t.toLowerCase();
+          if ((titleCounts.get(tLower) || 0) > 1) {
+            const count = (titleSeen.get(tLower) || 0) + 1;
+            titleSeen.set(tLower, count);
+            const levelPrefix = l.level || `Variant ${count}`;
+            const newTitle = `${t} (${levelPrefix})`;
+            oldTitleToNew.set(t, newTitle); // Only last rename stored, but we handle below
+            l.title = newTitle;
+          }
+          return l;
+        });
+
+        // Step B: Re-sync set level_names with actual level titles
+        const allLevelTitles = new Set(allMappedLevels.map((l: any) => l.title));
+
+        allMappedSets = allMappedSets.map((s: any) => {
+          const existingValid = (s.level_names || []).filter((name: string) => allLevelTitles.has(name));
+          
+          if (existingValid.length > 0) {
+            // Some level_names already match — keep them
+            s.level_names = existingValid;
+          } else {
+            // No direct match — try matching by level key prefix (e.g. "Set A - Q1" starts with "Set A")
+            const sNameLower = (s.set_name || "").trim().toLowerCase();
+            const matchedByKey = allMappedLevels
+              .filter((l: any) => {
+                const levelKey = (l.level || "").toLowerCase();
+                return levelKey.startsWith(sNameLower);
+              })
+              .map((l: any) => l.title);
+            
+            if (matchedByKey.length > 0) {
+              s.level_names = matchedByKey;
+            }
+            // else keep original level_names as fallback
+          }
+
+          return s;
+        });
+
+        // Deduplicate sets by name (merge level_names)
+        const setMap = new Map<string, any>();
+        allMappedSets.forEach((s: any) => {
+          const key = (s.set_name || "").trim();
+          if (!setMap.has(key)) {
+            setMap.set(key, { ...s });
+          } else {
+            const existing = setMap.get(key)!;
+            existing.level_names = Array.from(new Set([
+              ...(existing.level_names || []),
+              ...(s.level_names || [])
+            ]));
+          }
+        });
+        allMappedSets = Array.from(setMap.values());
+      }
+
+      console.log("[Autofill] Post-processed levels:", allMappedLevels.map((l: any) => ({ level: l.level, title: l.title })));
+      console.log("[Autofill] Post-processed sets:", allMappedSets.map((s: any) => ({ set_name: s.set_name, level_names: s.level_names })));
 
       // Update basic details from the first practical
       console.log("[Autofill] Found practicals count:", practicals.length);
@@ -1362,7 +1435,7 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
         title: firstPractical.title || form.title,
         description: firstPractical.description || form.description,
         language: firstPractical.language || form.language || "c",
-        max_marks: Number(firstPractical.max_marks || (allMappedLevels.reduce((s, l) => s + l.max_marks, 0))) || form.max_marks,
+        max_marks: Number(firstPractical.max_marks || (allMappedLevels.reduce((s: number, l: any) => s + l.max_marks, 0))) || form.max_marks,
         practical_number: firstPractical.practical_number || form.practical_number,
         is_exam: isExam
       };

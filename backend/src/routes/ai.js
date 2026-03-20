@@ -154,7 +154,67 @@ router.post(
         const itemType = isExam
           ? 'exam questions and sets'
           : 'practical experiments';
-        const prompt = `
+
+        // Use a different prompt for exams vs practicals
+        const prompt = isExam
+          ? `
+You are a precision PDF-to-Code mapping bot for a competitive programming / exam platform.
+Analyze the provided exam paper text. The paper typically has multiple SETS (e.g. "Set A", "Set B", etc.), each containing numbered questions with marks.
+
+Your job: Extract ALL questions from ALL sets into a SINGLE JSON object.
+
+OUTPUT JSON STRUCTURE (STRICT - return ONLY this JSON, no markdown, no explanation):
+{
+  "practicals": [
+    {
+      "practical_number": 1,
+      "title": "Exam",
+      "description": "",
+      "max_marks": {Total marks of the largest set},
+      "duration_minutes": null,
+      "enableLevels": true,
+      "language": "c",
+      "levels": [
+        {
+          "level": "{SetName} - Q{number}",
+          "title": "{Unique descriptive title derived from the problem statement}",
+          "description": "{FULL problem statement copied verbatim from PDF, including all examples, constraints, and sub-parts}",
+          "max_marks": {Exact marks from PDF},
+          "reference_code": "Complete working solution in C that reads from stdin and writes to stdout",
+          "starter_code": "Incomplete template with function signature and TODO comments for student to fill in",
+          "testCases": [{"input": "{sample input}", "expected_output": "{sample output}"}]
+        }
+      ],
+      "sets": [
+        {
+          "set_name": "Set A",
+          "level_names": ["{EXACT same title strings as used in levels[].title for this set's questions}"]
+        },
+        {
+          "set_name": "Set B",
+          "level_names": ["{EXACT same title strings as used in levels[].title for this set's questions}"]
+        }
+      ]
+    }
+  ]
+}
+
+CRITICAL RULES:
+1. **ALL levels go in ONE practicals entry.** Do NOT create separate practicals for each set.
+2. **Globally unique titles:** Each level MUST have a unique "title". If two questions in different sets are similar, make titles distinct (e.g. "Card Game Probability (Set A)" vs "Browser History Navigation (Set B)").
+3. **level field format:** Use "{SetName} - Q{number}" format (e.g. "Set A - Q1", "Set B - Q2") to keep them globally unique.
+4. **sets[].level_names MUST exactly match levels[].title:** The strings in level_names must be character-for-character identical to the corresponding level's "title" field. This is critical for the frontend mapping.
+5. **LITERAL MARKS:** Extract exact marks as they appear in the PDF.
+6. **Sub-parts:** If a question has sub-parts (a), (b), (c) with separate marks, combine them into ONE level. Include all sub-parts in the description. Sum their marks for max_marks.
+7. **Sample I/O:** Include ALL examples from the PDF in the description AND as testCases.
+8. **NO HALLUCINATIONS:** Use only actual data from the provided text.
+9. **reference_code:** Must be complete, compilable C code using stdin/stdout. For algorithm/dry-run questions, write a program that solves the core problem.
+10. **starter_code:** Must be an incomplete template with the function signature and TODO placeholders.
+
+TEXT:
+${chunkText}
+`
+          : `
 You are a precision PDF-to-Code mapping bot for a competitive programming platform.
 Analyze the provided text and extract ALL coding problems/tasks into a valid JSON object.
 
@@ -163,41 +223,25 @@ OUTPUT JSON STRUCTURE (STRICT):
   "practicals": [
     {
       "practical_number": {Actual number (e.g. 1)}, 
-      "title": "{Actual Set Name (e.g. Set A)}", 
-      "description": "{General context for this set from PDF}",
-      "max_marks": {Actual total marks for this set from PDF},
-      "duration_minutes": {Actual time},
-      "enableLevels": true,
+      "title": "{Actual Problem Title}", 
+      "description": "{Full problem statement...}\\n\\nSample Input: {input}\\nSample Output: {output}", 
+      "max_marks": {Actual marks},
+      "enableLevels": false,
       "language": "c",
-      "levels": [
-        { 
-          "level": "Task 1", 
-          "title": "{Actual Problem 1 Name}", 
-          "description": "{Full statement...}\\n\\nSample Input: {input}\\nSample Output: {output}", 
-          "max_marks": {Actual marks for this task},
-          "reference_code": "MANDATORY: Complete solution code that reads from stdin and writes to stdout.", 
-          "testCases": [{ "input": "{input}", "expected_output": "{output}" }] 
-        }
-      ],
-      "sets": [
-        { "set_name": "{Actual Set Name}", "level_names": ["{Actual Problem Name}"] }
-      ]
-    },
-    {
-      "practical_number": {Actual number (e.g. 2)}, 
-      "title": "{Actual Set Name (e.g. Set B)}", 
-      "max_marks": {Actual total marks for this set},
-      "levels": [ { "level": "Task 1", "title": "{Problem name}", "max_marks": {marks}, "reference_code": "...", "testCases": [...] } ],
-      "sets": [ { "set_name": "{Set Name}", "level_names": ["{Problem Name}"] } ]
+      "reference_code": "MANDATORY: Complete solution code that reads from stdin and writes to stdout.",
+      "starter_code": "Incomplete template with function signature and TODO comments.",
+      "testCases": [{ "input": "{input}", "expected_output": "{output}" }]
     }
   ]
 }
 
 CRITICAL EXECUTION RULES:
-1. **LITERAL MARKS & COUNTS:** You MUST extract the exact Marks and number of Sets exactly as they appear in the PDF. Do NOT use default values or perform your own calculations.
-2. **DISTINCT SETS:** Every distinct "Set X" or "Task X" section in the PDF MUST be a separate entry in the 'practicals' array. Do NOT merge 8 sets into one.
-3. **STRICT I/O CONSISTENCY:** The 'Sample Input' and 'Sample Output' in the description MUST exactly match the first 'testCase'.
+1. **LITERAL MARKS & COUNTS:** Extract exact Marks as they appear in the PDF.
+2. **DISTINCT PROBLEMS:** Every distinct problem/experiment MUST be a separate entry.
+3. **STRICT I/O CONSISTENCY:** Sample Input/Output in description MUST match the first testCase.
 4. **NO HALLUCINATIONS:** Use only actual data from the provided text.
+5. **reference_code:** Must be complete, compilable C code using stdin/stdout.
+6. **starter_code:** Must be an incomplete template with TODO placeholders.
 
 TEXT:
 ${chunkText}
@@ -356,9 +400,112 @@ ${chunkText}
         }
       });
 
-      const practicals = Array.from(practicalsMap.values()).sort(
+      let practicals = Array.from(practicalsMap.values()).sort(
         (a, b) => a.practical_number - b.practical_number
       );
+
+      // 5. Post-processing for exams: ensure level titles are unique and sets map correctly
+      if (isExam) {
+        practicals = practicals.map((p) => {
+          if (!p.levels || p.levels.length === 0) return p;
+
+          // Step A: Ensure all level titles are globally unique
+          const titleCounts = new Map();
+          p.levels.forEach((l) => {
+            const t = (l.title || l.level || '').trim();
+            titleCounts.set(t, (titleCounts.get(t) || 0) + 1);
+          });
+
+          // For duplicate titles, append the level key to make them unique
+          const titleSeen = new Map();
+          p.levels = p.levels.map((l) => {
+            const t = (l.title || l.level || '').trim();
+            if (titleCounts.get(t) > 1) {
+              const count = (titleSeen.get(t) || 0) + 1;
+              titleSeen.set(t, count);
+              // Use the level key (e.g. "Set A - Q1") as part of the title
+              const levelPrefix = l.level || `Variant ${count}`;
+              l.title = `${t} (${levelPrefix})`;
+            }
+            return l;
+          });
+
+          // Step B: Build a map from level key -> title for set mapping
+          const levelKeyToTitle = new Map();
+          p.levels.forEach((l) => {
+            if (l.level) levelKeyToTitle.set(l.level, l.title || l.level);
+          });
+
+          // Step C: Re-derive sets[].level_names to match actual level titles
+          if (p.sets && p.sets.length > 0) {
+            const setPrefix = (setName) => {
+              // Extract set identifier (e.g. "Set A" -> "Set A")
+              return (setName || '').trim();
+            };
+
+            p.sets = p.sets.map((s) => {
+              const sName = setPrefix(s.set_name);
+
+              // Strategy 1: Try to keep existing level_names if they match actual titles
+              const allTitles = new Set(p.levels.map((l) => l.title));
+              const validNames = (s.level_names || []).filter((n) =>
+                allTitles.has(n)
+              );
+
+              if (validNames.length > 0) {
+                s.level_names = validNames;
+              } else {
+                // Strategy 2: Match levels whose level key starts with the set name
+                const matchedTitles = p.levels
+                  .filter((l) => {
+                    const lKey = (l.level || '').toLowerCase();
+                    return lKey.startsWith(sName.toLowerCase());
+                  })
+                  .map((l) => l.title || l.level);
+
+                if (matchedTitles.length > 0) {
+                  s.level_names = matchedTitles;
+                }
+                // else keep original level_names as fallback
+              }
+
+              return s;
+            });
+          } else {
+            // No sets provided by AI - create them from level keys
+            // Group levels by their set prefix (e.g. "Set A - Q1" -> "Set A")
+            const setGroups = new Map();
+            p.levels.forEach((l) => {
+              const lKey = l.level || '';
+              const dashIdx = lKey.indexOf(' - ');
+              const groupName =
+                dashIdx > 0 ? lKey.substring(0, dashIdx).trim() : 'Default Set';
+              if (!setGroups.has(groupName)) setGroups.set(groupName, []);
+              setGroups.get(groupName).push(l.title || l.level);
+            });
+
+            if (setGroups.size > 0) {
+              p.sets = Array.from(setGroups.entries()).map(
+                ([name, titles]) => ({
+                  set_name: name,
+                  level_names: titles,
+                })
+              );
+            }
+          }
+
+          logger.info(
+            `[PostProcess] Practical "${p.title}": ${p.levels.length} levels, ${(p.sets || []).length} sets`
+          );
+          (p.sets || []).forEach((s) => {
+            logger.info(
+              `  Set "${s.set_name}": level_names=[${s.level_names.join(', ')}]`
+            );
+          });
+
+          return p;
+        });
+      }
 
       return res.json({ practicals });
     } catch (err) {
