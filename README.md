@@ -1,6 +1,7 @@
 # 🧠 CodeGuard – Online Code Evaluation Platform
 
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
+![Version](https://img.shields.io/badge/version-3.0.0-orange.svg)
 ![Status](https://img.shields.io/badge/status-production--ready-success)
 ![Docker](https://img.shields.io/badge/docker-supported-blue)
 
@@ -8,31 +9,30 @@
 
 ---
 
+## 🔥 What's New in 3.0
+
+- **🚀 Faculty Dashboard 2.0**: Completely optimized dashboard with **zero-latency TBT** (Total Blocking Time) and real-time performance analytics.
+- **✨ AI-Driven Diagnostics**: Enhanced Gemini 1.5 Flash integration provides deeper code analysis, automated hints, and instant error resolution suggestions.
+- **🛠️ Interactive STDIN Support**: Fully overhauled execution engine using `node-pty` for a true terminal experience with real-time user input.
+- **📱 Fluid UI Refinement**: Responsive Recharts integration and adaptive navigation menus for seamless cross-device evaluation.
+
+---
+
 ## 🚀 Features
 
 ### Core Execution
 - **⚡ Zero-Latency Execution** – "Pre-warmed" container pools ensure code runs instantly without cold start delays.
-- **🔒 Secure Sandboxing** – All code executes in isolated, resource-constrained Docker containers (Alpine Linux) to prevent malicious activity.
+- **🔒 Secure Sandboxing** – All code executes in isolated, resource-constrained Docker containers with a custom **Seccomp** profile and resource limits.
+- **⌨️ Interactive Terminal** – Real-time partial output streaming via WebSockets and `node-pty`, supporting interactive user input and infinite loop protection.
 - **📝 Advanced Editor** – Monaco-based rich text editor with glassmorphism UI, smart language switching, and smooth resizing capabilities.
-- **📶 Interactive Terminal** – WebSocket-based terminal facilitating real-time partial output streaming, infinite loop protection, and interactive input.
-
-### Student Experience
-- **🔄 Smart Reattempt System** – Automated handling of practical reattempts with integrated approval workflow for failed submissions.
-- **📱 Adaptive Navigation** – Mobile-optimized subject filtering and horizontal scroll views for efficient access on any device.
-- **📈 Real-time Progress** – Instant feedback on submissions with detailed test case analysis and execution metrics.
 
 ### AI & Intelligence
-- **🤖 Clinical AI Intelligence** – Integrated Gemini AI for smart error diagnostics, code explanation, and automated hints.
+- **🤖 Clinical AI Intelligence** – Integrated Gemini AI for automated code explanations, personalized feedback, and predictive error detection.
 
-### User Experience
-- **✨ Premium UI** – Modern glassmorphism design with fluid animations and responsive layouts.
-- **📱 Fully Responsive** – Mobile-first design with card/table hybrid views that adapt to any screen size.
-- **⏳ Skeleton Loaders** – High-fidelity skeleton components for instant page rendering without blocking loaders.
-
-### Administration
-- **👩‍🏫 Faculty & Admin Dashboards** – Specialized interfaces for managing classes, students, and system resources.
-- **📊 Detailed Analytics** – Track submission history, performance metrics, and automated grading results.
-- **📥 Bulk User Import** – Import users from CSV or Excel files with drag-and-drop support.
+### Student & Faculty Experience
+- **🔄 Smart Reattempt System** – Automated approval workflows for practical reattempts.
+- **📈 Advanced Analytics** – Real-time Recharts-powered visualization for student progress and submission heatmaps.
+- **📥 Bulk User Import** – High-performance CSV/Excel processing with validated record-by-record ingestion.
 
 ---
 
@@ -40,11 +40,11 @@
 
 | Domain | Technologies |
 |:---|:---|
-| **Frontend** | **Next.js 16**, React 19, TypeScript, Tailwind CSS, Framer Motion, ShadCN UI |
-| **Backend** | **Node.js**, Express.js 5, WebSocket (ws), BullMQ, Redis, Zod |
-| **Infrastructure** | **Docker**, Docker Compose, Supabase (PostgreSQL + Auth) |
-| **AI** | **Google Gemini 1.5** (Flash model) for error analysis and coding assistance |
-| **Runtimes** | Python 3.12, OpenJDK 21, GCC (C/C++) on Alpine Linux |
+| **Frontend** | **Next.js 16**, React 19, TypeScript, Tailwind CSS, Framer Motion, ShadCN UI, Recharts |
+| **Backend** | **Node.js**, Express.js 5, WebSocket (ws), BullMQ, Redis, node-pty |
+| **Infrastructure** | **Docker**, Docker Compose, Supabase (PostgreSQL + Auth), Seccomp |
+| **AI** | **Google Gemini 1.5 Flash** for deep code intelligence |
+| **Runtimes** | Python 3.12, OpenJDK 21, GCC (C/C++) with custom interactive wrappers |
 
 ---
 
@@ -175,6 +175,7 @@ flowchart LR
       API[Express API]
       WS[WebSocket Gateway]
       Q[BullMQ Workers]
+      PTY[node-pty Subprocesses]
    end
 
    subgraph EX[Execution Layer]
