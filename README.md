@@ -110,6 +110,8 @@ DOCKER_MEMORY_LIMIT=128m
 DOCKER_CPU_LIMIT=0.5
 DOCKER_POOL_SIZE_PYTHON=2
 EXECUTION_TIMEOUT=15
+# Specify 'runsc' for gVisor execution on Production Linux servers
+DOCKER_RUNTIME=
 ```
 
 ### Auth Behavior by Environment
