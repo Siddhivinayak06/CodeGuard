@@ -142,7 +142,9 @@ class PoolManager {
       const proc = spawn('docker', runArgs);
       let stderrOut = '';
       if (proc.stderr) {
-        proc.stderr.on('data', (d) => { stderrOut += d.toString(); });
+        proc.stderr.on('data', (d) => {
+          stderrOut += d.toString();
+        });
       }
       proc.on('error', (err) => reject(err));
       proc.on('close', (code) => {
@@ -150,8 +152,14 @@ class PoolManager {
           this.pools[lang].push({ id: containerName, activeWorkers: 0 });
           resolve(containerName);
         } else {
-          logger.error(`Failed to create container for ${lang}. Code: ${code}. Stderr: ${stderrOut}`);
-          reject(new Error(`Docker run failed with code ${code}. Stderr: ${stderrOut}`));
+          logger.error(
+            `Failed to create container for ${lang}. Code: ${code}. Stderr: ${stderrOut}`
+          );
+          reject(
+            new Error(
+              `Docker run failed with code ${code}. Stderr: ${stderrOut}`
+            )
+          );
         }
       });
     });
@@ -165,7 +173,9 @@ class PoolManager {
     }
 
     const pool = this.pools[lang] || this.pools.cpp;
-    const available = pool.find((c) => c.activeWorkers < config.docker.workersPerContainer);
+    const available = pool.find(
+      (c) => c.activeWorkers < config.docker.workersPerContainer
+    );
 
     if (available) {
       available.activeWorkers++;
@@ -234,8 +244,11 @@ class PoolManager {
 
     if (container) {
       container.activeWorkers = Math.max(0, container.activeWorkers - 1);
-      
-      if (this.waiting[lang].length > 0 && container.activeWorkers < config.docker.workersPerContainer) {
+
+      if (
+        this.waiting[lang].length > 0 &&
+        container.activeWorkers < config.docker.workersPerContainer
+      ) {
         const next = this.waiting[lang].shift();
         container.activeWorkers++;
         next(containerId);

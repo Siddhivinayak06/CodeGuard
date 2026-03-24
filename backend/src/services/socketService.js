@@ -41,7 +41,7 @@ const handleConnection = async (ws, req) => {
   try {
     const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
     const token = url.searchParams.get('token');
-    
+
     if (!token) {
       logger.warn('WebSocket connection attempt without token');
       ws.close(1008, 'Unauthorized: Missing token');
@@ -51,16 +51,21 @@ const handleConnection = async (ws, req) => {
     const { getSupabaseClient } = require('../middleware/authMiddleware');
     const supabase = getSupabaseClient();
     if (!supabase) {
-       logger.error('Supabase client not available for WebSocket auth');
-       ws.close(1011, 'Internal Server Error');
-       return;
+      logger.error('Supabase client not available for WebSocket auth');
+      ws.close(1011, 'Internal Server Error');
+      return;
     }
-    const { data: { user }, error } = await supabase.auth.getUser(token);
-    
+    const {
+      data: { user },
+      error,
+    } = await supabase.auth.getUser(token);
+
     if (error || !user) {
-       logger.warn('WebSocket unauthorized: invalid token', { error: error?.message });
-       ws.close(1008, 'Unauthorized: Invalid token');
-       return;
+      logger.warn('WebSocket unauthorized: invalid token', {
+        error: error?.message,
+      });
+      ws.close(1008, 'Unauthorized: Invalid token');
+      return;
     }
   } catch (authErr) {
     logger.error('Error during WebSocket authentication', authErr);
