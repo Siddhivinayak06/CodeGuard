@@ -60,6 +60,7 @@ const {
   isDockerAvailable,
 } = require('../utils/runtimeDetector');
 const poolManager = require('../services/poolManager');
+const queueService = require('../services/queueService');
 
 // sanity checks: ensure modules are functions
 if (typeof runBatchCode !== 'function') {
@@ -140,7 +141,6 @@ router.post('/', async (req, res) => {
         } else {
           // Queue-based execution (requires Redis)
           logger.info(`Queuing batch execution for ${lang}...`);
-          const queueService = require('../services/queueService');
           const job = await queueService.addJob({
             type: 'batch',
             code,
@@ -226,7 +226,6 @@ router.post('/', async (req, res) => {
       } else {
         // Queue-based execution (requires Redis)
         logger.info(`Queuing single execution for ${lang}...`);
-        const queueService = require('../services/queueService');
         const job = await queueService.addJob({
           type: 'single',
           code,

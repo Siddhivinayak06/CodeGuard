@@ -5,6 +5,7 @@ import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import "@xterm/xterm/css/xterm.css";
 import { useTheme } from "next-themes";
+import { createBrowserClient } from "@supabase/ssr";
 import { FileData } from "./FileExplorer";
 
 interface InteractiveTerminalProps {
@@ -179,10 +180,24 @@ const InteractiveTerminal = forwardRef<
       let pingInterval: NodeJS.Timeout;
 
       // WebSocket setup with debounce and heartbeat
-      const connectTimeout = setTimeout(() => {
+      const connectTimeout = setTimeout(async () => {
         if (!term.current) return;
 
-        const ws = new WebSocket(wsEndpoint);
+        let finalEndpoint = wsEndpoint;
+        try {
+          const supabase = createBrowserClient(
+            process.env.NEXT_PUBLIC_SUPABASE_URL!,
+            process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+          );
+          const { data: { session } } = await supabase.auth.getSession();
+          if (session?.access_token) {
+            finalEndpoint = `${wsEndpoint}?token=${session.access_token}`;
+          }
+        } catch (err) {
+          console.warn("Failed to attach auth token to websocket:", err);
+        }
+
+        const ws = new WebSocket(finalEndpoint);
         socket.current = ws;
 
         // Heartbeat interval

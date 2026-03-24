@@ -13,6 +13,7 @@ const envSchema = z.object({
   DOCKER_PIDS_LIMIT: z.string().default('64'),
   DOCKER_JAVA_MEMORY_LIMIT: z.string().default('128m'),
   DOCKER_JAVA_PIDS_LIMIT: z.string().default('64'),
+  DOCKER_RUNTIME: z.string().default(''),
   RATE_LIMIT_MAX: z.string().transform(Number).default('500'),
   MAX_CONCURRENT_CONNECTIONS: z.string().transform(Number).default('200'),
   CORS_ORIGIN: z.string().default('http://localhost:3000'),
@@ -69,6 +70,7 @@ module.exports = {
     pidsLimit: env.DOCKER_PIDS_LIMIT,
     javaMemory: env.DOCKER_JAVA_MEMORY_LIMIT,
     javaPidsLimit: env.DOCKER_JAVA_PIDS_LIMIT,
+    runtime: env.DOCKER_RUNTIME,
     pool: {
       cpp: env.DOCKER_POOL_SIZE_CPP,
       python: env.DOCKER_POOL_SIZE_PYTHON,

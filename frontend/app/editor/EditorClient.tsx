@@ -4,7 +4,16 @@ import React, { useEffect, useRef, useState, useMemo } from "react";
 import axios from "axios";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import CodeEditor from "@/components/editor/CodeEditor";
+import dynamic from "next/dynamic";
+
+const CodeEditor = dynamic(() => import("@/components/editor/CodeEditor"), {
+  ssr: false,
+  loading: () => (
+    <div className="h-full w-full flex items-center justify-center bg-muted/20 animate-pulse text-muted-foreground font-mono text-sm">
+      Loading Editor...
+    </div>
+  ),
+});
 import useProctoring from "@/hooks/useProctoring";
 import { useSessionValidator } from "@/hooks/useSessionValidator";
 import { ModeToggle } from "@/components/layout/ModeToggle";

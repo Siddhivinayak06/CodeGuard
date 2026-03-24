@@ -2,8 +2,15 @@
 
 import { useState, useRef, useEffect, useMemo } from "react";
 import dynamic from "next/dynamic";
-import CodeEditor from "@/components/editor/CodeEditor";
-import { ModeToggle } from "@/components/layout/ModeToggle";
+
+const CodeEditor = dynamic(() => import("@/components/editor/CodeEditor"), {
+  ssr: false,
+  loading: () => (
+    <div className="h-full w-full flex items-center justify-center bg-muted/20 animate-pulse text-muted-foreground font-mono text-sm">
+      Loading Editor...
+    </div>
+  ),
+});
 import { ChevronDown, Loader2, Sparkles } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";

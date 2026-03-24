@@ -213,7 +213,7 @@ module.exports = async function runBatchCode(
       logger.info(`Releasing container ${containerId} back to pool...`);
       // Use fire-and-forget release or await it?
       // PoolManager.release handles its own internal cleanup.
-      poolManager.release(poolLang, containerId);
+      await poolManager.release(poolLang, containerId);
     }
   }
 };

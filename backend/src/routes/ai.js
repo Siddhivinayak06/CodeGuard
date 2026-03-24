@@ -4,6 +4,7 @@ const aiService = require('../services/aiService');
 const logger = require('../utils/logger');
 const multer = require('multer');
 const { PDFParse } = require('pdf-parse');
+const { requireRole } = require('../middleware/roleMiddleware');
 
 // Configure multer for memory storage
 const upload = multer({
@@ -90,6 +91,7 @@ router.post('/chat2', async (req, res) => {
 // New endpoint for bulk generating practicals from PDF
 router.post(
   '/generate-bulk-practicals-from-pdf',
+  requireRole(['admin', 'faculty']),
   upload.single('pdf'),
   async (req, res) => {
     try {

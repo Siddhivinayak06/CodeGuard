@@ -9,8 +9,14 @@ import { cookies } from "next/headers";
 export async function createClient() {
   const cookieStore = await cookies();
 
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://placeholder.supabase.co";
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "placeholder-key";
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+  if (!supabaseUrl || !supabaseAnonKey) {
+    throw new Error(
+      "Missing Supabase environment variables. Please check your .env file."
+    );
+  }
 
   return createServerClient<Database>(
     supabaseUrl,
@@ -23,10 +29,12 @@ export async function createClient() {
         setAll(cookiesToSet) {
           try {
             cookiesToSet.forEach(({ name, value, options }) =>
-              cookieStore.set(name, value, { ...options, maxAge: 7200 }),
+              // Let Supabase handle the correct maxAge for refresh/access tokens
+              cookieStore.set(name, value, options),
             );
           } catch {
-            // Safe to ignore if called from a Server Component
+            // Safe to ignore if called from a Server Component.
+            // Ensure you have middleware.ts refreshing the user session!
           }
         },
       },

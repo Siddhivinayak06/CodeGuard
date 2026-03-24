@@ -4,7 +4,16 @@ import { useCallback, useEffect, useRef, useState, useMemo } from "react";
 import axios from "axios";
 import { ChevronDown } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
-import CodeEditor from "@/components/editor/CodeEditor";
+import dynamic from "next/dynamic";
+
+const CodeEditor = dynamic(() => import("@/components/editor/CodeEditor"), {
+  ssr: false,
+  loading: () => (
+    <div className="h-full w-full flex items-center justify-center bg-muted/20 animate-pulse text-muted-foreground font-mono text-sm">
+      Loading Editor...
+    </div>
+  ),
+});
 import OutputPane from "@/components/editor/OutputPane";
 import InputPane from "@/components/editor/InputPane";
 import useProctoring from "@/hooks/useProctoring";
@@ -142,9 +151,13 @@ int main() {
     setError("");
     setOutput("");
     try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const headers = session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {};
+
       const res = await axios.post(
         `${process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5002"}/execute`,
         { code, lang, stdinInput: input },
+        { headers }
       );
       setOutput(res.data.output ?? "");
       setError(res.data.error ?? "");

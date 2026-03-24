@@ -138,6 +138,7 @@ fi
     docker = spawn('docker', [
       'run',
       '--rm',
+      ...(config.docker.runtime ? ['--runtime=' + config.docker.runtime] : []),
       '--network',
       'none',
       '-m',

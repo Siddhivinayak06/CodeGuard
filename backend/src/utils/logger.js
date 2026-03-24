@@ -62,13 +62,6 @@ if (process.env.NODE_ENV === 'production') {
   );
 }
 
-/**
- * Create a child logger with additional context
- * @param {Object} meta - Additional metadata
- * @returns {winston.Logger}
- */
-logger.child = (meta) => {
-  return logger.child(meta);
-};
+// Winston natively provides logger.child(meta) — no override needed.
 
 module.exports = logger;

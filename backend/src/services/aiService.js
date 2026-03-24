@@ -126,6 +126,7 @@ const chatWithOllamaStream = async (
     const response = await axios.post(`${baseUrl}/api/chat`, payload, {
       responseType: 'stream',
       signal: abortSignal,
+      timeout: 120000, // 2 minute timeout to prevent infinite hangs
     });
 
     for await (const chunk of response.data) {

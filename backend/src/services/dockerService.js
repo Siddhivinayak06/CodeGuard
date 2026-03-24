@@ -28,6 +28,7 @@ const launchContainer = (lang, containerName) => {
     runArgs = [
       'run',
       '--rm',
+      ...(config.docker.runtime ? ['--runtime=' + config.docker.runtime] : []),
       '--name',
       containerName,
       '-d',
@@ -56,6 +57,7 @@ const launchContainer = (lang, containerName) => {
     runArgs = [
       'run',
       '--rm',
+      ...(config.docker.runtime ? ['--runtime=' + config.docker.runtime] : []),
       '--name',
       containerName,
       '-d',
@@ -82,6 +84,7 @@ const launchContainer = (lang, containerName) => {
     runArgs = [
       'run',
       '--rm',
+      ...(config.docker.runtime ? ['--runtime=' + config.docker.runtime] : []),
       '--name',
       containerName,
       '-d',

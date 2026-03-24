@@ -99,6 +99,7 @@ class PoolManager {
     const runArgs = [
       'run',
       '--rm',
+      ...(config.docker.runtime ? ['--runtime=' + config.docker.runtime] : []),
       '--name',
       containerName,
       '-d',
@@ -139,13 +140,18 @@ class PoolManager {
 
     return new Promise((resolve, reject) => {
       const proc = spawn('docker', runArgs);
+      let stderrOut = '';
+      if (proc.stderr) {
+        proc.stderr.on('data', (d) => { stderrOut += d.toString(); });
+      }
+      proc.on('error', (err) => reject(err));
       proc.on('close', (code) => {
         if (code === 0) {
-          this.pools[lang].push({ id: containerName, busy: false });
+          this.pools[lang].push({ id: containerName, activeWorkers: 0 });
           resolve(containerName);
         } else {
-          logger.error(`Failed to create container for ${lang}`);
-          reject(new Error(`Docker run failed with code ${code}`));
+          logger.error(`Failed to create container for ${lang}. Code: ${code}. Stderr: ${stderrOut}`);
+          reject(new Error(`Docker run failed with code ${code}. Stderr: ${stderrOut}`));
         }
       });
     });
@@ -158,11 +164,11 @@ class PoolManager {
       return 'local';
     }
 
-    const pool = this.pools[lang] || this.pools.cpp; // fallback to cpp/c if lang mismatch
-    const available = pool.find((c) => !c.busy);
+    const pool = this.pools[lang] || this.pools.cpp;
+    const available = pool.find((c) => c.activeWorkers < config.docker.workersPerContainer);
 
     if (available) {
-      available.busy = true;
+      available.activeWorkers++;
       return available.id;
     }
 
@@ -182,10 +188,10 @@ class PoolManager {
         timeoutPromise,
       ]);
 
-      // Mark the newly created container as busy immediately
+      // Mark the newly created container as having one worker immediately
       const newContainer = pool.find((c) => c.id === containerId);
       if (newContainer) {
-        newContainer.busy = true;
+        newContainer.activeWorkers++;
       }
 
       return containerId;
@@ -221,25 +227,29 @@ class PoolManager {
     const pool = this.pools[lang];
     if (!pool) return;
 
-    await this.resetContainer(containerId);
-
     const container = pool.find((c) => c.id === containerId);
+    const otherWorkersActive = container && container.activeWorkers > 1;
+
+    await this.resetContainer(containerId, otherWorkersActive);
+
     if (container) {
-      if (this.waiting[lang].length > 0) {
+      container.activeWorkers = Math.max(0, container.activeWorkers - 1);
+      
+      if (this.waiting[lang].length > 0 && container.activeWorkers < config.docker.workersPerContainer) {
         const next = this.waiting[lang].shift();
+        container.activeWorkers++;
         next(containerId);
-      } else {
-        container.busy = false;
       }
     }
   }
 
-  async resetContainer(containerId) {
+  async resetContainer(containerId, hasOtherWorkers = false) {
     logger.info(`Cleaning up container ${containerId}...`);
-    // 1. Wipe /tmp (the tmpfs)
-    // 2. Kill stray user processes (UID 1000 is 'runner')
-    // We do this inside the pooled container to ensure a clean slate.
-    const resetCmd = `rm -rf /tmp/* && (pkill -u 1000 -x python3 || pkill -u 1000 -x a.out || true)`;
+    // In multi-worker mode, only do a lightweight cleanup if others are still running.
+    // Full cleanup (pkill) only when no other workers are using the container.
+    const resetCmd = hasOtherWorkers
+      ? `rm -rf /tmp/*`
+      : `rm -rf /tmp/* && (pkill -u 1000 -x python3 || pkill -u 1000 -x a.out || true)`;
 
     return new Promise((resolve) => {
       const proc = spawn('docker', ['exec', containerId, 'sh', '-c', resetCmd]);
