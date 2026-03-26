@@ -237,7 +237,7 @@ export default function AdminUsers() {
       };
       if (token) headers["Authorization"] = `Bearer ${token}`;
 
-      const payload = await safeFetchJson(`/api/admin/users`, { headers });
+      const payload = await safeFetchJson(`/api/admin/users`, { headers, cache: "no-store" });
       const arr = (payload && (payload as any).data) ?? payload ?? [];
 
       if (!Array.isArray(arr)) setUsers([]);

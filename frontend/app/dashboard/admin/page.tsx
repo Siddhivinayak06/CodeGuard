@@ -257,10 +257,10 @@ export default function AdminDashboard() {
         if (token) headers["Authorization"] = `Bearer ${token}`;
 
         const [statsRes, subjRes] = await Promise.all([
-          fetch(`/api/admin/stats`, { headers }).then((r) =>
+          fetch(`/api/admin/stats`, { headers, cache: "no-store" }).then((r) =>
             r.json().catch(() => ({})),
           ),
-          fetch(`/api/admin/subjects`, { headers }).then((r) =>
+          fetch(`/api/admin/subjects`, { headers, cache: "no-store" }).then((r) =>
             r.json().catch(() => []),
           ),
         ]);
@@ -388,15 +388,8 @@ export default function AdminDashboard() {
 
       const returned = payload?.data ?? payload ?? null;
 
-      if (isEditing) {
-        const updated = Array.isArray(returned) ? returned[0] : returned;
-        setSubjects((prev) =>
-          prev.map((p) => (p.id === updated?.id ? updated : p)),
-        );
-      } else {
-        const newItem = Array.isArray(returned) ? returned[0] : returned;
-        if (newItem) setSubjects((prev) => [...prev, newItem]);
-      }
+      // Safely refetch all dashboard items from the server to guarantee updated joins and UI state
+      await handleRefresh();
 
       setFormOpen(false);
     } catch (err: any) {
@@ -445,10 +438,10 @@ export default function AdminDashboard() {
       };
       if (token) headers["Authorization"] = `Bearer ${token}`;
       const [statsRes, subjRes] = await Promise.all([
-        fetch(`/api/admin/stats`, { headers }).then((r) =>
+        fetch(`/api/admin/stats`, { headers, cache: "no-store" }).then((r) =>
           r.json().catch(() => ({})),
         ),
-        fetch(`/api/admin/subjects`, { headers }).then((r) =>
+        fetch(`/api/admin/subjects`, { headers, cache: "no-store" }).then((r) =>
           r.json().catch(() => []),
         ),
       ]);
