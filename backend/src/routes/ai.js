@@ -370,7 +370,8 @@ ${chunkText}
         try {
           const messages = [{ role: 'user', parts: [{ text: prompt }] }];
           let fullResponse = '';
-          await aiService.chat(messages, null, configOverrides, (chunk) => {
+          const bulkConfig = { ...configOverrides, maxOutputTokens: 65536 };
+          await aiService.chat(messages, null, bulkConfig, (chunk) => {
             fullResponse += chunk;
           });
 
@@ -516,8 +517,56 @@ ${chunkText}
                 );
               }
 
+              // Attempt 5: Handle truncated JSON (AI output cut off mid-response)
+              // Walk the string tracking open structures, then close them
+              try {
+                let truncSrc = repaired;
+                // Apply escape fixes first
+                truncSrc = truncSrc.replace(/\\([^"\\\//bfnrtu])/g, '\\\\$1');
+                // eslint-disable-next-line no-control-regex
+                truncSrc = truncSrc.replace(/[\x00-\x1f]/g, (m) => {
+                  if (m === '\n' || m === '\r' || m === '\t') return m;
+                  return '';
+                });
+
+                let tInStr = false;
+                const opens = [];
+                for (let ti = 0; ti < truncSrc.length; ti++) {
+                  const tc = truncSrc[ti];
+                  if (tInStr) {
+                    if (tc === '\\' && ti + 1 < truncSrc.length) {
+                      ti++; // skip escaped char
+                    } else if (tc === '"') {
+                      tInStr = false;
+                    }
+                  } else {
+                    if (tc === '"') tInStr = true;
+                    else if (tc === '{') opens.push('}');
+                    else if (tc === '[') opens.push(']');
+                    else if (tc === '}' || tc === ']') opens.pop();
+                  }
+                }
+
+                // If still open structures, the response was truncated
+                if (opens.length > 0 || tInStr) {
+                  let suffix = '';
+                  if (tInStr) suffix += '"';
+                  while (opens.length > 0) suffix += opens.pop();
+                  const recovered = truncSrc + suffix;
+                  const result = JSON.parse(recovered);
+                  logger.info(
+                    `repairJson: recovered truncated JSON by closing ${suffix.length} open structures`
+                  );
+                  return result;
+                }
+              } catch (e5) {
+                logger.debug(
+                  `repairJson attempt 5 (truncation recovery): ${e5.message.substring(0, 200)}`
+                );
+              }
+
               logger.error(
-                `repairJson: all 4 attempts failed. First 500 chars: ${cleaned.substring(0, 500)}`
+                `repairJson: all 5 attempts failed. First 500 chars: ${cleaned.substring(0, 500)}`
               );
               return null;
             } catch (_e) {

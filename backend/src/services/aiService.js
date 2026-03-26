@@ -73,7 +73,11 @@ const chatWithGeminiStream = async (
   if (!apiKey) throw new Error('Gemini API key missing');
 
   const genAI = new GoogleGenerativeAI(apiKey);
-  const model = genAI.getGenerativeModel({ model: modelName });
+  const generationConfig = {};
+  if (configOverrides?.maxOutputTokens) {
+    generationConfig.maxOutputTokens = configOverrides.maxOutputTokens;
+  }
+  const model = genAI.getGenerativeModel({ model: modelName, generationConfig });
 
   const chat = model.startChat({
     history: [
