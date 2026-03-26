@@ -374,35 +374,154 @@ ${chunkText}
             fullResponse += chunk;
           });
 
-          // Helper to attempt JSON repair
+          // Helper to attempt JSON repair with multiple strategies
           const repairJson = (str) => {
             try {
               let cleaned = str
-                .replace(/```json/g, '')
+                .replace(/```json/gi, '')
                 .replace(/```/g, '')
                 .trim();
 
               const first = cleaned.indexOf('{');
               const last = cleaned.lastIndexOf('}');
-              if (first !== -1 && last !== -1) {
-                cleaned = cleaned.substring(first, last + 1);
-              }
-
-              try {
-                return JSON.parse(cleaned);
-              } catch (_e) {
-                logger.debug(`JSON.parse failed, attempting repair...`);
-              }
-
-              cleaned = cleaned.replace(/\\([^"\\/bfnrtu])/g, '\\\\$1');
-
-              try {
-                return JSON.parse(cleaned);
-              } catch (e2) {
-                logger.debug(`Repair step 1 failed: ${e2.message}`);
+              if (first === -1 || last === -1) {
+                logger.debug('repairJson: no { } found in response');
                 return null;
               }
+              cleaned = cleaned.substring(first, last + 1);
+
+              // Attempt 1: Direct parse
+              try {
+                return JSON.parse(cleaned);
+              } catch (e1) {
+                logger.debug(
+                  `repairJson attempt 1 (direct): ${e1.message.substring(0, 200)}`
+                );
+              }
+
+              // Attempt 2: Remove trailing commas (common AI mistake)
+              let repaired = cleaned.replace(/,\s*([}\]])/g, '$1');
+              try {
+                return JSON.parse(repaired);
+              } catch (e2) {
+                logger.debug(
+                  `repairJson attempt 2 (trailing commas): ${e2.message.substring(0, 200)}`
+                );
+              }
+
+              // Attempt 3: Fix invalid escape sequences (C code in JSON strings)
+              // JSON only allows: \" \\ \/ \b \f \n \r \t \uXXXX
+              // C code often has: \0 \' \a \v \e \x \( \) \[ \] etc.
+              // Strategy: walk through the string character by character,
+              // only transforming escapes inside JSON string values.
+              try {
+                let fixed = '';
+                let inString = false;
+                let i = 0;
+                while (i < repaired.length) {
+                  const ch = repaired[i];
+
+                  if (!inString) {
+                    if (ch === '"') {
+                      inString = true;
+                    }
+                    fixed += ch;
+                    i++;
+                  } else {
+                    // Inside a JSON string value
+                    if (ch === '"') {
+                      // End of string
+                      inString = false;
+                      fixed += ch;
+                      i++;
+                    } else if (ch === '\\') {
+                      // Escape sequence
+                      const next = repaired[i + 1];
+                      if (next === undefined) {
+                        // Trailing backslash — drop it
+                        i++;
+                      } else if (
+                        next === '"' ||
+                        next === '\\' ||
+                        next === '/' ||
+                        next === 'b' ||
+                        next === 'f' ||
+                        next === 'n' ||
+                        next === 'r' ||
+                        next === 't'
+                      ) {
+                        // Valid JSON escape — keep as-is
+                        fixed += ch + next;
+                        i += 2;
+                      } else if (next === 'u') {
+                        // \uXXXX — keep if followed by 4 hex digits, else escape
+                        const hex = repaired.substring(i + 2, i + 6);
+                        if (/^[0-9a-fA-F]{4}$/.test(hex)) {
+                          fixed += repaired.substring(i, i + 6);
+                          i += 6;
+                        } else {
+                          // Invalid \u sequence — double-escape
+                          fixed += '\\\\u';
+                          i += 2;
+                        }
+                      } else {
+                        // Invalid escape for JSON (e.g. \0, \', \a, \v, \e, \x, \p, etc.)
+                        // Double-escape the backslash so it becomes a literal backslash in the parsed string
+                        fixed += '\\\\' + next;
+                        i += 2;
+                      }
+                    } else if (ch.charCodeAt(0) < 0x20) {
+                      // Literal control characters inside strings — replace with JSON escapes
+                      if (ch === '\n') fixed += '\\n';
+                      else if (ch === '\r') fixed += '\\r';
+                      else if (ch === '\t') fixed += '\\t';
+                      else
+                        fixed +=
+                          '\\u' +
+                          ch.charCodeAt(0).toString(16).padStart(4, '0');
+                      i++;
+                    } else {
+                      fixed += ch;
+                      i++;
+                    }
+                  }
+                }
+                return JSON.parse(fixed);
+              } catch (e3) {
+                logger.debug(
+                  `repairJson attempt 3 (escape fix): ${e3.message.substring(0, 200)}`
+                );
+              }
+
+              // Attempt 4: Aggressive — strip everything outside the main JSON structure
+              // and retry with the escape-fixed version plus trailing-comma removal
+              try {
+                let aggressive = repaired
+                  .replace(/,\s*([}\]])/g, '$1')
+                  // Replace any remaining raw control chars
+                  // eslint-disable-next-line no-control-regex
+                  .replace(/[\x00-\x1f]/g, (m) => {
+                    if (m === '\n' || m === '\r' || m === '\t') return m;
+                    return '';
+                  });
+                // One more pass of the simple regex escape fixer
+                aggressive = aggressive.replace(
+                  /\\([^"\\\/bfnrtu])/g,
+                  '\\\\$1'
+                );
+                return JSON.parse(aggressive);
+              } catch (e4) {
+                logger.debug(
+                  `repairJson attempt 4 (aggressive): ${e4.message.substring(0, 200)}`
+                );
+              }
+
+              logger.error(
+                `repairJson: all 4 attempts failed. First 500 chars: ${cleaned.substring(0, 500)}`
+              );
+              return null;
             } catch (_e) {
+              logger.error(`repairJson: unexpected error: ${_e.message}`);
               return null;
             }
           };
