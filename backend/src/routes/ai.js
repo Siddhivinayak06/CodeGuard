@@ -506,10 +506,7 @@ ${chunkText}
                     return '';
                   });
                 // One more pass of the simple regex escape fixer
-                aggressive = aggressive.replace(
-                  /\\([^"\\/bfnrtu])/g,
-                  '\\\\$1'
-                );
+                aggressive = aggressive.replace(/\\([^"\\/bfnrtu])/g, '\\\\$1');
                 return JSON.parse(aggressive);
               } catch (e4) {
                 logger.debug(
