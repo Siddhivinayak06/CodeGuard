@@ -77,7 +77,10 @@ const chatWithGeminiStream = async (
   if (configOverrides?.maxOutputTokens) {
     generationConfig.maxOutputTokens = configOverrides.maxOutputTokens;
   }
-  const model = genAI.getGenerativeModel({ model: modelName, generationConfig });
+  const model = genAI.getGenerativeModel({
+    model: modelName,
+    generationConfig,
+  });
 
   const chat = model.startChat({
     history: [

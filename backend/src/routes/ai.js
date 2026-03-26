@@ -507,7 +507,7 @@ ${chunkText}
                   });
                 // One more pass of the simple regex escape fixer
                 aggressive = aggressive.replace(
-                  /\\([^"\\\/bfnrtu])/g,
+                  /\\([^"\\/bfnrtu])/g,
                   '\\\\$1'
                 );
                 return JSON.parse(aggressive);
@@ -522,7 +522,7 @@ ${chunkText}
               try {
                 let truncSrc = repaired;
                 // Apply escape fixes first
-                truncSrc = truncSrc.replace(/\\([^"\\\//bfnrtu])/g, '\\\\$1');
+                truncSrc = truncSrc.replace(/\\([^"\\//bfnrtu])/g, '\\\\$1');
                 // eslint-disable-next-line no-control-regex
                 truncSrc = truncSrc.replace(/[\x00-\x1f]/g, (m) => {
                   if (m === '\n' || m === '\r' || m === '\t') return m;
