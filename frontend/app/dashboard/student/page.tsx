@@ -73,6 +73,7 @@ export default function StudentDashboard() {
   );
   const [progress, setProgress] = useState<ProgressData[]>([]);
   const [submissions, setSubmissions] = useState<DashboardSubmission[]>([]);
+  const [exams, setExams] = useState<number>(0);
   const [loading, setLoading] = useState(true);
 
   // Stats
@@ -183,7 +184,7 @@ export default function StudentDashboard() {
         // 4. Fetch Practical Details (for Subjects & Semester Check)
         const { data: practicalsDetails } = await supabase
           .from("practicals")
-          .select(`id, subject_id, subjects(id, subject_name, semester)`)
+          .select(`id, subject_id, subjects(id, subject_name, semester), practical_levels(id)`)
           .in("id", pids);
 
         // Filter PIDs by Semester (Strict Match)
@@ -225,7 +226,7 @@ export default function StudentDashboard() {
 
         const passedSet = new Set(
           statusSubmissions
-            ?.filter((s) => s.status === "passed")
+            ?.filter((s) => s.status === "passed" || s.status === "completed")
             .map((s) => s.practical_id),
         );
         const failedSet = new Set(
@@ -233,6 +234,14 @@ export default function StudentDashboard() {
             ?.filter((s) => s.status === "failed")
             .map((s) => s.practical_id),
         );
+        
+        // Count passed/completed submissions per practical to compare strictly vs levels
+        const passedCountMap = new Map<number, number>();
+        statusSubmissions?.forEach(s => {
+           if (s.status === "passed" || s.status === "completed") {
+               passedCountMap.set(s.practical_id, (passedCountMap.get(s.practical_id) || 0) + 1);
+           }
+        });
 
         // 6. Calculate Subject Progress (Using filtered details)
         const subjectMap = new Map<
@@ -258,17 +267,31 @@ export default function StudentDashboard() {
           const entry = subjectMap.get(sid)!;
           entry.total += 1;
 
-          // Passed Logic
+          // Status Resolution Logic
           const manualStatus = manualStatusMap.get(p.id);
-          const isManualComplete =
-            manualStatus === "completed" || manualStatus === "passed";
-          const isSubmissionPassed = passedSet.has(p.id);
-          if (isManualComplete || isSubmissionPassed) {
-            entry.passed += 1;
+            
+          const hasFailedSubmission = failedSet.has(p.id);
+          const hasPassedSubmission = passedSet.has(p.id);
+          const passedCount = passedCountMap.get(p.id) || 0;
+          const requiredLevels = p.practical_levels && p.practical_levels.length > 0 ? p.practical_levels.length : 1;
+          
+          let isOverallPassed = false;
+          let isOverallFailed = false;
+
+          // Priority: Explicit Submission Failure -> Explicit Manual Pass -> Submission Passed -> Generic Manual Complete
+          if (hasFailedSubmission) {
+            isOverallFailed = true;
+          } else if (manualStatus === "passed") {
+            isOverallPassed = true;
+          } else if (hasPassedSubmission && passedCount >= requiredLevels) {
+            isOverallPassed = true;
+          } else if (manualStatus === "completed") {
+            isOverallPassed = true; // Fallback for offline practicals with no code submissions
           }
 
-          // Failed Logic (Strictly submission failure)
-          if (failedSet.has(p.id) && !isSubmissionPassed && !isManualComplete) {
+          if (isOverallPassed) {
+            entry.passed += 1;
+          } else if (isOverallFailed) {
             entry.failed += 1;
           }
         });
@@ -310,6 +333,14 @@ export default function StudentDashboard() {
         }));
 
         setSubmissions(formattedSubs);
+
+        // 8. Fetch upcoming Exams
+        const { count: examCount } = await supabase
+          .from("exam_sessions")
+          .select("id", { count: "exact", head: true })
+          .eq("student_id", user.id)
+          .eq("is_active", true);
+        setExams(examCount || 0);
       } catch (err) {
         console.error("Dashboard fetch error:", err);
       } finally {
@@ -416,10 +447,10 @@ export default function StudentDashboard() {
             />
 
             <StatCard
-              label="Subjects"
-              value={progress.length}
-              icon={BookOpen}
-              colorClass="text-blue-600 dark:text-blue-400"
+              label="Active Exams"
+              value={exams}
+              icon={GraduationCap}
+              colorClass="text-purple-600 dark:text-purple-400"
               itemVariants={itemVariants}
               loading={loading}
             />
@@ -433,11 +464,31 @@ export default function StudentDashboard() {
               loading={loading}
             />
 
-            {/* ===== QUICK ACTIONS - Wide (2x1) ===== */}
+            {/* ===== QUICK ACTIONS - 2x2 Grid ===== */}
             <motion.div
               variants={itemVariants}
               className="md:col-span-2 grid grid-cols-2 gap-4"
             >
+              {/* Exams - Full width of this block */}
+              <Link
+                href="/student/exams"
+                className="col-span-2 glass-card rounded-2xl p-5 flex items-center gap-4 hover-lift group bg-gradient-to-br from-emerald-50 to-teal-50 dark:from-emerald-950/20 dark:to-teal-950/20"
+              >
+                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center shadow-lg">
+                  <GraduationCap className="w-6 h-6 text-white" />
+                </div>
+                <div className="flex-1">
+                  <h3 className="font-semibold text-gray-900 dark:text-white">
+                    Active Exams
+                  </h3>
+                  <p className="text-xs text-emerald-600 dark:text-emerald-400 font-medium">
+                    View & Start Exams
+                  </p>
+                </div>
+                <ArrowUpRight className="w-5 h-5 text-gray-400 group-hover:text-emerald-500 group-hover:-translate-y-0.5 group-hover:translate-x-0.5 transition-all" />
+              </Link>
+
+              {/* Code Editor - Half width */}
               <Link
                 href="/Interactive"
                 className="glass-card rounded-2xl p-5 flex items-center gap-4 hover-lift group bg-gradient-to-br from-indigo-50 to-purple-50 dark:from-indigo-950/20 dark:to-purple-950/20"

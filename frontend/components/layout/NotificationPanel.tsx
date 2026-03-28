@@ -137,10 +137,8 @@ export default function NotificationPanel() {
           filter: `user_id=eq.${userId}`,
         },
         (payload) => {
-          setNotifications((prev) => [
-            payload.new as unknown as Notification,
-            ...prev,
-          ]);
+          // Re-fetch instead of blind append to respect server-side lock filtering & dedup
+          fetchNotifications();
         },
       )
       .subscribe();

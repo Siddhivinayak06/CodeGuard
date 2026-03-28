@@ -41,8 +41,18 @@ export default function StudentDashboardSkeleton() {
                 </div>
             ))}
 
-            {/* ===== QUICK ACTIONS - Wide (2x1) ===== */}
+            {/* ===== QUICK ACTIONS - 2x2 Grid ===== */}
             <div className="md:col-span-2 grid grid-cols-2 gap-4">
+                {/* Exams - Full width of this block */}
+                <div className="col-span-2 glass-card rounded-2xl p-5 flex items-center gap-4">
+                    <Skeleton className="w-12 h-12 rounded-xl" />
+                    <div className="flex-1 space-y-2">
+                        <Skeleton className="h-5 w-32 rounded" />
+                        <Skeleton className="h-3 w-24 rounded" />
+                    </div>
+                    <Skeleton className="w-5 h-5 rounded" />
+                </div>
+                {/* Interactive & Practicals - Half width each */}
                 {[1, 2].map((i) => (
                     <div key={i} className="glass-card rounded-2xl p-5 flex items-center gap-4">
                         <Skeleton className="w-12 h-12 rounded-xl" />
@@ -50,7 +60,7 @@ export default function StudentDashboardSkeleton() {
                             <Skeleton className="h-5 w-24 rounded" />
                             <Skeleton className="h-3 w-20 rounded" />
                         </div>
-                        <Skeleton className="w-5 h-5 rounded" />
+                        <Skeleton className="w-5 h-5 rounded invisible sm:visible" />
                     </div>
                 ))}
             </div>
@@ -75,8 +85,8 @@ export default function StudentDashboardSkeleton() {
                 </div>
             </div>
 
-            {/* ===== RECENT SUBMISSIONS - Wide (2x1) ===== */}
-            <div className="md:col-span-2 glass-card rounded-3xl p-6">
+            {/* ===== RECENT SUBMISSIONS - Full Width (4x1) ===== */}
+            <div className="md:col-span-2 lg:col-span-4 glass-card rounded-3xl p-6">
                 <div className="flex items-center justify-between mb-5">
                     <div className="flex items-center gap-2">
                         <Skeleton className="w-5 h-5 rounded" />

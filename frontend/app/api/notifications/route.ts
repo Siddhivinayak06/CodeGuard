@@ -197,6 +197,14 @@ export async function GET(request: NextRequest) {
 
       const seenPracticalAssigned = new Set<string>();
       const deduped = enriched.filter((n: any) => {
+        // Filter out notifications for practicals that are currently locked due to sequence
+        if (
+          n.metadata?.is_locked &&
+          n.metadata?.lock_reason === "Previous practicals in this subject are not completed."
+        ) {
+          return false;
+        }
+
         const key = getPracticalAssignedDedupKey(n);
         if (!key) return true;
         if (seenPracticalAssigned.has(key)) return false;

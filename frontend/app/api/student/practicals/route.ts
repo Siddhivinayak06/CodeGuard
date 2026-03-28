@@ -135,7 +135,13 @@ export async function GET() {
       .select("practical_id, status, marks_obtained")
       .eq("student_id", userId)) as any as { data: any[] | null };
 
-    const submissionMap = new Map(submissions?.map((s) => [s.practical_id, s]));
+    const submissionGroupMap = new Map<number, any[]>();
+    submissions?.forEach(sub => {
+       if (!submissionGroupMap.has(sub.practical_id)) {
+           submissionGroupMap.set(sub.practical_id, []);
+       }
+       submissionGroupMap.get(sub.practical_id)!.push(sub);
+    });
 
     // Fetch Schedules for these practicals (matching batch or logic)
     // We want schedules where:
@@ -172,15 +178,25 @@ export async function GET() {
     // Map to desired format
     const practicals = data.map((sp: any) => {
       const p = sp.practicals;
-      const sub = submissionMap.get(p.id);
+      const subs = submissionGroupMap.get(p.id) || [];
       const schedule = scheduleMap.get(p.id);
 
       // Determine final status
       // Priority: Passed -> Completed (Manual) -> Submission Status -> Assigned Status
       let finalStatus = sp.status;
-      if (sub?.status === "passed") finalStatus = "passed";
-      else if (sp.status === "completed") finalStatus = "completed";
-      else if (sub?.status) finalStatus = sub.status;
+      if (subs.length > 0) {
+          const hasFailed = subs.some(s => s.status === "failed");
+          const allPassed = subs.every(s => s.status === "passed" || s.status === "completed");
+          const totalRequired = p.practical_levels && p.practical_levels.length > 0 ? p.practical_levels.length : 1;
+          
+          if (allPassed && subs.length >= totalRequired) finalStatus = "passed";
+          else if (hasFailed) finalStatus = "failed";
+          else finalStatus = "pending";
+      } else if (sp.status === "completed") {
+          finalStatus = "completed";
+      }
+      
+      const totalMarks = subs.reduce((acc, curr) => acc + (curr.marks_obtained || 0), 0);
 
       return {
         id: p.id,
@@ -214,7 +230,7 @@ export async function GET() {
         max_attempts: sp.max_attempts ?? 1,
         is_locked: sp.is_locked ?? false,
         lock_reason: sp.lock_reason,
-        marks_obtained: sub?.marks_obtained ?? undefined,
+        marks_obtained: totalMarks,
       };
     });
 

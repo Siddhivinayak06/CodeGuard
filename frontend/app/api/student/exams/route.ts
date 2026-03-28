@@ -122,7 +122,7 @@ export async function GET() {
       .map((s: any) => (s.exams as any)?.practicals?.id)
       .filter(Boolean);
 
-    const submissionMap = new Map<number, any>();
+    const submissionGroupMap = new Map<number, any[]>();
     if (practicalIds.length > 0) {
       const { data: submissions } = await supabase
         .from("submissions")
@@ -131,7 +131,10 @@ export async function GET() {
         .in("practical_id", practicalIds);
 
       (submissions || []).forEach((sub: any) => {
-        submissionMap.set(sub.practical_id, sub);
+        if (!submissionGroupMap.has(sub.practical_id)) {
+            submissionGroupMap.set(sub.practical_id, []);
+        }
+        submissionGroupMap.get(sub.practical_id)!.push(sub);
       });
     }
 
@@ -155,7 +158,7 @@ export async function GET() {
       .map((session: any) => {
         const exam = session.exams as any;
         const p = exam.practicals as any;
-        const sub = submissionMap.get(p.id);
+        const subs = submissionGroupMap.get(p.id) || [];
         const sp = studentPracticalMap.get(p.id);
         const assignedSetId = session.assigned_set_id ? String(session.assigned_set_id) : null;
         const allowedLevelIds = assignedSetId ? setLevelsMap.get(assignedSetId) : null;
@@ -180,11 +183,23 @@ export async function GET() {
           }
         }
 
-        // Determine final status
+        // Determine final overall status
         let finalStatus = sp?.status || "assigned";
-        if (sub?.status === "passed") finalStatus = "passed";
-        else if (sp?.status === "completed") finalStatus = "completed";
-        else if (sub?.status) finalStatus = sub.status;
+        if (subs.length > 0) {
+            const hasFailed = subs.some(s => s.status === "failed");
+            const allPassed = subs.every(s => s.status === "passed" || s.status === "completed");
+            // Also enforce that we have submitted ALL required visible levels to be strictly passed
+            const totalRequired = visibleLevels.length > 0 ? visibleLevels.length : 1;
+            
+            if (allPassed && subs.length >= totalRequired) finalStatus = "passed";
+            else if (hasFailed) finalStatus = "failed";
+            else finalStatus = "pending";
+        } else if (sp?.status === "completed") {
+            finalStatus = "completed";
+        }
+        
+        // Sum marks
+        const totalMarks = subs.reduce((acc, curr) => acc + (curr.marks_obtained || 0), 0);
 
         return {
           id: p.id,
@@ -218,7 +233,7 @@ export async function GET() {
           max_attempts: sp?.max_attempts ?? 1,
           is_locked: sp?.is_locked ?? false,
           lock_reason: sp?.lock_reason,
-          marks_obtained: sub?.marks_obtained ?? undefined,
+          marks_obtained: totalMarks,
           // Exam-specific fields
           duration_minutes: exam.duration_minutes,
           require_fullscreen: exam.require_fullscreen,
