@@ -431,6 +431,10 @@ export async function generatePdfClient({
   testCaseResults?: TestCaseResultPdf[];
   filename?: string;
 }) {
+  const safeStudent = studentName?.replace(/\s+/g, "_") || "User";
+  const safeRoll = rollNumber?.replace(/\s+/g, "_") || "Unknown";
+  const finalFilename = `${safeStudent}_${safeRoll}.pdf`;
+
   const doc = createDoc();
   const margin = 42;
   const pageWidth = doc.internal.pageSize.getWidth();
@@ -512,7 +516,7 @@ export async function generatePdfClient({
   }
 
   addFooters(doc, pageWidth, pageHeight, margin);
-  doc.save(filename);
+  doc.save(finalFilename);
 }
 
 // ─── Combined multi‑task PDF ──────────────────────────────────────────────────
@@ -547,6 +551,10 @@ export async function generateCombinedPdfClient({
   subjectCode?: string;
   filename?: string;
 }) {
+  const safeStudent = studentName?.replace(/\s+/g, "_") || "User";
+  const safeRoll = rollNumber?.replace(/\s+/g, "_") || "Unknown";
+  const finalFilename = `${safeStudent}_${safeRoll}.pdf`;
+
   const doc = createDoc();
   const margin = 42;
   const pageWidth = doc.internal.pageSize.getWidth();
@@ -739,5 +747,5 @@ export async function generateCombinedPdfClient({
   });
 
   addFooters(doc, pageWidth, pageHeight, margin);
-  doc.save(filename);
+  doc.save(finalFilename);
 }

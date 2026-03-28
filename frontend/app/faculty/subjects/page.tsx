@@ -150,7 +150,7 @@ export default function FacultySubjects() {
         // Then get the actual subject details
         const res = await supabase
           .from("subjects")
-          .select(`id, subject_name, subject_code, practicals(id), semester`)
+          .select(`id, subject_name, subject_code, practicals(id, is_exam), semester`)
           .in("id", subjectIds)
           .order("subject_name", { ascending: true });
 
@@ -170,17 +170,22 @@ export default function FacultySubjects() {
 
         if (!isMounted) return;
 
-        const formatted = ((data as any[]) || []).map((s) => ({
-          id: s.id,
-          subject_name: s.subject_name,
-          subject_code: s.subject_code,
-          faculty_id: user.id, // We filtered by user.id so this is safe
-          created_at: new Date().toISOString(), // Mocking if not selected, or should select it.
-          semester: s.semester || "",
-          practical_count: Array.isArray(s.practicals)
-            ? s.practicals.length
-            : 0,
-        }));
+        const formatted = ((data as any[]) || []).map((s) => {
+          const allPracticals = s.practicals || [];
+          const exams = allPracticals.filter((p: any) => p.is_exam);
+          const pracs = allPracticals.filter((p: any) => !p.is_exam);
+          
+          return {
+            id: s.id,
+            subject_name: s.subject_name,
+            subject_code: s.subject_code,
+            faculty_id: user.id, // We filtered by user.id so this is safe
+            created_at: new Date().toISOString(), // Mocking if not selected, or should select it.
+            semester: s.semester || "",
+            practical_count: pracs.length,
+            exam_count: exams.length,
+          };
+        });
 
         if (isMounted) {
           setSubjects(formatted);
@@ -365,6 +370,10 @@ export default function FacultySubjects() {
     (sum, s) => sum + (s.practical_count || 0),
     0,
   );
+  const totalExams = subjects.reduce(
+    (sum, s) => sum + (s.exam_count || 0),
+    0,
+  );
   const selectedSubject = subjects.find((s) => s.id === selected);
   const examCount = practicals.filter((p) => Boolean((p as any).is_exam)).length;
   const practicalCount = practicals.length - examCount;
@@ -430,7 +439,7 @@ export default function FacultySubjects() {
         </div>
 
         {/* Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
           <div className="glass-card-premium rounded-3xl p-6 hover-lift">
             <div className="flex items-start justify-between">
               <div>
@@ -457,8 +466,24 @@ export default function FacultySubjects() {
                   {totalPracticals}
                 </p>
               </div>
-              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center shadow-lg">
+              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-400 to-cyan-500 flex items-center justify-center shadow-lg">
                 <FileCheck className="w-6 h-6 text-white" />
+              </div>
+            </div>
+          </div>
+
+          <div className="glass-card-premium rounded-3xl p-6 hover-lift">
+            <div className="flex items-start justify-between">
+              <div>
+                <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  Total Exams
+                </p>
+                <p className="text-3xl font-bold text-gray-900 dark:text-white mt-2">
+                  {totalExams}
+                </p>
+              </div>
+              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-violet-500 to-fuchsia-500 flex items-center justify-center shadow-lg">
+                <FileText className="w-6 h-6 text-white" />
               </div>
             </div>
           </div>
@@ -469,7 +494,7 @@ export default function FacultySubjects() {
                 <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                   Active Subject
                 </p>
-                <p className="text-2xl font-bold text-gray-900 dark:text-white mt-2 truncate max-w-[200px]">
+                <p className="text-2xl font-bold text-gray-900 dark:text-white mt-2 truncate max-w-[140px]">
                   {selectedSubject ? selectedSubject.subject_name : "—"}
                 </p>
               </div>
@@ -530,7 +555,7 @@ export default function FacultySubjects() {
                             {s.subject_name}
                           </div>
                           <div className="text-xs text-gray-500">
-                            {s.subject_code} • {s.practical_count} practicals
+                            {s.subject_code} • {s.practical_count} practicals • {s.exam_count} exams
                           </div>
                         </div>
                         <ChevronRight

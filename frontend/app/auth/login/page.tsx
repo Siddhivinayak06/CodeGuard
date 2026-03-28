@@ -13,6 +13,8 @@ import {
   Code,
   Zap,
   CheckCircle,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 import { getURL } from "@/lib/utils";
 
@@ -32,6 +34,7 @@ function LoginContent() {
   const isProduction = process.env.NODE_ENV === "production";
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
@@ -320,14 +323,26 @@ function LoginContent() {
                     >
                       <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
                       <input
-                        type="password"
+                        type={showPassword ? "text" : "password"}
                         placeholder="••••••••"
-                        className="input-premium pl-12 h-14"
+                        className="input-premium pl-12 pr-12 h-14 w-full"
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
                         required
                         disabled={isLoading}
                       />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors focus:outline-none"
+                        tabIndex={-1}
+                      >
+                        {showPassword ? (
+                          <EyeOff className="w-5 h-5" />
+                        ) : (
+                          <Eye className="w-5 h-5" />
+                        )}
+                      </button>
                     </motion.div>
                   </div>
 

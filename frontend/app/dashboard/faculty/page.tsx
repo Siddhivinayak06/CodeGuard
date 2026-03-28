@@ -137,21 +137,28 @@ function PracticalCard({
           </div>
         </div>
 
-        {/* Middle: Status */}
-        <span
-          className={cn(
-            "shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-full",
-            "bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400",
-          )}
-        >
-          <div
+        {/* Middle: Status & Type */}
+        <div className="flex flex-col items-end gap-1.5 shrink-0">
+          <span
             className={cn(
-              "w-1.5 h-1.5 rounded-full",
-              "bg-emerald-500",
+              "inline-flex items-center gap-1.5 px-2.5 py-1 text-[10px] font-bold tracking-wider rounded-md uppercase",
+              practical.is_exam
+                ? "bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400"
+                : "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
             )}
-          />
-          Active
-        </span>
+          >
+            {practical.is_exam ? "EXAM" : "PRACTICAL"}
+          </span>
+          <span
+            className={cn(
+              "inline-flex items-center gap-1.5 px-2.5 py-0.5 text-xs font-medium rounded-full",
+              "bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400",
+            )}
+          >
+            <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+            Active
+          </span>
+        </div>
 
         {/* Right: Actions */}
         <div className="flex gap-1 shrink-0">
@@ -264,8 +271,15 @@ export default function FacultyDashboardPage() {
               .select("practical_id, batch_name, date")
               .in("practical_id", pIds);
 
+            // Fetch Exams
+            const { data: examData } = await supabase
+              .from("exams")
+              .select("practical_id, start_time")
+              .in("practical_id", pIds);
+
+            const schedMap = new Map<number, { batch_name: string | null; date: string }[]>();
+
             if (schedData) {
-              const schedMap = new Map<number, { batch_name: string | null; date: string }[]>();
               (schedData as any[]).forEach((s) => {
                 if (s.practical_id) {
                   const list = schedMap.get(s.practical_id) || [];
@@ -273,12 +287,22 @@ export default function FacultyDashboardPage() {
                   schedMap.set(s.practical_id, list);
                 }
               });
-
-              practicalsWithSchedules = practicalsWithSchedules.map((p) => ({
-                ...p,
-                schedules: schedMap.get(p.id) || [],
-              }));
             }
+
+            if (examData) {
+              (examData as any[]).forEach((e) => {
+                if (e.practical_id && e.start_time) {
+                  const list = schedMap.get(e.practical_id) || [];
+                  list.push({ batch_name: "Exam", date: e.start_time });
+                  schedMap.set(e.practical_id, list);
+                }
+              });
+            }
+
+            practicalsWithSchedules = practicalsWithSchedules.map((p) => ({
+              ...p,
+              schedules: schedMap.get(p.id) || [],
+            }));
           }
           setPracticals(practicalsWithSchedules);
 
@@ -330,8 +354,14 @@ export default function FacultyDashboardPage() {
           .select("practical_id, batch_name, date")
           .in("practical_id", pIds);
 
+        const { data: examData } = await supabase
+          .from("exams")
+          .select("practical_id, start_time")
+          .in("practical_id", pIds);
+
+        const schedMap = new Map<number, { batch_name: string | null; date: string }[]>();
+
         if (schedData) {
-          const schedMap = new Map<number, { batch_name: string | null; date: string }[]>();
           (schedData as any[]).forEach((s) => {
             if (s.practical_id) {
               const list = schedMap.get(s.practical_id) || [];
@@ -339,12 +369,22 @@ export default function FacultyDashboardPage() {
               schedMap.set(s.practical_id, list);
             }
           });
-
-          practicalsWithSchedules = practicalsWithSchedules.map((p) => ({
-            ...p,
-            schedules: schedMap.get(p.id) || [],
-          }));
         }
+
+        if (examData) {
+          (examData as any[]).forEach((e) => {
+            if (e.practical_id && e.start_time) {
+              const list = schedMap.get(e.practical_id) || [];
+              list.push({ batch_name: "Exam", date: e.start_time });
+              schedMap.set(e.practical_id, list);
+            }
+          });
+        }
+
+        practicalsWithSchedules = practicalsWithSchedules.map((p) => ({
+          ...p,
+          schedules: schedMap.get(p.id) || [],
+        }));
       }
       setPracticals(practicalsWithSchedules);
     }
@@ -419,7 +459,8 @@ export default function FacultyDashboardPage() {
     return data;
   }, [submissions]);
 
-  const activePracticalsCount = practicals.length;
+  const activePracticalsCount = practicals.filter(p => !p.is_exam).length;
+  const activeExamsCount = practicals.filter(p => p.is_exam).length;
   const eventsByDate = useMemo(() => {
     const map = new Map<string, Practical[]>();
     practicals.forEach((p) => {
@@ -429,19 +470,44 @@ export default function FacultyDashboardPage() {
   }, [practicals]);
 
   // Dates with events for Calendar modifiers
-  const eventDates = useMemo(() => {
-    const dates: Date[] = [];
+  const { practicalDates, examDates } = useMemo(() => {
+    const pDates: Date[] = [];
+    const eDates: Date[] = [];
     practicals.forEach((p) => {
       if (p.schedules) {
         p.schedules.forEach((s) => {
           if (s.date) {
-            dates.push(new Date(s.date));
+            if (p.is_exam) {
+              eDates.push(new Date(s.date));
+            } else {
+              pDates.push(new Date(s.date));
+            }
           }
         });
       }
     });
-    return dates;
+    return { practicalDates: pDates, examDates: eDates };
   }, [practicals]);
+
+  // Events specifically for the currently selected date
+  const eventsForSelectedDate = useMemo(() => {
+    if (!selected) return [];
+    
+    // Create a local date string robustly (YYYY-MM-DD)
+    const targetDate = new Date(selected.getTime() - selected.getTimezoneOffset() * 60000)
+      .toISOString()
+      .split("T")[0];
+
+    return practicals.filter((p) => {
+      if (!p.schedules) return false;
+      return p.schedules.some((s) => {
+        if (!s.date) return false;
+        // Parse the ISO string or pure date string
+        const sDate = s.date.length > 10 ? s.date.split("T")[0] : s.date;
+        return sDate === targetDate;
+      });
+    });
+  }, [practicals, selected]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50/30 to-purple-50/30 dark:from-gray-950 dark:via-indigo-950/10 dark:to-purple-950/10">
@@ -530,14 +596,14 @@ export default function FacultyDashboardPage() {
               <div className="flex items-start justify-between">
                 <div>
                   <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                    My Subjects
+                    Active Exams
                   </p>
                   <p className="text-3xl font-bold text-gray-900 dark:text-white mt-2">
-                    {subjects.length}
+                    {activeExamsCount}
                   </p>
                 </div>
-                <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-pink-500 to-rose-500 flex items-center justify-center shadow-lg">
-                  <BookOpen className="w-6 h-6 text-white" />
+                <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-violet-500 to-fuchsia-500 flex items-center justify-center shadow-lg">
+                  <FileCheck className="w-6 h-6 text-white" />
                 </div>
               </div>
             </motion.div>
@@ -598,7 +664,7 @@ export default function FacultyDashboardPage() {
             >
               <div className="flex items-center justify-between mb-6">
                 <h3 className="text-lg font-bold text-gray-900 dark:text-white">
-                  Recent Practicals
+                  Recent Assignments
                 </h3>
                 <button
                   onClick={() => router.push("/dashboard/faculty/practicals")}
@@ -673,19 +739,69 @@ export default function FacultyDashboardPage() {
                     onSelect={(d) => d && setSelected(d)}
                     className="rounded-xl border-none shadow-none"
                     modifiers={{
-                      hasEvent: eventDates,
+                      hasPractical: practicalDates,
+                      hasExam: examDates,
                     }}
                     modifiersClassNames={{
-                      hasEvent:
-                        "after:content-[''] after:absolute after:bottom-1 after:left-1/2 after:-translate-x-1/2 after:w-1 after:h-1 after:bg-indigo-500 after:rounded-full",
+                      hasPractical:
+                        "after:content-[''] after:absolute after:bottom-1 after:left-1/2 after:-translate-x-1/2 after:w-1 after:h-1 after:bg-blue-500 after:rounded-full",
+                      hasExam:
+                        "[&]:border-violet-500 [&]:bg-violet-50 dark:[&]:bg-violet-900/20 after:content-[''] after:absolute after:bottom-1 after:left-1/2 after:-translate-x-1/2 after:w-1.5 after:h-1.5 after:bg-violet-600 dark:after:bg-violet-400 after:rounded-full",
                     }}
                   />
                 </div>
 
+                {/* Selected Date Details */}
+                <div className="mt-5 space-y-3">
+                  <h4 className="text-sm font-semibold text-gray-900 dark:text-white pb-2 border-b border-gray-100 dark:border-gray-800">
+                    {selected.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}
+                  </h4>
+                  
+                  {eventsForSelectedDate.length === 0 ? (
+                    <p className="text-xs text-gray-500 dark:text-gray-400 text-center py-4 bg-gray-50/50 dark:bg-gray-800/30 rounded-xl">
+                      No assignments scheduled.
+                    </p>
+                  ) : (
+                    <div className="space-y-2 max-h-[160px] overflow-y-auto pr-1">
+                      {eventsForSelectedDate.map((event) => (
+                        <div key={event.id} className="p-3 bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700/50 rounded-xl flex flex-col gap-1.5 shadow-sm group hover:border-indigo-200 dark:hover:border-indigo-800 transition-colors">
+                          <div className="flex items-start justify-between gap-2">
+                            <p className="text-sm font-medium text-gray-900 dark:text-white leading-tight line-clamp-2 title">
+                              {event.title}
+                            </p>
+                            <span
+                              className={cn(
+                                "shrink-0 px-1.5 py-0.5 text-[9px] font-bold rounded-md uppercase",
+                                event.is_exam
+                                  ? "bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400"
+                                  : "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
+                              )}
+                            >
+                              {event.is_exam ? "EXAM" : "PRAC"}
+                            </span>
+                          </div>
+                          
+                          {/* Schedule specific details for the day */}
+                          {event.schedules
+                            ?.filter(s => s.date && (s.date.length > 10 ? s.date.split("T")[0] : s.date) === (new Date(selected.getTime() - selected.getTimezoneOffset() * 60000).toISOString().split("T")[0]))
+                            .map((s, idx) => (
+                              <div key={idx} className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+                                <Clock size={12} />
+                                {s.batch_name ? (
+                                  <span>{s.batch_name}</span>
+                                ) : (
+                                  <span>{new Date(s.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                                )}
+                              </div>
+                            ))}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
 
-
-              </div >
-            </motion.div >
+              </div>
+            </motion.div>
           </motion.div >
         )
         }

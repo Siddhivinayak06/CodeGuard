@@ -7,6 +7,6 @@ export type Practical = Tables<"practicals"> & {
   practical_number?: number | null;
   schedules?: { batch_name: string | null; date: string }[];
 };
-export type Subject = Tables<"subjects"> & { practical_count?: number };
+export type Subject = Tables<"subjects"> & { practical_count?: number; exam_count?: number; };
 export type Student = Tables<"users">;
 export type Level = Tables<"practical_levels"> & { testCases: TestCase[]; reference_code?: string; starter_code?: string; };

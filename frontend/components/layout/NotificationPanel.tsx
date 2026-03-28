@@ -352,6 +352,12 @@ export default function NotificationPanel() {
                             return;
                           }
 
+                          if (notification.type === "practical_assigned") {
+                            setIsOpen(false);
+                            router.push("/student/practicals");
+                            return;
+                          }
+
                           if (notification.link) {
                             setIsOpen(false);
                             router.push(notification.link);
