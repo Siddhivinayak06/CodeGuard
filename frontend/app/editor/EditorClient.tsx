@@ -499,6 +499,17 @@ int main() {
           statusRes.data?.session &&
           statusRes.data.session?.started_at
         ) {
+          // If session is already expired, don't start the timer — show submitted state
+          if (statusRes.data.session.isExpired || statusRes.data.remainingMs <= 0) {
+            toast.error("This exam session has expired.");
+            setIsSubmitted(true);
+            setExamConfig(statusRes.data.examConfig);
+            if (statusRes.data.assignedSet) {
+              setAssignedSet(statusRes.data.assignedSet);
+            }
+            return;
+          }
+
           setExamConfig(statusRes.data.examConfig);
           setExamSession(statusRes.data.session);
           setExamTimeRemaining(statusRes.data.remainingMs);
@@ -586,24 +597,31 @@ int main() {
   }, [isExamMode, examIdParam, user, practicalId, supabase]);
 
   // Exam countdown timer
+  const examTimerStarted = useRef(false);
   useEffect(() => {
     if (!isExamMode || examTimeRemaining === null || isSubmitted) return;
 
-    if (examTimeRemaining <= 0 && !examAutoSubmittedRef.current) {
-      examAutoSubmittedRef.current = true;
-      console.warn("Exam time expired! Auto-submitting...");
-      toast.error("Time's up! Auto-submitting your exam...");
-      handleSubmit();
+    // Prevent starting the timer if the exam was already expired on load
+    if (examTimeRemaining <= 0) {
+      if (!examAutoSubmittedRef.current && examTimerStarted.current) {
+        // Only auto-submit if the timer was actively counting down
+        examAutoSubmittedRef.current = true;
+        console.warn("Exam time expired! Auto-submitting...");
+        toast.error("Time's up! Auto-submitting your exam...");
+        handleSubmit();
+      }
       return;
     }
 
-    examTimerRef.current = setInterval(() => {
+    examTimerStarted.current = true;
+
+    const intervalId = setInterval(() => {
       setExamTimeRemaining(prev => {
         if (prev === null) return null;
         const next = prev - 1000;
         if (next <= 0 && !examAutoSubmittedRef.current) {
           examAutoSubmittedRef.current = true;
-          clearInterval(examTimerRef.current!);
+          clearInterval(intervalId);
           console.warn("Exam time expired! Auto-submitting...");
           toast.error("Time's up! Auto-submitting your exam...");
           handleSubmit();
@@ -614,9 +632,10 @@ int main() {
     }, 1000);
 
     return () => {
-      if (examTimerRef.current) clearInterval(examTimerRef.current);
+      clearInterval(intervalId);
     };
-  }, [isExamMode, examTimeRemaining !== null, isSubmitted]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isExamMode, examTimeRemaining === null, isSubmitted]);
 
   // Exam anti-cheating: block copy/paste/cut/right-click/DevTools
   useEffect(() => {
