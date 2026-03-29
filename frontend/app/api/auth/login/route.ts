@@ -14,8 +14,6 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        console.log("[LOGIN] Starting login attempt...");
-        console.log("[LOGIN] SUPABASE_URL:", process.env.NEXT_PUBLIC_SUPABASE_URL ? "SET" : "MISSING");
 
         const supabase = await createClient();
 
@@ -25,22 +23,22 @@ export async function POST(request: NextRequest) {
         });
 
         if (error) {
-            console.error("[LOGIN] Auth error:", error.message);
+
             return NextResponse.json({ error: error.message }, { status: 401 });
         }
 
-        console.log("[LOGIN] Sign in successful. Getting user...");
+
         const { data: { user }, error: authError } = await supabase.auth.getUser();
 
         if (authError || !user) {
-            console.error("[LOGIN] User fetch error:", authError?.message);
+
             return NextResponse.json(
                 { error: "User not found after login." },
                 { status: 401 }
             );
         }
 
-        console.log("[LOGIN] User found:", user.id.slice(0, 8));
+
 
         // ENFORCE SINGLE SESSION
         const sessionId = crypto.randomUUID();
@@ -54,7 +52,7 @@ export async function POST(request: NextRequest) {
             .eq("uid", user.id);
 
         if (dbError) {
-            console.error("[LOGIN] Failed to update active session", dbError);
+            console.error("Failed to update active session", dbError);
         }
 
         // Set cookie
@@ -74,10 +72,10 @@ export async function POST(request: NextRequest) {
         if (normalizedRole === "admin") redirectUrl = "/dashboard/admin";
         else if (normalizedRole === "faculty") redirectUrl = "/dashboard/faculty";
 
-        console.log("[LOGIN] Success! Redirecting to:", redirectUrl);
+
         return NextResponse.json({ success: true, redirectUrl });
     } catch (err) {
-        console.error("[LOGIN] CRITICAL CRASH:", err);
+        console.error("Login error:", err);
         return NextResponse.json(
             { error: "Internal server error during login." },
             { status: 500 }

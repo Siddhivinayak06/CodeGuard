@@ -102,7 +102,6 @@ function LoginContent() {
 
       setIsSuccess(true);
       setIsLoading(false);
-      console.log("LOGIN SUCCESS. Cookies:", document.cookie);
       window.location.href = target;
     } catch (err: unknown) {
       const errorMessage =
