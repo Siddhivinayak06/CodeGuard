@@ -970,9 +970,8 @@ int main() {
       try {
         const { data, error } = await supabase
           .from("test_cases")
-          .select("input, expected_output, level_id")
+          .select("input, expected_output, level_id, is_hidden")
           .eq("practical_id", Number(practicalId))
-          .eq("is_hidden", false)
           .order("id", { ascending: true })
           .limit(10);
 
