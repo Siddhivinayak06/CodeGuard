@@ -60,22 +60,22 @@ function LoginContent() {
     setIsLoading(true);
     setError(null);
 
-    const formData = new FormData();
-    formData.append("email", email);
-    formData.append("password", password);
-
     try {
-      const { login } = await import("@/app/auth/actions");
-      const result = await login(formData);
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
 
-      if (result.error) {
-        throw new Error(result.error);
+      const result = await res.json();
+
+      if (!res.ok || result.error) {
+        throw new Error(result.error || "Login failed");
       }
 
       if (result.success && result.redirectUrl) {
         setIsSuccess(true);
         setIsLoading(false);
-        // Use hard navigation to ensure cookies are sent to middleware
         console.log("LOGIN SUCCESS. Cookies:", document.cookie);
         window.location.href = result.redirectUrl;
       }
