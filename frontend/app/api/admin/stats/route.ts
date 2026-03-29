@@ -10,7 +10,7 @@ export async function GET() {
     const { response: authError } = await requireRole(supabase, ["admin"]);
     if (authError) return authError;
 
-    const [studentsRes, facultyRes, subjectsRes, practicalsRes] =
+    const [studentsRes, facultyRes, subjectsRes, practicalsRes, examsRes] =
       await Promise.all([
         supabase
           .from("users")
@@ -25,7 +25,12 @@ export async function GET() {
           .select("*", { count: "exact", head: true }),
         supabase
           .from("practicals")
-          .select("*", { count: "exact", head: true }),
+          .select("*", { count: "exact", head: true })
+          .or("is_exam.eq.false,is_exam.is.null"),
+        supabase
+          .from("practicals")
+          .select("*", { count: "exact", head: true })
+          .eq("is_exam", true),
       ]);
 
     return NextResponse.json({
@@ -33,11 +38,12 @@ export async function GET() {
       faculty: facultyRes.count ?? 0,
       subjects: subjectsRes.count ?? 0,
       practicals: practicalsRes.count ?? 0,
+      exams: examsRes.count ?? 0,
     });
   } catch (err) {
     console.error("Error fetching stats:", err);
     return NextResponse.json(
-      { students: 0, faculty: 0, subjects: 0, practicals: 0 },
+      { students: 0, faculty: 0, subjects: 0, practicals: 0, exams: 0 },
       { status: 500 },
     );
   }

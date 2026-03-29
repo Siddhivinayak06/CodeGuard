@@ -23,6 +23,7 @@ import {
   ChevronRight,
   ChevronDown,
   Minus,
+  FileText,
 } from "lucide-react";
 
 // Motion variants for consistent animations
@@ -69,38 +70,32 @@ function StatCard({
   label,
   value,
   icon,
-  colorClass,
-  trend,
+  gradient,
 }: {
   label: string;
   value: number;
   icon: React.ReactNode;
-  colorClass: string;
-  trend?: string;
+  gradient: string;
 }) {
   return (
     <motion.div
       variants={itemVariants}
-      className="glass-card rounded-2xl p-5 hover-lift flex items-center gap-4 border border-gray-100 dark:border-gray-800"
+      className="glass-card-premium rounded-3xl p-6 hover-lift flex flex-col justify-between"
     >
-      <div
-        className={`w-12 h-12 rounded-xl ${colorClass.replace("text-", "bg-").replace("600", "100").replace("500", "100")} dark:bg-opacity-20 flex items-center justify-center`}
-      >
-        {/* Clone element to force color if needed, or rely on parent class */}
-        <div className={colorClass}>{icon}</div>
-      </div>
-      <div>
-        <p className="text-2xl font-bold text-gray-900 dark:text-white">
-          {value}
-        </p>
-        <p className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wider font-medium">
-          {label}
-        </p>
-        {trend && (
-          <p className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 mt-0.5">
-            {trend}
+      <div className="flex items-start justify-between">
+        <div>
+          <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+            {label}
           </p>
-        )}
+          <p className="text-3xl font-bold text-gray-900 dark:text-white mt-2">
+            {value}
+          </p>
+        </div>
+        <div
+          className={`w-12 h-12 rounded-2xl flex items-center justify-center shadow-lg ${gradient}`}
+        >
+          <div className="text-white">{icon}</div>
+        </div>
       </div>
     </motion.div>
   );
@@ -112,27 +107,29 @@ function QuickActionCard({
   description,
   icon,
   href,
-  colorClass,
+  gradient,
 }: {
   title: string;
   description: string;
   icon: React.ReactNode;
   href: string;
-  colorClass: string;
+  gradient: string;
 }) {
   return (
     <motion.div variants={itemVariants}>
       <Link
         href={href}
-        className="glass-card rounded-2xl p-6 hover-lift group block border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900/50 hover:border-gray-300 dark:hover:border-gray-700 transition-all"
+        className="glass-card-premium rounded-3xl p-6 hover-lift group block hover:-translate-y-1 transition-all"
       >
         <div className="flex items-start justify-between mb-4">
           <div
-            className={`p-3 rounded-xl ${colorClass.replace("text-", "bg-").replace("600", "50").replace("500", "50")} dark:bg-opacity-20`}
+            className={`w-12 h-12 rounded-2xl flex items-center justify-center shadow-md group-hover:shadow-lg transition-all ${gradient}`}
           >
-            <div className={colorClass}>{icon}</div>
+            <div className="text-white">{icon}</div>
           </div>
-          <ArrowUpRight className="w-5 h-5 text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-300 group-hover:-translate-y-0.5 group-hover:translate-x-0.5 transition-all" />
+          <div className="p-2 rounded-full bg-gray-50 dark:bg-gray-800 group-hover:bg-indigo-50 dark:group-hover:bg-indigo-900/30 transition-colors">
+            <ArrowUpRight className="w-4 h-4 text-gray-400 group-hover:text-indigo-500 transition-colors" />
+          </div>
         </div>
         <h3 className="text-lg font-bold text-gray-900 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
           {title}
@@ -517,35 +514,37 @@ export default function AdminDashboard() {
           variants={containerVariants}
           initial="hidden"
           animate="visible"
-          className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 mb-8"
+          className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-5 gap-5 mb-8"
         >
           <StatCard
             label="Students"
             value={stats.students ?? 0}
             icon={<GraduationCap className="w-6 h-6" />}
-            colorClass="text-blue-600 dark:text-blue-400"
-            trend="⬆ 12% vs last month"
+            gradient="bg-gradient-to-br from-blue-500 to-indigo-500"
           />
           <StatCard
             label="Faculty"
             value={stats.faculty ?? 0}
             icon={<Users className="w-6 h-6" />}
-            colorClass="text-purple-600 dark:text-purple-400"
-            trend="⬆ 4% vs last month"
+            gradient="bg-gradient-to-br from-purple-500 to-pink-500"
           />
           <StatCard
             label="Subjects"
             value={stats.subjects ?? 0}
             icon={<BookOpen className="w-6 h-6" />}
-            colorClass="text-indigo-600 dark:text-indigo-400"
-            trend="Stable"
+            gradient="bg-gradient-to-br from-indigo-500 to-purple-500"
           />
           <StatCard
             label="Practicals"
             value={stats.practicals ?? 0}
             icon={<FileCode className="w-6 h-6" />}
-            colorClass="text-emerald-600 dark:text-emerald-400"
-            trend="⬆ 8% vs last month"
+            gradient="bg-gradient-to-br from-emerald-400 to-teal-500"
+          />
+          <StatCard
+            label="Exams"
+            value={stats.exams ?? 0}
+            icon={<FileText className="w-6 h-6" />}
+            gradient="bg-gradient-to-br from-violet-500 to-fuchsia-500"
           />
         </motion.section>
 
@@ -561,21 +560,21 @@ export default function AdminDashboard() {
             description="Add, edit, or remove users"
             icon={<UserCog className="w-6 h-6" />}
             href="/admin/users"
-            colorClass="text-indigo-600 dark:text-indigo-400"
+            gradient="bg-gradient-to-br from-indigo-400 to-indigo-600"
           />
           <QuickActionCard
             title="Manage Subjects"
             description="Configure courses and subjects"
             icon={<BookOpen className="w-6 h-6" />}
             href="/admin/subjects"
-            colorClass="text-purple-600 dark:text-purple-400"
+            gradient="bg-gradient-to-br from-purple-400 to-purple-600"
           />
           <QuickActionCard
             title="System Analytics"
             description="View platform statistics"
             icon={<BarChart3 className="w-6 h-6" />}
             href="/admin/analytics"
-            colorClass="text-pink-600 dark:text-pink-400"
+            gradient="bg-gradient-to-br from-pink-400 to-pink-600"
           />
         </motion.section>
 
