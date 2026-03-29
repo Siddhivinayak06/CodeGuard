@@ -61,24 +61,49 @@ function LoginContent() {
     setError(null);
 
     try {
-      const res = await fetch("/api/auth/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
+      const supabase = createClient();
+
+      // 1. Sign in directly from browser → Supabase (bypasses BunkerWeb)
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email,
+        password,
       });
 
-      const result = await res.json();
-
-      if (!res.ok || result.error) {
-        throw new Error(result.error || "Login failed");
+      if (signInError) {
+        throw new Error(signInError.message);
       }
 
-      if (result.success && result.redirectUrl) {
-        setIsSuccess(true);
-        setIsLoading(false);
-        console.log("LOGIN SUCCESS. Cookies:", document.cookie);
-        window.location.href = result.redirectUrl;
+      // 2. Get the authenticated user
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      if (userError || !user) {
+        throw new Error("User not found after login.");
       }
+
+      // 3. Enforce single session — update DB via Supabase client
+      const sessionId = crypto.randomUUID();
+      await supabase
+        .from("users")
+        .update({
+          active_session_id: sessionId,
+          session_updated_at: new Date().toISOString()
+        } as never)
+        .eq("uid", user.id);
+
+      // 4. Set session cookie client-side
+      document.cookie = `device_session_id=${sessionId}; path=/; max-age=${60 * 60 * 24 * 7}; SameSite=Lax${window.location.protocol === "https:" ? "; Secure" : ""}`;
+
+      // 5. Determine redirect based on role
+      const role = user.user_metadata?.role;
+      const normalizedRole = role?.toLowerCase();
+
+      let target = "/dashboard/student";
+      if (normalizedRole === "admin") target = "/dashboard/admin";
+      else if (normalizedRole === "faculty") target = "/dashboard/faculty";
+
+      setIsSuccess(true);
+      setIsLoading(false);
+      console.log("LOGIN SUCCESS. Cookies:", document.cookie);
+      window.location.href = target;
     } catch (err: unknown) {
       const errorMessage =
         err instanceof Error ? err.message : "An error occurred during login";
