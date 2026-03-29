@@ -12,7 +12,8 @@ RUN apk add --no-cache libc6-compat
 
 # Copy package files and install dependencies
 COPY package*.json ./
-RUN npm ci --legacy-peer-deps
+# Force development environment to ensure Next.js devDependencies (like typescript, tailwind) are installed
+RUN NODE_ENV=development npm ci --legacy-peer-deps
 
 # Copy source code
 COPY . .
