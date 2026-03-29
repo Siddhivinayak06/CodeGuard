@@ -69,11 +69,6 @@ services:
       retries: 3
       start_period: 10s
 
-    deploy:
-      resources:
-        limits:
-          cpus: '4'
-          memory: 4096M
     logging:
       driver: "json-file"
       options:
@@ -118,11 +113,6 @@ services:
       retries: 3
       start_period: 15s
 
-    deploy:
-      resources:
-        limits:
-          cpus: '1'
-          memory: 1024M
     logging:
       driver: "json-file"
       options:
@@ -140,11 +130,6 @@ services:
     restart: unless-stopped
     networks:
       - app_net
-    deploy:
-      resources:
-        limits:
-          cpus: '0.5'
-          memory: 256M
     logging:
       driver: "json-file"
       options:
@@ -160,11 +145,6 @@ services:
     restart: unless-stopped
     networks:
       - app_net
-    deploy:
-      resources:
-        limits:
-          cpus: '1'
-          memory: 512M
     logging:
       driver: "json-file"
       options:
@@ -180,11 +160,6 @@ services:
     restart: unless-stopped
     networks:
       - app_net
-    deploy:
-      resources:
-        limits:
-          cpus: '0.5'
-          memory: 256M
     logging:
       driver: "json-file"
       options:

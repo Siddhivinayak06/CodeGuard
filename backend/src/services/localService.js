@@ -227,7 +227,7 @@ while IFS= read -r line; do
         MAIN_CLASS=$(ls "$WORKDIR"/*.class 2>/dev/null | head -1 | xargs basename -s .class 2>/dev/null)
       fi
       if [ -n "$MAIN_CLASS" ]; then
-        java -cp "$WORKDIR" "$MAIN_CLASS"
+        java -XX:+UseSerialGC -Xmx128M -cp "$WORKDIR" "$MAIN_CLASS"
       fi
     fi
     current_file=""

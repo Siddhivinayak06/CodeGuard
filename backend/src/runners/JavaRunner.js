@@ -64,7 +64,7 @@ if [ -s /tmp/${uniqueId}/compile_err.txt ]; then
   cat /tmp/${uniqueId}/compile_err.txt 1>&2
   exit 1
 else
-  printf "%s" '${this.escapeForPrintf(stdinInput)}' | timeout ${timeoutSec} java -cp /tmp/${uniqueId} Main
+  printf "%s" '${this.escapeForPrintf(stdinInput)}' | timeout ${timeoutSec} java -XX:+UseSerialGC -Xmx128M -cp /tmp/${uniqueId} Main
 fi
     `.trim();
   }
