@@ -799,12 +799,22 @@ function FacultySubmissionsContentInner() {
     });
   };
 
-  const stats = {
-    total: submissions.length,
-    passed: submissions.filter(s => s.status === 'passed').length,
-    failed: submissions.filter(s => s.status === 'failed').length,
-    pending: submissions.filter(s => ['pending', 'submitted'].includes(s.status)).length,
-  };
+  // Check if we have set-based exam data
+  const hasSetData = groupedSubmissions.some(g => g.assigned_set_name);
+
+  const stats = hasSetData
+    ? {
+        total: groupedSubmissions.length,
+        passed: groupedSubmissions.filter(g => g.overallStatus === 'passed').length,
+        failed: groupedSubmissions.filter(g => g.overallStatus === 'failed').length,
+        pending: groupedSubmissions.filter(g => g.overallStatus === 'pending').length,
+      }
+    : {
+        total: submissions.length,
+        passed: submissions.filter(s => s.status === 'passed').length,
+        failed: submissions.filter(s => s.status === 'failed').length,
+        pending: submissions.filter(s => ['pending', 'submitted'].includes(s.status)).length,
+      };
 
   // Set-wise stats (computed from grouped submissions)
   const setStats = useMemo(() => {
@@ -965,7 +975,7 @@ function FacultySubmissionsContentInner() {
             <StatCard label="Failed" value={stats.failed} icon={XCircle} colorClass="text-red-600 dark:text-red-400" itemVariants={itemVariants} loading={loading} />
             <StatCard label="Total" value={stats.total} icon={LayoutGrid} colorClass="text-indigo-600 dark:text-indigo-400" itemVariants={itemVariants} loading={loading} />
             {setStats && setStats.length > 0 && (
-              <StatCard label="Sets Submitted" value={setStats.length} icon={Layers} colorClass="text-violet-600 dark:text-violet-400" itemVariants={itemVariants} loading={loading} />
+              <StatCard label="Submissions" value={setStats.length} icon={Layers} colorClass="text-violet-600 dark:text-violet-400" itemVariants={itemVariants} loading={loading} />
             )}
           </motion.div>
 
