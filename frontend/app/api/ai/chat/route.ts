@@ -23,7 +23,7 @@ export async function POST(req: NextRequest) {
         ...(contentType ? { "Content-Type": contentType } : {}),
       },
       body: req.body,
-      // @ts-ignore
+      // @ts-expect-error - Required for streaming bodies in Node 18+ fetch
       duplex: "half",
     });
 
@@ -39,10 +39,10 @@ export async function POST(req: NextRequest) {
       status: response.status,
       headers: response.headers,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("AI Chat Proxy Error:", error);
     return NextResponse.json(
-      { error: "Failed to connect to AI background service", details: error.message },
+      { error: "Failed to connect to AI background service", details: error instanceof Error ? error.message : "Unknown error" },
       { status: 500 }
     );
   }

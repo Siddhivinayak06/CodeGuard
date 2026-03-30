@@ -24,26 +24,26 @@ export async function POST(req: NextRequest) {
         ...(contentType ? { "Content-Type": contentType } : {}),
       },
       body: req.body,
-      // @ts-ignore - Required for streaming bodies in Node 18+ fetch
+      // @ts-expect-error - Required for streaming bodies in Node 18+ fetch
       duplex: "half",
     });
 
     if (!response.ok) {
-      let errorMsg = `AI backend error ${response.status}: ${response.statusText}`;
+      const errorMsg = `AI backend error ${response.status}: ${response.statusText}`;
       try {
         const errorData = await response.json();
         return NextResponse.json({ error: errorData.error || errorMsg }, { status: response.status });
-      } catch (e) {
+      } catch {
         return NextResponse.json({ error: errorMsg }, { status: response.status });
       }
     }
 
     const data = await response.json();
     return NextResponse.json(data);
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("AI Generate Bulk Proxy Error:", error);
     return NextResponse.json(
-      { error: "Failed to connect to AI background service", details: error.message },
+      { error: "Failed to connect to AI background service", details: error instanceof Error ? error.message : "Unknown error" },
       { status: 500 }
     );
   }
