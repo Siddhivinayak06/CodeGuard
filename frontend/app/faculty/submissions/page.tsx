@@ -968,15 +968,12 @@ function FacultySubmissionsContentInner() {
             variants={containerVariants}
             initial="hidden"
             animate="visible"
-            className={`grid gap-4 sm:gap-6 ${setStats && setStats.length > 0 ? "grid-cols-2 md:grid-cols-5" : "grid-cols-2 md:grid-cols-4"}`}
+            className="grid gap-4 sm:gap-6 grid-cols-2 md:grid-cols-4"
           >
             <StatCard label="Pending" value={stats.pending} icon={Clock} colorClass="text-amber-600 dark:text-amber-400" itemVariants={itemVariants} loading={loading} />
             <StatCard label="Passed" value={stats.passed} icon={CheckCircle2} colorClass="text-emerald-600 dark:text-emerald-400" itemVariants={itemVariants} loading={loading} />
             <StatCard label="Failed" value={stats.failed} icon={XCircle} colorClass="text-red-600 dark:text-red-400" itemVariants={itemVariants} loading={loading} />
             <StatCard label="Total" value={stats.total} icon={LayoutGrid} colorClass="text-indigo-600 dark:text-indigo-400" itemVariants={itemVariants} loading={loading} />
-            {setStats && setStats.length > 0 && (
-              <StatCard label="Submissions" value={setStats.length} icon={Layers} colorClass="text-violet-600 dark:text-violet-400" itemVariants={itemVariants} loading={loading} />
-            )}
           </motion.div>
 
           {/* Submissions Table Card */}
