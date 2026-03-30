@@ -21,6 +21,7 @@ import {
   RotateCcw,
   ChevronDown,
   ChevronRight,
+  Layers,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { motion } from "framer-motion";
@@ -505,6 +506,42 @@ function FacultySubmissionsContentInner() {
         }
       });
 
+      // Fetch per-student assigned exam sets for dynamic maxMarks calculation
+      const { data: examsData } = await (supabase.from("exams") as any)
+        .select("id, practical_id")
+        .in("practical_id", practicalIds);
+      
+      const maxMarksBySession = new Map<string, number>(); // studentId_practicalId -> max_marks
+
+      if (examsData && examsData.length > 0) {
+        const examIds = examsData.map((e: any) => e.id);
+        const examPracticalMap = new Map<string, number>(examsData.map((e: any) => [e.id, e.practical_id]));
+
+        const { data: sessionsData } = await (supabase.from("exam_sessions") as any)
+          .select(`
+            student_id, 
+            exam_id, 
+            assigned_set_id, 
+            exam_question_sets ( 
+              exam_set_levels ( 
+                practical_levels ( max_marks ) 
+              ) 
+            )
+          `)
+          .in("exam_id", examIds);
+
+        (sessionsData || []).forEach((sess: any) => {
+          const practicalId = examPracticalMap.get(sess.exam_id);
+          if (practicalId !== undefined && sess.exam_question_sets?.exam_set_levels) {
+            const setLevels = sess.exam_question_sets.exam_set_levels;
+            const setMaxMarks = setLevels.reduce((sum: number, sl: any) => sum + (sl.practical_levels?.max_marks || 0), 0);
+            if (setMaxMarks > 0) {
+              maxMarksBySession.set(`${sess.student_id}_${practicalId}`, setMaxMarks);
+            }
+          }
+        });
+      }
+
       // Get unique student IDs from submissions
       const submitterIds = [...new Set(((allSubmissions || []) as any[]).map(s => s.student_id).filter(id => id !== null))];
 
@@ -554,7 +591,9 @@ function FacultySubmissionsContentInner() {
             marks = studentSubs.reduce((sum, sub) => sum + (sub.marks_obtained || 0), 0);
           }
 
-          const maxMarksForPid = maxMarksByPractical.get(pid) || 10;
+          // Use assigned set max marks if available (for exams), else fallback to global practical max marks
+          const studentSessionMaxMarks = maxMarksBySession.get(`${student.uid}_${pid}`);
+          const maxMarksForPid = studentSessionMaxMarks || maxMarksByPractical.get(pid) || 10;
 
           return {
             title: subject.practicals.find((p: any) => p.id === pid)?.title || "",
@@ -915,108 +954,20 @@ function FacultySubmissionsContentInner() {
           </motion.div>
 
           {/* Stats Row */}
-          {setStats && setStats.length > 0 ? (
-            <motion.div
-              variants={containerVariants}
-              initial="hidden"
-              animate="visible"
-              className="space-y-4"
-            >
-              {/* Set-wise stat cards */}
-              <div className={`grid gap-4 ${setStats.length === 1 ? 'grid-cols-1' : setStats.length === 2 ? 'grid-cols-1 md:grid-cols-2' : 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3'}`}>
-                {setStats.map(ss => (
-                  <motion.div
-                    key={ss.setName}
-                    variants={itemVariants}
-                    className="glass-card rounded-2xl p-5"
-                  >
-                    <div className="flex items-center justify-between mb-3">
-                      <span className="text-sm font-bold text-violet-600 dark:text-violet-400 bg-violet-100 dark:bg-violet-900/30 px-2.5 py-1 rounded-lg">
-                        {ss.setName}
-                      </span>
-                      <span className="text-xs text-gray-500 font-medium">
-                        {ss.total} student{ss.total !== 1 ? 's' : ''}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-4">
-                      <div className="flex items-center gap-1.5">
-                        <div className="w-2 h-2 rounded-full bg-emerald-500" />
-                        <span className="text-sm font-semibold text-emerald-700 dark:text-emerald-400">{ss.passed}</span>
-                        <span className="text-[10px] text-gray-400">passed</span>
-                      </div>
-                      <div className="flex items-center gap-1.5">
-                        <div className="w-2 h-2 rounded-full bg-red-500" />
-                        <span className="text-sm font-semibold text-red-700 dark:text-red-400">{ss.failed}</span>
-                        <span className="text-[10px] text-gray-400">failed</span>
-                      </div>
-                      <div className="flex items-center gap-1.5">
-                        <div className="w-2 h-2 rounded-full bg-amber-400" />
-                        <span className="text-sm font-semibold text-amber-700 dark:text-amber-400">{ss.pending}</span>
-                        <span className="text-[10px] text-gray-400">pending</span>
-                      </div>
-                    </div>
-                    {/* Mini progress bar */}
-                    <div className="mt-3 h-1.5 rounded-full bg-gray-100 dark:bg-gray-800 overflow-hidden flex">
-                      {ss.total > 0 && (
-                        <>
-                          <div className="h-full bg-emerald-500 transition-all" style={{ width: `${(ss.passed / ss.total) * 100}%` }} />
-                          <div className="h-full bg-red-500 transition-all" style={{ width: `${(ss.failed / ss.total) * 100}%` }} />
-                          <div className="h-full bg-amber-400 transition-all" style={{ width: `${(ss.pending / ss.total) * 100}%` }} />
-                        </>
-                      )}
-                    </div>
-                  </motion.div>
-                ))}
-              </div>
-              {/* Compact overall totals */}
-              <div className="grid grid-cols-4 gap-3">
-                <StatCard label="Pending" value={stats.pending} icon={Clock} colorClass="text-amber-600 dark:text-amber-400" itemVariants={itemVariants} loading={loading} />
-                <StatCard label="Passed" value={stats.passed} icon={CheckCircle2} colorClass="text-emerald-600 dark:text-emerald-400" itemVariants={itemVariants} loading={loading} />
-                <StatCard label="Failed" value={stats.failed} icon={XCircle} colorClass="text-red-600 dark:text-red-400" itemVariants={itemVariants} loading={loading} />
-                <StatCard label="Total" value={stats.total} icon={LayoutGrid} colorClass="text-indigo-600 dark:text-indigo-400" itemVariants={itemVariants} loading={loading} />
-              </div>
-            </motion.div>
-          ) : (
-            <motion.div
-              variants={containerVariants}
-              initial="hidden"
-              animate="visible"
-              className="grid grid-cols-2 md:grid-cols-4 gap-6"
-            >
-              <StatCard
-                label="Pending"
-                value={stats.pending}
-                icon={Clock}
-                colorClass="text-amber-600 dark:text-amber-400"
-                itemVariants={itemVariants}
-                loading={loading}
-              />
-              <StatCard
-                label="Passed"
-                value={stats.passed}
-                icon={CheckCircle2}
-                colorClass="text-emerald-600 dark:text-emerald-400"
-                itemVariants={itemVariants}
-                loading={loading}
-              />
-              <StatCard
-                label="Failed"
-                value={stats.failed}
-                icon={XCircle}
-                colorClass="text-red-600 dark:text-red-400"
-                itemVariants={itemVariants}
-                loading={loading}
-              />
-              <StatCard
-                label="Total"
-                value={stats.total}
-                icon={LayoutGrid}
-                colorClass="text-indigo-600 dark:text-indigo-400"
-                itemVariants={itemVariants}
-                loading={loading}
-              />
-            </motion.div>
-          )}
+          <motion.div
+            variants={containerVariants}
+            initial="hidden"
+            animate="visible"
+            className={`grid gap-4 sm:gap-6 ${setStats && setStats.length > 0 ? "grid-cols-2 md:grid-cols-5" : "grid-cols-2 md:grid-cols-4"}`}
+          >
+            <StatCard label="Pending" value={stats.pending} icon={Clock} colorClass="text-amber-600 dark:text-amber-400" itemVariants={itemVariants} loading={loading} />
+            <StatCard label="Passed" value={stats.passed} icon={CheckCircle2} colorClass="text-emerald-600 dark:text-emerald-400" itemVariants={itemVariants} loading={loading} />
+            <StatCard label="Failed" value={stats.failed} icon={XCircle} colorClass="text-red-600 dark:text-red-400" itemVariants={itemVariants} loading={loading} />
+            <StatCard label="Total" value={stats.total} icon={LayoutGrid} colorClass="text-indigo-600 dark:text-indigo-400" itemVariants={itemVariants} loading={loading} />
+            {setStats && setStats.length > 0 && (
+              <StatCard label="Sets Submitted" value={setStats.length} icon={Layers} colorClass="text-violet-600 dark:text-violet-400" itemVariants={itemVariants} loading={loading} />
+            )}
+          </motion.div>
 
           {/* Submissions Table Card */}
           <motion.div

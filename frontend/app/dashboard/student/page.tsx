@@ -141,7 +141,7 @@ export default function StudentDashboard() {
           name: sd.name || undefined,
         });
 
-        // 2. Fetch ALL Assignments (Manual + Batch)
+        // 2. Fetch ALL Assignments (Manual + Batch + Exams + Submissions)
         // Manual Assignments
         const { data: manualData } = await supabase
           .from("student_practicals")
@@ -152,6 +152,27 @@ export default function StudentDashboard() {
         const { data: batchData } = await supabase
           .from("schedule_allocations")
           .select(`schedule:schedules(practical_id)`)
+          .eq("student_id", user.id);
+
+        // Exam Assignments (via exam_sessions -> exams -> practical_id)
+        let examPracticalIds: number[] = [];
+        try {
+          const { data: examSessions } = await (supabase
+            .from("exam_sessions") as any)
+            .select("exam_id, exams ( practical_id )")
+            .eq("student_id", user.id);
+
+          examPracticalIds = (examSessions || [])
+            .map((es: any) => es.exams?.practical_id)
+            .filter((pid: any) => pid != null);
+        } catch (e) {
+          console.error("Error fetching exam sessions for dashboard:", e);
+        }
+
+        // Submissions (catch any practicals the student submitted to but wasn't formally assigned)
+        const { data: submissionPids } = await supabase
+          .from("submissions")
+          .select("practical_id")
           .eq("student_id", user.id);
 
         // 3. Consolidate Unique Practicals & Track Completion
@@ -170,6 +191,14 @@ export default function StudentDashboard() {
           if (item.schedule?.practical_id) {
             assignedPracticalIds.add(item.schedule.practical_id);
           }
+        });
+
+        // Add exam practicals
+        examPracticalIds.forEach((pid: number) => assignedPracticalIds.add(pid));
+
+        // Add submission practicals
+        (submissionPids || []).forEach((item: any) => {
+          if (item.practical_id) assignedPracticalIds.add(item.practical_id);
         });
 
         if (assignedPracticalIds.size === 0) {
@@ -334,12 +363,11 @@ export default function StudentDashboard() {
 
         setSubmissions(formattedSubs);
 
-        // 8. Fetch upcoming Exams
-        const { count: examCount } = await supabase
-          .from("exam_sessions")
+        // 8. Fetch Exams count (all exams assigned to student)
+        const { count: examCount } = await (supabase
+          .from("exam_sessions") as any)
           .select("id", { count: "exact", head: true })
-          .eq("student_id", user.id)
-          .eq("is_active", true);
+          .eq("student_id", user.id);
         setExams(examCount || 0);
       } catch (err) {
         console.error("Dashboard fetch error:", err);

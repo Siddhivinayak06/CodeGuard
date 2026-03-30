@@ -159,14 +159,18 @@ export async function middleware(request: NextRequest) {
   const supabase = createServerClient<Database>(supabaseUrl, supabaseAnonKey, {
     cookies: {
       getAll: () => request.cookies.getAll(),
-      setAll: (cookies) => {
-        cookies.forEach(({ name, value, options }) => {
-          response.cookies.set(name, value, {
+      setAll: (cookiesToSet) => {
+        cookiesToSet.forEach(({ name, value, options }) => {
+          request.cookies.set(name, value)
+        })
+        cookiesToSet.forEach(({ name, value, options }) => {
+          response.cookies.set({
+            name,
+            value,
             ...options,
             httpOnly: true,
             secure: process.env.NODE_ENV === "production",
             sameSite: "lax",
-            maxAge: 60 * 60 * 2,
           })
         })
       },
