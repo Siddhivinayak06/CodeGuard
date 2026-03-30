@@ -24,7 +24,7 @@ import {
 interface StudentPracticalMarks {
     student_name: string;
     roll_no: string;
-    practicals: { title: string; marks: number | null }[];
+    practicals: { title: string; marks: number | null; maxMarks: number }[];
 }
 
 interface SubjectReportViewProps {
@@ -34,6 +34,7 @@ interface SubjectReportViewProps {
     subjectCode: string;
     practicalTitles: string[];
     practicalDeadlines: (string | null)[];
+    practicalMaxMarks: number[];
     students: StudentPracticalMarks[];
     onDownloadPdf: () => void;
 }
@@ -45,6 +46,7 @@ export default function SubjectReportView({
     subjectCode,
     practicalTitles,
     practicalDeadlines,
+    practicalMaxMarks,
     students,
     onDownloadPdf,
 }: SubjectReportViewProps) {
@@ -57,7 +59,8 @@ export default function SubjectReportView({
             .filter((m): m is number => m !== null);
 
         const avg = marks.length > 0 ? marks.reduce((a, b) => a + b, 0) / marks.length : 0;
-        const passed = marks.filter((m) => m >= 5).length;
+        const passThreshold = Math.ceil((practicalMaxMarks[idx] || 10) * 0.6);
+        const passed = marks.filter((m) => m >= passThreshold).length;
         const submitted = marks.length;
 
         return {
@@ -80,13 +83,15 @@ export default function SubjectReportView({
     const studentPerformance = students.map((s) => {
         const validMarks = s.practicals.filter((p) => p.marks !== null);
         const total = validMarks.reduce((sum, p) => sum + (p.marks || 0), 0);
-        const avg = validMarks.length > 0 ? total / validMarks.length : 0;
-        return { ...s, total, avg, completed: validMarks.length };
-    }).sort((a, b) => b.avg - a.avg);
+        const maxTotal = validMarks.reduce((sum, p) => sum + p.maxMarks, 0);
+        const overallPercentage = maxTotal > 0 ? (total / maxTotal) * 100 : 0;
+        const avgScore = validMarks.length > 0 ? total / validMarks.length : 0;
+        return { ...s, total, maxTotal, overallPercentage, avgScore, completed: validMarks.length };
+    }).sort((a, b) => b.overallPercentage - a.overallPercentage);
 
     // Top and bottom performers
     const topPerformers = studentPerformance.slice(0, 3);
-    const needsAttention = studentPerformance.filter(s => s.avg < 5 && s.completed > 0).slice(0, 3);
+    const needsAttention = studentPerformance.filter(s => s.overallPercentage < 50 && s.completed > 0).slice(0, 3);
 
     if (!isOpen) return null;
 
@@ -155,7 +160,7 @@ export default function SubjectReportView({
                                     <Award className="w-6 h-6 text-emerald-600 dark:text-emerald-400" />
                                 </div>
                                 <div>
-                                    <p className="text-2xl font-bold text-gray-900 dark:text-white">{topPerformers[0]?.avg.toFixed(1) || "-"}</p>
+                                    <p className="text-2xl font-bold text-gray-900 dark:text-white">{topPerformers[0]?.avgScore.toFixed(1) || "-"}</p>
                                     <p className="text-xs text-gray-500 uppercase tracking-wider font-medium">Top Score</p>
                                 </div>
                             </div>
@@ -245,9 +250,14 @@ export default function SubjectReportView({
                                                 </p>
                                                 <p className="text-xs text-gray-500 font-mono">{student.roll_no}</p>
                                             </div>
-                                            <span className="text-lg font-bold text-emerald-600">
-                                                {student.avg.toFixed(1)}
-                                            </span>
+                                            <div className="text-right">
+                                                <span className="text-lg font-bold text-emerald-600 block leading-tight">
+                                                    {student.total}
+                                                </span>
+                                                <span className="text-[10px] text-emerald-600/70 font-semibold uppercase tracking-wider">
+                                                    / {student.maxTotal} pt
+                                                </span>
+                                            </div>
                                         </div>
                                     ))}
                                 </div>
@@ -274,9 +284,14 @@ export default function SubjectReportView({
                                                 </p>
                                                 <p className="text-xs text-gray-500 font-mono">{student.roll_no}</p>
                                             </div>
-                                            <span className="text-lg font-bold text-amber-600">
-                                                {student.avg.toFixed(1)}
-                                            </span>
+                                            <div className="text-right">
+                                                <span className="text-lg font-bold text-amber-600 block leading-tight">
+                                                    {student.total}
+                                                </span>
+                                                <span className="text-[10px] text-amber-600/70 font-semibold uppercase tracking-wider">
+                                                    / {student.maxTotal} pt
+                                                </span>
+                                            </div>
                                         </div>
                                     )) : (
                                         <p className="text-sm text-gray-500 italic p-3 bg-gray-50 dark:bg-gray-800 rounded-xl text-center">
@@ -318,16 +333,18 @@ export default function SubjectReportView({
                                                     {student.student_name}
                                                 </td>
                                                 <td className="px-4 py-3 text-gray-500 font-mono text-xs">{student.roll_no}</td>
-                                                {student.practicals.map((p, pIdx) => (
-                                                    <td key={pIdx} className="px-2 py-3 text-center">
-                                                        {p.marks !== null ? (
-                                                            <span className={`inline-flex items-center justify-center w-8 h-8 rounded-lg text-xs font-bold ${p.marks >= 8 ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400" :
-                                                                p.marks >= 5 ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400" :
-                                                                    "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
-                                                                }`}>
-                                                                {p.marks}
-                                                            </span>
-                                                        ) : (
+                                                {student.practicals.map((p, pIdx) => {
+                                                    const passThresh = Math.ceil(p.maxMarks * 0.6);
+                                                    return (
+                                                        <td key={pIdx} className="px-2 py-3 text-center">
+                                                            {p.marks !== null ? (
+                                                                <span className={`inline-flex items-center justify-center px-1.5 py-1 rounded-lg text-xs font-bold ${p.marks >= Math.ceil(p.maxMarks * 0.8) ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400" :
+                                                                    p.marks >= passThresh ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400" :
+                                                                        "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
+                                                                    }`}>
+                                                                    {p.marks}/{p.maxMarks}
+                                                                </span>
+                                                            ) : (
                                                             (() => {
                                                                 const deadline = practicalDeadlines[pIdx];
                                                                 const isExpired = deadline ? new Date(deadline).getTime() < Date.now() : false;
@@ -338,16 +355,17 @@ export default function SubjectReportView({
                                                             })()
                                                         )}
                                                     </td>
-                                                ))}
+                                                    );
+                                                })}
                                                 <td className="px-4 py-3 text-center font-bold text-gray-900 dark:text-white">
-                                                    {student.total}
+                                                    {student.total}/{student.maxTotal}
                                                 </td>
                                                 <td className="px-4 py-3 text-center">
-                                                    <span className={`inline-flex items-center justify-center px-2 py-1 rounded-lg text-xs font-bold ${student.avg >= 5
+                                                    <span className={`inline-flex items-center justify-center px-2 py-1 rounded-lg text-xs font-bold ${student.overallPercentage >= 60
                                                         ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
                                                         : "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
                                                         }`}>
-                                                        {student.avg.toFixed(1)}
+                                                        {student.overallPercentage.toFixed(0)}%
                                                     </span>
                                                 </td>
                                             </tr>

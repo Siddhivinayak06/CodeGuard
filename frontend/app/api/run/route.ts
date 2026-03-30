@@ -518,7 +518,8 @@ export async function POST(req: Request) {
         console.error("Error checking existing marks:", e);
       }
 
-      const newStatus = marksObtained >= 4 ? "passed" : "failed";
+      const passThreshold = Math.ceil(maxMarks * 0.6);
+      const newStatus = marksObtained >= passThreshold ? "passed" : "failed";
 
       if (shouldUpdate) {
         try {
@@ -561,7 +562,7 @@ export async function POST(req: Request) {
 
     return NextResponse.json({
       results: allResults,
-      verdict: marksObtained >= 4 ? "passed" : "failed",
+      verdict: marksObtained >= Math.ceil(maxMarks * 0.6) ? "passed" : "failed",
       marksObtained,
       passedTestCases: passed,
       totalTestCases: total,

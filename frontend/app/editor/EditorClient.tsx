@@ -709,19 +709,25 @@ int main() {
         .single<any>();
 
       if (data) {
-        // 1. Strict Lock (is_locked or attempts)
+        // 1. Strict Lock (is_locked flag set by faculty or system)
         if (data.is_locked) {
           setIsSessionLocked(true);
           setLockReason(data.lock_reason || "Session locked by faculty.");
           return;
         }
 
-        const attempts = data.attempt_count || 0;
-        const max = data.max_attempts || 1;
-        if (attempts >= max) {
-          setIsSessionLocked(true);
-          setLockReason("You have already used your attempt. Refreshing is not allowed.");
-          return;
+        // 2. Attempt-based lock — skip in exam mode because the exam start
+        //    API already validates attempts server-side and increments
+        //    attempt_count. Checking here races with that API call and can
+        //    falsely lock the student out when the increment completes first.
+        if (!isExamMode) {
+          const attempts = data.attempt_count || 0;
+          const max = data.max_attempts || 1;
+          if (attempts >= max) {
+            setIsSessionLocked(true);
+            setLockReason("You have already used your attempt. Refreshing is not allowed.");
+            return;
+          }
         }
 
         // Sequential lock removed — students can access any scheduled practical

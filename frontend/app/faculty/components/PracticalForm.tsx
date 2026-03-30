@@ -1118,12 +1118,9 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
 
       const savedSettings = localStorage.getItem("ai_settings");
       const config = savedSettings ? JSON.parse(savedSettings) : {};
-      const apiUrl =
-        process.env.NEXT_PUBLIC_AI_API_URL || "http://localhost:5002/ai";
-
       const { data: { session } } = await supabase.auth.getSession();
 
-      const res = await fetch(`${apiUrl}/chat`, {
+      const res = await fetch(`/api/ai/chat`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -1241,10 +1238,9 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
       formData.append("pdf", file);
       formData.append("isExam", String(isExam));
 
-      const apiUrl = process.env.NEXT_PUBLIC_AI_API_URL || "http://localhost:5002/ai";
       const { data: { session } } = await supabase.auth.getSession();
 
-      const res = await fetch(`${apiUrl}/generate-bulk-practicals-from-pdf`, {
+      const res = await fetch(`/api/ai/generate-bulk`, {
         method: "POST",
         headers: {
           "Authorization": `Bearer ${session?.access_token || ""}`

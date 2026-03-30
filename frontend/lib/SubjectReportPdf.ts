@@ -5,7 +5,7 @@ import autoTable from "jspdf-autotable";
 interface StudentPracticalMarks {
     student_name: string;
     roll_no: string;
-    practicals: { title: string; marks: number | null }[];
+    practicals: { title: string; marks: number | null; maxMarks: number }[];
 }
 
 interface SubjectReportData {
@@ -13,6 +13,7 @@ interface SubjectReportData {
     subjectCode: string;
     practicalTitles: string[];
     practicalDeadlines: (string | null)[];
+    practicalMaxMarks: number[];
     students: StudentPracticalMarks[];
     generatedBy?: string;
 }
@@ -22,6 +23,7 @@ export async function generateSubjectReport({
     subjectCode,
     practicalTitles,
     practicalDeadlines,
+    practicalMaxMarks,
     students,
     generatedBy,
 }: SubjectReportData) {
@@ -69,26 +71,26 @@ export async function generateSubjectReport({
 
     const tableBody = students.map((student, idx) => {
         const marks = student.practicals.map((p, pIdx) => {
-            if (p.marks !== null) return p.marks.toString();
+            if (p.marks !== null) return `${p.marks}/${p.maxMarks || practicalMaxMarks[pIdx] || 10}`;
 
             const deadline = practicalDeadlines[pIdx];
             const isExpired = deadline ? new Date(deadline).getTime() < Date.now() : false;
             return isExpired ? "Abs" : "-";
         });
-        const validMarks = student.practicals
-            .filter((p) => p.marks !== null)
-            .map((p) => p.marks as number);
-        const total = validMarks.reduce((sum, m) => sum + m, 0);
-        const avg =
-            validMarks.length > 0 ? (total / validMarks.length).toFixed(1) : "-";
+        
+        const validPracticals = student.practicals.filter((p) => p.marks !== null);
+        const total = validPracticals.reduce((sum, p) => sum + (p.marks as number), 0);
+        const maxTotal = validPracticals.reduce((sum, p) => sum + (p.maxMarks || 10), 0);
+        
+        const overallPercentage = maxTotal > 0 ? ((total / maxTotal) * 100).toFixed(0) + "%" : "-";
 
         return [
             (idx + 1).toString(),
             student.student_name,
             student.roll_no,
             ...marks,
-            total.toString(),
-            avg,
+            `${total}/${maxTotal}`,
+            overallPercentage,
         ];
     });
 

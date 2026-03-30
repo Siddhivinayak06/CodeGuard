@@ -92,6 +92,7 @@ interface Submission {
   level_id?: number | null;
   level_title?: string | null;
   level_max_marks?: number | null;
+  assigned_set_name?: string | null;
 }
 
 interface GroupedSubmission {
@@ -108,6 +109,7 @@ interface GroupedSubmission {
   latestDate: string;
   attempt_count: number;
   max_attempts: number;
+  assigned_set_name?: string | null;
 }
 
 interface TestCase {
@@ -159,10 +161,11 @@ function FacultySubmissionsContentInner() {
     subjectCode: string;
     practicalTitles: string[];
     practicalDeadlines: (string | null)[];
+    practicalMaxMarks: number[];
     students: {
       student_name: string;
       roll_no: string;
-      practicals: { title: string; marks: number | null }[];
+      practicals: { title: string; marks: number | null; maxMarks: number }[];
     }[];
   } | null>(null);
 
@@ -308,6 +311,41 @@ function FacultySubmissionsContentInner() {
         spMap = new Map((sps as any[])?.map(sp => [`${sp.student_id}_${sp.practical_id}`, sp]));
       }
 
+      // Fetch exam sessions with assigned set names for exam practicals
+      // Maps student_id+practical_id -> set_name
+      const examSetMap = new Map<string, string>();
+      try {
+        // Find exams for the practicals in this result set
+        const { data: exams } = await (supabase
+          .from("exams") as any)
+          .select("id, practical_id")
+          .in("practical_id", practicalIdsForSps);
+
+        if (exams && exams.length > 0) {
+          const examIds = exams.map((e: any) => e.id);
+          const examPracticalMap = new Map<string, number>(exams.map((e: any) => [e.id, e.practical_id]));
+
+          // Fetch all exam_sessions with assigned set info
+          const { data: sessions } = await (supabase
+            .from("exam_sessions") as any)
+            .select("student_id, exam_id, assigned_set_id, exam_question_sets ( set_name )")
+            .in("exam_id", examIds)
+            .in("student_id", studentIds);
+
+          (sessions || []).forEach((sess: any) => {
+            const practicalId = examPracticalMap.get(sess.exam_id);
+            if (practicalId !== undefined) {
+              const setName = sess.exam_question_sets?.set_name || null;
+              if (setName) {
+                examSetMap.set(`${sess.student_id}_${practicalId}`, setName);
+              }
+            }
+          });
+        }
+      } catch (examFetchErr) {
+        console.error("Error fetching exam set names:", examFetchErr);
+      }
+
       const formatted: Submission[] = ((data || []) as any[]).map((s: any) => ({
         id: s.id,
         submission_id: s.id,
@@ -328,6 +366,7 @@ function FacultySubmissionsContentInner() {
         level_id: s.level_id,
         level_title: s.practical_levels?.title || null,
         level_max_marks: s.practical_levels?.max_marks || null,
+        assigned_set_name: examSetMap.get(`${s.student_id}_${s.practical_id}`) || null,
       }));
 
       setSubmissions(formatted);
@@ -384,7 +423,7 @@ function FacultySubmissionsContentInner() {
         .from("submissions")
         .update({
           marks_obtained: marksNum,
-          status: marksNum >= 5 ? 'passed' : 'failed'
+          status: marksNum >= 6 ? 'passed' : 'failed'
         } as never)
         .eq("id", submissionId);
 
@@ -450,6 +489,22 @@ function FacultySubmissionsContentInner() {
         .select("student_id, practical_id, marks_obtained")
         .in("practical_id", practicalIds);
 
+      // Fetch practical levels to calculate max marks per practical
+      const { data: practicalLevels } = await supabase
+        .from("practical_levels")
+        .select("practical_id, max_marks")
+        .in("practical_id", practicalIds);
+
+      const maxMarksByPractical = new Map<number, number>();
+      practicalIds.forEach((pid: number) => {
+        const levels = (practicalLevels || []).filter((l: any) => l.practical_id === pid);
+        if (levels.length > 0) {
+          maxMarksByPractical.set(pid, levels.reduce((sum: number, l: any) => sum + (l.max_marks || 10), 0));
+        } else {
+          maxMarksByPractical.set(pid, 10); // Standard single practical
+        }
+      });
+
       // Get unique student IDs from submissions
       const submitterIds = [...new Set(((allSubmissions || []) as any[]).map(s => s.student_id).filter(id => id !== null))];
 
@@ -490,12 +545,21 @@ function FacultySubmissionsContentInner() {
       // 6. Build the report data structure
       const reportStudents = students.map(student => {
         const practicals = practicalIds.map((pid: number) => {
-          const submission = ((allSubmissions || []) as any[]).find(
+          const studentSubs = ((allSubmissions || []) as any[]).filter(
             s => s.student_id === student.uid && s.practical_id === pid
           );
+          
+          let marks: number | null = null;
+          if (studentSubs.length > 0) {
+            marks = studentSubs.reduce((sum, sub) => sum + (sub.marks_obtained || 0), 0);
+          }
+
+          const maxMarksForPid = maxMarksByPractical.get(pid) || 10;
+
           return {
             title: subject.practicals.find((p: any) => p.id === pid)?.title || "",
-            marks: submission?.marks_obtained ?? null,
+            marks,
+            maxMarks: maxMarksForPid
           };
         });
 
@@ -511,6 +575,7 @@ function FacultySubmissionsContentInner() {
         subjectCode: subject.subject_code,
         practicalTitles,
         practicalDeadlines,
+        practicalMaxMarks: practicalIds.map((pid: number) => maxMarksByPractical.get(pid) || 10),
         students: reportStudents,
       });
       setIsReportViewOpen(true);
@@ -630,6 +695,7 @@ function FacultySubmissionsContentInner() {
           latestDate: sub.created_at,
           attempt_count: sub.attempt_count || 0,
           max_attempts: sub.max_attempts || 1,
+          assigned_set_name: sub.assigned_set_name || null,
         });
       }
       const group = map.get(key)!;
@@ -666,7 +732,13 @@ function FacultySubmissionsContentInner() {
 
         group.totalMarks = allGraded ? totalMarks : null;
         group.totalMaxMarks = totalMaxMarks;
-        group.overallStatus = allPassed ? 'passed' : anyFailed ? 'failed' : 'pending';
+
+        if (allGraded) {
+          const passThreshold = Math.ceil(totalMaxMarks * 0.6);
+          group.overallStatus = totalMarks >= passThreshold ? 'passed' : 'failed';
+        } else {
+          group.overallStatus = 'pending';
+        }
       } else {
         // Single submission
         const s = subs[0];
@@ -694,6 +766,27 @@ function FacultySubmissionsContentInner() {
     failed: submissions.filter(s => s.status === 'failed').length,
     pending: submissions.filter(s => ['pending', 'submitted'].includes(s.status)).length,
   };
+
+  // Set-wise stats (computed from grouped submissions)
+  const setStats = useMemo(() => {
+    const setNames = new Set<string>();
+    groupedSubmissions.forEach(g => {
+      if (g.assigned_set_name) setNames.add(g.assigned_set_name);
+    });
+    if (setNames.size === 0) return null;
+
+    const result = Array.from(setNames).sort().map(setName => {
+      const groups = groupedSubmissions.filter(g => g.assigned_set_name === setName);
+      return {
+        setName,
+        total: groups.length,
+        passed: groups.filter(g => g.overallStatus === 'passed').length,
+        failed: groups.filter(g => g.overallStatus === 'failed').length,
+        pending: groups.filter(g => g.overallStatus === 'pending').length,
+      };
+    });
+    return result;
+  }, [groupedSubmissions]);
 
   // Bulk Actions
   const handleSelectAll = (checked: boolean) => {
@@ -822,45 +915,108 @@ function FacultySubmissionsContentInner() {
           </motion.div>
 
           {/* Stats Row */}
-          <motion.div
-            variants={containerVariants}
-            initial="hidden"
-            animate="visible"
-            className="grid grid-cols-2 md:grid-cols-4 gap-6"
-          >
-            <StatCard
-              label="Pending"
-              value={stats.pending}
-              icon={Clock}
-              colorClass="text-amber-600 dark:text-amber-400"
-              itemVariants={itemVariants}
-              loading={loading}
-            />
-            <StatCard
-              label="Passed"
-              value={stats.passed}
-              icon={CheckCircle2}
-              colorClass="text-emerald-600 dark:text-emerald-400"
-              itemVariants={itemVariants}
-              loading={loading}
-            />
-            <StatCard
-              label="Failed"
-              value={stats.failed}
-              icon={XCircle}
-              colorClass="text-red-600 dark:text-red-400"
-              itemVariants={itemVariants}
-              loading={loading}
-            />
-            <StatCard
-              label="Total"
-              value={stats.total}
-              icon={LayoutGrid}
-              colorClass="text-indigo-600 dark:text-indigo-400"
-              itemVariants={itemVariants}
-              loading={loading}
-            />
-          </motion.div>
+          {setStats && setStats.length > 0 ? (
+            <motion.div
+              variants={containerVariants}
+              initial="hidden"
+              animate="visible"
+              className="space-y-4"
+            >
+              {/* Set-wise stat cards */}
+              <div className={`grid gap-4 ${setStats.length === 1 ? 'grid-cols-1' : setStats.length === 2 ? 'grid-cols-1 md:grid-cols-2' : 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3'}`}>
+                {setStats.map(ss => (
+                  <motion.div
+                    key={ss.setName}
+                    variants={itemVariants}
+                    className="glass-card rounded-2xl p-5"
+                  >
+                    <div className="flex items-center justify-between mb-3">
+                      <span className="text-sm font-bold text-violet-600 dark:text-violet-400 bg-violet-100 dark:bg-violet-900/30 px-2.5 py-1 rounded-lg">
+                        {ss.setName}
+                      </span>
+                      <span className="text-xs text-gray-500 font-medium">
+                        {ss.total} student{ss.total !== 1 ? 's' : ''}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-4">
+                      <div className="flex items-center gap-1.5">
+                        <div className="w-2 h-2 rounded-full bg-emerald-500" />
+                        <span className="text-sm font-semibold text-emerald-700 dark:text-emerald-400">{ss.passed}</span>
+                        <span className="text-[10px] text-gray-400">passed</span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <div className="w-2 h-2 rounded-full bg-red-500" />
+                        <span className="text-sm font-semibold text-red-700 dark:text-red-400">{ss.failed}</span>
+                        <span className="text-[10px] text-gray-400">failed</span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <div className="w-2 h-2 rounded-full bg-amber-400" />
+                        <span className="text-sm font-semibold text-amber-700 dark:text-amber-400">{ss.pending}</span>
+                        <span className="text-[10px] text-gray-400">pending</span>
+                      </div>
+                    </div>
+                    {/* Mini progress bar */}
+                    <div className="mt-3 h-1.5 rounded-full bg-gray-100 dark:bg-gray-800 overflow-hidden flex">
+                      {ss.total > 0 && (
+                        <>
+                          <div className="h-full bg-emerald-500 transition-all" style={{ width: `${(ss.passed / ss.total) * 100}%` }} />
+                          <div className="h-full bg-red-500 transition-all" style={{ width: `${(ss.failed / ss.total) * 100}%` }} />
+                          <div className="h-full bg-amber-400 transition-all" style={{ width: `${(ss.pending / ss.total) * 100}%` }} />
+                        </>
+                      )}
+                    </div>
+                  </motion.div>
+                ))}
+              </div>
+              {/* Compact overall totals */}
+              <div className="grid grid-cols-4 gap-3">
+                <StatCard label="Pending" value={stats.pending} icon={Clock} colorClass="text-amber-600 dark:text-amber-400" itemVariants={itemVariants} loading={loading} />
+                <StatCard label="Passed" value={stats.passed} icon={CheckCircle2} colorClass="text-emerald-600 dark:text-emerald-400" itemVariants={itemVariants} loading={loading} />
+                <StatCard label="Failed" value={stats.failed} icon={XCircle} colorClass="text-red-600 dark:text-red-400" itemVariants={itemVariants} loading={loading} />
+                <StatCard label="Total" value={stats.total} icon={LayoutGrid} colorClass="text-indigo-600 dark:text-indigo-400" itemVariants={itemVariants} loading={loading} />
+              </div>
+            </motion.div>
+          ) : (
+            <motion.div
+              variants={containerVariants}
+              initial="hidden"
+              animate="visible"
+              className="grid grid-cols-2 md:grid-cols-4 gap-6"
+            >
+              <StatCard
+                label="Pending"
+                value={stats.pending}
+                icon={Clock}
+                colorClass="text-amber-600 dark:text-amber-400"
+                itemVariants={itemVariants}
+                loading={loading}
+              />
+              <StatCard
+                label="Passed"
+                value={stats.passed}
+                icon={CheckCircle2}
+                colorClass="text-emerald-600 dark:text-emerald-400"
+                itemVariants={itemVariants}
+                loading={loading}
+              />
+              <StatCard
+                label="Failed"
+                value={stats.failed}
+                icon={XCircle}
+                colorClass="text-red-600 dark:text-red-400"
+                itemVariants={itemVariants}
+                loading={loading}
+              />
+              <StatCard
+                label="Total"
+                value={stats.total}
+                icon={LayoutGrid}
+                colorClass="text-indigo-600 dark:text-indigo-400"
+                itemVariants={itemVariants}
+                loading={loading}
+              />
+            </motion.div>
+          )}
 
           {/* Submissions Table Card */}
           <motion.div
@@ -1003,11 +1159,15 @@ function FacultySubmissionsContentInner() {
                               <td className="px-4 py-3 text-gray-600 dark:text-gray-300 max-w-[200px] truncate" title={group.practical_title}>
                                 <div className="flex items-center gap-2">
                                   {group.practical_title}
-                                  {isMultiTask && (
+                                  {group.assigned_set_name ? (
+                                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-violet-100 dark:bg-violet-900/30 text-violet-600 dark:text-violet-400">
+                                      {group.assigned_set_name}
+                                    </span>
+                                  ) : isMultiTask ? (
                                     <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400">
                                       {group.submissions.length} tasks
                                     </span>
-                                  )}
+                                  ) : null}
                                 </div>
                               </td>
                             )}

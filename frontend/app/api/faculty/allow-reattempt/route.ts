@@ -64,6 +64,8 @@ export async function POST(req: Request) {
         max_attempts: newMax,
         is_locked: false,
         lock_reason: null, // Clear reason
+        status: "assigned", // Reset status for fresh attempt
+        completed_at: null, // Clear completion timestamp
         // We do NOT reset attempt_count, so history is preserved.
         // Since max > attempt_count, they can start.
       } as never)
@@ -95,17 +97,74 @@ export async function POST(req: Request) {
           .eq("student_id", studentId) as any;
 
         console.warn(`[Allow Re-attempt] Deleted ${deletedSessionCount ?? '?'} exam_session(s) for student ${studentId}, exam ${examData.id}, practical ${practicalId}. Initiated by faculty ${user.id}`);
+
+        // Re-create a pre-assigned exam session (started_at=null) so the student
+        // can start the exam fresh when they open the editor.
+        // Round-robin set assignment (pick the set with fewest existing assignments).
+        const { data: sets } = await (supabase
+          .from("exam_question_sets") as any)
+          .select("id, set_order")
+          .eq("exam_id", examData.id)
+          .order("set_order", { ascending: true });
+
+        let pickedSetId: string | null = null;
+
+        if (sets && sets.length > 0) {
+          const { data: allSessions } = await (supabase
+            .from("exam_sessions") as any)
+            .select("assigned_set_id")
+            .eq("exam_id", examData.id)
+            .not("assigned_set_id", "is", null);
+
+          const setLoad = new Map<string, number>();
+          sets.forEach((s: any) => setLoad.set(s.id, 0));
+          (allSessions || []).forEach((sess: any) => {
+            const sid = String(sess.assigned_set_id || "");
+            if (sid && setLoad.has(sid)) {
+              setLoad.set(sid, (setLoad.get(sid) || 0) + 1);
+            }
+          });
+
+          let minCount = Infinity;
+          for (const s of sets) {
+            const count = setLoad.get(s.id) || 0;
+            if (count < minCount) {
+              minCount = count;
+              pickedSetId = s.id;
+            }
+          }
+        }
+
+        // Fetch exam end_time for fallback expiry
+        const { data: examForExpiry } = await (supabase
+          .from("exams") as any)
+          .select("end_time")
+          .eq("id", examData.id)
+          .single();
+
+        const fallbackExpiry = examForExpiry?.end_time
+          ? new Date(examForExpiry.end_time).toISOString()
+          : new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString();
+
+        const { error: reInsertErr } = await (supabase
+          .from("exam_sessions") as any)
+          .insert({
+            exam_id: examData.id,
+            student_id: studentId,
+            started_at: null,
+            expires_at: fallbackExpiry,
+            is_active: true,
+            assigned_set_id: pickedSetId,
+          });
+
+        if (reInsertErr) {
+          console.error("[Allow Re-attempt] Failed to re-create exam session:", reInsertErr);
+        } else {
+          console.log(`[Allow Re-attempt] Re-created exam session for student ${studentId}, exam ${examData.id}, assigned_set=${pickedSetId}`);
+        }
       }
 
-      // 2. Clear old submissions to allow starting from scratch 
-      //    (otherwise start screen may block them or old code will persist)
-      const { count: deletedSubmissionCount } = await supabase
-        .from("submissions")
-        .delete({ count: "exact" })
-        .eq("practical_id", practicalId)
-        .eq("student_id", studentId) as any;
-        
-      console.warn(`[Allow Re-attempt] Deleted ${deletedSubmissionCount ?? '?'} submission(s) for student ${studentId}, practical ${practicalId}. Initiated by faculty ${user.id}`);
+      // Old submissions are preserved for history/grading reference.
     }
     // -----------------------------------------------------------------
 
