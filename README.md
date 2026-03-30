@@ -164,133 +164,92 @@ If you prefer running services individually for development:
 ## 🧱 Architecture Overview
 
 ```mermaid
-flowchart TB
-   %% ── Client ──────────────────────────────────────────────────
-   subgraph CLIENT["🖥️ Client"]
-      direction LR
-      Browser["Browser"]
-      Monaco["Monaco Editor"]
-      Term["Terminal UI\n(xterm.js)"]
-   end
+flowchart TD
 
-   %% ── Frontend ────────────────────────────────────────────────
-   subgraph FRONTEND["⚛️ Frontend · Next.js 16 (Edge)"]
-      direction TB
-      MW["🛡️ Edge Middleware\nRBAC · Session Enforcement\nSecurity Headers (CSP, HSTS)"]
-      APIR["API Routes\n/api/run · /api/submission\n/api/exam · /api/ai"]
-      Pages["Pages & Components\nDashboards · Auth · Compiler"]
-   end
+    subgraph ClientLayer [🖥️ Client Browser]
+        Browser["User Browser"]
+        Monaco["Monaco Editor"]
+        Term["Terminal UI (xterm.js)"]
+    end
 
-   %% ── Backend ─────────────────────────────────────────────────
-   subgraph BACKEND["🚀 Backend · Express.js 5"]
-      direction TB
-      SEC["🔒 Security Layer\nHelmet · Rate Limiter\nCORS · Auth Middleware"]
+    subgraph FrontendLayer [⚛️ Frontend Layer · Next.js 16]
+        MW["🛡️ Edge Middleware\n(RBAC, Session)"]
+        Pages["Pages & Components\n(Dashboards, Auth)"]
+        APIR["API Routes\n(/api/run, /api/ai)"]
+    end
 
-      subgraph ROUTES["Route Handlers"]
-         direction LR
-         EXEC["/execute\nBatch & Single Run"]
-         AIR["/ai\nChat · Explain\nAnalyze · Hints"]
-      end
+    subgraph BackendLayer [🚀 Backend Layer · Express.js 5]
+        SEC["🔒 Security Layer\n(Helmet, CORS, Auth)"]
+        SS["Socket Service\n(WebSocket Gateway)"]
+        Routes["Route Handlers\n(/execute, /ai)"]
+        QS["Queue Service\n(BullMQ Worker)"]
+        AIS["AI Service\n(Streaming Context)"]
+    end
 
-      subgraph SERVICES["Core Services"]
-         direction LR
-         SS["Socket Service\nWebSocket Gateway\n+ Auth Handshake"]
-         QS["Queue Service\nBullMQ Producer\n& Worker"]
-         AIS["AI Service\nGemini · Ollama\nStreaming Chat"]
-      end
-   end
+    subgraph EngineLayer [⚙️ Execution Engine]
+        PM["Pool Manager\n(Acquire, Release, Scaling)"]
+        Runners["Runner Factory\n(Python, Java, C/C++)"]
+        Wrappers["Interactive Wrappers\n(node-pty)"]
+    end
 
-   %% ── Execution Engine ────────────────────────────────────────
-   subgraph ENGINE["⚙️ Execution Engine"]
-      direction TB
-      PM["Pool Manager\nAcquire · Release · Reset\nDynamic Scaling"]
+    subgraph InfraLayer [🏗️ Infrastructure]
+        DSP["Docker Socket Proxy\n(TCP, Whitelisted)"]
+        Containers["📦 Sandboxed Pools\n(tmpfs, read-only FS, Seccomp)"]
+        Redis[("Redis\n(Job Queue)")]
+    end
 
-      subgraph RUNNERS["Runner Factory"]
-         direction LR
-         BR["Base Runner"]
-         PR["Python\nRunner"]
-         JR["Java\nRunner"]
-         CR["C/C++\nRunner"]
-      end
+    subgraph DataLayer [☁️ Data & External Services]
+        SB[("Supabase\n(PostgreSQL, Auth, RLS)")]
+        Gemini["🤖 Gemini 1.5 Flash"]
+    end
 
-      subgraph WRAPPERS["Interactive Wrappers (node-pty)"]
-         direction LR
-         PW["interactive_wrapper.py\nMulti-file · REPL"]
-         JW["InteractiveWrapper.java\nCompile & Run"]
-         CW["interactive_wrapper.c\nCompile & Execute"]
-      end
-   end
+    %% Dependencies and Flow
+    Browser -- "HTTPS" --> MW
+    Monaco -- "HTTP POST" --> APIR
+    Term -. "wss://" .-> SS
 
-   %% ── Infrastructure ──────────────────────────────────────────
-   subgraph INFRA["🏗️ Infrastructure"]
-      direction TB
-      DSP["Docker Socket Proxy\n(TCP · Whitelisted Ops)"]
+    MW --> Pages
+    Pages --> APIR
+    MW -. "Session check" .-> SB
 
-      subgraph CONTAINERS["Sandboxed Container Pools"]
-         direction LR
-         PC["🐍 Python Pool\nRead-only FS\ntmpfs workspace"]
-         JC["☕ Java Pool\nSerial GC · 128M\ntmpfs workspace"]
-         CC["⚙️ C/C++ Pool\nSeccomp Profile\ntmpfs workspace"]
-      end
+    APIR -- "Proxy /execute" --> SEC
+    SEC -. "JWT Verify" .-> SB
 
-      REDIS[("Redis\nJob Queue · State")]
-   end
+    SEC --> Routes
+    Routes --> QS
+    Routes --> AIS
+    Routes -- "Save submission" --> SB
 
-   %% ── Data & External ─────────────────────────────────────────
-   subgraph DATA["☁️ Data & External Services"]
-      direction LR
-      SB[("Supabase\nPostgreSQL · Auth\nRLS · Storage")]
-      GEMINI["🤖 Gemini 1.5 Flash\nCode Intelligence\nStreaming API"]
-   end
+    QS <--> Redis
+    AIS <--> Gemini
 
-   %% ── Connections ─────────────────────────────────────────────
+    QS --> PM
+    SS <--> PM
 
-   %% Client → Frontend
-   Browser -- "HTTPS" --> MW
-   Monaco -- "Code submit" --> APIR
-   Term -. "WebSocket (wss://)" .-> SS
+    PM --> Runners
+    PM --> Wrappers
 
-   %% Frontend internals
-   MW --> Pages
-   MW -- "Session check" --> SB
-   Pages --> APIR
-   APIR -- "Proxy /execute & /ai" --> SEC
+    PM -- "docker API" --> DSP
+    DSP --> Containers
+    Wrappers -. "stdin/stdout" .-> Containers
 
-   %% Backend internals
-   SEC --> ROUTES
-   EXEC --> QS
-   AIR --> AIS
-   QS -- "Enqueue job" --> REDIS
-   REDIS -- "Dispatch" --> QS
+    Containers -- "Batch result" --> QS
+    Containers -. "Live output" .-> SS
 
-   %% Backend → Execution
-   QS --> PM
-   SS -- "Interactive session" --> PM
+    %% Styles for distinct layering
+    classDef client fill:#E3F2FD,stroke:#1565C0,stroke-width:1px,color:#000
+    classDef frontend fill:#F3E5F5,stroke:#6A1B9A,stroke-width:1px,color:#000
+    classDef backend fill:#E8F5E9,stroke:#2E7D32,stroke-width:1px,color:#000
+    classDef engine fill:#FFF3E0,stroke:#E65100,stroke-width:1px,color:#000
+    classDef infra fill:#ECEFF1,stroke:#455A64,stroke-width:1px,color:#000
+    classDef data fill:#EFEBE9,stroke:#4E342E,stroke-width:1px,color:#000
 
-   %% Execution internals
-   PM --> RUNNERS
-   BR --> PR
-   BR --> JR
-   BR --> CR
-   PM --> WRAPPERS
-
-   %% Execution → Infrastructure
-   PM -- "docker run / exec" --> DSP
-   DSP --> CONTAINERS
-   WRAPPERS -. "stdin/stdout via pty" .-> CONTAINERS
-
-   %% Results flow back
-   CONTAINERS -- "Output / Exit code" --> SS
-   CONTAINERS -- "Batch results" --> QS
-   QS -- "Job result" --> EXEC
-
-   %% Live streaming
-   SS -. "Stream output" .-> Term
-
-   %% Data connections
-   SEC -- "JWT verify" --> SB
-   EXEC -- "Save submission" --> SB
-   AIS -- "Streaming chat" --> GEMINI
+    class Browser,Monaco,Term client
+    class MW,Pages,APIR frontend
+    class SEC,SS,Routes,QS,AIS backend
+    class PM,Runners,Wrappers engine
+    class DSP,Containers,Redis infra
+    class SB,Gemini data
 ```
 
 > **Key:** Solid lines (`──`) are HTTP/RPC calls. Dotted lines (`··`) are persistent WebSocket / PTY streams. Each container pool runs with `--network none`, memory caps, PID limits, and a custom Seccomp profile.
