@@ -26,11 +26,12 @@ class CRunner extends BaseRunner {
 
     return `
 mkdir -p /tmp/${uniqueId} &&
-printf "%s" '${this.escapeForPrintf(code)}' > /tmp/${uniqueId}/code.c &&
+${this.writeBase64FileCommand(code, `/tmp/${uniqueId}/code.c`)} &&
+${this.writeBase64FileCommand(stdinInput, `/tmp/${uniqueId}/input.txt`)} &&
 gcc /tmp/${uniqueId}/code.c -o /tmp/${uniqueId}/a.out -lm 2>/tmp/${uniqueId}/gcc_err.txt || true &&
 cat /tmp/${uniqueId}/gcc_err.txt 1>&2 || true &&
 if [ -f /tmp/${uniqueId}/a.out ]; then
-  printf "%s" '${this.escapeForPrintf(stdinInput)}' | timeout ${timeoutSec} /tmp/${uniqueId}/a.out
+  cat /tmp/${uniqueId}/input.txt | timeout ${timeoutSec} /tmp/${uniqueId}/a.out
 else
   exit 1
 fi

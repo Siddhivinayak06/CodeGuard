@@ -26,8 +26,9 @@ class PythonRunner extends BaseRunner {
 
     return `
 mkdir -p /tmp/${uniqueId} &&
-printf "%s" '${this.escapeForPrintf(code)}' > /tmp/${uniqueId}/code.py &&
-printf "%s" '${this.escapeForPrintf(stdinInput)}' | timeout ${timeoutSec} python3 /tmp/${uniqueId}/code.py
+${this.writeBase64FileCommand(code, `/tmp/${uniqueId}/code.py`)} &&
+${this.writeBase64FileCommand(stdinInput, `/tmp/${uniqueId}/input.txt`)} &&
+cat /tmp/${uniqueId}/input.txt | timeout ${timeoutSec} python3 /tmp/${uniqueId}/code.py
     `.trim();
   }
 }

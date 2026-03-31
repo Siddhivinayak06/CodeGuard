@@ -504,7 +504,9 @@ export default function PracticalForm({
             if (refsData && refsData.length > 0) {
               setSampleCode(refsData[0].code || "");
               setStarterCode(refsData[0].starter_code || "");
-              setSampleLanguage(refsData[0].language || "c");
+              setSampleLanguage(refsData[0].language || practical.language || "c");
+            } else {
+              setSampleLanguage(practical.language || "c");
             }
           } else {
             setEnableLevels(isExam ? true : false);
@@ -518,7 +520,9 @@ export default function PracticalForm({
             if (refsData && refsData.length > 0) {
               setSampleCode(refsData[0].code || "");
               setStarterCode(refsData[0].starter_code || "");
-              setSampleLanguage(refsData[0].language || "c");
+              setSampleLanguage(refsData[0].language || practical.language || "c");
+            } else {
+              setSampleLanguage(practical.language || "c");
             }
           }
 
@@ -765,6 +769,11 @@ export default function PracticalForm({
       | HTMLInputElement
       | HTMLTextAreaElement
       | HTMLSelectElement;
+
+    if (name === "language") {
+      setSampleLanguage(value);
+    }
+
     setForm((prev) => ({
       ...prev,
       [name]:
@@ -1237,6 +1246,7 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
       const formData = new FormData();
       formData.append("pdf", file);
       formData.append("isExam", String(isExam));
+      formData.append("language", form.language || "c");
 
       const { data: { session } } = await supabase.auth.getSession();
 
@@ -1467,7 +1477,8 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
       // Update single-level fields from the first practical if no levels
       let finalTestCases = testCases;
       if (allMappedLevels.length === 0) {
-        if (firstPractical.language) setSampleLanguage(firstPractical.language);
+        const langToUse = firstPractical.language || form.language || "c";
+        setSampleLanguage(langToUse);
         if (firstPractical.reference_code) setSampleCode(firstPractical.reference_code);
         if (firstPractical.starter_code) setStarterCode(firstPractical.starter_code);
         
@@ -3595,7 +3606,7 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
                               generatingTests={generatingTests}
                               sampleCode={sampleCode}
                               setSampleCode={setSampleCode}
-                              sampleLanguage={sampleLanguage || "c"}
+                              sampleLanguage={sampleLanguage || form.language || "c"}
                               onAddLevel={createTaskForActiveSet}
                               onRemoveLevel={(displayLevel) => {
                                 const originalLevel = originalLevelByDisplay.get(displayLevel);
@@ -3697,7 +3708,7 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
                             setSampleCode={setSampleCode}
                             starterCode={starterCode}
                             setStarterCode={setStarterCode}
-                            sampleLanguage={sampleLanguage}
+                            sampleLanguage={sampleLanguage || form.language || "c"}
                             setSampleLanguage={setSampleLanguage}
                             getLanguageExtension={getLanguageExtension}
                             testCases={testCases}

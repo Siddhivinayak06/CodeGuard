@@ -39,13 +39,8 @@ const executeQueue = new Queue(QUEUE_NAME, {
   connection: queueConnection,
   defaultJobOptions: {
     attempts: 1,
-    removeOnComplete: {
-      age: 3600, // keep for 1 hour
-      count: 1000,
-    },
-    removeOnFail: {
-      age: 24 * 3600, // keep for 24 hours
-    },
+    removeOnComplete: true,
+    removeOnFail: true,
   },
 });
 

@@ -3,9 +3,11 @@ const { spawn } = require('child_process');
 const { v4: uuidv4 } = require('uuid');
 const logger = require('../utils/logger');
 const poolManager = require('../services/poolManager');
+const config = require('../config');
 
-function escapeForPrintf(s = '') {
-  return String(s).replace(/'/g, "'\\''");
+function writeBase64FileCommand(content = '', filePath) {
+  const b64 = Buffer.from(content).toString('base64');
+  return `echo "${b64}" | base64 -d > ${filePath}`;
 }
 
 async function runCommand(args, options = {}) {
@@ -33,18 +35,23 @@ async function compileInContainer(containerName, code, lang, uniqueId) {
 
   // Pooled containers use /tmp/${uniqueId} for isolation
   if (lang === 'python') {
-    cmd = `mkdir -p /tmp/${uniqueId} && printf "%s" '${escapeForPrintf(escapedCode)}' > /tmp/${uniqueId}/code.py`;
+    cmd = `mkdir -p /tmp/${uniqueId} && ${writeBase64FileCommand(escapedCode, `/tmp/${uniqueId}/code.py`)}`;
   } else if (lang === 'c') {
-    cmd = `mkdir -p /tmp/${uniqueId} && printf "%s" '${escapeForPrintf(escapedCode)}' > /tmp/${uniqueId}/code.c && gcc -O2 /tmp/${uniqueId}/code.c -o /tmp/${uniqueId}/a.out -lm 2>/tmp/${uniqueId}/gcc_err.txt || (cat /tmp/${uniqueId}/gcc_err.txt 1>&2 && exit 1)`;
+    cmd = `mkdir -p /tmp/${uniqueId} && ${writeBase64FileCommand(escapedCode, `/tmp/${uniqueId}/code.c`)} && gcc -O2 /tmp/${uniqueId}/code.c -o /tmp/${uniqueId}/a.out -lm 2>/tmp/${uniqueId}/gcc_err.txt || (cat /tmp/${uniqueId}/gcc_err.txt 1>&2 && exit 1)`;
   } else if (lang === 'cpp' || lang === 'c++') {
-    cmd = `mkdir -p /tmp/${uniqueId} && printf "%s" '${escapeForPrintf(escapedCode)}' > /tmp/${uniqueId}/code.cpp && g++ -O2 /tmp/${uniqueId}/code.cpp -o /tmp/${uniqueId}/a.out -lm 2>/tmp/${uniqueId}/gcc_err.txt || (cat /tmp/${uniqueId}/gcc_err.txt 1>&2 && exit 1)`;
+    cmd = `mkdir -p /tmp/${uniqueId} && ${writeBase64FileCommand(escapedCode, `/tmp/${uniqueId}/code.cpp`)} && g++ -O2 /tmp/${uniqueId}/code.cpp -o /tmp/${uniqueId}/a.out -lm 2>/tmp/${uniqueId}/gcc_err.txt || (cat /tmp/${uniqueId}/gcc_err.txt 1>&2 && exit 1)`;
   } else if (lang === 'java') {
+    let className = 'UserCode';
+    const publicClassMatch = escapedCode.match(/^\s*public\s+class\s+([A-Za-z_][A-Za-z0-9_]*)/m);
+    if (publicClassMatch) {
+      className = publicClassMatch[1];
+    } else {
+      const classMatch = escapedCode.match(/^\s*class\s+([A-Za-z_][A-Za-z0-9_]*)/m);
+      if (classMatch) className = classMatch[1];
+    }
     cmd = `
 mkdir -p /tmp/${uniqueId} &&
-printf "%s" '${escapeForPrintf(escapedCode)}' > /tmp/${uniqueId}/TempUserCode.java &&
-class_name=$(grep -Eo '^[[:space:]]*(public[[:space:]]+)?class[[:space:]]+[A-Za-z_][A-Za-z0-9_]*' /tmp/${uniqueId}/TempUserCode.java | head -n1 | awk '{print $NF}') &&
-if [ -n "$class_name" ]; then code_file=/tmp/${uniqueId}/$class_name.java; else code_file=/tmp/${uniqueId}/UserCode.java; fi &&
-mv /tmp/${uniqueId}/TempUserCode.java "$code_file" &&
+${writeBase64FileCommand(escapedCode, `/tmp/${uniqueId}/${className}.java`)} &&
 javac /tmp/${uniqueId}/*.java 2> /tmp/${uniqueId}/compile_err.txt || (cat /tmp/${uniqueId}/compile_err.txt 1>&2 && exit 1)
 `;
   }
@@ -80,7 +87,7 @@ java -cp /tmp/${uniqueId} $MAIN_CLASS
     lang === 'java'
       ? '/usr/bin/time -f "CPU:%U|%S MEM:%M"'
       : '/usr/bin/time -p';
-  const runCmd = `printf "%s" '${escapeForPrintf(stdinInput)}' | timeout ${timeoutSec} ${timeCmd} sh -c '${baseRunCmd.trim().replace(/'/g, "'\\''")}'`;
+  const runCmd = `${writeBase64FileCommand(stdinInput, `/tmp/${uniqueId}/input.txt`)} && cat /tmp/${uniqueId}/input.txt | timeout ${timeoutSec} ${timeCmd} sh -c '${baseRunCmd.trim().replace(/'/g, "'\\''")}'`;
 
   const result = await runCommand(['exec', containerName, 'sh', '-c', runCmd]);
 
@@ -125,7 +132,7 @@ module.exports = async function runBatchCode(
   batch = [],
   options = {}
 ) {
-  const CONCURRENCY_LIMIT = 5;
+  const CONCURRENCY_LIMIT = config.docker.workersPerContainer || 15;
   const { earlyExit = true } = options;
   const uniqueId = uuidv4();
 

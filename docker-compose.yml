@@ -86,8 +86,8 @@ services:
         NEXT_PUBLIC_DEV_SUPABASE_REDIRECT_URL: ${NEXT_PUBLIC_DEV_SUPABASE_REDIRECT_URL}
         SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY}
     image: ${FRONTEND_IMAGE:-codeguard-frontend}:${FRONTEND_TAG:-latest}
-    expose:
-      - "3000"
+    ports:
+      - "3000:3000"
     env_file:
       - .env
     environment:

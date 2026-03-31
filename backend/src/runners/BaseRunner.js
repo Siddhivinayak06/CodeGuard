@@ -73,12 +73,24 @@ class BaseRunner {
   }
 
   /**
-   * Escape string for printf
+   * Escape string for printf (Deprecated - use writeBase64FileCommand instead)
    * @param {string} s - String to escape
    * @returns {string}
    */
   escapeForPrintf(s = '') {
     return String(s).replace(/'/g, "'\\'");
+  }
+
+  /**
+   * Generates a bash command to safely write a file using base64 decoding.
+   * This avoids all quotes and escaping issues with bash `-c` execution.
+   * @param {string} content - File content
+   * @param {string} filePath - Absolute path in the container
+   * @returns {string} The shell command to execute
+   */
+  writeBase64FileCommand(content = '', filePath) {
+    const b64 = Buffer.from(content).toString('base64');
+    return `echo "${b64}" | base64 -d > ${filePath}`;
   }
 
   /**

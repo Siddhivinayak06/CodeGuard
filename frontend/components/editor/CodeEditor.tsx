@@ -483,6 +483,10 @@ export default function CodeEditor({
                     scrollBeyondLastLine: false,
                     padding: { top: 16, bottom: 16 },
                     stickyScroll: { enabled: false },
+                    smoothScrolling: true,
+                    scrollbar: {
+                      alwaysConsumeMouseWheel: false,
+                    },
                   }}
                 />
               );

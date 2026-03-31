@@ -252,6 +252,11 @@ function drawCodeBlock(
   cap = 10000
 ): number {
   const safe = cleanText((code || "No code submitted").slice(0, cap));
+
+  // Set font BEFORE splitting so metrics are correct for Courier
+  doc.setFont("courier", "normal");
+  doc.setFontSize(8.5);
+
   const lines = doc.splitTextToSize(safe, width - 34) as string[];
 
   const lineH = 10;
@@ -284,8 +289,6 @@ function drawCodeBlock(
     doc.line(x, cy, x + width, cy);
     doc.line(x, cy + batchH, x + width, cy + batchH);
 
-    doc.setFont("courier", "normal");
-    doc.setFontSize(8.5);
 
     let lineY = cy + 11;
     for (let i = 0; i < batch.length; i++) {
@@ -326,6 +329,11 @@ function drawOutputBlock(
 ): number {
   // eslint-disable-next-line no-control-regex
   const safe = cleanText(output.replace(/\x1B\[[0-9;]*[A-Za-z]/g, "")).slice(0, cap);
+
+  // Set font BEFORE splitting so metrics are correct for Courier
+  doc.setFont("courier", "normal");
+  doc.setFontSize(7.5);
+
   const lines = doc.splitTextToSize(safe, width - 20) as string[];
   const lineH = 10;
 
@@ -351,8 +359,6 @@ function drawOutputBlock(
     doc.setLineWidth(0.3);
     doc.rect(x, cy, width, batchH, "S");
 
-    doc.setFont("courier", "normal");
-    doc.setFontSize(7.5);
     doc.setTextColor(...DARK);
 
     let lineY = cy + 11;

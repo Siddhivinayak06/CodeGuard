@@ -9,7 +9,7 @@ const envSchema = z.object({
     .enum(['development', 'production', 'test'])
     .default('development'),
   DOCKER_MEMORY_LIMIT: z.string().default('64m'),
-  DOCKER_CPU_LIMIT: z.string().default('0.1'),
+  DOCKER_CPU_LIMIT: z.string().default('1.0'),
   DOCKER_PIDS_LIMIT: z.string().default('256'),
   DOCKER_JAVA_MEMORY_LIMIT: z.string().default('128m'),
   DOCKER_JAVA_PIDS_LIMIT: z.string().default('512'),
@@ -28,7 +28,7 @@ const envSchema = z.object({
   DOCKER_POOL_SIZE_PYTHON: z.string().transform(Number).default('5'),
   DOCKER_POOL_SIZE_JAVA: z.string().transform(Number).default('5'),
   DOCKER_POOL_SIZE_C: z.string().transform(Number).default('5'),
-  WORKERS_PER_CONTAINER: z.string().transform(Number).default('10'),
+  WORKERS_PER_CONTAINER: z.string().transform(Number).default('15'),
   USE_PROCESS_POOL: z
     .string()
     .transform((val) => val === 'true')

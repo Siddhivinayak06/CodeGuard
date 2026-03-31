@@ -41,12 +41,12 @@ export default function useProctoring({
   useEffect(() => {
     if (!active) return;
 
-    // Start grace period (e.g. 3 seconds) to allow fullscreen transition
+    // Start grace period (e.g. 5 seconds) to allow fullscreen transition
     isGracePeriod.current = true;
     const graceTimeout = setTimeout(() => {
       isGracePeriod.current = false;
       console.log("Proctoring Guard: Grace period ended, monitoring active.");
-    }, 3000);
+    }, 5000);
 
     const handleViolation = (reason) => {
       if (isGracePeriod.current) return; // Ignore during grace period

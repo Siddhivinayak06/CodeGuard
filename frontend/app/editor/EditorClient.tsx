@@ -444,6 +444,7 @@ int main() {
   // Restored State & Proctoring Logic
   const [isFullscreenMode, setIsFullscreenMode] = useState(false);
   const [hasExamStarted, setHasExamStarted] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
 
   const proctoringStorageKey = useMemo(() => {
     if (!isExamMode || !user?.id) return null;
@@ -455,7 +456,7 @@ int main() {
 
   // Proctoring Hook (Only active after exam starts)
   const { violations, locked } = useProctoring({
-    active: hasExamStarted && !isSubmitted,
+    active: hasExamStarted && !isSubmitted && !isExporting,
     maxViolations: examConfig?.max_violations ?? 3,
     storageKey: proctoringStorageKey ?? undefined,
   });
@@ -1219,6 +1220,7 @@ int main() {
 
   const downloadPdf = async () => {
     try {
+      setIsExporting(true);
       await generatePdfClient({
         studentName: user?.email || "Anonymous",
         rollNumber: rollNo || "N/A",
@@ -1235,8 +1237,12 @@ int main() {
           .join("\n\n"),
         filename: practical?.title?.replace(/\s+/g, "_") || "code_output.pdf",
       });
+      // Add a small delay to allow the browser save dialog to open/close
+      // without triggering a window blur violation immediately
+      setTimeout(() => setIsExporting(false), 3000);
     } catch (err) {
       console.error(err);
+      setIsExporting(false);
     }
   };
 

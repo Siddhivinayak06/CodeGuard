@@ -34,37 +34,49 @@ class JavaRunner extends BaseRunner {
   buildCommand(code, testCase, uniqueId, timeoutSec) {
     const { stdinInput = '' } = testCase;
 
-    return `
-mkdir -p /tmp/${uniqueId} &&
-printf "%s" '${this.escapeForPrintf(code)}' > /tmp/${uniqueId}/TempUserCode.java || true &&
-pkg_line=$(grep -E '^[[:space:]]*package[[:space:]]+[a-zA-Z0-9_.]+' /tmp/${uniqueId}/TempUserCode.java | head -n1 | sed 's/;//') || true &&
-class_name=$(grep -Eo '^[[:space:]]*(public[[:space:]]+)?class[[:space:]]+[A-Za-z_][A-Za-z0-9_]*' /tmp/${uniqueId}/TempUserCode.java | head -n1 | awk '{print $NF}') || true &&
-if [ -n "$class_name" ]; then code_file=/tmp/${uniqueId}/$class_name.java; else code_file=/tmp/${uniqueId}/UserCode.java; fi &&
-mv /tmp/${uniqueId}/TempUserCode.java "$code_file" || cp /tmp/${uniqueId}/TempUserCode.java "$code_file" &&
-if grep -q 'public[[:space:]]\\+static[[:space:]]\\+void[[:space:]]\\+main[[:space:]]*(' "$code_file"; then has_main=1; else has_main=0; fi &&
-if [ "$has_main" -eq 1 ] && [ "$class_name" != "Main" ]; then
-  wrapper_file=/tmp/${uniqueId}/Main.java
-  if [ -n "$pkg_line" ]; then echo "$pkg_line;" > "$wrapper_file"; else : > "$wrapper_file"; fi
-  cat >> "$wrapper_file" <<'WRAPPER'
+    // Parse class name and package from the Node side for robust extraction
+    const pkgMatch = code.match(/^\s*package\s+([a-zA-Z0-9_.]+)\s*;/m);
+    const pkgName = pkgMatch ? pkgMatch[1] : null;
+
+    let className = 'UserCode';
+    const publicClassMatch = code.match(/^\s*public\s+class\s+([A-Za-z_][A-Za-z0-9_]*)/m);
+    if (publicClassMatch) {
+      className = publicClassMatch[1];
+    } else {
+      const classMatch = code.match(/^\s*class\s+([A-Za-z_][A-Za-z0-9_]*)/m);
+      if (classMatch) className = classMatch[1];
+    }
+
+    const hasMain = /public\s+static\s+void\s+main\s*\(/.test(code);
+
+    let wrapperCode = '';
+    if (hasMain && className !== 'Main') {
+      wrapperCode = `
+${pkgName ? `package ${pkgName};` : ''}
 public class Main {
     public static void main(String[] args) {
         try {
-            %CLASS_NAME%.main(args);
+            ${className}.main(args);
         } catch (Throwable t) {
             t.printStackTrace();
             System.exit(1);
         }
     }
 }
-WRAPPER
-  sed -i "s/%CLASS_NAME%/$class_name/g" "$wrapper_file"
-fi &&
+      `.trim();
+    }
+
+    return `
+mkdir -p /tmp/${uniqueId} &&
+${this.writeBase64FileCommand(code, `/tmp/${uniqueId}/${className}.java`)} &&
+${wrapperCode ? this.writeBase64FileCommand(wrapperCode, `/tmp/${uniqueId}/Main.java`) + ' &&' : ''}
+${this.writeBase64FileCommand(stdinInput, `/tmp/${uniqueId}/input.txt`)} &&
 javac /tmp/${uniqueId}/*.java 2> /tmp/${uniqueId}/compile_err.txt || true &&
 if [ -s /tmp/${uniqueId}/compile_err.txt ]; then
   cat /tmp/${uniqueId}/compile_err.txt 1>&2
   exit 1
 else
-  printf "%s" '${this.escapeForPrintf(stdinInput)}' | timeout ${timeoutSec} java -XX:+UseSerialGC -Xmx128M -cp /tmp/${uniqueId} Main
+  cat /tmp/${uniqueId}/input.txt | timeout ${timeoutSec} java -XX:+UseSerialGC -Xmx128M -cp /tmp/${uniqueId} Main
 fi
     `.trim();
   }
