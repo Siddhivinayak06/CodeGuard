@@ -38,7 +38,11 @@ async function execInContainer(containerName, cmd) {
 
     docker.on('error', reject);
     docker.on('close', (code) => {
-      resolve({ stdout: stdout.trim(), stderr: stderr.trim(), exitCode: typeof code === 'number' ? code : null });
+      resolve({
+        stdout: stdout.trim(),
+        stderr: stderr.trim(),
+        exitCode: typeof code === 'number' ? code : null,
+      });
     });
   });
 }
@@ -64,8 +68,8 @@ module.exports = async function runCode(
 
   const uniqueId = uuidv4();
   const escapedCode = code.replace(/\r/g, '');
-  const timeoutSec = DEFAULT_TIMEOUT_SEC;
-  
+  const timeoutSec = config.executionTimeout || DEFAULT_TIMEOUT_SEC;
+
   const poolLang =
     lang === 'cpp' || lang === 'c++'
       ? 'cpp'
@@ -94,11 +98,15 @@ module.exports = async function runCode(
       baseRunCmd = `/tmp/${uniqueId}/a.out`;
     } else if (poolLang === 'java') {
       let className = 'UserCode';
-      const publicClassMatch = escapedCode.match(/^\s*public\s+class\s+([A-Za-z_][A-Za-z0-9_]*)/m);
+      const publicClassMatch = escapedCode.match(
+        /^\s*public\s+class\s+([A-Za-z_][A-Za-z0-9_]*)/m
+      );
       if (publicClassMatch) {
         className = publicClassMatch[1];
       } else {
-        const classMatch = escapedCode.match(/^\s*class\s+([A-Za-z_][A-Za-z0-9_]*)/m);
+        const classMatch = escapedCode.match(
+          /^\s*class\s+([A-Za-z_][A-Za-z0-9_]*)/m
+        );
         if (classMatch) className = classMatch[1];
       }
       compileCmd = `
@@ -119,33 +127,39 @@ java -cp /tmp/${uniqueId} $MAIN_CLASS
         output: '',
         error: compileResult.stderr || 'Compilation Failed',
         stderr: compileResult.stderr,
-        exitCode: compileResult.exitCode
+        exitCode: compileResult.exitCode,
       };
     }
 
     const runCmd = `${writeBase64FileCommand(stdinInput, `/tmp/${uniqueId}/input.txt`)} && cat /tmp/${uniqueId}/input.txt | timeout ${timeoutSec} sh -c '${baseRunCmd.trim()}'`;
-    
+
     const testResult = await execInContainer(containerId, runCmd);
     const cleanError = testResult.stderr.trim() || null;
     return {
-       output: testResult.stdout,
-       error: cleanError,
-       stderr: testResult.stderr,
-       exitCode: testResult.exitCode
+      output: testResult.stdout,
+      error: cleanError,
+      stderr: testResult.stderr,
+      exitCode: testResult.exitCode,
     };
-
   } catch (err) {
-     logger.error(`runCode execution failed: ${err.message}`);
-     return {
-        output: '',
-        error: `Runner failed: ${err.message}`,
-        stderr: err.message,
-        exitCode: null,
-     };
+    logger.error(`runCode execution failed: ${err.message}`);
+    return {
+      output: '',
+      error: `Runner failed: ${err.message}`,
+      stderr: err.message,
+      exitCode: null,
+    };
   } finally {
-     if (containerId && containerId !== 'local') {
-        const poolLangStr = (lang === 'java') ? 'java' : (lang === 'c') ? 'c' : (lang === 'cpp' || lang === 'c++') ? 'cpp' : 'python';
-        await poolManager.release(poolLangStr, containerId);
-     }
+    if (containerId && containerId !== 'local') {
+      const poolLangStr =
+        lang === 'java'
+          ? 'java'
+          : lang === 'c'
+            ? 'c'
+            : lang === 'cpp' || lang === 'c++'
+              ? 'cpp'
+              : 'python';
+      await poolManager.release(poolLangStr, containerId);
+    }
   }
 };

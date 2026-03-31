@@ -42,11 +42,15 @@ async function compileInContainer(containerName, code, lang, uniqueId) {
     cmd = `mkdir -p /tmp/${uniqueId} && ${writeBase64FileCommand(escapedCode, `/tmp/${uniqueId}/code.cpp`)} && g++ -O2 /tmp/${uniqueId}/code.cpp -o /tmp/${uniqueId}/a.out -lm 2>/tmp/${uniqueId}/gcc_err.txt || (cat /tmp/${uniqueId}/gcc_err.txt 1>&2 && exit 1)`;
   } else if (lang === 'java') {
     let className = 'UserCode';
-    const publicClassMatch = escapedCode.match(/^\s*public\s+class\s+([A-Za-z_][A-Za-z0-9_]*)/m);
+    const publicClassMatch = escapedCode.match(
+      /^\s*public\s+class\s+([A-Za-z_][A-Za-z0-9_]*)/m
+    );
     if (publicClassMatch) {
       className = publicClassMatch[1];
     } else {
-      const classMatch = escapedCode.match(/^\s*class\s+([A-Za-z_][A-Za-z0-9_]*)/m);
+      const classMatch = escapedCode.match(
+        /^\s*class\s+([A-Za-z_][A-Za-z0-9_]*)/m
+      );
       if (classMatch) className = classMatch[1];
     }
     cmd = `

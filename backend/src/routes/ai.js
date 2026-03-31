@@ -194,12 +194,15 @@ router.post(
       // R5. Do NOT wrap the JSON in markdown fences. Return raw JSON only.
       // ─────────────────────────────────────────────────────────────────────────
 
-      const ioInstructions = {
-        java: 'CRITICAL REQUIREMENT: For Java, write a public class named "Main" with a "public static void main(String[] args)" method. Use Scanner or BufferedReader for I/O. The code MUST read all inputs from stdin and print strictly the expected output to stdout. NO markdown fences.',
-        python: 'CRITICAL REQUIREMENT: For Python, read all inputs using input() or sys.stdin.read(). Print strictly the expected output to stdout. NO markdown fences.',
-        cpp: 'CRITICAL REQUIREMENT: For C++, use cin/cout or scanf/printf. The code MUST read all inputs from stdin and print strictly the expected output to stdout. NO markdown fences.',
-        c: 'CRITICAL REQUIREMENT: For C, use scanf/printf. The code MUST read all inputs from stdin and print strictly the expected output to stdout. NO markdown fences.'
-      }[language] || 'The code MUST read all inputs from stdin and print strictly the expected output to stdout.';
+      const ioInstructions =
+        {
+          java: 'CRITICAL REQUIREMENT: For Java, write a public class named "Main" with a "public static void main(String[] args)" method. Use Scanner or BufferedReader for I/O. The code MUST read all inputs from stdin and print strictly the expected output to stdout. NO markdown fences.',
+          python:
+            'CRITICAL REQUIREMENT: For Python, read all inputs using input() or sys.stdin.read(). Print strictly the expected output to stdout. NO markdown fences.',
+          cpp: 'CRITICAL REQUIREMENT: For C++, use cin/cout or scanf/printf. The code MUST read all inputs from stdin and print strictly the expected output to stdout. NO markdown fences.',
+          c: 'CRITICAL REQUIREMENT: For C, use scanf/printf. The code MUST read all inputs from stdin and print strictly the expected output to stdout. NO markdown fences.',
+        }[language] ||
+        'The code MUST read all inputs from stdin and print strictly the expected output to stdout.';
 
       const processChunk = async (chunkText, index) => {
         const prompt = isExam

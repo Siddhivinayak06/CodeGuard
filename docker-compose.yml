@@ -125,7 +125,6 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile.python
-      no_cache: true
     image: ${PY_RUNTIME_IMAGE:-codeguard-python}:${PY_RUNTIME_TAG:-latest}
     # Legacy mode: idle container for container-per-user execution
     # To enable process pool mode, change to: python3 /app/multi_worker.py
@@ -143,7 +142,6 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile.java
-      no_cache: true
     image: ${JAVA_RUNTIME_IMAGE:-codeguard-java}:${JAVA_RUNTIME_TAG:-latest}
     command: tail -f /dev/null
     restart: unless-stopped
@@ -159,7 +157,6 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile.c
-      no_cache: true
     image: ${C_RUNTIME_IMAGE:-codeguard-c}:${C_RUNTIME_TAG:-latest}
     command: tail -f /dev/null
     restart: unless-stopped

@@ -39,7 +39,9 @@ class JavaRunner extends BaseRunner {
     const pkgName = pkgMatch ? pkgMatch[1] : null;
 
     let className = 'UserCode';
-    const publicClassMatch = code.match(/^\s*public\s+class\s+([A-Za-z_][A-Za-z0-9_]*)/m);
+    const publicClassMatch = code.match(
+      /^\s*public\s+class\s+([A-Za-z_][A-Za-z0-9_]*)/m
+    );
     if (publicClassMatch) {
       className = publicClassMatch[1];
     } else {
