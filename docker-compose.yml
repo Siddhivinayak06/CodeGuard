@@ -41,6 +41,7 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
+      no_cache: true
     image: ${BACKEND_IMAGE:-codeguard-backend}:${BACKEND_TAG:-latest}
     expose:
       - "5002"
@@ -79,6 +80,7 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      no_cache: true
       args:
         NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL}
         NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY}
@@ -86,8 +88,8 @@ services:
         NEXT_PUBLIC_DEV_SUPABASE_REDIRECT_URL: ${NEXT_PUBLIC_DEV_SUPABASE_REDIRECT_URL}
         SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY}
     image: ${FRONTEND_IMAGE:-codeguard-frontend}:${FRONTEND_TAG:-latest}
-    ports:
-      - "3000:3000"
+    expose:
+      - "3000"
     env_file:
       - .env
     environment:
@@ -123,6 +125,7 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile.python
+      no_cache: true
     image: ${PY_RUNTIME_IMAGE:-codeguard-python}:${PY_RUNTIME_TAG:-latest}
     # Legacy mode: idle container for container-per-user execution
     # To enable process pool mode, change to: python3 /app/multi_worker.py
@@ -140,6 +143,7 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile.java
+      no_cache: true
     image: ${JAVA_RUNTIME_IMAGE:-codeguard-java}:${JAVA_RUNTIME_TAG:-latest}
     command: tail -f /dev/null
     restart: unless-stopped
@@ -155,6 +159,7 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile.c
+      no_cache: true
     image: ${C_RUNTIME_IMAGE:-codeguard-c}:${C_RUNTIME_TAG:-latest}
     command: tail -f /dev/null
     restart: unless-stopped
