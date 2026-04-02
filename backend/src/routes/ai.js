@@ -4,7 +4,11 @@ const aiService = require('../services/aiService');
 const logger = require('../utils/logger');
 const multer = require('multer');
 const { PDFParse } = require('pdf-parse');
+const { z } = require('zod');
 const { requireRole } = require('../middleware/roleMiddleware');
+const {
+  generateFuzzTestCases,
+} = require('../services/testCaseGeneratorService');
 
 // Configure multer for memory storage
 const upload = multer({
@@ -87,6 +91,31 @@ router.post('/chat2', async (req, res) => {
     }
   }
 });
+
+router.post(
+  '/generate-fuzz-testcases',
+  requireRole(['admin', 'faculty']),
+  async (req, res) => {
+    try {
+      const result = await generateFuzzTestCases(req.body || {});
+      return res.json(result);
+    } catch (err) {
+      if (err instanceof z.ZodError) {
+        return res.status(400).json({
+          error: 'Validation Error',
+          details: err.errors,
+        });
+      }
+
+      logger.error('Fuzzer test case generation failed', {
+        error: err.message,
+      });
+      return res.status(500).json({
+        error: err.message || 'Failed to generate fuzz test cases',
+      });
+    }
+  }
+);
 
 // New endpoint for bulk generating practicals from PDF
 router.post(

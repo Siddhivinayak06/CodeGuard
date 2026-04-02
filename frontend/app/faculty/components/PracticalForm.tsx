@@ -213,6 +213,7 @@ export default function PracticalForm({
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [generatingTests, setGeneratingTests] = useState(false);
+  const [fuzzerCount, setFuzzerCount] = useState<number>(100);
   const [isGeneratingCode, setIsGeneratingCode] = useState(false);
   const [isFormatting, setIsFormatting] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
@@ -1081,159 +1082,155 @@ export default function PracticalForm({
   const getCurrentLevel = () => levels.find((l) => l.level === activeLevel) || levels[0];
 
   const generateTestCases = async () => {
-    // Determine source description based on mode
+    const currentLevel = enableLevels ? getCurrentLevel() : null;
     const sourceDescription = enableLevels
-      ? getCurrentLevel().description
-      : form.description;
-
+      ? currentLevel?.description || ""
+      : form.description || "";
     const sourceReferenceCode = enableLevels
-      ? getCurrentLevel().reference_code
-      : sampleCode;
+      ? currentLevel?.reference_code || ""
+      : sampleCode || "";
 
-    if (!sourceDescription || sourceDescription.length < 10) {
+    const normalizedLanguage = String(sampleLanguage || form.language || "c")
+      .toLowerCase()
+      .trim();
+    const sourceLanguage =
+      normalizedLanguage === "c++"
+        ? "cpp"
+        : normalizedLanguage === "py"
+          ? "python"
+          : normalizedLanguage;
+
+    const requestedCount = [25, 50, 100].includes(fuzzerCount)
+      ? fuzzerCount
+      : 100;
+
+    if (enableLevels && !currentLevel) {
+      alert("Please select a level first.");
+      return;
+    }
+
+    if (!sourceDescription || sourceDescription.trim().length < 10) {
       alert("Please enter a detailed description first.");
+      return;
+    }
+
+    if (!sourceReferenceCode || sourceReferenceCode.trim().length < 10) {
+      alert("Please add reference code first. Fuzzer needs it to build expected outputs.");
       return;
     }
 
     setGeneratingTests(true);
     try {
-      const prompt = `You are an expert test case generator. Analyze the following problem and code, then generate 3-5 diverse test cases.
+      const currentCases = enableLevels
+        ? currentLevel?.testCases || []
+        : testCases;
 
-## Problem Description:
-${sourceDescription}
+      const existingInputs = currentCases
+        .map((tc) => String(tc.input || "").trimEnd())
+        .filter((input) => input.length > 0);
 
-${sourceReferenceCode ? `## Reference Code:
-\`\`\`
-${sourceReferenceCode}
-\`\`\`
-
-IMPORTANT: Study the reference code carefully to understand:
-1. What input format it expects (e.g. standard input reading, arrays vs individual variables)
-2. What the code actually does with the input
-3. What exact output format it produces (e.g. printed text output, returned array representations)
-` : ""}
-
-## Your Task:
-Generate test cases that match EXACTLY what this specific code/problem expects.
-- Ensure inputs match the expected stdin format of the code
-- Ensure expected outputs match what the code would actually produce
-- Include edge cases (empty input, single element, boundary values, etc.)
-- Each test case should test different scenarios
-
-Return ONLY a valid JSON array:
-[{"input": "your input here", "expected_output": "expected output here"}, ...]
-
-Do not include markdown formatting, explanations, or any text outside the JSON array.`;
+      const defaultTimeLimit = Number(currentCases[0]?.time_limit_ms || 2000);
+      const defaultMemoryLimit = Number(
+        currentCases[0]?.memory_limit_kb ||
+          (sourceLanguage === "java" ? 262144 : 65536),
+      );
 
       const savedSettings = localStorage.getItem("ai_settings");
-      const config = savedSettings ? JSON.parse(savedSettings) : {};
-      const { data: { session } } = await supabase.auth.getSession();
+      const aiConfig = savedSettings ? JSON.parse(savedSettings) : {};
+      const fuzzerAiConfig = {
+        requestTimeoutMs:
+          Number(aiConfig?.requestTimeoutMs) > 0
+            ? Number(aiConfig.requestTimeoutMs)
+            : 300000,
+        maxOutputTokens:
+          Number(aiConfig?.maxOutputTokens) > 0
+            ? Number(aiConfig.maxOutputTokens)
+            : undefined,
+      };
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
 
-      const res = await fetch(`/api/ai/chat`, {
+      const res = await fetch(`/api/ai/generate-fuzzer`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${session?.access_token || ""}`
+          Authorization: `Bearer ${session?.access_token || ""}`,
         },
         body: JSON.stringify({
-          messages: [{ role: "user", parts: [{ text: prompt }] }],
-          config,
+          description: sourceDescription,
+          referenceCode: sourceReferenceCode,
+          language: sourceLanguage,
+          count: requestedCount,
+          existingInputs,
+          timeLimitMs: defaultTimeLimit,
+          memoryLimitKb: defaultMemoryLimit,
+          config: fuzzerAiConfig,
         }),
       });
 
-      if (!res.ok) throw new Error(`API Error: ${res.statusText}`);
-      if (!res.body) throw new Error("No response body");
-
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let fullText = "";
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        const chunk = decoder.decode(value, { stream: true });
-        const lines = chunk.split("\n\n");
-
-        for (const line of lines) {
-          if (line.startsWith("data: ")) {
-            const dataStr = line.slice(6);
-            if (dataStr === "[DONE]") break;
-            try {
-              const parsed = JSON.parse(dataStr);
-              if (parsed.text) fullText += parsed.text;
-              if (parsed.error) throw new Error(parsed.error);
-            } catch (e) {
-              console.warn("Error parsing chunk:", e);
-            }
-          }
-        }
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(payload?.error || `API Error: ${res.statusText}`);
       }
 
-      let jsonStr = fullText;
-      // Clean up markdown if present
-      jsonStr = jsonStr
-        .replace(/```json/g, "")
-        .replace(/```/g, "")
-        .trim();
+      const generatedTests = Array.isArray(payload?.testCases)
+        ? payload.testCases
+        : [];
 
-      // Extract JSON array from response (AI might add extra text)
-      const jsonMatch = jsonStr.match(/\[[\s\S]*\]/);
-      if (!jsonMatch) {
-        throw new Error("No valid JSON array found in AI response");
+      if (generatedTests.length === 0) {
+        throw new Error("No valid executable test cases were generated.");
       }
-      jsonStr = jsonMatch[0];
 
-      const newTests = JSON.parse(jsonStr);
-      if (Array.isArray(newTests)) {
-        const formattedTests = newTests.map((t: any) => ({
-          input: String(t.input),
-          expected_output: String(t.expected_output),
-          is_hidden: false,
-          time_limit_ms: 2000,
-          memory_limit_kb: 65536,
+        const formattedTests: TestCase[] = generatedTests.map((t: any) => ({
+          input: String(t.input || ""),
+          expected_output: String(t.expected_output ?? t.expectedOutput ?? ""),
+          is_hidden: Boolean(t.is_hidden || false),
+          time_limit_ms: Number(t.time_limit_ms || defaultTimeLimit),
+          memory_limit_kb: Number(t.memory_limit_kb || defaultMemoryLimit),
           id: 0,
           practical_id: null,
           level_id: null,
           created_at: "",
         }));
 
-        if (enableLevels) {
-          // Get existing inputs for this level
-          const existingInputs = new Set(
-            getCurrentLevel().testCases.map((tc) => tc.input.trim())
-          );
-          // Filter out duplicates
-          const uniqueTests = formattedTests.filter(
-            (tc) => !existingInputs.has(tc.input.trim())
-          );
-          // Add to current level test cases
-          setLevels((prev) =>
-            prev.map((l) =>
-              l.level === activeLevel
-                ? { ...l, testCases: [...l.testCases, ...uniqueTests] }
-                : l,
-            ),
-          );
-        } else {
-          // Get existing inputs
-          const existingInputs = new Set(
-            testCases.map((tc) => tc.input.trim())
-          );
-          // Filter out duplicates
-          const uniqueTests = formattedTests.filter(
-            (tc) => !existingInputs.has(tc.input.trim())
-          );
-          // Add to global test cases
-          setTestCases((prev) => [...prev, ...uniqueTests]);
-        }
+      if (enableLevels && currentLevel) {
+        const currentLevelKey = currentLevel.level;
+        const existingInputSet = new Set(
+          currentLevel.testCases.map((tc) => tc.input.trimEnd()),
+        );
+        const uniqueTests = formattedTests.filter(
+          (tc) => !existingInputSet.has(tc.input.trimEnd()),
+        );
+
+        setLevels((prev) =>
+          prev.map((l) =>
+            l.level === currentLevelKey
+              ? { ...l, testCases: [...l.testCases, ...uniqueTests] }
+              : l,
+          ),
+        );
       } else {
-        throw new Error("Invalid response format");
+        const existingInputSet = new Set(testCases.map((tc) => tc.input.trimEnd()));
+        const uniqueTests = formattedTests.filter(
+          (tc) => !existingInputSet.has(tc.input.trimEnd()),
+        );
+
+        setTestCases((prev) => [...prev, ...uniqueTests]);
+      }
+
+      const generatedCount = Number(payload?.meta?.generatedCount || formattedTests.length);
+      const requested = Number(payload?.meta?.requestedCount || requestedCount);
+      if (generatedCount < requested) {
+        alert(
+          `Fuzzer generated ${generatedCount}/${requested} valid test cases. Try regenerating for more coverage.`,
+        );
       }
     } catch (err: any) {
-      console.error("AI Generation Error:", err);
+      console.error("Fuzzer Generation Error:", err);
       alert(
-        "Failed to generate test cases. Please try again. " +
-        (err.message || ""),
+        "Failed to generate fuzz test cases. Please try again. " +
+          (err.message || ""),
       );
     } finally {
       setGeneratingTests(false);
@@ -3018,7 +3015,7 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
                       levels={levels}
                       isExam={isExam}
                       showAssessmentControls={true}
-                      showNumberField={false}
+                      showNumberField={!isExam}
                       onMarkdownChange={(val) => setForm(prev => ({ ...prev, description: val }))}
                       onMagicFormat={async (text, callback) => {
                         setIsFormatting(true);
@@ -3066,6 +3063,8 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
                         removeLevelTestCase={removeLevelTestCase}
                         updateLevelTestCase={updateLevelTestCase}
                         generateTestCases={generateTestCases}
+                        fuzzerCount={fuzzerCount}
+                        setFuzzerCount={setFuzzerCount}
                         generatingTests={generatingTests}
                         sampleCode={sampleCode}
                         setSampleCode={setSampleCode}
@@ -3172,6 +3171,8 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
                         addTestCase={addTestCase}
                         removeTestCase={removeTestCase}
                         generateTestCases={generateTestCases}
+                        fuzzerCount={fuzzerCount}
+                        setFuzzerCount={setFuzzerCount}
                         generatingTests={generatingTests}
                         isExam={isExam}
                         onGenerateCode={async (type) => {
@@ -3603,6 +3604,8 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
                                 if (originalLevel) updateLevelTestCase(originalLevel, index, field, value);
                               }}
                               generateTestCases={generateTestCases}
+                              fuzzerCount={fuzzerCount}
+                              setFuzzerCount={setFuzzerCount}
                               generatingTests={generatingTests}
                               sampleCode={sampleCode}
                               setSampleCode={setSampleCode}
@@ -3716,6 +3719,8 @@ Do not include markdown formatting, explanations, or any text outside the JSON a
                             addTestCase={addTestCase}
                             removeTestCase={removeTestCase}
                             generateTestCases={generateTestCases}
+                            fuzzerCount={fuzzerCount}
+                            setFuzzerCount={setFuzzerCount}
                             generatingTests={generatingTests}
                             isExam={isExam}
                             onGenerateCode={async (type) => {

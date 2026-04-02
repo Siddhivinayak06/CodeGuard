@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 import { requireRole } from "@/lib/auth";
+import { supabaseAdmin } from "@/lib/supabase/service";
 
 export async function POST(request: Request) {
     try {
@@ -33,7 +34,7 @@ export async function POST(request: Request) {
 
         for (const batch of uniqueBatches) {
             if (batch) {
-                const { data: students } = (await supabase
+                const { data: students } = (await supabaseAdmin
                     .from("users")
                     .select("uid")
                     .eq("batch", batch)
@@ -56,12 +57,14 @@ export async function POST(request: Request) {
 
             // Conflict Check (Simpler version for bulk: check DB)
             // Note: This is N queries. For 10-15 practicals it's fine. For 100s, need optimization.
-            const { data: conflicts } = await supabase
+            const { data: conflicts } = await supabaseAdmin
                 .from("schedules")
                 .select("id")
                 .eq("faculty_id", faculty_id)
                 .eq("date", date)
-                .or(`and(start_time.lte.${end_time},end_time.gte.${start_time})`);
+                // Strict overlap: existing.start < new.end AND existing.end > new.start.
+                // This allows back-to-back sessions.
+                .or(`and(start_time.lt.${end_time},end_time.gt.${start_time})`);
 
             if (conflicts && conflicts.length > 0) {
                 errors.push({ ...schedule, error: "Faculty Conflict" });
@@ -70,12 +73,12 @@ export async function POST(request: Request) {
 
             // Batch Conflict Check
             if (batch_name) {
-                const { data: batchConflicts } = await supabase
+                const { data: batchConflicts } = await supabaseAdmin
                     .from("schedules")
                     .select("id")
                     .eq("batch_name", batch_name)
                     .eq("date", date)
-                    .or(`and(start_time.lte.${end_time},end_time.gte.${start_time})`);
+                    .or(`and(start_time.lt.${end_time},end_time.gt.${start_time})`);
 
                 if (batchConflicts && batchConflicts.length > 0) {
                     errors.push({ ...schedule, error: "Batch Conflict" });
@@ -85,7 +88,7 @@ export async function POST(request: Request) {
 
 
             // Insert
-            const { data: inserted, error: insertError } = (await (supabase
+            const { data: inserted, error: insertError } = (await (supabaseAdmin
                 .from("schedules") as any)
                 .insert({
                     practical_id: practical_id || null,
@@ -113,7 +116,7 @@ export async function POST(request: Request) {
                     schedule_id: inserted.id,
                     student_id: uid
                 }));
-                await (supabase.from("schedule_allocations") as any).insert(allocations);
+                await (supabaseAdmin.from("schedule_allocations") as any).insert(allocations);
             }
         }
 

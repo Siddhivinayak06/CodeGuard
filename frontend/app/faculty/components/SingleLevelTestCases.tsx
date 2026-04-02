@@ -37,6 +37,8 @@ interface SingleLevelTestCasesProps {
   addTestCase: () => void;
   removeTestCase: (index: number) => void;
   generateTestCases: () => Promise<void>;
+  fuzzerCount: number;
+  setFuzzerCount: (count: number) => void;
   generatingTests: boolean;
   isExam?: boolean;
   onGenerateCode?: (type: 'starter' | 'reference') => Promise<void>;
@@ -58,6 +60,8 @@ export default function SingleLevelTestCases({
   addTestCase,
   removeTestCase,
   generateTestCases,
+  fuzzerCount,
+  setFuzzerCount,
   generatingTests,
   isExam,
   onGenerateCode,
@@ -178,6 +182,8 @@ export default function SingleLevelTestCases({
         addTestCase={addTestCase}
         removeTestCase={removeTestCase}
         generateTestCases={generateTestCases}
+        fuzzerCount={fuzzerCount}
+        setFuzzerCount={setFuzzerCount}
         generatingTests={generatingTests}
         description={form.description || ""}
       />

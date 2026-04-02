@@ -289,6 +289,9 @@ export async function POST(req: Request) {
             const refPayload = {
               code: referenceCode,
               lang: refLangNorm || reqLangNorm || String(lang),
+              mode: "run",
+              executionModel: "stdin_legacy",
+              failFast: false,
               batch: userBatch.map((u: any) => ({
                 id: u.id,
                 stdinInput: u.stdinInput,
@@ -378,6 +381,9 @@ export async function POST(req: Request) {
         code,
         reference_code: referenceCode || undefined,
         reference_lang: refLangNorm || referenceLang || undefined,
+        mode,
+        executionModel: "wrapper_harness",
+        failFast: true,
         lang: reqLangNorm || lang,
         batch,
       });
@@ -407,9 +413,18 @@ export async function POST(req: Request) {
       const stdout = d.stdout ?? "";
       const expected = batchItem?.expectedOutput ?? "";
       const input = batchItem?.stdinInput ?? "";
+      const runnerStatus = String(d.status ?? "").toLowerCase();
 
       let status: string;
-      if (isUser) {
+      if (runnerStatus === "compile_error") {
+        status = "compile_error";
+      } else if (runnerStatus === "runtime_error") {
+        status = "runtime_error";
+      } else if (runnerStatus === "time_limit_exceeded") {
+        status = "timeout";
+      } else if (runnerStatus === "skipped_fail_fast") {
+        status = "failed";
+      } else if (isUser) {
         if (expected && expected !== "") {
           const normStdout = normalizeOutputText(stdout);
           const normExpected = normalizeOutputText(expected);

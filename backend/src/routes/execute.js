@@ -12,6 +12,9 @@ const executeSchema = z.object({
   code: z.string().optional(),
   reference_code: z.string().optional(),
   reference_lang: z.string().optional(),
+  mode: z.enum(['run', 'submit']).optional(),
+  executionModel: z.enum(['stdin_legacy', 'wrapper_harness']).optional(),
+  failFast: z.boolean().optional(),
   lang: z.enum(['c', 'cpp', 'python', 'py', 'java']).default('c'),
   batch: z
     .array(
@@ -21,6 +24,8 @@ const executeSchema = z.object({
         input: z.string().optional(),
         expectedOutput: z.string().optional(),
         is_hidden: z.boolean().optional(),
+        time_limit_ms: z.number().int().positive().optional(),
+        memory_limit_kb: z.number().int().positive().optional(),
       })
     )
     .optional(),
@@ -105,11 +110,38 @@ router.post('/', async (req, res) => {
       code,
       reference_code,
       reference_lang,
+      mode,
+      executionModel,
+      failFast,
       lang,
       batch,
       stdinInput,
       problem,
     } = parseResult.data;
+
+    const effectiveExecutionModel =
+      executionModel || config.execution.defaultExecutionModel;
+    const effectiveFailFast =
+      typeof failFast === 'boolean'
+        ? failFast
+        : config.execution.strictFailFast;
+
+    const normalizedBatch = Array.isArray(batch)
+      ? batch.map((tc) => ({
+          ...tc,
+          stdinInput: tc.stdinInput ?? tc.input ?? '',
+          time_limit_ms: tc.time_limit_ms ?? 2000,
+          memory_limit_kb:
+            tc.memory_limit_kb ?? (lang === 'java' ? 262144 : 65536),
+        }))
+      : [];
+
+    const runnerOptions = {
+      earlyExit: effectiveFailFast,
+      failFast: effectiveFailFast,
+      executionModel: effectiveExecutionModel,
+      mode: mode || 'run',
+    };
 
     // runtimeDetector and poolManager are pre-loaded at module level
 
@@ -125,11 +157,12 @@ router.post('/', async (req, res) => {
     };
 
     const useDirectLocal = shouldUseDirectLocal();
+    const useQueue = Boolean(queueService.isEnabled);
 
     // ========================
     // 1️⃣ Batch mode (multiple test cases)
     // ========================
-    if (Array.isArray(batch) && batch.length > 0) {
+    if (normalizedBatch.length > 0) {
       try {
         let runnerResults;
 
@@ -137,7 +170,24 @@ router.post('/', async (req, res) => {
           // Direct local execution — no Redis/queue needed
           if (!localBatchCode) localBatchCode = require('../utils/localRunner');
           logger.info(`[Execute] Direct local batch execution for ${lang}`);
-          runnerResults = await localBatchCode(code, lang, batch);
+          runnerResults = await localBatchCode(
+            code,
+            lang,
+            normalizedBatch,
+            runnerOptions
+          );
+        } else if (!useQueue) {
+          // Development mode fallback: run directly without Redis queue
+          if (!runBatchCode) runBatchCode = require('../utils/dockerRunner');
+          logger.info(
+            `[Execute] Direct docker batch execution for ${lang} (queue disabled)`
+          );
+          runnerResults = await runBatchCode(
+            code,
+            lang,
+            normalizedBatch,
+            runnerOptions
+          );
         } else {
           // Queue-based execution (requires Redis)
           logger.info(`Queuing batch execution for ${lang}...`);
@@ -145,18 +195,36 @@ router.post('/', async (req, res) => {
             type: 'batch',
             code,
             lang,
-            batch,
+            batch: normalizedBatch,
             problem,
+            options: runnerOptions,
           });
           runnerResults = await job.waitUntilFinished(queueService.queueEvents);
         }
 
         for (const result of runnerResults) {
-          const tc = batch.find((b) => b.id === result.test_case_id);
+          const tc = normalizedBatch.find((b) => b.id === result.test_case_id);
           if (!tc) continue;
+          const runnerStatus = String(result.status || '').toLowerCase();
 
           // Ensure field exists
           result.reference_stdout = result.reference_stdout ?? '';
+
+          if (runnerStatus === 'skipped_fail_fast') {
+            result.reference_stdout = tc.expectedOutput ?? '';
+            result.status = 'skipped_fail_fast';
+            continue;
+          }
+
+          if (
+            runnerStatus === 'compile_error' ||
+            runnerStatus === 'runtime_error' ||
+            runnerStatus === 'time_limit_exceeded'
+          ) {
+            result.reference_stdout = tc.expectedOutput ?? '';
+            result.status = runnerStatus;
+            continue;
+          }
 
           if (!tc.is_hidden && reference_code) {
             try {
@@ -181,6 +249,11 @@ router.post('/', async (req, res) => {
           const userOut = (result.stdout ?? '').trimEnd();
           const refOut = (result.reference_stdout ?? '').trimEnd();
           const lowErr = (result.stderr ?? '').toLowerCase();
+
+          if (runnerStatus === 'passed' || runnerStatus === 'failed') {
+            result.status = runnerStatus;
+            continue;
+          }
 
           // Verdict logic
           if (
@@ -223,6 +296,13 @@ router.post('/', async (req, res) => {
         if (!localRunCode) localRunCode = require('../utils/localRunCode');
         logger.info(`[Execute] Direct local single execution for ${lang}`);
         userResult = await localRunCode(code, lang, stdinInput);
+      } else if (!useQueue) {
+        // Development mode fallback: run directly without Redis queue
+        if (!runCode) runCode = require('../utils/runCode');
+        logger.info(
+          `[Execute] Direct docker single execution for ${lang} (queue disabled)`
+        );
+        userResult = await runCode(code, lang, stdinInput);
       } else {
         // Queue-based execution (requires Redis)
         logger.info(`Queuing single execution for ${lang}...`);

@@ -1,5 +1,9 @@
 const path = require('path');
-require('dotenv').config({ path: path.resolve(__dirname, '../../.env') });
+const dotenv = require('dotenv');
+
+// Prefer backend/.env for local backend runs, then fall back to repo-root .env.
+dotenv.config({ path: path.resolve(__dirname, '../.env') });
+dotenv.config({ path: path.resolve(__dirname, '../../.env') });
 const { z } = require('zod');
 
 // Environment variable schema with validation
@@ -20,7 +24,7 @@ const envSchema = z.object({
   AI_PROVIDER: z.enum(['gemini', 'ollama', 'mock']).default('ollama'),
   AI_API_KEY: z.string().optional(),
   AI_API_KEY_2: z.string().optional(),
-  AI_MODEL: z.string().default('qwen2.5-coder'),
+  AI_MODEL: z.string().default('qwen3.5:9b'),
   OLLAMA_URL: z.string().default('http://127.0.0.1:11434'),
   LOG_LEVEL: z.enum(['error', 'warn', 'info', 'http', 'debug']).default('info'),
   REDIS_URL: z.string().default('redis://localhost:6379'),
@@ -33,6 +37,18 @@ const envSchema = z.object({
     .string()
     .transform((val) => val === 'true')
     .default('true'),
+  ENABLE_WRAPPER_HARNESS: z
+    .string()
+    .transform((val) => val === 'true')
+    .default('true'),
+  DEFAULT_EXECUTION_MODEL: z
+    .enum(['stdin_legacy', 'wrapper_harness'])
+    .default('stdin_legacy'),
+  STRICT_FAIL_FAST: z
+    .string()
+    .transform((val) => val === 'true')
+    .default('true'),
+  WRAPPER_HARNESS_LANGS: z.string().default('python,py,c,java'),
   ALLOW_LOCAL_EXECUTION: z
     .string()
     .transform((val) => val === 'true')
@@ -79,6 +95,14 @@ module.exports = {
     },
     workersPerContainer: env.WORKERS_PER_CONTAINER,
     useProcessPool: env.USE_PROCESS_POOL,
+  },
+  execution: {
+    enableWrapperHarness: env.ENABLE_WRAPPER_HARNESS,
+    defaultExecutionModel: env.DEFAULT_EXECUTION_MODEL,
+    strictFailFast: env.STRICT_FAIL_FAST,
+    wrapperHarnessLangs: env.WRAPPER_HARNESS_LANGS.split(',')
+      .map((lang) => lang.trim().toLowerCase())
+      .filter(Boolean),
   },
   rateLimit: {
     windowMs: 15 * 60 * 1000, // 15 minutes

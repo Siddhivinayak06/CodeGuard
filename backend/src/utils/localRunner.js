@@ -1,16 +1,28 @@
-// src/utils/localRunner.js
-// Batch code execution using locally installed compilers (no Docker).
-// Mirror of dockerRunner.js but runs via child_process.spawn directly.
 const { spawn } = require('child_process');
 const { v4: uuidv4 } = require('uuid');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const logger = require('./logger');
+const config = require('../config');
+const {
+  normalizeOutput,
+  createSkippedResult,
+  sortBatchResults,
+  buildBatchErrorResults,
+} = require('./execution/batchResultUtils');
+const {
+  shouldUseCompiledBatchHarness,
+} = require('./execution/harnessSelectors');
+const {
+  COMPILED_BATCH_HARNESS_SCRIPT,
+  buildHarnessTsvTestsPayload,
+} = require('./execution/harnessScripts');
+const {
+  parseCompiledHarnessResults,
+  buildOrderedCompiledResults,
+} = require('./execution/harnessParsers');
 
-/**
- * Spawn a process with a Node.js-based timeout.
- */
 function spawnWithTimeout(cmd, args, options, timeoutMs) {
   return new Promise((resolve) => {
     const proc = spawn(cmd, args, options);
@@ -23,8 +35,12 @@ function spawnWithTimeout(cmd, args, options, timeoutMs) {
     }
     proc.stdin.end();
 
-    proc.stdout.on('data', (d) => (stdout += d.toString()));
-    proc.stderr.on('data', (d) => (stderr += d.toString()));
+    proc.stdout.on('data', (d) => {
+      stdout += d.toString();
+    });
+    proc.stderr.on('data', (d) => {
+      stderr += d.toString();
+    });
 
     const timer = setTimeout(() => {
       timedOut = true;
@@ -35,6 +51,7 @@ function spawnWithTimeout(cmd, args, options, timeoutMs) {
       clearTimeout(timer);
       resolve({ stdout, stderr, exitCode, timedOut });
     });
+
     proc.on('error', () => {
       clearTimeout(timer);
       resolve({ stdout, stderr, exitCode: 1, timedOut });
@@ -46,9 +63,15 @@ function compileLocally(code, lang, workDir) {
   if (lang === 'python' || lang === 'py') {
     const codeFile = path.join(workDir, 'code.py');
     fs.writeFileSync(codeFile, code);
-    // Python has no compilation step
-    return Promise.resolve({ stdout: '', stderr: '', exitCode: 0 });
-  } else if (lang === 'c') {
+    return spawnWithTimeout(
+      'python3',
+      ['-m', 'py_compile', codeFile],
+      { stdio: ['pipe', 'pipe', 'pipe'], cwd: workDir, input: '' },
+      10000
+    );
+  }
+
+  if (lang === 'c') {
     const codeFile = path.join(workDir, 'code.c');
     const outFile = path.join(workDir, 'a.out');
     fs.writeFileSync(codeFile, code);
@@ -58,7 +81,9 @@ function compileLocally(code, lang, workDir) {
       { stdio: ['pipe', 'pipe', 'pipe'], cwd: workDir, input: '' },
       10000
     );
-  } else if (lang === 'cpp' || lang === 'c++') {
+  }
+
+  if (lang === 'cpp' || lang === 'c++') {
     const codeFile = path.join(workDir, 'code.cpp');
     const outFile = path.join(workDir, 'a.out');
     fs.writeFileSync(codeFile, code);
@@ -68,7 +93,9 @@ function compileLocally(code, lang, workDir) {
       { stdio: ['pipe', 'pipe', 'pipe'], cwd: workDir, input: '' },
       10000
     );
-  } else if (lang === 'java') {
+  }
+
+  if (lang === 'java') {
     const classMatch = code.match(
       /(?:public\s+)?class\s+([A-Za-z_][A-Za-z0-9_]*)/
     );
@@ -100,8 +127,8 @@ function execTestCaseLocally(tc, lang, workDir) {
   } = tc;
 
   const timeoutMs = Math.max(1000, time_limit_ms);
-
-  let cmd, args;
+  let cmd;
+  let args;
 
   if (lang === 'python' || lang === 'py') {
     cmd = 'python3';
@@ -110,10 +137,9 @@ function execTestCaseLocally(tc, lang, workDir) {
     cmd = path.join(workDir, 'a.out');
     args = [];
   } else if (lang === 'java') {
-    // Find main class from compiled .class files
     const classFiles = fs
       .readdirSync(workDir)
-      .filter((f) => f.endsWith('.class'));
+      .filter((fileName) => fileName.endsWith('.class'));
     let mainClass = 'Main';
     if (classFiles.length > 0) {
       mainClass = classFiles[0].replace('.class', '');
@@ -141,7 +167,52 @@ function execTestCaseLocally(tc, lang, workDir) {
       is_hidden,
       cpuTime: elapsed / 1000,
       memoryKB: 0,
+      time_ms: elapsed,
+      memory_kb: 0,
     };
+  });
+}
+
+async function runCompiledHarnessLocally(batch, workDir, lang, options = {}) {
+  const { failFast = true } = options;
+  const normalizedLang = String(lang || '').toLowerCase();
+  const harnessLang =
+    normalizedLang === 'java'
+      ? 'java'
+      : normalizedLang === 'c'
+        ? 'c'
+        : 'python';
+  const harnessPath = path.join(workDir, 'batch_harness.sh');
+  const testsPath = path.join(workDir, 'tests.tsv');
+  const testsPayload = buildHarnessTsvTestsPayload(batch);
+
+  const totalTimeMs = batch.reduce(
+    (sum, tc) => sum + (tc.time_limit_ms ?? 2000),
+    0
+  );
+  const hardTimeoutMs = Math.max(5000, totalTimeMs + 5000);
+
+  fs.writeFileSync(harnessPath, COMPILED_BATCH_HARNESS_SCRIPT, {
+    mode: 0o755,
+  });
+  fs.writeFileSync(testsPath, testsPayload);
+
+  const harnessResult = await spawnWithTimeout(
+    'sh',
+    [harnessPath, testsPath, harnessLang, workDir, failFast ? '1' : '0'],
+    { stdio: ['pipe', 'pipe', 'pipe'], cwd: workDir, input: '' },
+    hardTimeoutMs
+  );
+
+  const resultById = parseCompiledHarnessResults(harnessResult.stdout, batch);
+
+  return buildOrderedCompiledResults({
+    batch,
+    resultById,
+    failFast,
+    timedOut: Boolean(harnessResult.timedOut),
+    stderr: harnessResult.stderr,
+    exitCode: harnessResult.exitCode,
   });
 }
 
@@ -152,79 +223,118 @@ module.exports = async function localBatchCode(
   options = {}
 ) {
   const CONCURRENCY_LIMIT = 5;
-  const { earlyExit = true } = options;
+  const {
+    earlyExit = true,
+    failFast = earlyExit,
+    executionModel = config.execution?.defaultExecutionModel,
+  } = options;
+
   const uniqueId = uuidv4();
   const workDir = path.join(os.tmpdir(), `codeguard-${uniqueId}`);
   fs.mkdirSync(workDir, { recursive: true });
 
+  const normalizedLang = String(lang || '').toLowerCase();
+  const effectiveFailFast =
+    typeof failFast === 'boolean' ? failFast : Boolean(earlyExit);
+
+  const useCompiledBatchHarness = shouldUseCompiledBatchHarness(
+    normalizedLang,
+    executionModel,
+    config.execution
+  );
+
   const poolLang =
-    lang === 'cpp' || lang === 'c++'
+    normalizedLang === 'cpp' || normalizedLang === 'c++'
       ? 'cpp'
-      : lang === 'c'
+      : normalizedLang === 'c'
         ? 'c'
-        : lang === 'py'
+        : normalizedLang === 'py'
           ? 'python'
-          : lang;
+          : normalizedLang;
 
   try {
     logger.info(`[LocalRunner] Compiling ${poolLang} locally...`);
-    const compileResult = await compileLocally(code, lang, workDir);
+    const compileResult = await compileLocally(code, normalizedLang, workDir);
 
     if (compileResult.exitCode !== 0) {
-      logger.warn(`[LocalRunner] Compilation failed`);
-      return batch.map((tc) => ({
-        test_case_id: tc.id,
-        input: tc.stdinInput,
-        expectedOutput: tc.expectedOutput,
-        stdout: '',
-        stderr: compileResult.stderr,
-        exitCode: compileResult.exitCode,
-        is_hidden: tc.is_hidden,
-      }));
+      logger.warn('[LocalRunner] Compilation failed');
+      return buildBatchErrorResults(
+        batch,
+        compileResult.stderr || 'Compilation failed',
+        compileResult.exitCode || 1,
+        'compile_error'
+      );
+    }
+
+    if (useCompiledBatchHarness) {
+      logger.info(
+        `[LocalRunner] Executing ${batch.length} test cases via shell harness for ${normalizedLang}...`
+      );
+      const harnessResults = await runCompiledHarnessLocally(
+        batch,
+        workDir,
+        normalizedLang,
+        { failFast: effectiveFailFast }
+      );
+      logger.info(
+        `[LocalRunner] Final batch results: ${harnessResults.length}`
+      );
+      return sortBatchResults(harnessResults, batch);
     }
 
     const results = [];
     let hasFailed = false;
-
     const queue = [...batch];
 
     const runWorker = async () => {
       while (queue.length > 0) {
-        if (earlyExit && hasFailed) break;
+        if (effectiveFailFast && hasFailed) break;
         const tc = queue.shift();
         if (!tc) break;
 
-        const result = await execTestCaseLocally(tc, lang, workDir);
+        const result = await execTestCaseLocally(tc, normalizedLang, workDir);
         results.push(result);
 
-        if (result.exitCode !== 0) {
+        const hasExpectedOutput = typeof tc.expectedOutput === 'string';
+        const outputMismatch =
+          hasExpectedOutput &&
+          normalizeOutput(result.stdout) !== normalizeOutput(tc.expectedOutput);
+
+        if (result.exitCode !== 0 || outputMismatch) {
           hasFailed = true;
         }
       }
     };
 
     const workers = [];
-    const numWorkers = Math.min(CONCURRENCY_LIMIT, batch.length);
+    const numWorkers = effectiveFailFast
+      ? 1
+      : Math.min(CONCURRENCY_LIMIT, batch.length);
     for (let i = 0; i < numWorkers; i++) {
       workers.push(runWorker());
     }
+
     await Promise.all(workers);
 
-    logger.info(`[LocalRunner] 📦 Batch results: ${results.length}`);
-    return results.sort(
-      (a, b) =>
-        batch.findIndex((tc) => tc.id === a.test_case_id) -
-        batch.findIndex((tc) => tc.id === b.test_case_id)
-    );
+    if (effectiveFailFast && hasFailed && results.length < batch.length) {
+      const executedIds = new Set(results.map((r) => String(r.test_case_id)));
+      for (const tc of batch) {
+        if (!executedIds.has(String(tc.id))) {
+          results.push(createSkippedResult(tc));
+        }
+      }
+    }
+
+    logger.info(`[LocalRunner] Final batch results: ${results.length}`);
+    return sortBatchResults(results, batch);
   } catch (e) {
     logger.error(`[LocalRunner] Batch execution failed: ${e.message}`);
     throw e;
   } finally {
-    // Cleanup temp directory
     try {
       fs.rmSync(workDir, { recursive: true, force: true });
     } catch {
-      // ignore cleanup errors
+      // Ignore cleanup errors.
     }
   }
 };

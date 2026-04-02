@@ -698,6 +698,7 @@ int main() {
         .select(`
           attempt_count, 
           max_attempts, 
+          status,
           is_locked, 
           lock_reason,
           practicals (
@@ -722,9 +723,14 @@ int main() {
         //    attempt_count. Checking here races with that API call and can
         //    falsely lock the student out when the increment completes first.
         if (!isExamMode) {
-          const attempts = data.attempt_count || 0;
-          const max = data.max_attempts || 1;
-          if (attempts >= max) {
+          const attempts = Number(data.attempt_count || 0);
+          const max = Number(data.max_attempts || 1);
+          const status = String(data.status || "").toLowerCase();
+          const isActiveAttemptStatus =
+            status === "in_progress" || status === "overdue";
+
+          // Allow the currently active started attempt.
+          if (attempts >= max && !isActiveAttemptStatus) {
             setIsSessionLocked(true);
             setLockReason("You have already used your attempt. Refreshing is not allowed.");
             return;
@@ -732,6 +738,8 @@ int main() {
         }
 
         // Sequential lock removed — students can access any scheduled practical
+        setIsSessionLocked(false);
+        setLockReason(null);
       }
     };
 

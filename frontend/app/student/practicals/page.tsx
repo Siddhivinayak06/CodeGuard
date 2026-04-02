@@ -184,6 +184,97 @@ function getLanguageColor(lang: string) {
   }
 }
 
+type ParsedClock = {
+  hours: number;
+  minutes: number;
+  seconds: number;
+};
+
+function parseClockTime(value?: string | null): ParsedClock | null {
+  if (!value) return null;
+
+  const match = String(value)
+    .trim()
+    .match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/);
+
+  if (!match) return null;
+
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  const seconds = Number(match[3] || 0);
+
+  if ([hours, minutes, seconds].some((v) => Number.isNaN(v))) {
+    return null;
+  }
+
+  return { hours, minutes, seconds };
+}
+
+function parseScheduleTimeRange(value?: string | null) {
+  if (!value) return { start: null, end: null };
+
+  const normalized = String(value).replace(/–/g, "-");
+  const parts = normalized
+    .split("-")
+    .map((part) => part.trim())
+    .filter(Boolean);
+
+  if (parts.length >= 2) {
+    return {
+      start: parseClockTime(parts[0]),
+      end: parseClockTime(parts[1]),
+    };
+  }
+
+  const single = parseClockTime(parts[0] || normalized.trim());
+  return { start: single, end: single };
+}
+
+function buildLocalDateTime(
+  dateValue: string,
+  time: ParsedClock | null,
+  fallback: "start" | "end",
+) {
+  const dateOnly = String(dateValue).slice(0, 10);
+  const parts = dateOnly.split("-").map((p) => Number(p));
+
+  if (parts.length !== 3 || parts.some((p) => Number.isNaN(p))) {
+    const parsed = new Date(dateValue);
+    if (time) {
+      parsed.setHours(time.hours, time.minutes, time.seconds, 0);
+      return parsed;
+    }
+
+    if (fallback === "end") {
+      parsed.setHours(23, 59, 59, 999);
+    } else {
+      parsed.setHours(0, 0, 0, 0);
+    }
+
+    return parsed;
+  }
+
+  const [year, month, day] = parts;
+
+  if (time) {
+    return new Date(
+      year,
+      month - 1,
+      day,
+      time.hours,
+      time.minutes,
+      time.seconds,
+      0,
+    );
+  }
+
+  if (fallback === "end") {
+    return new Date(year, month - 1, day, 23, 59, 59, 999);
+  }
+
+  return new Date(year, month - 1, day, 0, 0, 0, 0);
+}
+
 function getStatusGradient(status: string) {
   switch (status?.toLowerCase()) {
     case "passed":
@@ -451,17 +542,16 @@ export default function StudentPracticals() {
 
         const data: FormattedPractical[] = json.data;
 
-        // Check for overdue (Client-side logic)
+        // Check for overdue using schedule end date/time (Client-side logic)
         const now = new Date();
-        now.setHours(0, 0, 0, 0); // Start of today
 
         data.forEach(p => {
           if (p.schedule_date && !["submitted", "completed", "passed", "failed"].includes(p.status)) {
-            const schedDate = new Date(p.schedule_date);
-            schedDate.setHours(0, 0, 0, 0);
+            const { end } = parseScheduleTimeRange(p.schedule_time || null);
+            const scheduleEnd = buildLocalDateTime(p.schedule_date, end, "end");
 
-            // If schedule date is strictly before today, it is overdue
-            if (schedDate < now) {
+            // Mark overdue only after the scheduled end-time (or end-of-day if no end-time exists).
+            if (now.getTime() > scheduleEnd.getTime()) {
               p.status = "overdue";
             }
           }
@@ -544,17 +634,14 @@ export default function StudentPracticals() {
         let scheduleLocked = false;
 
         if (p.schedule_date) {
-          const schedDate = new Date(p.schedule_date);
-          if (p.schedule_time) {
-            const [hours, minutes] = p.schedule_time.split(":").map(Number);
-            schedDate.setHours(hours, minutes, 0, 0);
-          } else {
-            schedDate.setHours(0, 0, 0, 0);
-          }
+          const { start } = parseScheduleTimeRange(p.schedule_time || null);
+          const scheduleStart = buildLocalDateTime(p.schedule_date, start, "start");
 
-          if (now < schedDate) {
+          if (now.getTime() < scheduleStart.getTime()) {
             p.is_locked = true;
-            p.lock_reason = `Available on ${schedDate.toLocaleDateString()} at ${schedDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+            p.lock_reason = start
+              ? `Available on ${scheduleStart.toLocaleDateString()} at ${scheduleStart.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+              : `Available on ${scheduleStart.toLocaleDateString()}`;
             scheduleLocked = true;
           }
         }
@@ -599,17 +686,14 @@ export default function StudentPracticals() {
         let scheduleLocked = false;
 
         if (p.schedule_date) {
-          const schedDate = new Date(p.schedule_date);
-          if (p.schedule_time) {
-            const [hours, minutes] = p.schedule_time.split(":").map(Number);
-            schedDate.setHours(hours, minutes, 0, 0);
-          } else {
-            schedDate.setHours(0, 0, 0, 0);
-          }
+          const { start } = parseScheduleTimeRange(p.schedule_time || null);
+          const scheduleStart = buildLocalDateTime(p.schedule_date, start, "start");
 
-          if (now < schedDate) {
+          if (now.getTime() < scheduleStart.getTime()) {
             p.is_locked = true;
-            p.lock_reason = `Available on ${schedDate.toLocaleDateString()} at ${schedDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+            p.lock_reason = start
+              ? `Available on ${scheduleStart.toLocaleDateString()} at ${scheduleStart.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+              : `Available on ${scheduleStart.toLocaleDateString()}`;
             scheduleLocked = true;
           }
         }
@@ -757,6 +841,27 @@ export default function StudentPracticals() {
     };
   }, [sequencedPracticals]);
 
+  const getAttemptState = (p: FormattedPractical) => {
+    const maxAttempts = Math.max(1, Number(p.max_attempts || 1));
+    const rawAttempts = Math.max(0, Number(p.attempt_count || 0));
+    const attemptsOverflow = rawAttempts > maxAttempts;
+    const usedAttempts = Math.min(rawAttempts, maxAttempts);
+    const remainingAttempts = Math.max(0, maxAttempts - usedAttempts);
+    const normalizedStatus = String(p.status || "").toLowerCase();
+    const hasActiveAttempt =
+      normalizedStatus === "in_progress" || normalizedStatus === "overdue";
+    const canStart = !attemptsOverflow && (hasActiveAttempt || remainingAttempts > 0);
+
+    return {
+      maxAttempts,
+      usedAttempts,
+      remainingAttempts,
+      hasActiveAttempt,
+      attemptsOverflow,
+      canStart,
+    };
+  };
+
   // Handle View Result, Start Practical, Navigate...
   const handleViewResult = async (
     practicalId: number,
@@ -805,7 +910,10 @@ export default function StudentPracticals() {
     }
   };
 
-  const handleStartPractical = async (practical: FormattedPractical) => {
+  const handleStartPractical = async (
+    practical: FormattedPractical,
+    confirmedLastAttempt = false,
+  ) => {
     if (practical.is_locked) {
       toast.warning("This practical is locked. " + (practical.lock_reason || "Please complete the previous practical first."));
       return;
@@ -815,14 +923,18 @@ export default function StudentPracticals() {
     //   return;
     // }
 
-    const remainingAttempts = practical.max_attempts - practical.attempt_count;
+    const attemptState = getAttemptState(practical);
 
-    if (remainingAttempts <= 0) {
+    if (!attemptState.canStart) {
       toast.error("You have no remaining attempts for this practical.");
       return;
     }
 
-    if (remainingAttempts === 1) {
+    if (
+      !attemptState.hasActiveAttempt &&
+      attemptState.remainingAttempts === 1 &&
+      !confirmedLastAttempt
+    ) {
       setAttemptWarning({ show: true, practical });
       return;
     }
@@ -900,6 +1012,7 @@ export default function StudentPracticals() {
     const isUrgent = false;
     const showLocked = p.is_locked && !isDone && !isSubmitted;
     const isHighlighted = highlightedPracticalId === p.id;
+    const attemptState = getAttemptState(p);
 
     // Status accent colors
     const accentMap: Record<string, string> = {
@@ -1027,20 +1140,20 @@ export default function StudentPracticals() {
                 </span>
                 <span className={cn(
                   "text-xs font-bold",
-                  p.max_attempts - p.attempt_count <= 1 ? "text-red-500" : "text-gray-500 dark:text-gray-400"
+                  attemptState.remainingAttempts <= 1 ? "text-red-500" : "text-gray-500 dark:text-gray-400"
                 )}>
-                  {p.attempt_count}/{p.max_attempts}
+                  {attemptState.usedAttempts}/{attemptState.maxAttempts}
                 </span>
               </div>
               <div className="w-full h-1 rounded-full bg-gray-100 dark:bg-gray-800 overflow-hidden">
                 <div
                   className={cn(
                     "h-full rounded-full transition-all duration-500",
-                    p.max_attempts - p.attempt_count <= 1
+                    attemptState.remainingAttempts <= 1
                       ? "bg-gradient-to-r from-red-500 to-rose-400"
                       : "bg-gradient-to-r from-indigo-500 to-purple-500"
                   )}
-                  style={{ width: `${Math.min((p.attempt_count / p.max_attempts) * 100, 100)}%` }}
+                  style={{ width: `${Math.min((attemptState.usedAttempts / attemptState.maxAttempts) * 100, 100)}%` }}
                 />
               </div>
             </div>
@@ -1056,21 +1169,25 @@ export default function StudentPracticals() {
               <Button
                 className={cn(
                   "w-full transition-all duration-300 shadow-md font-semibold",
-                  isUrgent
+                  !attemptState.canStart
+                    ? "bg-gray-300 dark:bg-gray-700 text-gray-600 dark:text-gray-300"
+                    : isUrgent
                     ? "bg-red-600 hover:bg-red-700 shadow-red-500/20"
                     : "bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 shadow-indigo-500/25"
                 )}
                 size="sm"
                 onClick={() => handleStartPractical(p)}
-                disabled={p.is_locked}
+                disabled={p.is_locked || !attemptState.canStart}
               >
                 <span className="flex items-center gap-2">
                   {p.is_locked
                     ? "Locked"
-                    : p.status === "in_progress"
+                    : !attemptState.canStart
+                      ? "No Attempts Left"
+                    : attemptState.hasActiveAttempt
                       ? "Continue Solving"
                       : "Start Practical"}
-                  {!p.is_locked && (
+                  {!p.is_locked && attemptState.canStart && (
                     <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
                   )}
                 </span>
@@ -1112,7 +1229,7 @@ export default function StudentPracticals() {
 
                 <div className="flex gap-1.5 ml-auto">
                   {/* Retry */}
-                  {p.status === "failed" && p.attempt_count < p.max_attempts && (
+                  {p.status === "failed" && attemptState.remainingAttempts > 0 && (
                     <Button
                       size="sm"
                       variant="outline"
@@ -1127,7 +1244,7 @@ export default function StudentPracticals() {
                   )}
 
                   {/* Request Reattempt */}
-                  {p.status === "failed" && p.attempt_count >= p.max_attempts && (
+                  {p.status === "failed" && attemptState.remainingAttempts === 0 && (
                     (p.lock_reason?.includes("Re-attempt Requested")) ? (
                       <div className="flex items-center gap-1 px-2.5 py-1.5 bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400 rounded-lg text-[11px] font-bold">
                         <Loader2 className="w-3 h-3 animate-spin" />
@@ -1172,6 +1289,7 @@ export default function StudentPracticals() {
     const isSubmitted = p.status === "submitted";
     const isUrgent = false;
     const isHighlighted = highlightedPracticalId === p.id;
+    const attemptState = getAttemptState(p);
 
     return (
       <motion.div
@@ -1226,7 +1344,7 @@ export default function StudentPracticals() {
               {(!isDone && p.max_attempts > 1) && (
                 <span className="flex items-center gap-1">
                   <Sparkles className="w-3 h-3 text-amber-500" />
-                  {p.max_attempts - p.attempt_count} attempts
+                  {attemptState.remainingAttempts} attempts
                 </span>
               )}
             </div>
@@ -1247,14 +1365,14 @@ export default function StudentPracticals() {
 
               <div className="flex gap-2">
                 {/* Retry Button - Show if attempts are available */}
-                {p.status === "failed" && p.attempt_count < p.max_attempts && (
+                {p.status === "failed" && attemptState.remainingAttempts > 0 && (
                   <Button size="icon" variant="outline" className="w-8 h-8 text-orange-600 border-orange-200 bg-orange-50/50" onClick={() => handleStartPractical(p)} disabled={p.is_locked}>
                     <RefreshCw className="w-3.5 h-3.5" />
                   </Button>
                 )}
 
                 {/* Request Reattempt - Only if attempts exhausted */}
-                {p.status === "failed" && p.attempt_count >= p.max_attempts && (
+                {p.status === "failed" && attemptState.remainingAttempts === 0 && (
                   (p.lock_reason?.includes("Re-attempt Requested")) ? (
                     <div className="flex items-center gap-1.5 px-3 py-1 bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400 rounded-lg border border-purple-100 dark:border-purple-800/50 text-xs font-bold animate-pulse">
                       <Loader2 className="w-3 h-3 animate-spin" />
@@ -1275,12 +1393,25 @@ export default function StudentPracticals() {
           ) : (
             <Button
               size="sm"
-              className={cn("h-8 text-xs px-4", isUrgent ? "bg-red-600 hover:bg-red-700" : "bg-indigo-600 hover:bg-indigo-700")}
+              className={cn(
+                "h-8 text-xs px-4",
+                !attemptState.canStart
+                  ? "bg-gray-300 dark:bg-gray-700 text-gray-600 dark:text-gray-300"
+                  : isUrgent
+                    ? "bg-red-600 hover:bg-red-700"
+                    : "bg-indigo-600 hover:bg-indigo-700"
+              )}
               onClick={() => handleStartPractical(p)}
-              disabled={p.is_locked}
+              disabled={p.is_locked || !attemptState.canStart}
             >
-              {p.is_locked ? "Locked" : "Start"}
-              {!p.is_locked && <ArrowRight className="w-3 h-3 ml-1.5" />}
+              {p.is_locked
+                ? "Locked"
+                : !attemptState.canStart
+                  ? "No Attempts"
+                  : attemptState.hasActiveAttempt
+                    ? "Continue"
+                    : "Start"}
+              {!p.is_locked && attemptState.canStart && <ArrowRight className="w-3 h-3 ml-1.5" />}
             </Button>
           )}
         </div>
@@ -1706,7 +1837,7 @@ export default function StudentPracticals() {
                 className="flex-1 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white"
                 onClick={async () => {
                   if (attemptWarning.practical) {
-                    await handleStartPractical(attemptWarning.practical);
+                    await handleStartPractical(attemptWarning.practical, true);
                   }
                   setAttemptWarning({ show: false, practical: null });
                 }}

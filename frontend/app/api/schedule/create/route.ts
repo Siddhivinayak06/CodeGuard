@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 import { requireRole } from "@/lib/auth";
+import { supabaseAdmin } from "@/lib/supabase/service";
 
 export async function POST(request: Request) {
   try {
@@ -30,7 +31,7 @@ export async function POST(request: Request) {
     // 2. Conflict Checks
 
     // 2.1 Check Holiday
-    const { data: holiday } = (await supabase
+    const { data: holiday } = (await supabaseAdmin
       .from("holidays")
       .select("id, description")
       .eq("date", date)
@@ -48,12 +49,14 @@ export async function POST(request: Request) {
     // Also check 'faculty_availability' table. If we interpret it as "Busy Times", we check for overlap.
 
     // Check existing schedules for this faculty
-    const { data: facultyConflicts } = await supabase
+    const { data: facultyConflicts } = await supabaseAdmin
       .from("schedules")
       .select("id")
       .eq("faculty_id", faculty_id)
       .eq("date", date)
-      .or(`and(start_time.lte.${end_time},end_time.gte.${start_time})`); // Overlap logic
+      // Strict overlap: existing.start < new.end AND existing.end > new.start.
+      // This allows back-to-back sessions.
+      .or(`and(start_time.lt.${end_time},end_time.gt.${start_time})`);
 
     if (facultyConflicts && facultyConflicts.length > 0) {
       return NextResponse.json(
@@ -66,7 +69,7 @@ export async function POST(request: Request) {
     }
 
     // 3. Create Schedule
-    const { data: schedule, error: scheduleError } = (await (supabase
+    const { data: schedule, error: scheduleError } = (await (supabaseAdmin
       .from("schedules") as any)
       .insert({
         practical_id: practical_id || null, // Allow null
@@ -92,7 +95,7 @@ export async function POST(request: Request) {
 
     // If batch_name is provided, fetch students from that batch
     if (batch_name) {
-      const { data: batchStudents, error: batchError } = (await supabase
+      const { data: batchStudents, error: batchError } = (await supabaseAdmin
         .from("users")
         .select("uid")
         .eq("batch", batch_name)
@@ -115,7 +118,7 @@ export async function POST(request: Request) {
         student_id: studentId,
       }));
 
-      const { error: allocationError } = await (supabase
+      const { error: allocationError } = await (supabaseAdmin
         .from("schedule_allocations") as any)
         .insert(allocations);
 
@@ -135,7 +138,7 @@ export async function POST(request: Request) {
     if (practical_id && studentIdsToAllocate.length > 0) {
       try {
         // Check which students are already assigned to avoid duplicates
-        const { data: existingAssignments } = (await supabase
+        const { data: existingAssignments } = (await supabaseAdmin
           .from("student_practicals")
           .select("student_id")
           .eq("practical_id", practical_id)
@@ -155,7 +158,7 @@ export async function POST(request: Request) {
           }));
 
         if (newStudentPracticals.length > 0) {
-          const { error: spError } = await (supabase
+          const { error: spError } = await (supabaseAdmin
             .from("student_practicals") as any)
             .insert(newStudentPracticals);
 

@@ -1,9 +1,25 @@
-// src/utils/dockerRunner.js
 const { spawn } = require('child_process');
 const { v4: uuidv4 } = require('uuid');
-const logger = require('../utils/logger');
+const logger = require('./logger');
 const poolManager = require('../services/poolManager');
 const config = require('../config');
+const {
+  normalizeOutput,
+  createSkippedResult,
+  sortBatchResults,
+  buildBatchErrorResults,
+} = require('./execution/batchResultUtils');
+const {
+  shouldUseCompiledBatchHarness,
+} = require('./execution/harnessSelectors');
+const {
+  COMPILED_BATCH_HARNESS_SCRIPT,
+  buildHarnessTsvTestsPayload,
+} = require('./execution/harnessScripts');
+const {
+  parseCompiledHarnessResults,
+  buildOrderedCompiledResults,
+} = require('./execution/harnessParsers');
 
 function writeBase64FileCommand(content = '', filePath) {
   const b64 = Buffer.from(content).toString('base64');
@@ -18,8 +34,12 @@ async function runCommand(args, options = {}) {
   let stdout = '';
   let stderr = '';
 
-  proc.stdout.on('data', (data) => (stdout += data.toString()));
-  proc.stderr.on('data', (data) => (stderr += data.toString()));
+  proc.stdout.on('data', (data) => {
+    stdout += data.toString();
+  });
+  proc.stderr.on('data', (data) => {
+    stderr += data.toString();
+  });
 
   const exitCode = await new Promise((resolve) => {
     proc.on('close', resolve);
@@ -31,16 +51,25 @@ async function runCommand(args, options = {}) {
 
 async function compileInContainer(containerName, code, lang, uniqueId) {
   const escapedCode = code.replace(/\r/g, '');
+  const normalizedLang = String(lang || '').toLowerCase();
   let cmd = '';
 
-  // Pooled containers use /tmp/${uniqueId} for isolation
-  if (lang === 'python') {
-    cmd = `mkdir -p /tmp/${uniqueId} && ${writeBase64FileCommand(escapedCode, `/tmp/${uniqueId}/code.py`)}`;
-  } else if (lang === 'c') {
-    cmd = `mkdir -p /tmp/${uniqueId} && ${writeBase64FileCommand(escapedCode, `/tmp/${uniqueId}/code.c`)} && gcc -O2 /tmp/${uniqueId}/code.c -o /tmp/${uniqueId}/a.out -lm 2>/tmp/${uniqueId}/gcc_err.txt || (cat /tmp/${uniqueId}/gcc_err.txt 1>&2 && exit 1)`;
-  } else if (lang === 'cpp' || lang === 'c++') {
-    cmd = `mkdir -p /tmp/${uniqueId} && ${writeBase64FileCommand(escapedCode, `/tmp/${uniqueId}/code.cpp`)} && g++ -O2 /tmp/${uniqueId}/code.cpp -o /tmp/${uniqueId}/a.out -lm 2>/tmp/${uniqueId}/gcc_err.txt || (cat /tmp/${uniqueId}/gcc_err.txt 1>&2 && exit 1)`;
-  } else if (lang === 'java') {
+  if (normalizedLang === 'python' || normalizedLang === 'py') {
+    cmd = `mkdir -p /tmp/${uniqueId} && ${writeBase64FileCommand(
+      escapedCode,
+      `/tmp/${uniqueId}/code.py`
+    )} && python3 -m py_compile /tmp/${uniqueId}/code.py 2>/tmp/${uniqueId}/py_compile_err.txt || (cat /tmp/${uniqueId}/py_compile_err.txt 1>&2 && exit 1)`;
+  } else if (normalizedLang === 'c') {
+    cmd = `mkdir -p /tmp/${uniqueId} && ${writeBase64FileCommand(
+      escapedCode,
+      `/tmp/${uniqueId}/code.c`
+    )} && gcc -O2 /tmp/${uniqueId}/code.c -o /tmp/${uniqueId}/a.out -lm 2>/tmp/${uniqueId}/gcc_err.txt || (cat /tmp/${uniqueId}/gcc_err.txt 1>&2 && exit 1)`;
+  } else if (normalizedLang === 'cpp' || normalizedLang === 'c++') {
+    cmd = `mkdir -p /tmp/${uniqueId} && ${writeBase64FileCommand(
+      escapedCode,
+      `/tmp/${uniqueId}/code.cpp`
+    )} && g++ -O2 /tmp/${uniqueId}/code.cpp -o /tmp/${uniqueId}/a.out -lm 2>/tmp/${uniqueId}/gcc_err.txt || (cat /tmp/${uniqueId}/gcc_err.txt 1>&2 && exit 1)`;
+  } else if (normalizedLang === 'java') {
     let className = 'UserCode';
     const publicClassMatch = escapedCode.match(
       /^\s*public\s+class\s+([A-Za-z_][A-Za-z0-9_]*)/m
@@ -53,6 +82,7 @@ async function compileInContainer(containerName, code, lang, uniqueId) {
       );
       if (classMatch) className = classMatch[1];
     }
+
     cmd = `
 mkdir -p /tmp/${uniqueId} &&
 ${writeBase64FileCommand(escapedCode, `/tmp/${uniqueId}/${className}.java`)} &&
@@ -60,7 +90,7 @@ javac /tmp/${uniqueId}/*.java 2> /tmp/${uniqueId}/compile_err.txt || (cat /tmp/$
 `;
   }
 
-  return await runCommand(['exec', containerName, 'sh', '-c', cmd]);
+  return runCommand(['exec', containerName, 'sh', '-c', cmd]);
 }
 
 async function execTestCase(containerName, tc, lang, uniqueId) {
@@ -73,13 +103,18 @@ async function execTestCase(containerName, tc, lang, uniqueId) {
   } = tc;
 
   const timeoutSec = Math.max(1, Math.ceil(time_limit_ms / 1000));
+  const normalizedLang = String(lang || '').toLowerCase();
   let baseRunCmd = '';
 
-  if (lang === 'python') {
+  if (normalizedLang === 'python' || normalizedLang === 'py') {
     baseRunCmd = `python3 /tmp/${uniqueId}/code.py`;
-  } else if (lang === 'c' || lang === 'cpp' || lang === 'c++') {
+  } else if (
+    normalizedLang === 'c' ||
+    normalizedLang === 'cpp' ||
+    normalizedLang === 'c++'
+  ) {
     baseRunCmd = `/tmp/${uniqueId}/a.out`;
-  } else if (lang === 'java') {
+  } else if (normalizedLang === 'java') {
     baseRunCmd = `
 MAIN_CLASS=$(grep -l "public static void main" /tmp/${uniqueId}/*.java | head -n1 | xargs basename -s .java)
 if [ -z "$MAIN_CLASS" ]; then MAIN_CLASS=$(ls /tmp/${uniqueId}/*.class | head -n1 | xargs basename -s .class); fi
@@ -88,21 +123,26 @@ java -cp /tmp/${uniqueId} $MAIN_CLASS
   }
 
   const timeCmd =
-    lang === 'java'
+    normalizedLang === 'java'
       ? '/usr/bin/time -f "CPU:%U|%S MEM:%M"'
       : '/usr/bin/time -p';
-  const runCmd = `${writeBase64FileCommand(stdinInput, `/tmp/${uniqueId}/input.txt`)} && cat /tmp/${uniqueId}/input.txt | timeout ${timeoutSec} ${timeCmd} sh -c '${baseRunCmd.trim().replace(/'/g, "'\\''")}'`;
+  const runCmd = `${writeBase64FileCommand(
+    stdinInput,
+    `/tmp/${uniqueId}/input.txt`
+  )} && cat /tmp/${uniqueId}/input.txt | timeout ${timeoutSec} ${timeCmd} sh -c '${baseRunCmd
+    .trim()
+    .replace(/'/g, "'\\''")}'`;
 
   const result = await runCommand(['exec', containerName, 'sh', '-c', runCmd]);
 
   let cpuTime = 0;
   let memoryKB = 0;
 
-  if (lang === 'java') {
+  if (normalizedLang === 'java') {
     const match = result.stderr.match(/CPU:([\d.]+)\|([\d.]+) MEM:(\d+)/);
     if (match) {
       cpuTime = parseFloat(match[1]) + parseFloat(match[2]);
-      memoryKB = parseInt(match[3]);
+      memoryKB = parseInt(match[3], 10);
     }
   } else {
     const userMatch = result.stderr.match(/user ([\d.]+)/);
@@ -127,7 +167,61 @@ java -cp /tmp/${uniqueId} $MAIN_CLASS
     is_hidden,
     cpuTime,
     memoryKB,
+    time_ms: Math.round(cpuTime * 1000),
+    memory_kb: memoryKB,
   };
+}
+
+async function runCompiledHarnessInContainer(
+  containerName,
+  batch,
+  uniqueId,
+  lang,
+  options = {}
+) {
+  const { failFast = true } = options;
+  const normalizedLang = String(lang || '').toLowerCase();
+  const harnessLang =
+    normalizedLang === 'java'
+      ? 'java'
+      : normalizedLang === 'c'
+        ? 'c'
+        : 'python';
+  const harnessPath = `/tmp/${uniqueId}/batch_harness.sh`;
+  const testsPath = `/tmp/${uniqueId}/tests.tsv`;
+  const testsPayload = buildHarnessTsvTestsPayload(batch);
+
+  const totalTimeMs = batch.reduce(
+    (sum, tc) => sum + (tc.time_limit_ms ?? 2000),
+    0
+  );
+  const hardTimeoutSec = Math.max(5, Math.ceil(totalTimeMs / 1000) + 5);
+
+  const cmd = [
+    `mkdir -p /tmp/${uniqueId}`,
+    writeBase64FileCommand(COMPILED_BATCH_HARNESS_SCRIPT, harnessPath),
+    writeBase64FileCommand(testsPayload, testsPath),
+    `timeout ${hardTimeoutSec} sh ${harnessPath} ${testsPath} ${harnessLang} /tmp/${uniqueId} ${failFast ? 1 : 0}`,
+  ].join(' && ');
+
+  const harnessResult = await runCommand([
+    'exec',
+    containerName,
+    'sh',
+    '-c',
+    cmd,
+  ]);
+
+  const resultById = parseCompiledHarnessResults(harnessResult.stdout, batch);
+
+  return buildOrderedCompiledResults({
+    batch,
+    resultById,
+    failFast,
+    timedOut: harnessResult.exitCode === 124,
+    stderr: harnessResult.stderr,
+    exitCode: harnessResult.exitCode,
+  });
 }
 
 module.exports = async function runBatchCode(
@@ -137,18 +231,32 @@ module.exports = async function runBatchCode(
   options = {}
 ) {
   const CONCURRENCY_LIMIT = config.docker.workersPerContainer || 15;
-  const { earlyExit = true } = options;
+  const {
+    earlyExit = true,
+    failFast = earlyExit,
+    executionModel = config.execution?.defaultExecutionModel,
+  } = options;
   const uniqueId = uuidv4();
+  const normalizedLang = String(lang || '').toLowerCase();
+  const effectiveFailFast =
+    typeof failFast === 'boolean' ? failFast : Boolean(earlyExit);
 
-  let containerId = null;
+  const useCompiledBatchHarness = shouldUseCompiledBatchHarness(
+    normalizedLang,
+    executionModel,
+    config.execution
+  );
+
   const poolLang =
-    lang === 'cpp' || lang === 'c++'
+    normalizedLang === 'cpp' || normalizedLang === 'c++'
       ? 'cpp'
-      : lang === 'c'
+      : normalizedLang === 'c'
         ? 'c'
-        : lang === 'python'
+        : normalizedLang === 'python' || normalizedLang === 'py'
           ? 'python'
           : 'java';
+
+  let containerId = null;
 
   try {
     logger.info(`Acquiring container from pool for ${lang}...`);
@@ -159,71 +267,91 @@ module.exports = async function runBatchCode(
     const compileResult = await compileInContainer(
       containerId,
       code,
-      lang,
+      normalizedLang,
       uniqueId
     );
 
     if (compileResult.exitCode !== 0) {
       logger.warn(`Compilation failed for ${containerId}`);
-      return batch.map((tc) => ({
-        test_case_id: tc.id,
-        input: tc.stdinInput,
-        expectedOutput: tc.expectedOutput,
-        stdout: '',
-        stderr: compileResult.stderr,
-        exitCode: compileResult.exitCode,
-        is_hidden: tc.is_hidden,
-      }));
+      return buildBatchErrorResults(
+        batch,
+        compileResult.stderr || 'Compilation failed',
+        compileResult.exitCode || 1,
+        'compile_error'
+      );
+    }
+
+    if (useCompiledBatchHarness) {
+      logger.info(
+        `Executing ${batch.length} test cases via shell batch harness for ${normalizedLang} in ${containerId}...`
+      );
+      const harnessResults = await runCompiledHarnessInContainer(
+        containerId,
+        batch,
+        uniqueId,
+        normalizedLang,
+        { failFast: effectiveFailFast }
+      );
+      logger.info(`Final batch results: ${harnessResults.length}`);
+      return sortBatchResults(harnessResults, batch);
     }
 
     const results = [];
     let hasFailed = false;
+    const queue = [...batch];
 
-    const runWithEarlyExit = async () => {
-      const queue = [...batch];
+    const runWorker = async () => {
+      while (queue.length > 0) {
+        if (effectiveFailFast && hasFailed) break;
+        const tc = queue.shift();
+        if (!tc) break;
 
-      const runWorker = async () => {
-        while (queue.length > 0) {
-          if (earlyExit && hasFailed) break;
-          const tc = queue.shift();
-          if (!tc) break;
+        const result = await execTestCase(
+          containerId,
+          tc,
+          normalizedLang,
+          uniqueId
+        );
+        results.push(result);
 
-          const result = await execTestCase(containerId, tc, lang, uniqueId);
-          results.push(result);
+        const hasExpectedOutput = typeof tc.expectedOutput === 'string';
+        const outputMismatch =
+          hasExpectedOutput &&
+          normalizeOutput(result.stdout) !== normalizeOutput(tc.expectedOutput);
 
-          if (result.exitCode !== 0) {
-            hasFailed = true;
-          }
+        if (result.exitCode !== 0 || outputMismatch) {
+          hasFailed = true;
         }
-      };
-
-      const workers = [];
-      const numWorkers = Math.min(CONCURRENCY_LIMIT, batch.length);
-      for (let i = 0; i < numWorkers; i++) {
-        workers.push(runWorker());
       }
-
-      await Promise.all(workers);
-      return results;
     };
 
-    logger.info(`Executing ${batch.length} test cases in ${containerId}...`);
-    const batchResults = await runWithEarlyExit();
+    const workers = [];
+    const numWorkers = effectiveFailFast
+      ? 1
+      : Math.min(CONCURRENCY_LIMIT, batch.length);
+    for (let i = 0; i < numWorkers; i++) {
+      workers.push(runWorker());
+    }
 
-    logger.info(`📦 Final batch results: ${batchResults.length}`);
-    return batchResults.sort(
-      (a, b) =>
-        batch.findIndex((tc) => tc.id === a.test_case_id) -
-        batch.findIndex((tc) => tc.id === b.test_case_id)
-    );
+    await Promise.all(workers);
+
+    if (effectiveFailFast && hasFailed && results.length < batch.length) {
+      const executedIds = new Set(results.map((r) => String(r.test_case_id)));
+      for (const tc of batch) {
+        if (!executedIds.has(String(tc.id))) {
+          results.push(createSkippedResult(tc));
+        }
+      }
+    }
+
+    logger.info(`Final batch results: ${results.length}`);
+    return sortBatchResults(results, batch);
   } catch (e) {
     logger.error(`Batch execution failed: ${e.message}`);
     throw e;
   } finally {
     if (containerId) {
       logger.info(`Releasing container ${containerId} back to pool...`);
-      // Use fire-and-forget release or await it?
-      // PoolManager.release handles its own internal cleanup.
       await poolManager.release(poolLang, containerId);
     }
   }

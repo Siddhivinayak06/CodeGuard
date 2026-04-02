@@ -7,7 +7,6 @@ import {
   Trash2 as TrashIcon,
   Sparkles,
   ChevronDown,
-  ChevronUp,
   Eye,
   EyeOff,
   Clock,
@@ -27,6 +26,8 @@ interface TestCaseManagerProps {
   addTestCase: () => void;
   removeTestCase: (index: number) => void;
   generateTestCases: () => void;
+  fuzzerCount: number;
+  setFuzzerCount: (count: number) => void;
   generatingTests: boolean;
   description: string;
 }
@@ -41,6 +42,8 @@ export default function TestCaseManager({
   addTestCase,
   removeTestCase,
   generateTestCases,
+  fuzzerCount,
+  setFuzzerCount,
   generatingTests,
   description,
 }: TestCaseManagerProps) {
@@ -110,28 +113,44 @@ export default function TestCaseManager({
           </div>
         </div>
 
-        {/* AI Generate Button */}
-        <motion.button
-          type="button"
-          onClick={generateTestCases}
-          disabled={generatingTests || !description}
-          whileHover={{ scale: 1.02 }}
-          whileTap={{ scale: 0.98 }}
-          className={cx(
-            "flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-xl transition-all shadow-md",
-            generatingTests || !description
-              ? "bg-gray-100 dark:bg-gray-800 text-gray-400 cursor-not-allowed"
-              : "bg-gradient-to-r from-violet-500 to-purple-500 text-white hover:shadow-lg hover:shadow-violet-500/25",
-          )}
-        >
-          <motion.div
-            animate={generatingTests ? { rotate: 360 } : {}}
-            transition={{ duration: 1, repeat: generatingTests ? Infinity : 0, ease: "linear" }}
+        <div className="flex items-center gap-2">
+          <select
+            value={fuzzerCount}
+            onChange={(e) => setFuzzerCount(Number(e.target.value) || 100)}
+            disabled={generatingTests}
+            className="px-2.5 py-2 text-xs font-semibold bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-gray-700 dark:text-gray-300"
           >
-            <Sparkles size={14} />
-          </motion.div>
-          {generatingTests ? "Generating..." : "AI Generate"}
-        </motion.button>
+            <option value={25}>25 cases</option>
+            <option value={50}>50 cases</option>
+            <option value={100}>100 cases</option>
+          </select>
+
+          <motion.button
+            type="button"
+            onClick={generateTestCases}
+            disabled={generatingTests || !description}
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            className={cx(
+              "flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-xl transition-all shadow-md",
+              generatingTests || !description
+                ? "bg-gray-100 dark:bg-gray-800 text-gray-400 cursor-not-allowed"
+                : "bg-gradient-to-r from-violet-500 to-purple-500 text-white hover:shadow-lg hover:shadow-violet-500/25",
+            )}
+          >
+            <motion.div
+              animate={generatingTests ? { rotate: 360 } : {}}
+              transition={{
+                duration: 1,
+                repeat: generatingTests ? Infinity : 0,
+                ease: "linear",
+              }}
+            >
+              <Sparkles size={14} />
+            </motion.div>
+            {generatingTests ? "Generating..." : `Fuzzer ${fuzzerCount}`}
+          </motion.button>
+        </div>
       </div>
 
       {/* Test Cases List */}

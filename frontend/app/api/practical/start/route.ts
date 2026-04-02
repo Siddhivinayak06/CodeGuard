@@ -115,13 +115,26 @@ export async function POST(req: Request) {
     }
 
     // Check attempts
-    const attempts = (spRecord as any).attempt_count || 0;
-    const max = (spRecord as any).max_attempts || 1;
-    const currentStatus = (spRecord as any).status;
+    const attempts = Number((spRecord as any).attempt_count || 0);
+    const max = Number((spRecord as any).max_attempts || 1);
+    const currentStatus = String((spRecord as any).status || "").toLowerCase();
+
+    const isActiveSessionStatus =
+      currentStatus === "in_progress" || currentStatus === "overdue";
 
     // Idempotent start: if this attempt is already in progress, do not increment again.
-    if (currentStatus === "in_progress") {
+    if (isActiveSessionStatus) {
       return NextResponse.json({ success: true, attempt: attempts });
+    }
+
+    if (attempts > max) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Attempt data is invalid. Please contact faculty.",
+        },
+        { status: 403 },
+      );
     }
 
     if (attempts >= max) {

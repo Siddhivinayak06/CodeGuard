@@ -337,7 +337,25 @@ export function BulkScheduleWizard({ onScheduleCreated }: { onScheduleCreated: (
             const data = await res.json();
             if (data.success) {
                 toast.success(`Created ${data.created} schedule(s)`);
-                if (data.failed > 0) toast.warning(`${data.failed} conflict(s) skipped`);
+                if (data.failed > 0) {
+                    const reasonCounts = Array.isArray(data.errors)
+                        ? data.errors.reduce((acc: Record<string, number>, item: any) => {
+                            const reason = String(item?.error || "Unknown");
+                            acc[reason] = (acc[reason] || 0) + 1;
+                            return acc;
+                        }, {})
+                        : {};
+
+                    const details = Object.entries(reasonCounts)
+                        .map(([reason, count]) => `${count} ${reason}`)
+                        .join("; ");
+
+                    toast.warning(
+                        details
+                            ? `${data.failed} schedule(s) skipped: ${details}`
+                            : `${data.failed} schedule(s) skipped due to conflicts`
+                    );
+                }
                 onScheduleCreated();
                 loadGridData(); // Reload to show new status
                 setOpen(false); // Optionally close or keep open

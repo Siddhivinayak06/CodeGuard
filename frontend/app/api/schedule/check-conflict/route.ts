@@ -35,7 +35,9 @@ export async function POST(request: Request) {
         .select("id, start_time, end_time")
         .eq("faculty_id", faculty_id)
         .eq("date", date)
-        .or(`and(start_time.lte.${end_time},end_time.gte.${start_time})`);
+        // Strict overlap: existing.start < new.end AND existing.end > new.start.
+        // This allows back-to-back sessions (e.g. 09:00-11:00 and 11:00-13:00).
+        .or(`and(start_time.lt.${end_time},end_time.gt.${start_time})`);
 
       if (exclude_id) query = query.neq("id", exclude_id);
 
@@ -57,7 +59,7 @@ export async function POST(request: Request) {
         .select("id, start_time, end_time")
         .eq("batch_name", batch_name)
         .eq("date", date)
-        .or(`and(start_time.lte.${end_time},end_time.gte.${start_time})`);
+        .or(`and(start_time.lt.${end_time},end_time.gt.${start_time})`);
 
       if (exclude_id) batchQuery = batchQuery.neq("id", exclude_id);
 

@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 import { requireRole } from "@/lib/auth";
+import { supabaseAdmin } from "@/lib/supabase/service";
 
 export const dynamic = "force-dynamic";
 
@@ -26,7 +27,7 @@ export async function PUT(request: Request) {
             return NextResponse.json({ error: "No fields to update" }, { status: 400 });
         }
 
-        const { data, error } = await (supabase
+        const { data, error } = await (supabaseAdmin
             .from("schedules") as any)
             .update(updates)
             .eq("id", id)
@@ -60,10 +61,10 @@ export async function DELETE(request: Request) {
         }
 
         // Delete allocations first
-        await supabase.from("schedule_allocations").delete().eq("schedule_id", id as any);
+        await supabaseAdmin.from("schedule_allocations").delete().eq("schedule_id", id as any);
 
         // Delete the schedule
-        const { error } = await supabase
+        const { error } = await supabaseAdmin
             .from("schedules")
             .delete()
             .eq("id", id as any);

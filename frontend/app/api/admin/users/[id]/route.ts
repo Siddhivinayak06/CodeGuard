@@ -90,15 +90,26 @@ export async function DELETE(
         { status: 400 },
       );
 
+    // Delete from auth first so email can be reused on re-create.
+    const { error: authDeleteErr } = await supabaseAdmin.auth.admin.deleteUser(id);
+    if (authDeleteErr) {
+      const message = String(authDeleteErr.message || "").toLowerCase();
+      const notFound =
+        message.includes("not found") ||
+        message.includes("no rows") ||
+        message.includes("invalid uuid");
+
+      if (!notFound) {
+        throw authDeleteErr;
+      }
+    }
+
     // Delete user from users table
     const { error: delErr } = await supabaseAdmin
       .from("users")
       .delete()
       .eq("uid", id);
     if (delErr) throw delErr;
-
-    // Also delete from auth (optional - uncomment if needed)
-    // await supabaseAdmin.auth.admin.deleteUser(id);
 
     return NextResponse.json({ success: true, message: "User deleted" });
   } catch (err: any) {

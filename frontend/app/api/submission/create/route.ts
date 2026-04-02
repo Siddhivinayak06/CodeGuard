@@ -31,7 +31,7 @@ export async function POST(req: Request) {
     // Verify attempt limit has not been exceeded
     const { data: spRecord, error: spError } = (await supabase
       .from("student_practicals")
-      .select("attempt_count, max_attempts, is_locked, lock_reason")
+      .select("attempt_count, max_attempts, is_locked, lock_reason, status")
       .eq("student_id", student_id)
       .eq("practical_id", practical_id)
       .single()) as any;
@@ -66,10 +66,20 @@ export async function POST(req: Request) {
       }
     }
 
-    const attempts = spRecord.attempt_count || 0;
-    const maxAttempts = spRecord.max_attempts || 1;
+    const attempts = Number(spRecord.attempt_count || 0);
+    const maxAttempts = Number(spRecord.max_attempts || 1);
+    const currentStatus = String(spRecord.status || "").toLowerCase();
+    const hasActiveAttempt =
+      currentStatus === "in_progress" || currentStatus === "overdue";
 
     if (attempts > maxAttempts) {
+      return NextResponse.json(
+        { error: "Attempt limit exceeded" },
+        { status: 403 },
+      );
+    }
+
+    if (attempts >= maxAttempts && !hasActiveAttempt) {
       return NextResponse.json(
         { error: "Attempt limit exceeded" },
         { status: 403 },

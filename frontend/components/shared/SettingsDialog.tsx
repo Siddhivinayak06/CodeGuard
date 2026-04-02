@@ -19,9 +19,9 @@ import { useState, useEffect } from "react";
 import { Settings } from "lucide-react";
 
 export function SettingsDialog() {
-  const [provider, setProvider] = useState("gemini");
+  const [provider, setProvider] = useState("ollama");
   const [apiKey, setApiKey] = useState("");
-  const [model, setModel] = useState("gemini-1.5-flash-001");
+  const [model, setModel] = useState("qwen3.5:9b");
   const [ollamaUrl, setOllamaUrl] = useState("http://localhost:11434");
   const [open, setOpen] = useState(false);
 
@@ -30,9 +30,9 @@ export function SettingsDialog() {
     const saved = localStorage.getItem("ai_settings");
     if (saved) {
       const parsed = JSON.parse(saved);
-      setProvider(parsed.provider || "gemini");
+      setProvider(parsed.provider || "ollama");
       setApiKey(parsed.apiKey || "");
-      setModel(parsed.model || "gemini-1.5-flash-001");
+      setModel(parsed.model || "qwen3.5:9b");
       setOllamaUrl(parsed.ollamaUrl || "http://localhost:11434");
     }
   }, []);
@@ -108,7 +108,7 @@ export function SettingsDialog() {
               value={model}
               onChange={(e) => setModel(e.target.value)}
               placeholder={
-                provider === "gemini" ? "gemini-1.5-flash-001" : "mistral"
+                provider === "gemini" ? "gemini-1.5-flash-001" : "qwen3.5:9b"
               }
             />
           </div>

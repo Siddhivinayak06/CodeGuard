@@ -114,6 +114,11 @@ const chatWithOllamaStream = async (
 ) => {
   const baseUrl = configOverrides?.ollamaUrl || config.ai.ollamaUrl;
   const model = configOverrides?.model || config.ai.model || 'qwen2.5-coder';
+  const requestedTimeoutMs = Number(configOverrides?.requestTimeoutMs);
+  const timeoutMs =
+    Number.isFinite(requestedTimeoutMs) && requestedTimeoutMs > 0
+      ? requestedTimeoutMs
+      : 300000;
 
   const payload = {
     model,
@@ -133,22 +138,44 @@ const chatWithOllamaStream = async (
     const response = await axios.post(`${baseUrl}/api/chat`, payload, {
       responseType: 'stream',
       signal: abortSignal,
-      timeout: 120000, // 2 minute timeout to prevent infinite hangs
+      timeout: timeoutMs,
     });
 
+    const emitLine = (line) => {
+      const trimmed = line.trim();
+      if (!trimmed) return;
+
+      try {
+        const json = JSON.parse(trimmed);
+        if (json.error) {
+          throw new Error(String(json.error));
+        }
+        if (json.message?.content) {
+          onChunk(json.message.content);
+          return;
+        }
+        if (typeof json.response === 'string') {
+          onChunk(json.response);
+        }
+      } catch {
+        // Ignore malformed or partial lines and continue streaming.
+      }
+    };
+
+    let pending = '';
+
     for await (const chunk of response.data) {
-      const lines = chunk.toString().split('\n').filter(Boolean);
+      pending += chunk.toString('utf8');
+      const lines = pending.split('\n');
+      pending = lines.pop() || '';
 
       for (const line of lines) {
-        try {
-          const json = JSON.parse(line);
-          if (json.message?.content) {
-            onChunk(json.message.content);
-          }
-        } catch {
-          /* ignore partial JSON */
-        }
+        emitLine(line);
       }
+    }
+
+    if (pending.trim()) {
+      emitLine(pending);
     }
   } catch (err) {
     logger.error('Ollama error details:', {
@@ -156,6 +183,7 @@ const chatWithOllamaStream = async (
       code: err.code,
       status: err.response?.status,
       statusText: err.response?.statusText,
+      timeoutMs,
     });
     throw new Error(`Ollama request failed: ${err.message}`);
   }
@@ -188,15 +216,32 @@ const chatStream = async (
   if (!messages.length) return;
 
   const systemPrompt = buildSystemPrompt(contextData);
-  const provider = configOverrides?.provider || config.ai.provider || 'gemini';
-  logger.info(`AI Chat Request: Provider=${provider}`, { configOverrides });
+  const provider = config.ai.provider || configOverrides?.provider || 'gemini';
+  const effectiveConfig = {
+    ...configOverrides,
+    provider,
+  };
+
+  if (provider === 'gemini') {
+    effectiveConfig.model = config.ai.model || configOverrides?.model;
+    effectiveConfig.apiKey =
+      config.ai.apiKey2 || config.ai.apiKey || configOverrides?.apiKey;
+  } else if (provider === 'ollama') {
+    effectiveConfig.model = config.ai.model || configOverrides?.model;
+    effectiveConfig.ollamaUrl =
+      config.ai.ollamaUrl || configOverrides?.ollamaUrl;
+  }
+
+  logger.info(`AI Chat Request: Provider=${provider}`, {
+    model: effectiveConfig.model,
+  });
 
   switch (provider) {
     case 'gemini':
       return chatWithGeminiStream(
         messages,
         systemPrompt,
-        configOverrides,
+        effectiveConfig,
         onChunk,
         abortSignal
       );
@@ -204,7 +249,7 @@ const chatStream = async (
       return chatWithOllamaStream(
         messages,
         systemPrompt,
-        configOverrides,
+        effectiveConfig,
         onChunk,
         abortSignal
       );

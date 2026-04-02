@@ -32,6 +32,74 @@ async function isAdminUser(supabase: any): Promise<boolean> {
   }
 }
 
+async function findAuthUserByEmail(email: string) {
+  const normalizedEmail = String(email || "").trim().toLowerCase();
+  if (!normalizedEmail) return null;
+
+  let page = 1;
+  const perPage = 1000;
+
+  while (true) {
+    const { data, error } = await supabaseAdmin.auth.admin.listUsers({
+      page,
+      perPage,
+    });
+
+    if (error) throw error;
+
+    const users = data?.users || [];
+    const matched = users.find(
+      (u) => String(u.email || "").toLowerCase() === normalizedEmail,
+    );
+
+    if (matched) return matched;
+    if (users.length < perPage) break;
+    page += 1;
+  }
+
+  return null;
+}
+
+async function upsertUserProfile({
+  uid,
+  email,
+  name,
+  role,
+  roll_no,
+  semester,
+  department,
+  batch,
+}: {
+  uid: string;
+  email: string;
+  name?: string;
+  role: "student" | "faculty" | "admin";
+  roll_no?: string;
+  semester?: string;
+  department?: string;
+  batch?: string;
+}) {
+  const profile = {
+    uid,
+    name: name ?? email.split("@")[0],
+    email,
+    role,
+    roll_no,
+    semester,
+    department,
+    batch,
+  };
+
+  const { data, error } = await supabaseAdmin
+    .from("users")
+    .upsert(profile as any, { onConflict: "uid" })
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
 // ---------------------------
 // GET: list all users
 // ---------------------------
@@ -101,6 +169,7 @@ export async function POST(req: NextRequest) {
 // Handle single user creation
 async function handleSingleCreate(body: any) {
   const { email, name, role = "student", roll_no, semester, department, batch } = body;
+  const normalizedEmail = String(email || "").trim().toLowerCase();
 
   // Password is optional - generate a secure random one if not provided
   // This is useful for Azure/OAuth users who won't use password login
@@ -110,7 +179,7 @@ async function handleSingleCreate(body: any) {
     password = crypto.randomUUID() + "Aa1!"; // Meets most password requirements
   }
 
-  if (!email) {
+  if (!normalizedEmail) {
     return NextResponse.json(
       { success: false, error: "Email is required" },
       { status: 400 },
@@ -126,7 +195,7 @@ async function handleSingleCreate(body: any) {
   // Create Auth user
   const { data: createData, error: createErr } =
     await supabaseAdmin.auth.admin.createUser({
-      email,
+      email: normalizedEmail,
       password,
       user_metadata: { role, name },
       email_confirm: true, // Auto-confirm for local dev
@@ -134,9 +203,33 @@ async function handleSingleCreate(body: any) {
   if (createErr) {
     // Handle specific error for duplicate email
     if (createErr.code === "email_exists" || createErr.message?.includes("already been registered")) {
+      const existingAuthUser = await findAuthUserByEmail(normalizedEmail);
+      if (!existingAuthUser?.id) {
+        return NextResponse.json(
+          { success: false, error: "A user with this email already exists" },
+          { status: 409 },
+        );
+      }
+
+      const restored = await upsertUserProfile({
+        uid: existingAuthUser.id,
+        email: normalizedEmail,
+        name,
+        role: role as "student" | "faculty" | "admin",
+        roll_no,
+        semester,
+        department,
+        batch,
+      });
+
       return NextResponse.json(
-        { success: false, error: "A user with this email already exists" },
-        { status: 409 },
+        {
+          success: true,
+          restored: true,
+          data: restored,
+          message: "Existing account re-linked successfully",
+        },
+        { status: 200 },
       );
     }
     throw createErr;
@@ -150,22 +243,16 @@ async function handleSingleCreate(body: any) {
     );
 
   // Insert into users table (use upsert in case trigger already created the row)
-  const profile = {
+  const inserted = await upsertUserProfile({
     uid,
-    name: name ?? email.split("@")[0],
-    email,
+    email: normalizedEmail,
+    name,
     role: role as "student" | "faculty" | "admin",
     roll_no,
     semester,
     department,
     batch,
-  };
-  const { data: inserted, error: insertErr } = await supabaseAdmin
-    .from("users")
-    .upsert(profile as any, { onConflict: "uid" })
-    .select()
-    .single();
-  if (insertErr) throw insertErr;
+  });
 
   return NextResponse.json(
     {
@@ -187,6 +274,7 @@ async function handleBulkCreate(users: any[]) {
 
   for (const user of users) {
     const { email, name, role = "student", roll_no, semester, department, batch } = user;
+    const normalizedEmail = String(email || "").trim().toLowerCase();
 
     // Password is optional - generate a secure random one if not provided
     let password = user.password;
@@ -195,9 +283,9 @@ async function handleBulkCreate(users: any[]) {
     }
 
     // Validate required fields
-    if (!email) {
+    if (!normalizedEmail) {
       results.push({
-        email: email || "unknown",
+        email: normalizedEmail || "unknown",
         success: false,
         error: "Email is required",
       });
@@ -217,15 +305,49 @@ async function handleBulkCreate(users: any[]) {
       // Create Auth user
       const { data: createData, error: createErr } =
         await supabaseAdmin.auth.admin.createUser({
-          email,
+          email: normalizedEmail,
           password,
           user_metadata: { role, name },
           email_confirm: true,
         });
 
       if (createErr) {
+        if (
+          createErr.code === "email_exists" ||
+          createErr.message?.includes("already been registered")
+        ) {
+          try {
+            const existingAuthUser = await findAuthUserByEmail(normalizedEmail);
+            if (existingAuthUser?.id) {
+              const restored = await upsertUserProfile({
+                uid: existingAuthUser.id,
+                email: normalizedEmail,
+                name,
+                role: role as "student" | "faculty" | "admin",
+                roll_no,
+                semester,
+                department,
+                batch,
+              });
+              results.push({
+                email: normalizedEmail,
+                success: true,
+                data: restored,
+              });
+              continue;
+            }
+          } catch (restoreErr: any) {
+            results.push({
+              email: normalizedEmail,
+              success: false,
+              error: restoreErr?.message || "Failed to restore existing account",
+            });
+            continue;
+          }
+        }
+
         results.push({
-          email,
+          email: normalizedEmail,
           success: false,
           error: createErr.message || "Auth creation failed",
         });
@@ -243,26 +365,21 @@ async function handleBulkCreate(users: any[]) {
       }
 
       // Insert into users table (use upsert in case trigger already created the row)
-      const profile = {
-        uid,
-        name: name ?? email.split("@")[0],
-        email,
-        role: role as "student" | "faculty" | "admin",
-        roll_no,
-        semester,
-        department,
-        batch,
-      };
-
-      const { data: inserted, error: insertErr } = await supabaseAdmin
-        .from("users")
-        .upsert(profile as any, { onConflict: "uid" })
-        .select()
-        .single();
-
-      if (insertErr) {
+      let inserted;
+      try {
+        inserted = await upsertUserProfile({
+          uid,
+          email: normalizedEmail,
+          name,
+          role: role as "student" | "faculty" | "admin",
+          roll_no,
+          semester,
+          department,
+          batch,
+        });
+      } catch (insertErr: any) {
         results.push({
-          email,
+          email: normalizedEmail,
           success: false,
           error: insertErr.message || "Profile creation failed",
         });
@@ -270,13 +387,13 @@ async function handleBulkCreate(users: any[]) {
       }
 
       results.push({
-        email,
+        email: normalizedEmail,
         success: true,
         data: inserted,
       });
     } catch (err: any) {
       results.push({
-        email,
+        email: normalizedEmail,
         success: false,
         error: err.message || "Unknown error",
       });

@@ -47,6 +47,8 @@ interface LevelManagerProps {
   onAddLevel?: () => void;
   onRemoveLevel?: (level: string) => void;
   generateTestCases: () => void;
+  fuzzerCount: number;
+  setFuzzerCount: (count: number) => void;
   generatingTests: boolean;
   sampleCode: string;
   setSampleCode: (code: string) => void;
@@ -71,6 +73,8 @@ export default function LevelManager({
   removeLevelTestCase,
   updateLevelTestCase,
   generateTestCases,
+  fuzzerCount,
+  setFuzzerCount,
   generatingTests,
   sampleCode,
   setSampleCode,
@@ -357,6 +361,8 @@ export default function LevelManager({
             addTestCase={() => addLevelTestCase(activeLevel)}
             removeTestCase={(idx) => removeLevelTestCase(activeLevel, idx)}
             generateTestCases={generateTestCases}
+            fuzzerCount={fuzzerCount}
+            setFuzzerCount={setFuzzerCount}
             generatingTests={generatingTests}
             description={getCurrentLevel().description || ""}
           />
