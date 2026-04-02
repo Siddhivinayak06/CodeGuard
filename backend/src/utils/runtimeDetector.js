@@ -31,7 +31,7 @@ function whichCommand(cmd) {
       timeout: 5000,
       stdio: ['ignore', 'pipe', 'ignore'], // Ignore stderr to avoid "not found" noise
     }).trim();
-    
+
     if (isWindows && result) {
       // 'where' can return multiple lines, take the first one
       return result.split('\r\n')[0].trim();

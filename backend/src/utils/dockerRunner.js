@@ -287,17 +287,17 @@ module.exports = async function runBatchCode(
           time_ms: 0,
           memory_kb: 0,
         });
-        
+
         const hasExpectedOutput = typeof tc.expectedOutput === 'string';
         const outputMismatch =
           hasExpectedOutput &&
           normalizeOutput(result.stdout) !== normalizeOutput(tc.expectedOutput);
-          
+
         if (effectiveFailFast && (result.exitCode !== 0 || outputMismatch)) {
           break;
         }
       }
-      
+
       // If early exit, fill remaining with skipped
       if (results.length < batch.length) {
         const executedIds = new Set(results.map((r) => String(r.test_case_id)));
@@ -307,7 +307,7 @@ module.exports = async function runBatchCode(
           }
         }
       }
-      
+
       return sortBatchResults(results, batch);
     }
 

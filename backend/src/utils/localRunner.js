@@ -47,19 +47,24 @@ class LocalRunner {
         const compiler = runtime.compile;
         // Basic compilation
         try {
-          execSync(`"${compiler}" -O2 "${sourceFile}" -o "${executableFile}" -lm`, { stdio: 'pipe' });
+          execSync(
+            `"${compiler}" -O2 "${sourceFile}" -o "${executableFile}" -lm`,
+            { stdio: 'pipe' }
+          );
         } catch (err) {
           return {
             stdout: '',
             stderr: err.stderr ? err.stderr.toString() : err.message,
             exitCode: 1,
-            error: 'Compilation Failed'
+            error: 'Compilation Failed',
           };
         }
         runCmd = executableFile;
       } else if (lang === 'java') {
         let className = 'UserCode';
-        const classMatch = code.match(/^\s*(?:public\s+)?class\s+([A-Za-z_][A-Za-z0-9_]*)/m);
+        const classMatch = code.match(
+          /^\s*(?:public\s+)?class\s+([A-Za-z_][A-Za-z0-9_]*)/m
+        );
         if (classMatch) className = classMatch[1];
 
         sourceFile = path.join(workDir, `${className}.java`);
@@ -67,13 +72,16 @@ class LocalRunner {
 
         // Compile
         try {
-          execSync(`"${runtime.compile}" "${sourceFile}"`, { cwd: workDir, stdio: 'pipe' });
+          execSync(`"${runtime.compile}" "${sourceFile}"`, {
+            cwd: workDir,
+            stdio: 'pipe',
+          });
         } catch (err) {
           return {
             stdout: '',
             stderr: err.stderr ? err.stderr.toString() : err.message,
             exitCode: 1,
-            error: 'Compilation Failed'
+            error: 'Compilation Failed',
           };
         }
         runCmd = runtime.run;
@@ -96,8 +104,12 @@ class LocalRunner {
           proc.stdin.end();
         }
 
-        proc.stdout.on('data', (d) => { stdout += d.toString(); });
-        proc.stderr.on('data', (d) => { stderr += d.toString(); });
+        proc.stdout.on('data', (d) => {
+          stdout += d.toString();
+        });
+        proc.stderr.on('data', (d) => {
+          stderr += d.toString();
+        });
 
         proc.on('error', (err) => {
           resolve({ stdout, stderr, exitCode: 1, error: err.message });
@@ -111,15 +123,14 @@ class LocalRunner {
           });
         });
       });
-
     } finally {
       // Cleanup
       try {
         // We delay cleanup slightly or handle it asynchronously to avoid locking issues on Windows
         setTimeout(() => {
-            if (fs.existsSync(workDir)) {
-                fs.rmSync(workDir, { recursive: true, force: true });
-            }
+          if (fs.existsSync(workDir)) {
+            fs.rmSync(workDir, { recursive: true, force: true });
+          }
         }, 1000);
       } catch (e) {
         logger.error(`Failed to cleanup workdir ${workDir}: ${e.message}`);
@@ -132,7 +143,10 @@ class LocalRunner {
     const { failFast } = options;
 
     for (const tc of batch) {
-      const timeoutSec = Math.max(1, Math.ceil((tc.time_limit_ms || 5000) / 1000));
+      const timeoutSec = Math.max(
+        1,
+        Math.ceil((tc.time_limit_ms || 5000) / 1000)
+      );
       const result = await this.runCode(code, lang, tc.stdinInput, timeoutSec);
 
       results.push({

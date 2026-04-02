@@ -297,7 +297,8 @@ router.post('/', async (req, res) => {
 
       if (useDirectLocal) {
         // Direct local execution — no Redis/queue needed
-        if (!localRunCode) localRunCode = require('../utils/localRunner').localRunCode;
+        if (!localRunCode)
+          localRunCode = require('../utils/localRunner').localRunCode;
         logger.info(`[Execute] Direct local single execution for ${lang}`);
         userResult = await localRunCode(code, lang, stdinInput);
       } else if (!useQueue) {

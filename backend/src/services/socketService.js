@@ -394,12 +394,20 @@ const handleConnection = async (ws, req) => {
       }
     } catch (err) {
       logger.error(`Error in startSession for ${newLang}:`, err);
-      safeSend(ws, JSON.stringify({ type: 'error', message: 'Internal server error during session initialization' }));
+      safeSend(
+        ws,
+        JSON.stringify({
+          type: 'error',
+          message: 'Internal server error during session initialization',
+        })
+      );
     }
   };
 
   // Start default
-  startSession(lang).catch(err => logger.error('Initial startSession failed:', err));
+  startSession(lang).catch((err) =>
+    logger.error('Initial startSession failed:', err)
+  );
 
   ws.on('message', (msg) => {
     let parsed;
@@ -416,7 +424,9 @@ const handleConnection = async (ws, req) => {
 
     if (parsed.type === 'lang') {
       lang = parsed.lang;
-      startSession(lang).catch(err => logger.error('startSession(lang) failed:', err));
+      startSession(lang).catch((err) =>
+        logger.error('startSession(lang) failed:', err)
+      );
       // Send confirmation back to frontend
       safeSend(ws, JSON.stringify({ type: 'lang', lang: lang }));
     } else if (parsed.type === 'code') {
@@ -544,13 +554,13 @@ const handleConnection = async (ws, req) => {
 
   ws.on('close', () => {
     logger.info('Client disconnected, cleaning up');
-    cleanup().catch(err => logger.error('Cleanup failed on close:', err));
+    cleanup().catch((err) => logger.error('Cleanup failed on close:', err));
     activeSessions.delete(sessionId);
   });
 
   ws.on('error', (err) => {
     logger.error(`WebSocket error: ${err}`);
-    cleanup().catch(e => logger.error('Cleanup failed on error:', e));
+    cleanup().catch((e) => logger.error('Cleanup failed on error:', e));
     activeSessions.delete(sessionId);
   });
 };

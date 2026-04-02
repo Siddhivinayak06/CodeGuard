@@ -95,7 +95,7 @@ const execPython = (onData, onExit) => {
   const pythonProcess = spawn(pythonPath, ['-u', wrapperPath, workDir], {
     stdio: ['pipe', 'pipe', 'pipe'],
     cwd: workDir,
-    shell: process.platform === 'win32'
+    shell: process.platform === 'win32',
   });
 
   pythonProcess.stdout.on('data', onData);
