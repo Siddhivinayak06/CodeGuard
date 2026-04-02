@@ -3,6 +3,7 @@ const { spawn } = require('child_process');
 const { v4: uuidv4 } = require('uuid');
 const config = require('../config');
 const poolManager = require('../services/poolManager');
+const localRunner = require('./localRunner');
 const logger = require('./logger');
 
 const DEFAULT_TIMEOUT_SEC = 5;
@@ -83,6 +84,22 @@ module.exports = async function runCode(
 
   try {
     containerId = await poolManager.acquire(poolLang);
+    const timeoutSec = config.executionTimeout || DEFAULT_TIMEOUT_SEC;
+
+    if (containerId === 'local') {
+      const localResult = await localRunner.runCode(
+        escapedCode,
+        poolLang,
+        stdinInput,
+        timeoutSec
+      );
+      return {
+        output: localResult.stdout,
+        error: localResult.error || localResult.stderr,
+        stderr: localResult.stderr,
+        exitCode: localResult.exitCode,
+      };
+    }
 
     let compileCmd = '';
     let baseRunCmd = '';

@@ -2,6 +2,7 @@ const { spawn } = require('child_process');
 const { v4: uuidv4 } = require('uuid');
 const logger = require('./logger');
 const poolManager = require('../services/poolManager');
+const localRunner = require('./localRunner');
 const config = require('../config');
 const {
   normalizeOutput,
@@ -262,6 +263,53 @@ module.exports = async function runBatchCode(
     logger.info(`Acquiring container from pool for ${lang}...`);
     containerId = await poolManager.acquire(poolLang);
     logger.info(`Acquired container ${containerId}`);
+
+    if (containerId === 'local') {
+      logger.info(`Using local execution for batch on ${normalizedLang}`);
+      const results = [];
+      for (const tc of batch) {
+        const result = await localRunner.runCode(
+          code,
+          poolLang,
+          tc.stdinInput,
+          Math.max(1, Math.ceil((tc.time_limit_ms || 5000) / 1000))
+        );
+        results.push({
+          test_case_id: tc.id,
+          input: tc.stdinInput,
+          expectedOutput: tc.expectedOutput,
+          stdout: result.stdout,
+          stderr: result.stderr,
+          exitCode: result.exitCode,
+          is_hidden: tc.is_hidden,
+          cpuTime: 0,
+          memoryKB: 0,
+          time_ms: 0,
+          memory_kb: 0,
+        });
+        
+        const hasExpectedOutput = typeof tc.expectedOutput === 'string';
+        const outputMismatch =
+          hasExpectedOutput &&
+          normalizeOutput(result.stdout) !== normalizeOutput(tc.expectedOutput);
+          
+        if (effectiveFailFast && (result.exitCode !== 0 || outputMismatch)) {
+          break;
+        }
+      }
+      
+      // If early exit, fill remaining with skipped
+      if (results.length < batch.length) {
+        const executedIds = new Set(results.map((r) => String(r.test_case_id)));
+        for (const tc of batch) {
+          if (!executedIds.has(String(tc.id))) {
+            results.push(createSkippedResult(tc));
+          }
+        }
+      }
+      
+      return sortBatchResults(results, batch);
+    }
 
     logger.info(`Compiling code in container ${containerId}...`);
     const compileResult = await compileInContainer(

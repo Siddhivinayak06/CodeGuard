@@ -24,10 +24,18 @@ let detectedRuntimes = null;
  */
 function whichCommand(cmd) {
   try {
-    const result = execSync(`which ${cmd} 2>/dev/null`, {
+    const isWindows = process.platform === 'win32';
+    const whichCmd = isWindows ? `where ${cmd}` : `which ${cmd} 2>/dev/null`;
+    const result = execSync(whichCmd, {
       encoding: 'utf-8',
       timeout: 5000,
+      stdio: ['ignore', 'pipe', 'ignore'], // Ignore stderr to avoid "not found" noise
     }).trim();
+    
+    if (isWindows && result) {
+      // 'where' can return multiple lines, take the first one
+      return result.split('\r\n')[0].trim();
+    }
     return result || null;
   } catch {
     return null;
@@ -105,7 +113,9 @@ function isLocalAvailable(lang) {
  */
 function isDockerAvailable() {
   try {
-    execSync('docker info 2>/dev/null', {
+    const isWindows = process.platform === 'win32';
+    const redirect = isWindows ? '2>nul' : '2>/dev/null';
+    execSync(`docker info ${redirect}`, {
       encoding: 'utf-8',
       timeout: 5000,
       stdio: ['ignore', 'pipe', 'pipe'],

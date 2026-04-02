@@ -117,284 +117,289 @@ const handleConnection = async (ws, req) => {
   };
 
   const startSession = async (newLang) => {
-    await cleanup();
+    try {
+      await cleanup();
 
-    lang = newLang; // Sync lang for release
+      lang = newLang; // Sync lang for release
 
-    // Check if we should use local execution
-    const useLocal =
-      poolManager.useLocal &&
-      config.allowLocalExecution &&
-      isLocalAvailable(newLang);
+      // Check if we should use local execution
+      const useLocal =
+        poolManager.useLocal &&
+        config.allowLocalExecution &&
+        isLocalAvailable(newLang);
 
-    if (useLocal) {
-      pooledContainer = 'local';
-      logger.info(`[Socket] Using local execution for ${newLang}`);
+      if (useLocal) {
+        pooledContainer = 'local';
+        logger.info(`[Socket] Using local execution for ${newLang}`);
+
+        if (newLang === 'python') {
+          pythonProcess = localService.execPython(
+            (data) => {
+              const output = data.toString();
+              safeSend(ws, output);
+            },
+            (code) => {
+              logger.info(`[Local Python] exited with code ${code}`);
+            }
+          );
+          setTimeout(() => sendReady(newLang), 100);
+        } else if (newLang === 'c') {
+          cProcess = localService.execC(
+            (data) => {
+              if (suppressNextOutput) {
+                if (
+                  data.includes('✅') ||
+                  data.includes('❌') ||
+                  data.includes('...Program')
+                ) {
+                  suppressNextOutput = false;
+                  safeSend(ws, data);
+                }
+                return;
+              }
+              safeSend(ws, data);
+            },
+            ({ exitCode }) => {
+              logger.info(`[Local C] exited with code ${exitCode}`);
+              suppressNextOutput = false;
+            }
+          );
+          if (cProcess) {
+            setTimeout(() => sendReady(newLang), 100);
+          } else {
+            safeSend(
+              ws,
+              JSON.stringify({
+                type: 'error',
+                message: 'Failed to start local C process',
+              })
+            );
+          }
+        } else if (newLang === 'cpp') {
+          cppProcess = localService.execCpp(
+            (data) => {
+              if (suppressNextOutput) {
+                if (
+                  data.includes('✅') ||
+                  data.includes('❌') ||
+                  data.includes('...Program')
+                ) {
+                  suppressNextOutput = false;
+                  safeSend(ws, data);
+                }
+                return;
+              }
+              safeSend(ws, data);
+            },
+            ({ exitCode }) => {
+              logger.info(`[Local C++] exited with code ${exitCode}`);
+              suppressNextOutput = false;
+            }
+          );
+          if (cppProcess) {
+            setTimeout(() => sendReady(newLang), 100);
+          } else {
+            safeSend(
+              ws,
+              JSON.stringify({
+                type: 'error',
+                message: 'Failed to start local C++ process',
+              })
+            );
+          }
+        } else if (newLang === 'java') {
+          javaProcess = localService.execJava(
+            (data) => safeSend(ws, data.toString()),
+            (code) => {
+              logger.info(`[Local Java] exited with code ${code}`);
+            }
+          );
+          setTimeout(() => sendReady(newLang), 200);
+        }
+        return;
+      }
+
+      // --- Docker execution path (original) ---
+      let containerId;
+      try {
+        containerId = await poolManager.acquire(newLang);
+      } catch (err) {
+        logger.error(
+          `Failed to acquire container for ${newLang}: ${err.message}`
+        );
+        safeSend(
+          ws,
+          JSON.stringify({
+            type: 'error',
+            message: `Container unavailable for ${newLang}. System is busy, please try again.`,
+          })
+        );
+        // Still send a ready signal so frontend doesn't wait forever
+        // This allows the user to retry
+        setTimeout(() => sendReady(newLang), 100);
+        return;
+      }
+
+      // Validate container ID before proceeding
+      if (!containerId) {
+        logger.error(`Failed to acquire container for ${newLang}`);
+        safeSend(
+          ws,
+          JSON.stringify({
+            type: 'error',
+            message: `No container available for ${newLang}. Please try again.`,
+          })
+        );
+        setTimeout(() => sendReady(newLang), 100);
+        return;
+      }
+
+      pooledContainer = containerId;
+      suppressNextOutput = false;
 
       if (newLang === 'python') {
-        pythonProcess = localService.execPython(
-          (data) => {
-            const output = data.toString();
-            safeSend(ws, output);
-          },
-          (code) => {
-            logger.info(`[Local Python] exited with code ${code}`);
+        // Capture containerId before setTimeout to prevent race condition
+        const containerToUse = pooledContainer;
+        setTimeout(() => {
+          // Validate container still exists (may have been cleaned up by disconnect)
+          if (!containerToUse || pooledContainer !== containerToUse) {
+            logger.warn(
+              'Python container was cleaned up before process could start'
+            );
+            return;
           }
-        );
-        setTimeout(() => sendReady(newLang), 100);
+          pythonProcess = dockerService.execPython(
+            containerToUse,
+            (data) => {
+              const output = data.toString();
+              if (output.includes('__SERVER_LOG__')) {
+                const lines = output.split('\n');
+                lines.forEach((line) => {
+                  if (line.includes('__SERVER_LOG__')) {
+                    const logMsg = line.replace('__SERVER_LOG__', '').trim();
+                    logger.info(`[Python Container] ${logMsg}`);
+                  } else {
+                    safeSend(ws, line + '\n');
+                  }
+                });
+              } else {
+                safeSend(ws, output);
+              }
+            },
+            (code) => {
+              logger.info(`Python wrapper exited with code ${code}`);
+              if (code !== 0) {
+                // error state handling could go here
+              }
+            }
+          );
+          // Send ready after process is attached
+          setTimeout(() => sendReady(newLang), 100);
+        }, 200);
       } else if (newLang === 'c') {
-        cProcess = localService.execC(
-          (data) => {
-            if (suppressNextOutput) {
-              if (
-                data.includes('✅') ||
-                data.includes('❌') ||
-                data.includes('...Program')
-              ) {
-                suppressNextOutput = false;
-                safeSend(ws, data);
-              }
-              return;
-            }
-            safeSend(ws, data);
-          },
-          ({ exitCode }) => {
-            logger.info(`[Local C] exited with code ${exitCode}`);
-            suppressNextOutput = false;
-          }
-        );
-        if (cProcess) {
-          setTimeout(() => sendReady(newLang), 100);
-        } else {
-          safeSend(
-            ws,
-            JSON.stringify({
-              type: 'error',
-              message: 'Failed to start local C process',
-            })
-          );
-        }
-      } else if (newLang === 'cpp') {
-        cppProcess = localService.execCpp(
-          (data) => {
-            if (suppressNextOutput) {
-              if (
-                data.includes('✅') ||
-                data.includes('❌') ||
-                data.includes('...Program')
-              ) {
-                suppressNextOutput = false;
-                safeSend(ws, data);
-              }
-              return;
-            }
-            safeSend(ws, data);
-          },
-          ({ exitCode }) => {
-            logger.info(`[Local C++] exited with code ${exitCode}`);
-            suppressNextOutput = false;
-          }
-        );
-        if (cppProcess) {
-          setTimeout(() => sendReady(newLang), 100);
-        } else {
-          safeSend(
-            ws,
-            JSON.stringify({
-              type: 'error',
-              message: 'Failed to start local C++ process',
-            })
-          );
-        }
-      } else if (newLang === 'java') {
-        javaProcess = localService.execJava(
-          (data) => safeSend(ws, data.toString()),
-          (code) => {
-            logger.info(`[Local Java] exited with code ${code}`);
-          }
-        );
-        setTimeout(() => sendReady(newLang), 200);
-      }
-      return;
-    }
-
-    // --- Docker execution path (original) ---
-    let containerId;
-    try {
-      containerId = await poolManager.acquire(newLang);
-    } catch (err) {
-      logger.error(
-        `Failed to acquire container for ${newLang}: ${err.message}`
-      );
-      safeSend(
-        ws,
-        JSON.stringify({
-          type: 'error',
-          message: `Container unavailable for ${newLang}. System is busy, please try again.`,
-        })
-      );
-      // Still send a ready signal so frontend doesn't wait forever
-      // This allows the user to retry
-      setTimeout(() => sendReady(newLang), 100);
-      return;
-    }
-
-    // Validate container ID before proceeding
-    if (!containerId) {
-      logger.error(`Failed to acquire container for ${newLang}`);
-      safeSend(
-        ws,
-        JSON.stringify({
-          type: 'error',
-          message: `No container available for ${newLang}. Please try again.`,
-        })
-      );
-      setTimeout(() => sendReady(newLang), 100);
-      return;
-    }
-
-    pooledContainer = containerId;
-    suppressNextOutput = false;
-
-    if (newLang === 'python') {
-      // Capture containerId before setTimeout to prevent race condition
-      const containerToUse = pooledContainer;
-      setTimeout(() => {
-        // Validate container still exists (may have been cleaned up by disconnect)
-        if (!containerToUse || pooledContainer !== containerToUse) {
-          logger.warn(
-            'Python container was cleaned up before process could start'
-          );
-          return;
-        }
-        pythonProcess = dockerService.execPython(
-          containerToUse,
-          (data) => {
-            const output = data.toString();
-            if (output.includes('__SERVER_LOG__')) {
-              const lines = output.split('\n');
-              lines.forEach((line) => {
-                if (line.includes('__SERVER_LOG__')) {
-                  const logMsg = line.replace('__SERVER_LOG__', '').trim();
-                  logger.info(`[Python Container] ${logMsg}`);
-                } else {
-                  safeSend(ws, line + '\n');
+        setTimeout(() => {
+          cProcess = dockerService.execC(
+            pooledContainer,
+            (data) => {
+              if (suppressNextOutput) {
+                if (
+                  data.includes('✅') ||
+                  data.includes('❌') ||
+                  data.includes('...Program')
+                ) {
+                  suppressNextOutput = false;
+                  safeSend(ws, data);
                 }
-              });
-            } else {
-              safeSend(ws, output);
-            }
-          },
-          (code) => {
-            logger.info(`Python wrapper exited with code ${code}`);
-            if (code !== 0) {
-              // error state handling could go here
-            }
-          }
-        );
-        // Send ready after process is attached
-        setTimeout(() => sendReady(newLang), 100);
-      }, 200);
-    } else if (newLang === 'c') {
-      setTimeout(() => {
-        cProcess = dockerService.execC(
-          pooledContainer,
-          (data) => {
-            if (suppressNextOutput) {
-              if (
-                data.includes('✅') ||
-                data.includes('❌') ||
-                data.includes('...Program')
-              ) {
-                suppressNextOutput = false;
-                safeSend(ws, data);
+                return;
               }
-              return;
-            }
-            safeSend(ws, data);
-          },
-          ({ exitCode }) => {
-            logger.info(`C wrapper exited with code ${exitCode}`);
-            suppressNextOutput = false;
-            if (exitCode !== 0) {
-              // error state handling could go here
-            }
-          }
-        );
-        // Check if process was created and send ready after it has time to initialize
-        if (cProcess) {
-          setTimeout(() => sendReady(newLang), 100);
-        } else {
-          logger.error('Failed to create C process');
-          safeSend(
-            ws,
-            JSON.stringify({
-              type: 'error',
-              message: 'Failed to start C container',
-            })
-          );
-        }
-      }, 300);
-    } else if (newLang === 'cpp') {
-      setTimeout(() => {
-        cppProcess = dockerService.execCpp(
-          pooledContainer,
-          (data) => {
-            if (suppressNextOutput) {
-              if (
-                data.includes('✅') ||
-                data.includes('❌') ||
-                data.includes('...Program')
-              ) {
-                suppressNextOutput = false;
-                safeSend(ws, data);
+              safeSend(ws, data);
+            },
+            ({ exitCode }) => {
+              logger.info(`C wrapper exited with code ${exitCode}`);
+              suppressNextOutput = false;
+              if (exitCode !== 0) {
+                // error state handling could go here
               }
-              return;
             }
-            safeSend(ws, data);
-          },
-          ({ exitCode }) => {
-            logger.info(`C++ wrapper exited with code ${exitCode}`);
-            suppressNextOutput = false;
-            if (exitCode !== 0) {
-              // error state handling could go here
-            }
-          }
-        );
-        // Check if process was created and send ready
-        if (cppProcess) {
-          setTimeout(() => sendReady(newLang), 100);
-        } else {
-          logger.error('Failed to create C++ process');
-          safeSend(
-            ws,
-            JSON.stringify({
-              type: 'error',
-              message: 'Failed to start C++ container',
-            })
           );
-        }
-      }, 300);
-    } else if (newLang === 'java') {
-      setTimeout(() => {
-        javaProcess = dockerService.execJava(
-          pooledContainer,
-          (data) => safeSend(ws, data.toString()),
-          (code) => {
-            logger.info(`Java wrapper exited with code ${code}`);
-            if (code !== 0) {
-              // error state handling could go here
-            }
+          // Check if process was created and send ready after it has time to initialize
+          if (cProcess) {
+            setTimeout(() => sendReady(newLang), 100);
+          } else {
+            logger.error('Failed to create C process');
+            safeSend(
+              ws,
+              JSON.stringify({
+                type: 'error',
+                message: 'Failed to start C container',
+              })
+            );
           }
-        );
-        // Send ready after process is attached (Java needs more time)
-        setTimeout(() => sendReady(newLang), 200);
-      }, 600);
+        }, 300);
+      } else if (newLang === 'cpp') {
+        setTimeout(() => {
+          cppProcess = dockerService.execCpp(
+            pooledContainer,
+            (data) => {
+              if (suppressNextOutput) {
+                if (
+                  data.includes('✅') ||
+                  data.includes('❌') ||
+                  data.includes('...Program')
+                ) {
+                  suppressNextOutput = false;
+                  safeSend(ws, data);
+                }
+                return;
+              }
+              safeSend(ws, data);
+            },
+            ({ exitCode }) => {
+              logger.info(`C++ wrapper exited with code ${exitCode}`);
+              suppressNextOutput = false;
+              if (exitCode !== 0) {
+                // error state handling could go here
+              }
+            }
+          );
+          // Check if process was created and send ready
+          if (cppProcess) {
+            setTimeout(() => sendReady(newLang), 100);
+          } else {
+            logger.error('Failed to create C++ process');
+            safeSend(
+              ws,
+              JSON.stringify({
+                type: 'error',
+                message: 'Failed to start C++ container',
+              })
+            );
+          }
+        }, 300);
+      } else if (newLang === 'java') {
+        setTimeout(() => {
+          javaProcess = dockerService.execJava(
+            pooledContainer,
+            (data) => safeSend(ws, data.toString()),
+            (code) => {
+              logger.info(`Java wrapper exited with code ${code}`);
+              if (code !== 0) {
+                // error state handling could go here
+              }
+            }
+          );
+          // Send ready after process is attached (Java needs more time)
+          setTimeout(() => sendReady(newLang), 200);
+        }, 600);
+      }
+    } catch (err) {
+      logger.error(`Error in startSession for ${newLang}:`, err);
+      safeSend(ws, JSON.stringify({ type: 'error', message: 'Internal server error during session initialization' }));
     }
   };
 
   // Start default
-  startSession(lang);
+  startSession(lang).catch(err => logger.error('Initial startSession failed:', err));
 
   ws.on('message', (msg) => {
     let parsed;
@@ -411,7 +416,7 @@ const handleConnection = async (ws, req) => {
 
     if (parsed.type === 'lang') {
       lang = parsed.lang;
-      startSession(lang);
+      startSession(lang).catch(err => logger.error('startSession(lang) failed:', err));
       // Send confirmation back to frontend
       safeSend(ws, JSON.stringify({ type: 'lang', lang: lang }));
     } else if (parsed.type === 'code') {
@@ -539,13 +544,13 @@ const handleConnection = async (ws, req) => {
 
   ws.on('close', () => {
     logger.info('Client disconnected, cleaning up');
-    cleanup();
+    cleanup().catch(err => logger.error('Cleanup failed on close:', err));
     activeSessions.delete(sessionId);
   });
 
   ws.on('error', (err) => {
     logger.error(`WebSocket error: ${err}`);
-    cleanup();
+    cleanup().catch(e => logger.error('Cleanup failed on error:', e));
     activeSessions.delete(sessionId);
   });
 };

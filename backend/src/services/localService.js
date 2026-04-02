@@ -7,6 +7,7 @@ const path = require('path');
 const os = require('os');
 const { v4: uuidv4 } = require('uuid');
 const logger = require('../utils/logger');
+const { detectRuntimes } = require('../utils/runtimeDetector');
 
 const killIfExists = (proc) => {
   try {
@@ -88,11 +89,13 @@ const execPython = (onData, onExit) => {
   const workDir = path.join(os.tmpdir(), `codeguard-local-${uuidv4()}`);
   fs.mkdirSync(workDir, { recursive: true });
 
+  const pythonPath = detectRuntimes().python?.run || 'python3';
   const wrapperPath = getPythonWrapperPath();
 
-  const pythonProcess = spawn('python3', ['-u', wrapperPath, workDir], {
+  const pythonProcess = spawn(pythonPath, ['-u', wrapperPath, workDir], {
     stdio: ['pipe', 'pipe', 'pipe'],
     cwd: workDir,
+    shell: process.platform === 'win32'
   });
 
   pythonProcess.stdout.on('data', onData);
@@ -115,138 +118,122 @@ const execPython = (onData, onExit) => {
     });
   }
 
+  pythonProcess.on('error', (err) => {
+    logger.error(`[Local Python] process error: ${err.message}`);
+    if (onExit) onExit(1);
+  });
+
   return pythonProcess;
 };
 
 /**
- * Create a bash wrapper script for compiled languages (C, C++, Java).
+ * Create a Node.js wrapper script for compiled languages (C, C++, Java).
  * Returns the path to the wrapper script.
  */
-function createCompileRunWrapper(workDir, lang) {
-  let script;
-
-  if (lang === 'c') {
-    script = `#!/bin/bash
-WORKDIR="${workDir}"
-current_file=""
-file_content=""
-
-while IFS= read -r line; do
-  if [[ "$line" == __FILE_START__* ]]; then
-    # Save previous file if any
-    if [ -n "$current_file" ] && [ -n "$file_content" ]; then
-      printf '%s' "$file_content" > "$current_file"
-    fi
-    filename=\${line#__FILE_START__ }
-    current_file="$WORKDIR/$filename"
-    file_content=""
-  elif [[ "$line" == "__RUN_CODE__" ]]; then
-    # Save current file
-    if [ -n "$current_file" ] && [ -n "$file_content" ]; then
-      printf '%s' "$file_content" > "$current_file"
-    fi
-    # Find and compile
-    src_file=$(find "$WORKDIR" -maxdepth 1 -name "*.c" | head -1)
-    if [ -n "$src_file" ]; then
-      gcc "$src_file" -o "$WORKDIR/a.out" -lm 2>&1
-      if [ $? -eq 0 ]; then
-        "$WORKDIR/a.out"
-      fi
-    fi
-    current_file=""
-    file_content=""
-  elif [ -n "$current_file" ]; then
-    if [ -z "$file_content" ]; then
-      file_content="$line"
-    else
-      file_content="$file_content
-$line"
-    fi
-  fi
-done
-`;
-  } else if (lang === 'cpp') {
-    script = `#!/bin/bash
-WORKDIR="${workDir}"
-current_file=""
-file_content=""
-
-while IFS= read -r line; do
-  if [[ "$line" == __FILE_START__* ]]; then
-    if [ -n "$current_file" ] && [ -n "$file_content" ]; then
-      printf '%s' "$file_content" > "$current_file"
-    fi
-    filename=\${line#__FILE_START__ }
-    current_file="$WORKDIR/$filename"
-    file_content=""
-  elif [[ "$line" == "__RUN_CODE__" ]]; then
-    if [ -n "$current_file" ] && [ -n "$file_content" ]; then
-      printf '%s' "$file_content" > "$current_file"
-    fi
-    src_file=$(find "$WORKDIR" -maxdepth 1 -name "*.cpp" | head -1)
-    if [ -n "$src_file" ]; then
-      g++ "$src_file" -o "$WORKDIR/a.out" -lm 2>&1
-      if [ $? -eq 0 ]; then
-        "$WORKDIR/a.out"
-      fi
-    fi
-    current_file=""
-    file_content=""
-  elif [ -n "$current_file" ]; then
-    if [ -z "$file_content" ]; then
-      file_content="$line"
-    else
-      file_content="$file_content
-$line"
-    fi
-  fi
-done
-`;
-  } else if (lang === 'java') {
-    script = `#!/bin/bash
-WORKDIR="${workDir}"
-current_file=""
-file_content=""
-
-while IFS= read -r line; do
-  if [[ "$line" == __FILE_START__* ]]; then
-    if [ -n "$current_file" ] && [ -n "$file_content" ]; then
-      printf '%s' "$file_content" > "$current_file"
-    fi
-    filename=\${line#__FILE_START__ }
-    current_file="$WORKDIR/$filename"
-    file_content=""
-  elif [[ "$line" == "__RUN_CODE__" ]]; then
-    if [ -n "$current_file" ] && [ -n "$file_content" ]; then
-      printf '%s' "$file_content" > "$current_file"
-    fi
-    javac "$WORKDIR"/*.java 2>&1
-    if [ $? -eq 0 ]; then
-      MAIN_CLASS=$(grep -rl "public static void main" "$WORKDIR"/*.java 2>/dev/null | head -1 | xargs basename -s .java 2>/dev/null)
-      if [ -z "$MAIN_CLASS" ]; then
-        MAIN_CLASS=$(ls "$WORKDIR"/*.class 2>/dev/null | head -1 | xargs basename -s .class 2>/dev/null)
-      fi
-      if [ -n "$MAIN_CLASS" ]; then
-        java -XX:+UseSerialGC -Xmx128M -cp "$WORKDIR" "$MAIN_CLASS"
-      fi
-    fi
-    current_file=""
-    file_content=""
-  elif [ -n "$current_file" ]; then
-    if [ -z "$file_content" ]; then
-      file_content="$line"
-    else
-      file_content="$file_content
-$line"
-    fi
-  fi
-done
-`;
+let nodeWrapperPath = null;
+function getNodeWrapperPath() {
+  if (nodeWrapperPath && fs.existsSync(nodeWrapperPath)) {
+    return nodeWrapperPath;
   }
 
-  const wrapperPath = path.join(workDir, '_wrapper.sh');
-  fs.writeFileSync(wrapperPath, script, { mode: 0o755 });
-  return wrapperPath;
+  const wrapperDir = path.join(os.tmpdir(), 'codeguard-wrappers');
+  fs.mkdirSync(wrapperDir, { recursive: true });
+  nodeWrapperPath = path.join(wrapperDir, 'interactive_wrapper.js');
+
+  const script = `
+const fs = require('fs');
+const path = require('path');
+const { spawnSync } = require('child_process');
+const readline = require('readline');
+
+const workDir = process.argv[2];
+const lang = process.argv[3];
+const isWindows = process.platform === 'win32';
+
+const rl = readline.createInterface({
+  input: process.stdin,
+  terminal: false
+});
+
+let currentFile = null;
+let files = {};
+
+rl.on('line', (line) => {
+  if (line.startsWith('__FILE_START__ ')) {
+    currentFile = line.substring(15).trim();
+    files[currentFile] = [];
+  } else if (line === '__RUN_CODE__') {
+    // Write files
+    for (const [fname, contentLines] of Object.entries(files)) {
+      try {
+        fs.writeFileSync(path.join(workDir, fname), contentLines.join('\\n'));
+      } catch (err) {
+        console.error('Failed to write file ' + fname + ': ' + err.message);
+      }
+    }
+    
+    // Compile & Run
+    if (lang === 'c' || lang === 'cpp') {
+      const ext = (lang === 'c') ? '.c' : '.cpp';
+      const compiler = (lang === 'c') ? 'gcc' : 'g++';
+      const srcFile = Object.keys(files).find(f => f.endsWith(ext));
+      const exeFile = path.join(workDir, isWindows ? 'a.exe' : 'a.out');
+      
+      if (srcFile) {
+        const comp = spawnSync(compiler, ['-O2', path.join(workDir, srcFile), '-o', exeFile, '-lm'], { 
+          stdio: ['ignore', 'inherit', 'inherit'], 
+          cwd: workDir,
+          shell: isWindows 
+        });
+        if (comp.status === 0) {
+          spawnSync(exeFile, [], { stdio: ['ignore', 'inherit', 'inherit'], cwd: workDir });
+        }
+      }
+    } else if (lang === 'java') {
+      const comp = spawnSync('javac', ['*.java'], { 
+        stdio: ['ignore', 'inherit', 'inherit'], 
+        cwd: workDir, 
+        shell: true 
+      });
+      if (comp.status === 0) {
+        let mainClass = '';
+        try {
+          const javaFiles = fs.readdirSync(workDir).filter(f => f.endsWith('.java'));
+          for (const f of javaFiles) {
+            const content = fs.readFileSync(path.join(workDir, f), 'utf-8');
+            if (content.includes('public static void main')) {
+              mainClass = path.basename(f, '.java');
+              break;
+            }
+          }
+          if (!mainClass) {
+            const classes = fs.readdirSync(workDir).filter(f => f.endsWith('.class'));
+            if (classes.length > 0) mainClass = path.basename(classes[0], '.class');
+          }
+        } catch (err) {
+          console.error('Error finding main class: ' + err.message);
+        }
+        
+        if (mainClass) {
+          spawnSync('java', ['-XX:+UseSerialGC', '-Xmx128M', '-cp', '.', mainClass], { 
+            stdio: ['ignore', 'inherit', 'inherit'], 
+            cwd: workDir 
+          });
+        }
+      }
+    }
+    
+    files = {};
+    currentFile = null;
+    // Signal completion if needed or just flush
+  } else if (currentFile !== null) {
+    files[currentFile].push(line);
+  }
+});
+`;
+
+  fs.writeFileSync(nodeWrapperPath, script);
+  return nodeWrapperPath;
 }
 
 /**
@@ -256,9 +243,9 @@ const execC = (onData, onExit) => {
   const workDir = path.join(os.tmpdir(), `codeguard-local-${uuidv4()}`);
   fs.mkdirSync(workDir, { recursive: true });
 
-  const wrapperPath = createCompileRunWrapper(workDir, 'c');
+  const wrapperPath = getNodeWrapperPath();
 
-  const cProcess = spawn('bash', [wrapperPath], {
+  const cProcess = spawn('node', [wrapperPath, workDir, 'c'], {
     stdio: ['pipe', 'pipe', 'pipe'],
     cwd: workDir,
   });
@@ -299,9 +286,9 @@ const execCpp = (onData, onExit) => {
   const workDir = path.join(os.tmpdir(), `codeguard-local-${uuidv4()}`);
   fs.mkdirSync(workDir, { recursive: true });
 
-  const wrapperPath = createCompileRunWrapper(workDir, 'cpp');
+  const wrapperPath = getNodeWrapperPath();
 
-  const cppProcess = spawn('bash', [wrapperPath], {
+  const cppProcess = spawn('node', [wrapperPath, workDir, 'cpp'], {
     stdio: ['pipe', 'pipe', 'pipe'],
     cwd: workDir,
   });
@@ -341,9 +328,9 @@ const execJava = (onData, onExit) => {
   const workDir = path.join(os.tmpdir(), `codeguard-local-${uuidv4()}`);
   fs.mkdirSync(workDir, { recursive: true });
 
-  const wrapperPath = createCompileRunWrapper(workDir, 'java');
+  const wrapperPath = getNodeWrapperPath();
 
-  const javaProcess = spawn('bash', [wrapperPath], {
+  const javaProcess = spawn('node', [wrapperPath, workDir, 'java'], {
     stdio: ['pipe', 'pipe', 'pipe'],
     cwd: workDir,
   });
@@ -361,6 +348,11 @@ const execJava = (onData, onExit) => {
       }
     });
   }
+
+  javaProcess.on('error', (err) => {
+    logger.error(`[Local Java] process error: ${err.message}`);
+    if (onExit) onExit(1);
+  });
 
   return javaProcess;
 };

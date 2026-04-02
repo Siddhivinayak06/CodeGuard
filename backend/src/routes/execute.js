@@ -53,8 +53,9 @@ try {
 let localBatchCode;
 let localRunCode;
 try {
-  localBatchCode = require('../utils/localRunner');
-  localRunCode = require('../utils/localRunCode');
+  const runner = require('../utils/localRunner');
+  localBatchCode = runner.localBatchCode;
+  localRunCode = runner.localRunCode;
 } catch (e) {
   logger.warn('Failed to require local runners:', e && e.message);
 }
@@ -228,8 +229,11 @@ router.post('/', async (req, res) => {
 
           if (!tc.is_hidden && reference_code) {
             try {
-              if (!localRunCode)
-                localRunCode = require('../utils/localRunCode');
+              if (!localRunCode || !localBatchCode) {
+                const runner = require('../utils/localRunner');
+                localRunCode = runner.localRunCode;
+                localBatchCode = runner.localBatchCode;
+              }
               if (!runCode) runCode = require('../utils/runCode');
               const runner = useDirectLocal ? localRunCode : runCode;
               const refRes = await runner(
@@ -293,7 +297,7 @@ router.post('/', async (req, res) => {
 
       if (useDirectLocal) {
         // Direct local execution — no Redis/queue needed
-        if (!localRunCode) localRunCode = require('../utils/localRunCode');
+        if (!localRunCode) localRunCode = require('../utils/localRunner').localRunCode;
         logger.info(`[Execute] Direct local single execution for ${lang}`);
         userResult = await localRunCode(code, lang, stdinInput);
       } else if (!useQueue) {
