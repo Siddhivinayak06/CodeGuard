@@ -14,12 +14,11 @@ import {
   GraduationCap,
   UserCog,
   Shield,
-  Mail,
   ChevronDown,
   Hash,
   Calendar,
   Upload,
-  FileText,
+  Download,
   Building2,
   Users2,
   CheckCircle2,
@@ -40,41 +39,21 @@ import {
 
 type ApiUsersResponse = { success?: boolean; data?: any[] } | any[];
 
-// Role badge component
-function RoleBadge({ role }: { role: string }) {
-  const styles: Record<string, string> = {
-    student:
-      "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 border-blue-200/50 dark:border-blue-800/50",
-    faculty:
-      "bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400 border-purple-200/50 dark:border-purple-800/50",
-    admin:
-      "bg-pink-100 dark:bg-pink-900/30 text-pink-700 dark:text-pink-400 border-pink-200/50 dark:border-pink-800/50",
-  };
-
-  const icons: Record<string, React.ReactNode> = {
-    student: <GraduationCap className="w-3 h-3" />,
-    faculty: <UserCog className="w-3 h-3" />,
-    admin: <Shield className="w-3 h-3" />,
-  };
-
-  return (
-    <span
-      className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-lg border ${styles[role.toLowerCase()] || styles.student}`}
-    >
-      {icons[role.toLowerCase()]}
-      {role.charAt(0).toUpperCase() + role.slice(1)}
-    </span>
-  );
-}
-
 // Skeleton Row
 function SkeletonRow({
   showStudentCols = false,
+  showSelection = false,
 }: {
   showStudentCols?: boolean;
+  showSelection?: boolean;
 }) {
   return (
     <tr className="animate-pulse">
+      {showSelection && (
+        <td className="px-5 py-4">
+          <div className="h-4 w-4 bg-gray-200 dark:bg-gray-700 rounded" />
+        </td>
+      )}
       <td className="px-5 py-4">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 bg-gray-200 dark:bg-gray-700 rounded-xl" />
@@ -112,21 +91,21 @@ function StatCard({
   label,
   value,
   icon,
-  gradient,
+  tone,
 }: {
   label: string;
   value: number;
   icon: React.ReactNode;
-  gradient: string;
+  tone: string;
 }) {
   return (
-    <div className="glass-card rounded-2xl p-5 flex items-center gap-4">
+    <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-gray-900">
       <div
-        className={`w-12 h-12 rounded-xl ${gradient} flex items-center justify-center shadow-lg`}
+        className={`w-11 h-11 rounded-lg ${tone} flex items-center justify-center`}
       >
         {icon}
       </div>
-      <div>
+      <div className="mt-3">
         <p className="text-2xl font-bold text-gray-900 dark:text-white">
           {value}
         </p>
@@ -156,6 +135,10 @@ export default function AdminUsers() {
 
   const [selectedDepartment, setSelectedDepartment] = useState<string>("all");
   const [selectedBatch, setSelectedBatch] = useState<string>("all");
+  const [selectedUserIds, setSelectedUserIds] = useState<Set<string>>(
+    new Set(),
+  );
+  const [bulkBusy, setBulkBusy] = useState(false);
 
   const [form, setForm] = useState({
     id: "",
@@ -240,11 +223,24 @@ export default function AdminUsers() {
       const payload = await safeFetchJson(`/api/admin/users`, { headers, cache: "no-store" });
       const arr = (payload && (payload as any).data) ?? payload ?? [];
 
-      if (!Array.isArray(arr)) setUsers([]);
-      else setUsers(arr);
+      if (!Array.isArray(arr)) {
+        setUsers([]);
+        setSelectedUserIds(new Set());
+      } else {
+        setUsers(arr);
+        setSelectedUserIds((prev) => {
+          const validIds = new Set(arr.map((u: any) => String(u.uid)));
+          const next = new Set<string>();
+          prev.forEach((id) => {
+            if (validIds.has(id)) next.add(id);
+          });
+          return next;
+        });
+      }
     } catch (err: any) {
       console.error("Fetch users failed:", err);
       setUsers([]);
+      setSelectedUserIds(new Set());
     } finally {
       setLoading(false);
     }
@@ -253,6 +249,10 @@ export default function AdminUsers() {
   useEffect(() => {
     loadUsers();
   }, [user]);
+
+  useEffect(() => {
+    setSelectedUserIds(new Set());
+  }, [selectedRole]);
 
   const handleChange = (key: string, value: string) =>
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -471,14 +471,153 @@ export default function AdminUsers() {
     }
   );
 
+  const allFilteredSelected =
+    filteredUsers.length > 0 &&
+    filteredUsers.every((u) => selectedUserIds.has(String(u.uid)));
+
+  const someFilteredSelected =
+    !allFilteredSelected &&
+    filteredUsers.some((u) => selectedUserIds.has(String(u.uid)));
+
+  const toggleUserSelection = (uid: string) => {
+    setSelectedUserIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(uid)) next.delete(uid);
+      else next.add(uid);
+      return next;
+    });
+  };
+
+  const toggleSelectAllFiltered = () => {
+    setSelectedUserIds((prev) => {
+      const next = new Set(prev);
+      if (allFilteredSelected) {
+        filteredUsers.forEach((u) => next.delete(String(u.uid)));
+      } else {
+        filteredUsers.forEach((u) => next.add(String(u.uid)));
+      }
+      return next;
+    });
+  };
+
+  const applyBulkAction = async () => {
+    if (selectedUserIds.size === 0) return;
+
+    const userIds = Array.from(selectedUserIds);
+    const confirmed = confirm(
+      `Delete ${userIds.length} selected user(s)? This action cannot be undone.`,
+    );
+    if (!confirmed) return;
+
+    setBulkBusy(true);
+    try {
+      const token = await getAccessToken();
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+      };
+      if (token) headers["Authorization"] = `Bearer ${token}`;
+
+      const payload = await safeFetchJson(`/api/admin/users`, {
+        method: "DELETE",
+        headers,
+        body: JSON.stringify({
+          action: "delete",
+          userIds,
+        }),
+      });
+
+      const summary = (payload as any)?.summary;
+      await loadUsers();
+      setSelectedUserIds(new Set());
+
+      const success = Number(summary?.success || 0);
+      const failed = Number(summary?.failed || 0);
+      alert(
+        `Bulk action completed. ${success} succeeded${failed > 0 ? `, ${failed} failed` : ""}.`,
+      );
+    } catch (err: any) {
+      console.error("Bulk action failed:", err);
+      alert(err?.message || "Failed to apply bulk action");
+    } finally {
+      setBulkBusy(false);
+    }
+  };
+
+  const exportUsersToExcel = async () => {
+    const selectedUsers = filteredUsers.filter((u) =>
+      selectedUserIds.has(String(u.uid)),
+    );
+
+    if (selectedUsers.length === 0) {
+      alert("Please select at least one user to export.");
+      return;
+    }
+
+    try {
+      const XLSX = await import("xlsx").catch(() => null);
+      if (!XLSX) {
+        alert("Excel export requires the xlsx library.");
+        return;
+      }
+
+      const rows = selectedUsers.map((u, index) => ({
+        "S. No.": index + 1,
+        Name: u.name || "",
+        Email: u.email || "",
+        Role: u.role || selectedRole,
+        "Roll No.": u.roll_no || "",
+        Semester: u.semester || "",
+        Department: u.department || "",
+        Batch: u.batch || "",
+      }));
+
+      const worksheet = XLSX.utils.json_to_sheet(rows);
+      worksheet["!cols"] = [
+        { wch: 8 },
+        { wch: 24 },
+        { wch: 32 },
+        { wch: 12 },
+        { wch: 16 },
+        { wch: 12 },
+        { wch: 20 },
+        { wch: 10 },
+      ];
+
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, "Users");
+
+      const fileBytes = XLSX.write(workbook, {
+        bookType: "xlsx",
+        type: "array",
+      });
+
+      const blob = new Blob([fileBytes], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      });
+
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      const datePart = new Date().toISOString().slice(0, 10);
+      a.href = url;
+      a.download = `${selectedRole}-selected-users-${datePart}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error("Excel export failed:", err);
+      alert("Failed to export Excel file.");
+    }
+  };
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50/30 to-purple-50/30 dark:from-gray-950 dark:via-indigo-950/10 dark:to-purple-950/10">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
       <div className="pt-24 pb-12 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
         {/* Header */}
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 mb-8 animate-slideUp">
           <div className="flex items-center gap-4">
-            <div className="p-3 rounded-2xl bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 shadow-lg shadow-purple-500/25">
-              <Users className="w-8 h-8 text-white" />
+            <div className="p-3 rounded-xl bg-white border border-gray-200 shadow-sm dark:bg-gray-900 dark:border-gray-800">
+              <Users className="w-7 h-7 text-gray-700 dark:text-gray-200" />
             </div>
             <div>
               <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
@@ -507,11 +646,12 @@ export default function AdminUsers() {
                 setIsEditing(false);
                 setOpen(true);
               }}
-              className="inline-flex items-center justify-center gap-2 px-4 sm:px-5 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 text-white font-medium shadow-lg shadow-purple-500/25 hover:shadow-purple-500/40 hover:-translate-y-0.5 transition-all"
+              className="inline-flex items-center justify-center gap-2 px-4 sm:px-5 py-2.5 rounded-xl bg-gray-900 text-white font-medium hover:bg-gray-800 dark:bg-gray-100 dark:text-gray-900 dark:hover:bg-gray-200 transition-colors"
             >
               <Plus className="w-4 h-4" />
               <span>Add User</span>
             </button>
+
             <button
               onClick={() => {
                 setBulkCsv("");
@@ -535,32 +675,32 @@ export default function AdminUsers() {
           <StatCard
             label="Total Users"
             value={users.length}
-            icon={<Users className="w-6 h-6 text-white" />}
-            gradient="bg-gradient-to-br from-gray-800 to-gray-900 dark:from-gray-700 dark:to-gray-800"
+            icon={<Users className="w-5 h-5 text-current" />}
+            tone="bg-gray-900 text-white dark:bg-gray-100 dark:text-gray-900"
           />
           <StatCard
             label="Students"
             value={usersByRole.student.length}
-            icon={<GraduationCap className="w-6 h-6 text-white" />}
-            gradient="bg-gradient-to-br from-blue-500 to-cyan-500"
+            icon={<GraduationCap className="w-5 h-5 text-current" />}
+            tone="bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300"
           />
           <StatCard
             label="Faculty"
             value={usersByRole.faculty.length}
-            icon={<UserCog className="w-6 h-6 text-white" />}
-            gradient="bg-gradient-to-br from-pink-500 to-rose-500"
+            icon={<UserCog className="w-5 h-5 text-current" />}
+            tone="bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300"
           />
           <StatCard
             label="Admins"
             value={usersByRole.admin.length}
-            icon={<Shield className="w-6 h-6 text-white" />}
-            gradient="bg-gradient-to-br from-indigo-500 to-purple-500"
+            icon={<Shield className="w-5 h-5 text-current" />}
+            tone="bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-200"
           />
         </div>
 
         {/* Role Tabs & Search */}
         <div
-          className="glass-card rounded-2xl p-4 mb-6 animate-slideUp"
+          className="rounded-2xl border border-gray-200 bg-white p-4 mb-6 shadow-sm dark:border-gray-800 dark:bg-gray-900 animate-slideUp"
           style={{ animationDelay: "150ms" }}
         >
           <div className="flex flex-col sm:flex-row gap-4 items-center justify-between">
@@ -581,7 +721,7 @@ export default function AdminUsers() {
                   {role.charAt(0).toUpperCase() + role.slice(1)}
                   <span
                     className={`ml-1 px-2 py-0.5 text-xs rounded-full ${selectedRole === role
-                      ? "bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400"
+                      ? "bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200"
                       : "bg-gray-200 dark:bg-gray-700 text-gray-500"
                       }`}
                   >
@@ -599,7 +739,7 @@ export default function AdminUsers() {
                 placeholder="Search users..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500 transition-all"
+                className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
               />
             </div>
           </div>
@@ -664,18 +804,53 @@ export default function AdminUsers() {
               </div>
             </div>
           )}
+
         </div>
+
+        {selectedUserIds.size > 0 && (
+          <div className="mb-4 rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-3 sm:p-4 shadow-sm animate-slideUp">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                {selectedUserIds.size} selected
+              </p>
+
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={exportUsersToExcel}
+                  disabled={loading || bulkBusy || busy || selectedUserIds.size === 0}
+                  className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-700 transition-all disabled:opacity-50"
+                >
+                  <Download className="w-4 h-4" />
+                  <span>Export Excel</span>
+                </button>
+
+                <button
+                  onClick={applyBulkAction}
+                  disabled={bulkBusy || busy || selectedUserIds.size === 0}
+                  title={selectedUserIds.size > 0 ? `Delete ${selectedUserIds.size} selected users` : "Select users to delete"}
+                  className="inline-flex items-center justify-center w-10 h-10 rounded-lg border border-red-200 dark:border-red-900/50 text-red-600 dark:text-red-300 hover:bg-red-50 dark:hover:bg-red-950/30 transition-all disabled:opacity-50"
+                  aria-label="Delete selected users"
+                >
+                  {bulkBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Users Table */}
         <div
-          className="glass-card-premium rounded-3xl overflow-hidden animate-slideUp"
+          className="rounded-2xl overflow-hidden border border-gray-200 bg-white shadow-sm dark:border-gray-800 dark:bg-gray-900 animate-slideUp"
           style={{ animationDelay: "200ms" }}
         >
           {loading ? (
             <div className="overflow-x-auto">
               <table className="w-full min-w-[600px]">
-                <thead className="bg-gray-50/70 dark:bg-gray-800/70">
+                <thead className="bg-gray-50 dark:bg-gray-900">
                   <tr>
+                    <th className="px-5 py-3.5 w-12 text-center text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">
+                      <span className="sr-only">Select</span>
+                    </th>
                     <th className="px-5 py-3.5 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">
                       User
                     </th>
@@ -703,10 +878,11 @@ export default function AdminUsers() {
                     </th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-200/50 dark:divide-gray-700/50">
+                <tbody className="divide-y divide-gray-200 dark:divide-gray-800">
                   {[1, 2, 3, 4, 5].map((i) => (
                     <SkeletonRow
                       key={i}
+                      showSelection
                       showStudentCols={selectedRole === "student"}
                     />
                   ))}
@@ -744,11 +920,11 @@ export default function AdminUsers() {
                   return (
                     <div
                       key={u.uid}
-                      className={`p-4 rounded-2xl bg-white dark:bg-gray-800/50 border border-gray-100 dark:border-gray-700/50 shadow-sm hover:shadow-md transition-all ${highlightId === u.uid ? "ring-2 ring-emerald-500" : ""}`}
+                      className={`p-4 rounded-xl bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 shadow-sm ${highlightId === u.uid ? "ring-2 ring-emerald-500" : ""}`}
                     >
                       <div className="flex items-start justify-between gap-3">
                         <div className="flex items-center gap-3">
-                          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 flex items-center justify-center text-white font-bold shadow-lg">
+                          <div className="w-12 h-12 rounded-lg bg-gray-100 dark:bg-gray-800 flex items-center justify-center text-gray-700 dark:text-gray-200 font-bold">
                             {initials}
                           </div>
                           <div className="min-w-0">
@@ -760,7 +936,15 @@ export default function AdminUsers() {
                             </p>
                           </div>
                         </div>
-                        <div className="flex items-center gap-1">
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            checked={selectedUserIds.has(String(u.uid))}
+                            onChange={() => toggleUserSelection(String(u.uid))}
+                            className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                            aria-label={`Select ${u.name || u.email || "user"}`}
+                            disabled={busy || bulkBusy}
+                          />
                           <button
                             onClick={() => {
                               setForm({
@@ -778,7 +962,7 @@ export default function AdminUsers() {
                               setOpen(true);
                             }}
                             disabled={busy}
-                            className="p-2 rounded-lg text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/30 transition-colors disabled:opacity-50"
+                            className="p-2 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors disabled:opacity-50"
                           >
                             <Pencil className="w-4 h-4" />
                           </button>
@@ -825,8 +1009,21 @@ export default function AdminUsers() {
               {/* Desktop Table View */}
               <div className="hidden md:block overflow-x-auto">
                 <table className="w-full">
-                  <thead className="bg-gray-50/70 dark:bg-gray-800/70">
+                  <thead className="bg-gray-50 dark:bg-gray-900">
                     <tr>
+                      <th className="px-5 py-3.5 w-12 text-center text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">
+                        <input
+                          type="checkbox"
+                          checked={allFilteredSelected}
+                          ref={(el) => {
+                            if (el) el.indeterminate = someFilteredSelected;
+                          }}
+                          onChange={toggleSelectAllFiltered}
+                          className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                          aria-label="Select all visible users"
+                          disabled={busy || bulkBusy || filteredUsers.length === 0}
+                        />
+                      </th>
                       <th className="px-5 py-3.5 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">
                         User
                       </th>
@@ -854,7 +1051,7 @@ export default function AdminUsers() {
                       </th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-200/50 dark:divide-gray-700/50">
+                  <tbody className="divide-y divide-gray-200 dark:divide-gray-800">
                     {filteredUsers.map((u) => {
                       const initials = (u.name || u.email || "U")
                         .split(" ")
@@ -866,11 +1063,21 @@ export default function AdminUsers() {
                       return (
                         <tr
                           key={u.uid}
-                          className={`hover:bg-indigo-50/30 dark:hover:bg-indigo-900/10 transition-colors ${highlightId === u.uid ? "bg-emerald-50 dark:bg-emerald-900/20" : ""}`}
+                          className={`hover:bg-gray-50 dark:hover:bg-gray-800/60 transition-colors ${highlightId === u.uid ? "bg-emerald-50 dark:bg-emerald-900/20" : ""}`}
                         >
+                          <td className="px-5 py-4 text-center">
+                            <input
+                              type="checkbox"
+                              checked={selectedUserIds.has(String(u.uid))}
+                              onChange={() => toggleUserSelection(String(u.uid))}
+                              className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                              aria-label={`Select ${u.name || u.email || "user"}`}
+                              disabled={busy || bulkBusy}
+                            />
+                          </td>
                           <td className="px-5 py-4">
                             <div className="flex items-center gap-3">
-                              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 flex items-center justify-center text-white text-sm font-bold shadow-lg">
+                              <div className="w-10 h-10 rounded-lg bg-gray-100 dark:bg-gray-800 flex items-center justify-center text-gray-700 dark:text-gray-200 text-sm font-bold">
                                 {initials}
                               </div>
                               <span className="font-medium text-gray-900 dark:text-white">
@@ -944,7 +1151,7 @@ export default function AdminUsers() {
                                   setOpen(true);
                                 }}
                                 disabled={busy}
-                                className="p-2 rounded-lg text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/30 transition-colors disabled:opacity-50"
+                                className="p-2 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors disabled:opacity-50"
                                 title="Edit"
                               >
                                 <Pencil className="w-4 h-4" />
@@ -978,11 +1185,11 @@ export default function AdminUsers() {
                 className="absolute inset-0 bg-black/50 backdrop-blur-sm"
                 onClick={() => !busy && setOpen(false)}
               />
-              <div className="relative w-full max-w-lg glass-card-premium rounded-3xl p-8 shadow-2xl animate-scaleIn">
+              <div className="relative w-full max-w-lg rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-8 shadow-xl animate-scaleIn">
                 <div className="flex items-center justify-between mb-6">
                   <div className="flex items-center gap-3">
-                    <div className="p-2 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-500">
-                      <Users className="w-5 h-5 text-white" />
+                    <div className="p-2 rounded-xl bg-gray-100 dark:bg-gray-800">
+                      <Users className="w-5 h-5 text-gray-700 dark:text-gray-200" />
                     </div>
                     <h3 className="text-xl font-bold text-gray-900 dark:text-white">
                       {isEditing ? "Edit User" : "Add New User"}
@@ -1130,7 +1337,7 @@ export default function AdminUsers() {
                   </button>
                   <button
                     onClick={() => handleSave(form)}
-                    className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-medium shadow-lg shadow-indigo-500/25 hover:shadow-indigo-500/40 transition-all"
+                    className="px-5 py-2.5 rounded-xl bg-gray-900 text-white font-medium hover:bg-gray-800 dark:bg-gray-100 dark:text-gray-900 dark:hover:bg-gray-200 transition-colors"
                     disabled={busy}
                   >
                     {busy ? "Saving..." : "Save"}
@@ -1149,11 +1356,11 @@ export default function AdminUsers() {
                 className="absolute inset-0 bg-black/50 backdrop-blur-sm"
                 onClick={() => !bulkProcessing && setBulkOpen(false)}
               />
-              <div className="relative w-full max-w-3xl glass-card-premium rounded-3xl p-8 shadow-2xl animate-scaleIn max-h-[90vh] overflow-y-auto">
+              <div className="relative w-full max-w-3xl rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-8 shadow-xl animate-scaleIn max-h-[90vh] overflow-y-auto">
                 <div className="flex items-center justify-between mb-6">
                   <div className="flex items-center gap-3">
-                    <div className="p-2 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-500">
-                      <Upload className="w-5 h-5 text-white" />
+                    <div className="p-2 rounded-xl bg-gray-100 dark:bg-gray-800">
+                      <Upload className="w-5 h-5 text-gray-700 dark:text-gray-200" />
                     </div>
                     <h3 className="text-xl font-bold text-gray-900 dark:text-white">
                       Bulk Add Users
@@ -1171,7 +1378,7 @@ export default function AdminUsers() {
                 {bulkResults ? (
                   /* Results View */
                   <div className="space-y-4">
-                    <div className="flex items-center gap-4 p-4 rounded-xl bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-900/20 dark:to-purple-900/20">
+                    <div className="flex items-center gap-4 p-4 rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/40">
                       <div className="text-center">
                         <p className="text-2xl font-bold text-gray-900 dark:text-white">{bulkResults.summary?.total || 0}</p>
                         <p className="text-xs text-gray-500">Total</p>
@@ -1202,7 +1409,7 @@ export default function AdminUsers() {
                         setBulkOpen(false);
                         loadUsers();
                       }}
-                      className="w-full px-5 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-medium"
+                      className="w-full px-5 py-2.5 rounded-xl bg-gray-900 text-white font-medium hover:bg-gray-800 dark:bg-gray-100 dark:text-gray-900 dark:hover:bg-gray-200 transition-colors"
                     >
                       Done
                     </button>
@@ -1231,8 +1438,8 @@ export default function AdminUsers() {
                         }}
                       >
                         <div className="flex flex-col items-center justify-center pt-5 pb-6">
-                          <div className="p-3 rounded-full bg-gradient-to-br from-indigo-500 to-purple-500 mb-3">
-                            <Upload className="w-6 h-6 text-white" />
+                          <div className="p-3 rounded-full bg-gray-100 dark:bg-gray-800 mb-3">
+                            <Upload className="w-6 h-6 text-gray-600 dark:text-gray-300" />
                           </div>
                           <p className="mb-2 text-sm text-gray-700 dark:text-gray-300">
                             <span className="font-semibold">Click to upload</span> or drag and drop
@@ -1240,7 +1447,7 @@ export default function AdminUsers() {
                           <p className="text-xs text-gray-500">CSV or Excel file (.csv, .xlsx)</p>
                           {bulkCsv && (
                             <p className="mt-2 text-xs font-medium text-indigo-600 dark:text-indigo-400">
-                              📄 {bulkCsv}
+                              {bulkCsv}
                             </p>
                           )}
                         </div>
@@ -1335,7 +1542,7 @@ export default function AdminUsers() {
                           }
                         }}
                         disabled={bulkProcessing || bulkUsers.length === 0}
-                        className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-medium shadow-lg disabled:opacity-50 flex items-center gap-2"
+                        className="px-5 py-2.5 rounded-xl bg-gray-900 text-white font-medium hover:bg-gray-800 dark:bg-gray-100 dark:text-gray-900 dark:hover:bg-gray-200 disabled:opacity-50 flex items-center gap-2 transition-colors"
                       >
                         {bulkProcessing && <Loader2 className="w-4 h-4 animate-spin" />}
                         {bulkProcessing ? 'Processing...' : `Create ${bulkUsers.length} Users`}

@@ -67,6 +67,19 @@ const safeRedirect = (request: NextRequest, path: string, options: { params?: Re
   return response
 }
 
+const clearSessionCookies = (request: NextRequest, response: NextResponse) => {
+  response.cookies.delete("device_session_id")
+
+  request.cookies.getAll().forEach((cookie) => {
+    const name = cookie.name.toLowerCase()
+    if (name.includes("auth-token") || name.startsWith("sb-") || name.includes("supabase")) {
+      response.cookies.delete(cookie.name)
+    }
+  })
+
+  return response
+}
+
 /**
  * 🛠️ Security Header Injection (WAF-lite)
  */
@@ -142,6 +155,16 @@ export async function middleware(request: NextRequest) {
     return response
   }
 
+  const resetSessionRequested =
+    pathname === "/auth/login" && request.nextUrl.searchParams.get("reset") === "1"
+
+  if (resetSessionRequested) {
+    const response = injectSecurityHeaders(NextResponse.next())
+    response.headers.set("Cache-Control", "no-store")
+    response.headers.set("Server-Timing", `proxy;dur=${(performance.now() - startTime).toFixed(3)}`)
+    return clearSessionCookies(request, response)
+  }
+
   /* 4. Env Validation */
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
@@ -209,18 +232,14 @@ export async function middleware(request: NextRequest) {
             console.warn(`[Proxy] Session Invalid: DB=${userData.active_session_id} vs Cookie=${deviceSessionId}`);
             logSecurityEvent("SESSION_INVALIDATED", { path: pathname, userId: user.id });
 
-            const redirectRes = safeRedirect(request, AUTH_REDIRECT, { params: { error: "Session Expired. You logged in on another device." } });
+            const redirectRes = safeRedirect(request, AUTH_REDIRECT, {
+              params: {
+                reset: "1",
+                error: "Session expired. Please sign in again.",
+              },
+            })
 
-            // CRITICAL: Delete BOTH the device session cookie AND the Supabase auth cookie
-            redirectRes.cookies.delete("device_session_id");
-
-            // Find and delete the auth token cookie dynamically
-            const authCookie = request.cookies.getAll().find(c => c.name.includes("auth-token"));
-            if (authCookie) {
-              redirectRes.cookies.delete(authCookie.name);
-            }
-
-            return redirectRes;
+            return clearSessionCookies(request, redirectRes)
           }
         }
       }

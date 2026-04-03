@@ -60,6 +60,14 @@ const mockStudents: Student[] = [
   },
 ];
 
+const defaultFilters = {
+  query: "",
+  semester: "",
+  batch: "",
+  rollFrom: "",
+  rollTo: "",
+};
+
 describe("AssignStudentsStep", () => {
   it("renders correctly", () => {
     render(
@@ -67,7 +75,7 @@ describe("AssignStudentsStep", () => {
         students={mockStudents}
         selectedStudents={[]}
         setSelectedStudents={jest.fn()}
-        filters={{ query: "", semester: "", batch: "" }}
+        filters={defaultFilters}
         setFilters={jest.fn()}
       />,
     );
@@ -88,7 +96,7 @@ describe("AssignStudentsStep", () => {
         students={mockStudents}
         selectedStudents={[]}
         setSelectedStudents={jest.fn()}
-        filters={{ query: "Alice", semester: "", batch: "" }}
+        filters={{ ...defaultFilters, query: "Alice" }}
         setFilters={jest.fn()}
       />,
     );
@@ -104,7 +112,7 @@ describe("AssignStudentsStep", () => {
         students={mockStudents}
         selectedStudents={[]}
         setSelectedStudents={setSelectedStudents}
-        filters={{ query: "", semester: "", batch: "" }}
+        filters={defaultFilters}
         setFilters={jest.fn()}
       />,
     );
@@ -121,7 +129,7 @@ describe("AssignStudentsStep", () => {
         students={mockStudents}
         selectedStudents={[]}
         setSelectedStudents={setSelectedStudents}
-        filters={{ query: "", semester: "", batch: "" }}
+        filters={defaultFilters}
         setFilters={jest.fn()}
       />,
     );
@@ -136,10 +144,26 @@ describe("AssignStudentsStep", () => {
         students={mockStudents}
         selectedStudents={[mockStudents[0]]}
         setSelectedStudents={jest.fn()}
-        filters={{ query: "", semester: "", batch: "" }}
+        filters={defaultFilters}
         setFilters={jest.fn()}
       />,
     );
     expect(screen.getByText("1 selected")).toBeInTheDocument();
+  });
+
+  it("filters students by roll number range", () => {
+    render(
+      <AssignStudentsStep
+        students={mockStudents}
+        selectedStudents={[]}
+        setSelectedStudents={jest.fn()}
+        filters={{ ...defaultFilters, rollFrom: "2", rollTo: "3" }}
+        setFilters={jest.fn()}
+      />,
+    );
+
+    expect(screen.queryByText("Alice")).not.toBeInTheDocument();
+    expect(screen.getByText("Bob")).toBeInTheDocument();
+    expect(screen.getByText("Charlie")).toBeInTheDocument();
   });
 });

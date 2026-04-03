@@ -100,6 +100,15 @@ async function upsertUserProfile({
   return data;
 }
 
+function isAuthUserMissingError(error: any): boolean {
+  const message = String(error?.message || "").toLowerCase();
+  return (
+    message.includes("not found") ||
+    message.includes("no rows") ||
+    message.includes("invalid uuid")
+  );
+}
+
 // ---------------------------
 // GET: list all users
 // ---------------------------
@@ -159,6 +168,107 @@ export async function POST(req: NextRequest) {
     return handleSingleCreate(body);
   } catch (err: any) {
     console.error("POST /api/admin/users error:", err);
+    return NextResponse.json(
+      { success: false, error: err.message ?? "Server error" },
+      { status: 500 },
+    );
+  }
+}
+
+// ---------------------------
+// DELETE: bulk user actions
+// ---------------------------
+export async function DELETE(req: NextRequest) {
+  const supabase = await createClient();
+  const isAdmin = await isAdminUser(supabase);
+  if (!isAdmin)
+    return NextResponse.json(
+      { success: false, error: "Forbidden" },
+      { status: 403 },
+    );
+
+  try {
+    const body = await req.json().catch(() => ({}));
+    const action = String(body?.action || "delete").trim().toLowerCase();
+
+    const rawUserIds: unknown[] = Array.isArray(body?.userIds) ? body.userIds : [];
+    const parsedUserIds: string[] = rawUserIds
+      .map((id) => String(id || "").trim())
+      .filter((id): id is string => id.length > 0);
+    const userIds: string[] = Array.from(new Set(parsedUserIds));
+
+    if (userIds.length === 0) {
+      return NextResponse.json(
+        { success: false, error: "At least one user ID is required" },
+        { status: 400 },
+      );
+    }
+
+    if (action !== "delete") {
+      return NextResponse.json(
+        { success: false, error: "Only bulk delete is supported" },
+        { status: 400 },
+      );
+    }
+
+    const {
+      data: { user: currentUser },
+    } = await supabase.auth.getUser();
+
+    const currentAdminId = currentUser?.id || "";
+
+    const results: Array<{ uid: string; success: boolean; error?: string }> = [];
+
+    for (const uid of userIds) {
+      if (uid === currentAdminId) {
+        results.push({
+          uid,
+          success: false,
+          error: "Cannot delete your own account in bulk action",
+        });
+        continue;
+      }
+
+      try {
+        const { error: authDeleteError } = await supabaseAdmin.auth.admin.deleteUser(uid);
+
+        if (authDeleteError && !isAuthUserMissingError(authDeleteError)) {
+          throw authDeleteError;
+        }
+
+        const { error: profileDeleteError } = await supabaseAdmin
+          .from("users")
+          .delete()
+          .eq("uid", uid);
+
+        if (profileDeleteError) throw profileDeleteError;
+
+        results.push({ uid, success: true });
+      } catch (err: any) {
+        results.push({
+          uid,
+          success: false,
+          error: err?.message || "Failed to delete user",
+        });
+      }
+    }
+
+    const successCount = results.filter((r) => r.success).length;
+    const failCount = results.length - successCount;
+
+    return NextResponse.json({
+      success: true,
+      action,
+      summary: {
+        total: results.length,
+        success: successCount,
+        failed: failCount,
+      },
+      results,
+      message: `Deleted ${successCount} user(s)`,
+    });
+  } catch (err: any) {
+    console.error("DELETE /api/admin/users bulk error:", err);
     return NextResponse.json(
       { success: false, error: err.message ?? "Server error" },
       { status: 500 },

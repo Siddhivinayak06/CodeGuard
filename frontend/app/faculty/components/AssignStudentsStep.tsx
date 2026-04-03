@@ -16,16 +16,38 @@ function cx(...parts: Array<string | false | null | undefined>) {
   return parts.filter(Boolean).join(" ");
 }
 
+interface AssignStudentFilters {
+  query: string;
+  semester: string;
+  batch: string;
+  rollFrom: string;
+  rollTo: string;
+}
+
 interface AssignStudentsStepProps {
   students: Student[];
   selectedStudents: Student[];
   setSelectedStudents: React.Dispatch<React.SetStateAction<Student[]>>;
-  filters: { query: string; semester: string; batch: string };
-  setFilters: React.Dispatch<
-    React.SetStateAction<{ query: string; semester: string; batch: string }>
-  >;
+  filters: AssignStudentFilters;
+  setFilters: React.Dispatch<React.SetStateAction<AssignStudentFilters>>;
   availableBatches?: string[]; // Batches assigned to the selected subject
 }
+
+const parseRollNumber = (rollNo: string | null | undefined): number | null => {
+  const digitsOnly = String(rollNo || "").replace(/\D/g, "");
+  if (!digitsOnly) return null;
+
+  const parsed = Number(digitsOnly);
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
+const parseRangeBound = (value: string | null | undefined): number | null => {
+  const raw = String(value || "").trim();
+  if (!raw) return null;
+
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) ? parsed : null;
+};
 
 export default function AssignStudentsStep({
   students,
@@ -35,6 +57,18 @@ export default function AssignStudentsStep({
   setFilters,
   availableBatches,
 }: AssignStudentsStepProps) {
+  const fromBound = parseRangeBound(filters.rollFrom);
+  const toBound = parseRangeBound(filters.rollTo);
+
+  const lowerBound =
+    fromBound !== null && toBound !== null
+      ? Math.min(fromBound, toBound)
+      : fromBound;
+  const upperBound =
+    fromBound !== null && toBound !== null
+      ? Math.max(fromBound, toBound)
+      : toBound;
+
   // Use provided available batches, or extract from students if not provided
   const batches = availableBatches && availableBatches.length > 0
     ? availableBatches.filter(b => b !== "All").sort()
@@ -50,7 +84,16 @@ export default function AssignStudentsStep({
         (s.name || "").toLowerCase().includes(q) ||
         (s.roll_no || "").toLowerCase().includes(q);
       const matchesBatch = !filters.batch || s.batch === filters.batch;
-      return matchesQuery && matchesBatch;
+
+      const rollValue = parseRollNumber(s.roll_no);
+      const matchesRollRange =
+        lowerBound === null && upperBound === null
+          ? true
+          : rollValue !== null &&
+            (lowerBound === null || rollValue >= lowerBound) &&
+            (upperBound === null || rollValue <= upperBound);
+
+      return matchesQuery && matchesBatch && matchesRollRange;
     })
     .sort((a, b) => {
       const rollA = String(a.roll_no || "");
@@ -195,6 +238,31 @@ export default function AssignStudentsStep({
               </>
             )}
           </select>
+        </div>
+
+        <div className="grid grid-cols-2 gap-2 md:w-64">
+          <input
+            type="number"
+            min="0"
+            inputMode="numeric"
+            placeholder="Roll From"
+            value={filters.rollFrom}
+            onChange={(e) =>
+              setFilters((prev) => ({ ...prev, rollFrom: e.target.value }))
+            }
+            className="w-full px-3.5 py-2.5 bg-gray-50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-400 transition-all text-sm text-gray-900 dark:text-white placeholder-gray-400 outline-none"
+          />
+          <input
+            type="number"
+            min="0"
+            inputMode="numeric"
+            placeholder="Roll To"
+            value={filters.rollTo}
+            onChange={(e) =>
+              setFilters((prev) => ({ ...prev, rollTo: e.target.value }))
+            }
+            className="w-full px-3.5 py-2.5 bg-gray-50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-400 transition-all text-sm text-gray-900 dark:text-white placeholder-gray-400 outline-none"
+          />
         </div>
 
         {/* Inline actions */}

@@ -54,6 +54,21 @@ function LoginContent() {
     }
   }, [searchParams]);
 
+  useEffect(() => {
+    if (searchParams.get("reset") !== "1") return;
+    if (typeof window === "undefined") return;
+
+    localStorage.removeItem("cg_session_id");
+    document.cookie = "device_session_id=; path=/; max-age=0; SameSite=Lax";
+
+    Object.keys(localStorage).forEach((key) => {
+      const lowered = key.toLowerCase();
+      if (lowered.startsWith("sb-") || lowered.includes("supabase")) {
+        localStorage.removeItem(key);
+      }
+    });
+  }, [searchParams]);
+
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();

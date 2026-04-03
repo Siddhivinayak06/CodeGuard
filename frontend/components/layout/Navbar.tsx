@@ -22,7 +22,6 @@ import {
   Code,
   FileText,
   User as UserIcon,
-  BarChart3,
   Clock,
 } from "lucide-react";
 
@@ -61,7 +60,6 @@ const ADMIN_LINKS = [
   { name: "Yearly Schedule", href: "/admin/schedule", icon: CalendarDays },
   { name: "Subjects", href: "/admin/subjects", icon: BookOpen },
   { name: "Users", href: "/admin/users", icon: Users },
-  { name: "Analytics", href: "/admin/analytics", icon: BarChart3 },
 ];
 
 const STUDENT_LINKS = [

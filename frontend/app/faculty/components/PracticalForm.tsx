@@ -206,6 +206,9 @@ export default function PracticalForm({
 
   const [students, setStudents] = useState<Student[]>([]);
   const [selectedStudents, setSelectedStudents] = useState<Student[]>([]);
+  const [assignedStudentIds, setAssignedStudentIds] = useState<string[]>([]);
+  const [assignedStudentIdsLoaded, setAssignedStudentIdsLoaded] = useState(false);
+  const [didHydrateAssignedSelection, setDidHydrateAssignedSelection] = useState(false);
   const [assignmentDeadline, setAssignmentDeadline] = useState<string>(
     toLocalDateTimeInputValue(new Date().toISOString()),
   );
@@ -223,6 +226,8 @@ export default function PracticalForm({
     query: "",
     semester: "",
     batch: "",
+    rollFrom: "",
+    rollTo: "",
   });
   const [savedPracticals, setSavedPracticals] = useState<{ id: number }[]>([]);
 
@@ -441,6 +446,11 @@ export default function PracticalForm({
   // set initial state when practical prop changes
   useEffect(() => {
     if (practical) {
+      setSelectedStudents([]);
+      setStudents([]);
+      setAssignedStudentIds([]);
+      setAssignedStudentIdsLoaded(false);
+      setDidHydrateAssignedSelection(false);
       setStep(isExam ? initialStep : 1);
       setForm({
         ...practical,
@@ -458,21 +468,42 @@ export default function PracticalForm({
             setTestCases(testData as TestCase[]);
           }
 
-          // load already assigned students for existing practical
+          // Load already assigned students for existing practical.
+          // Exam fallback handles legacy records where only exam_sessions exist.
+          let assignedIds: string[] = [];
           const { data: studentData, error: studentError } = await supabase
             .from("student_practicals")
             .select("student_id")
             .eq("practical_id", practical.id);
 
           if (!studentError && studentData && studentData.length > 0) {
-            const assignedIds = studentData.map(
-              (sp: { student_id: string }) => sp.student_id,
-            );
-            // Store the IDs temporarily - we'll match with students when they load
-            (
-              window as unknown as { __assignedStudentIds: string[] }
-            ).__assignedStudentIds = assignedIds;
+            assignedIds = studentData
+              .map((sp: { student_id: string }) => sp.student_id)
+              .filter(Boolean);
           }
+
+          if (isExam && assignedIds.length === 0) {
+            const { data: examMeta } = await (supabase
+              .from("exams") as any)
+              .select("id")
+              .eq("practical_id", practical.id)
+              .maybeSingle();
+
+            if (examMeta?.id) {
+              const { data: examSessions, error: examSessionError } = await (supabase
+                .from("exam_sessions") as any)
+                .select("student_id")
+                .eq("exam_id", examMeta.id);
+
+              if (!examSessionError && Array.isArray(examSessions)) {
+                assignedIds = examSessions
+                  .map((row: any) => String(row.student_id || ""))
+                  .filter(Boolean);
+              }
+            }
+          }
+
+          setAssignedStudentIds(Array.from(new Set(assignedIds)));
 
           // load levels for existing practical
           const { data: levelsData } = await supabase
@@ -570,12 +601,17 @@ export default function PracticalForm({
           }
         } catch (e) {
           console.error("Failed to fetch practical data:", e);
+        } finally {
+          setAssignedStudentIdsLoaded(true);
         }
       };
 
       loadData();
     } else {
       // reset for new practical
+      setAssignedStudentIds([]);
+      setAssignedStudentIdsLoaded(true);
+      setDidHydrateAssignedSelection(false);
       setForm((prev) => ({
         ...prev,
         id: 0,
@@ -736,21 +772,6 @@ export default function PracticalForm({
           department: s.department || null,
         }));
         setStudents(mapped);
-
-        // Check if there are pre-assigned students to select
-        const assignedIds = (
-          window as unknown as { __assignedStudentIds: string[] }
-        ).__assignedStudentIds;
-        if (assignedIds && assignedIds.length > 0) {
-          const preSelected = mapped.filter((s: Student) =>
-            assignedIds.includes(s.uid),
-          );
-          if (preSelected.length > 0) {
-            setSelectedStudents(preSelected);
-          }
-          delete (window as unknown as { __assignedStudentIds?: string[] })
-            .__assignedStudentIds; // Clean up
-        }
       } catch (err) {
         console.error("Error fetching students:", err);
         setError("Failed to load students.");
@@ -759,6 +780,22 @@ export default function PracticalForm({
 
     fetchStudents();
   }, [supabase, practical, form.subject_id]);
+
+  useEffect(() => {
+    if (!practical || didHydrateAssignedSelection || !assignedStudentIdsLoaded) return;
+    if (students.length === 0) return;
+
+    const assignedSet = new Set(assignedStudentIds);
+    const preSelected = students.filter((s) => assignedSet.has(s.uid));
+    setSelectedStudents(preSelected);
+    setDidHydrateAssignedSelection(true);
+  }, [
+    practical,
+    didHydrateAssignedSelection,
+    assignedStudentIdsLoaded,
+    students,
+    assignedStudentIds,
+  ]);
 
   // ---------- handlers ----------
   const handleInput = (

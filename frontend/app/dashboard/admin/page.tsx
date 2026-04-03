@@ -18,7 +18,6 @@ import {
   Shield,
   ArrowUpRight,
   Settings,
-  BarChart3,
   UserCog,
   ChevronRight,
   ChevronDown,
@@ -553,7 +552,7 @@ export default function AdminDashboard() {
           variants={containerVariants}
           initial="hidden"
           animate="visible"
-          className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 mb-8"
+          className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 gap-5 mb-8"
         >
           <QuickActionCard
             title="Manage Users"
@@ -568,13 +567,6 @@ export default function AdminDashboard() {
             icon={<BookOpen className="w-6 h-6" />}
             href="/admin/subjects"
             gradient="bg-gradient-to-br from-purple-400 to-purple-600"
-          />
-          <QuickActionCard
-            title="System Analytics"
-            description="View platform statistics"
-            icon={<BarChart3 className="w-6 h-6" />}
-            href="/admin/analytics"
-            gradient="bg-gradient-to-br from-pink-400 to-pink-600"
           />
         </motion.section>
 

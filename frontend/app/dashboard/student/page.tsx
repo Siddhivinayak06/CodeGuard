@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useMemo, useRef } from "react";
+import { useCallback, useEffect, useState, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import StudentDashboardSkeleton from "@/components/skeletons/StudentDashboardSkeleton";
@@ -76,6 +76,17 @@ export default function StudentDashboard() {
   const [exams, setExams] = useState<number>(0);
   const [loading, setLoading] = useState(true);
 
+  const recoverFromStaleSession = useCallback(() => {
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("cg_session_id");
+      document.cookie = "device_session_id=; path=/; max-age=0; SameSite=Lax";
+      window.location.href = "/auth/login?reset=1";
+      return;
+    }
+
+    router.replace("/auth/login?reset=1");
+  }, [router]);
+
   // Stats
   const totalPracticals = progress.reduce((acc, p) => acc + p.total_count, 0);
   const passedPracticals = progress.reduce((acc, p) => acc + p.passed_count, 0);
@@ -97,7 +108,7 @@ export default function StudentDashboard() {
         const u = data?.user ?? null;
 
         if (!u) {
-          router.push("/auth/login");
+          recoverFromStaleSession();
           return;
         }
 
@@ -112,7 +123,7 @@ export default function StudentDashboard() {
 
         if (userData?.name) setUserName(userData.name);
       } catch {
-        router.push("/auth/login");
+        recoverFromStaleSession();
       }
     };
 
@@ -120,7 +131,7 @@ export default function StudentDashboard() {
     return () => {
       mountedRef.current = false;
     };
-  }, [router, supabase]);
+  }, [recoverFromStaleSession, supabase]);
 
   // Fetch dashboard data
   useEffect(() => {
