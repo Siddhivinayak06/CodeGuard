@@ -69,7 +69,6 @@ module.exports = async function runCode(
 
   const uniqueId = uuidv4();
   const escapedCode = code.replace(/\r/g, '');
-  const timeoutSec = config.executionTimeout || DEFAULT_TIMEOUT_SEC;
 
   const poolLang =
     lang === 'cpp' || lang === 'c++'

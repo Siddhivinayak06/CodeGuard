@@ -1,7 +1,5 @@
 const { VERDICTS } = require('./verdicts');
-const {
-  normalizeTrailingWhitespace,
-} = require('./outputComparator');
+const { normalizeTrailingWhitespace } = require('./outputComparator');
 
 /**
  * Normalize output (legacy compatibility wrapper).

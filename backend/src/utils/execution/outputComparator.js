@@ -20,7 +20,10 @@ const COMPARISON_MODES = Object.freeze({
 const DEFAULT_FLOAT_EPSILON = 1e-6;
 
 // ANSI escape sequence pattern (colors/cursor controls) that should never affect judging.
-const ANSI_ESCAPE_REGEX = /\x1B\[[0-9;]*[A-Za-z]/g;
+const ANSI_ESCAPE_REGEX = new RegExp(
+  `${String.fromCharCode(27)}\\[[0-9;]*[A-Za-z]`,
+  'g'
+);
 
 // Invisible characters that frequently sneak in from copied expected outputs.
 const INVISIBLE_CHARS_REGEX = /[\u200B-\u200D\uFEFF]/g;
@@ -64,7 +67,11 @@ function stripAllWhitespace(text) {
  * Each line is split by whitespace into tokens. Tokens that parse as numbers
  * are compared with epsilon tolerance; non-numeric tokens are compared exactly.
  */
-function compareWithFloatTolerance(actual, expected, epsilon = DEFAULT_FLOAT_EPSILON) {
+function compareWithFloatTolerance(
+  actual,
+  expected,
+  epsilon = DEFAULT_FLOAT_EPSILON
+) {
   const actualLines = normalizeTrailingWhitespace(actual).split('\n');
   const expectedLines = normalizeTrailingWhitespace(expected).split('\n');
 
@@ -117,7 +124,9 @@ function compareWithFloatTolerance(actual, expected, epsilon = DEFAULT_FLOAT_EPS
  */
 function compareUnorderedLines(actual, expected) {
   const actualLines = normalizeTrailingWhitespace(actual).split('\n').sort();
-  const expectedLines = normalizeTrailingWhitespace(expected).split('\n').sort();
+  const expectedLines = normalizeTrailingWhitespace(expected)
+    .split('\n')
+    .sort();
 
   if (actualLines.length !== expectedLines.length) {
     return {

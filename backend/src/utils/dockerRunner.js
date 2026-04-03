@@ -5,7 +5,6 @@ const poolManager = require('../services/poolManager');
 const localRunner = require('./localRunner');
 const config = require('../config');
 const {
-  normalizeOutput,
   createSkippedResult,
   sortBatchResults,
   buildBatchErrorResults,
@@ -132,7 +131,10 @@ java -cp /tmp/${uniqueId} $MAIN_CLASS
     `/tmp/${uniqueId}/input.txt`
   )} && START_NS=$(date +%s%N 2>/dev/null || echo "$(date +%s)000000000") && cat /tmp/${uniqueId}/input.txt | timeout ${timeoutSec} ${timeWrapper} sh -c '${baseRunCmd
     .trim()
-    .replace(/'/g, "'\\''")}' 2>/tmp/${uniqueId}/time_stderr.txt; EC=$?; END_NS=$(date +%s%N 2>/dev/null || echo "$(date +%s)000000000"); echo "__METRICS__|$EC|$START_NS|$END_NS" 1>&2; cat /tmp/${uniqueId}/time_stderr.txt 1>&2; exit $EC`;
+    .replace(
+      /'/g,
+      "'\\''"
+    )}' 2>/tmp/${uniqueId}/time_stderr.txt; EC=$?; END_NS=$(date +%s%N 2>/dev/null || echo "$(date +%s)000000000"); echo "__METRICS__|$EC|$START_NS|$END_NS" 1>&2; cat /tmp/${uniqueId}/time_stderr.txt 1>&2; exit $EC`;
 
   const result = await runCommand(['exec', containerName, 'sh', '-c', runCmd]);
 
@@ -143,9 +145,7 @@ java -cp /tmp/${uniqueId} $MAIN_CLASS
   let cleanedStderr = result.stderr;
 
   // Extract our metrics line
-  const metricsMatch = result.stderr.match(
-    /__METRICS__\|(\d+)\|(\d+)\|(\d+)/
-  );
+  const metricsMatch = result.stderr.match(/__METRICS__\|(\d+)\|(\d+)\|(\d+)/);
   if (metricsMatch) {
     const startNs = BigInt(metricsMatch[2]);
     const endNs = BigInt(metricsMatch[3]);
@@ -155,9 +155,7 @@ java -cp /tmp/${uniqueId} $MAIN_CLASS
   }
 
   // Extract memory from GNU time verbose output
-  const memMatch = result.stderr.match(
-    /Maximum resident set size.*?:\s*(\d+)/
-  );
+  const memMatch = result.stderr.match(/Maximum resident set size.*?:\s*(\d+)/);
   if (memMatch) {
     memoryKB = parseInt(memMatch[1], 10);
   }
@@ -298,7 +296,10 @@ module.exports = async function runBatchCode(
       logger.info(`Using local execution for batch on ${normalizedLang}`);
       const results = [];
       for (const tc of batch) {
-        const timeoutSec = Math.max(1, Math.ceil((tc.time_limit_ms || 5000) / 1000));
+        const timeoutSec = Math.max(
+          1,
+          Math.ceil((tc.time_limit_ms || 5000) / 1000)
+        );
         const result = await localRunner.runCode(
           code,
           poolLang,
@@ -320,7 +321,8 @@ module.exports = async function runBatchCode(
           stdout: result.stdout,
           timedOut: result.exitCode === 124,
           isCompileError: false,
-          outputMatch: typeof tc.expectedOutput === 'string' ? compResult.match : true,
+          outputMatch:
+            typeof tc.expectedOutput === 'string' ? compResult.match : true,
         });
 
         results.push({

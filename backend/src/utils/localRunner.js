@@ -69,7 +69,7 @@ class LocalRunner {
         resolve({
           stdout: stdout.trim(),
           stderr: stderr.trim(),
-          exitCode: timedOut ? 124 : (signal === 'SIGKILL' ? 137 : code),
+          exitCode: timedOut ? 124 : signal === 'SIGKILL' ? 137 : code,
           time_ms,
           memory_kb: 0, // We'll measure memory separately for compiled languages
           timedOut,
@@ -138,9 +138,7 @@ class LocalRunner {
         let memory_kb = 0;
         if (isMacOS) {
           // macOS: "maximum resident set size" in bytes
-          const memMatch = stderr.match(
-            /(\d+)\s+maximum resident set size/
-          );
+          const memMatch = stderr.match(/(\d+)\s+maximum resident set size/);
           if (memMatch) {
             memory_kb = Math.round(parseInt(memMatch[1], 10) / 1024);
           }
@@ -191,7 +189,7 @@ class LocalRunner {
         resolve({
           stdout: stdout.trim(),
           stderr: cleanStderr,
-          exitCode: timedOut ? 124 : (signal === 'SIGKILL' ? 137 : code),
+          exitCode: timedOut ? 124 : signal === 'SIGKILL' ? 137 : code,
           time_ms,
           memory_kb,
           timedOut,
@@ -231,7 +229,10 @@ class LocalRunner {
       } else if (lang === 'c' || lang === 'cpp') {
         const ext = lang === 'c' ? '.c' : '.cpp';
         const sourceFile = path.join(workDir, 'code' + ext);
-        const executableFile = path.join(workDir, isWindows ? 'a.exe' : 'a.out');
+        const executableFile = path.join(
+          workDir,
+          isWindows ? 'a.exe' : 'a.out'
+        );
         fs.writeFileSync(sourceFile, code);
 
         const compiler = runtime.compile;
@@ -338,7 +339,10 @@ class LocalRunner {
       } else if (lang === 'c' || lang === 'cpp') {
         const ext = lang === 'c' ? '.c' : '.cpp';
         const sourceFile = path.join(workDir, 'code' + ext);
-        const executableFile = path.join(workDir, isWindows ? 'a.exe' : 'a.out');
+        const executableFile = path.join(
+          workDir,
+          isWindows ? 'a.exe' : 'a.out'
+        );
         fs.writeFileSync(sourceFile, code);
 
         try {
@@ -434,7 +438,9 @@ class LocalRunner {
           }
         }, 1000);
       } catch (e) {
-        logger.error(`Failed to cleanup batch workdir ${workDir}: ${e.message}`);
+        logger.error(
+          `Failed to cleanup batch workdir ${workDir}: ${e.message}`
+        );
       }
     }
   }

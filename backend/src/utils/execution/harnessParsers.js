@@ -81,7 +81,11 @@ function buildOrderedCompiledResults({
     const existing = resultById.get(String(tc.id));
     if (existing) {
       orderedResults.push(existing);
-      if (!firstFailureFound && existing.status !== 'passed' && existing.status !== 'accepted') {
+      if (
+        !firstFailureFound &&
+        existing.status !== 'passed' &&
+        existing.status !== 'accepted'
+      ) {
         firstFailureFound = true;
       }
       continue;

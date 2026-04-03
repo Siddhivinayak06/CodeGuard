@@ -395,13 +395,15 @@ export async function POST(req: Request) {
 
     const details = runnerResults.details ?? [];
 
+    const ANSI_ESCAPE_REGEX = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*[A-Za-z]`, "g");
+
     const sanitizeOutputText = (s: any) =>
       String(s ?? "")
         .replace(/\r\n/g, "\n")
         .replace(/\r/g, "\n")
         .replace(/\u00A0/g, " ")
         .replace(/\0/g, "")
-        .replace(/\x1B\[[0-9;]*[A-Za-z]/g, "")
+        .replace(ANSI_ESCAPE_REGEX, "")
         .replace(/[\u200B-\u200D\uFEFF]/g, "")
         .normalize("NFKC");
 
