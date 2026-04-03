@@ -1,9 +1,14 @@
+const { VERDICTS } = require('./verdicts');
+const {
+  normalizeTrailingWhitespace,
+} = require('./outputComparator');
+
+/**
+ * Normalize output (legacy compatibility wrapper).
+ * New code should use outputComparator.compareOutput() instead.
+ */
 function normalizeOutput(text = '') {
-  return String(text)
-    .split('\n')
-    .map((line) => line.trimEnd())
-    .join('\n')
-    .trim();
+  return normalizeTrailingWhitespace(text);
 }
 
 function createSkippedResult(tc, reason = 'Skipped due to fail-fast') {
@@ -19,7 +24,7 @@ function createSkippedResult(tc, reason = 'Skipped due to fail-fast') {
     memoryKB: 0,
     time_ms: 0,
     memory_kb: 0,
-    status: 'skipped_fail_fast',
+    status: VERDICTS.SKIPPED,
   };
 }
 
@@ -31,13 +36,19 @@ function sortBatchResults(results, batch) {
   );
 }
 
+/**
+ * Check whether a status/verdict is a failing one.
+ */
 function isFailStatus(status = '') {
   const normalizedStatus = String(status || '').toLowerCase();
   return [
-    'compile_error',
-    'runtime_error',
-    'time_limit_exceeded',
-    'failed',
+    VERDICTS.COMPILE_ERROR,
+    VERDICTS.RUNTIME_ERROR,
+    VERDICTS.TIME_LIMIT_EXCEEDED,
+    VERDICTS.MEMORY_LIMIT_EXCEEDED,
+    VERDICTS.OUTPUT_LIMIT_EXCEEDED,
+    VERDICTS.WRONG_ANSWER,
+    'failed', // Legacy compatibility
   ].includes(normalizedStatus);
 }
 
@@ -45,7 +56,7 @@ function buildBatchErrorResults(
   batch,
   message,
   exitCode = 1,
-  status = 'runtime_error'
+  status = VERDICTS.RUNTIME_ERROR
 ) {
   return batch.map((tc) => ({
     test_case_id: tc.id,

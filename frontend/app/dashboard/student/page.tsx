@@ -80,6 +80,8 @@ export default function StudentDashboard() {
   const totalPracticals = progress.reduce((acc, p) => acc + p.total_count, 0);
   const passedPracticals = progress.reduce((acc, p) => acc + p.passed_count, 0);
   const failedPracticals = progress.reduce((acc, p) => acc + p.failed_count, 0);
+  const completedPracticals = passedPracticals + failedPracticals;
+  const pendingPracticals = Math.max(totalPracticals - completedPracticals, 0);
   const overallProgress =
     totalPracticals > 0
       ? Math.round((passedPracticals / totalPracticals) * 100)
@@ -457,8 +459,8 @@ export default function StudentDashboard() {
             </motion.div>
 
             <StatCard
-              label="Passed"
-              value={passedPracticals}
+              label="Completed"
+              value={completedPracticals}
               icon={CheckCircle2}
               colorClass="text-emerald-600 dark:text-emerald-400"
               itemVariants={itemVariants}
@@ -466,10 +468,10 @@ export default function StudentDashboard() {
             />
 
             <StatCard
-              label="Failed"
-              value={failedPracticals}
+              label="Pending"
+              value={pendingPracticals}
               icon={Clock}
-              colorClass="text-red-600 dark:text-red-400"
+              colorClass="text-amber-600 dark:text-amber-400"
               itemVariants={itemVariants}
               loading={loading}
             />

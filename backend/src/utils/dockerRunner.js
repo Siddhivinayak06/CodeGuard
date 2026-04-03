@@ -21,6 +21,8 @@ const {
   parseCompiledHarnessResults,
   buildOrderedCompiledResults,
 } = require('./execution/harnessParsers');
+const { determineVerdict, VERDICTS } = require('./execution/verdicts');
+const { compareOutput } = require('./execution/outputComparator');
 
 function writeBase64FileCommand(content = '', filePath) {
   const b64 = Buffer.from(content).toString('base64');
@@ -123,39 +125,67 @@ java -cp /tmp/${uniqueId} $MAIN_CLASS
 `;
   }
 
-  const timeCmd =
-    normalizedLang === 'java'
-      ? '/usr/bin/time -f "CPU:%U|%S MEM:%M"'
-      : '/usr/bin/time -p';
+  // Use GNU time -v for memory measurement when available, with nanosecond timing
+  const timeWrapper = `/usr/bin/time -v`;
   const runCmd = `${writeBase64FileCommand(
     stdinInput,
     `/tmp/${uniqueId}/input.txt`
-  )} && cat /tmp/${uniqueId}/input.txt | timeout ${timeoutSec} ${timeCmd} sh -c '${baseRunCmd
+  )} && START_NS=$(date +%s%N 2>/dev/null || echo "$(date +%s)000000000") && cat /tmp/${uniqueId}/input.txt | timeout ${timeoutSec} ${timeWrapper} sh -c '${baseRunCmd
     .trim()
-    .replace(/'/g, "'\\''")}'`;
+    .replace(/'/g, "'\\''")}' 2>/tmp/${uniqueId}/time_stderr.txt; EC=$?; END_NS=$(date +%s%N 2>/dev/null || echo "$(date +%s)000000000"); echo "__METRICS__|$EC|$START_NS|$END_NS" 1>&2; cat /tmp/${uniqueId}/time_stderr.txt 1>&2; exit $EC`;
 
   const result = await runCommand(['exec', containerName, 'sh', '-c', runCmd]);
 
+  // Parse metrics from stderr
   let cpuTime = 0;
   let memoryKB = 0;
+  let timeMs = 0;
+  let cleanedStderr = result.stderr;
 
-  if (normalizedLang === 'java') {
-    const match = result.stderr.match(/CPU:([\d.]+)\|([\d.]+) MEM:(\d+)/);
-    if (match) {
-      cpuTime = parseFloat(match[1]) + parseFloat(match[2]);
-      memoryKB = parseInt(match[3], 10);
-    }
-  } else {
-    const userMatch = result.stderr.match(/user ([\d.]+)/);
-    const sysMatch = result.stderr.match(/sys ([\d.]+)/);
-    if (userMatch && sysMatch) {
-      cpuTime = parseFloat(userMatch[1]) + parseFloat(sysMatch[1]);
-    }
+  // Extract our metrics line
+  const metricsMatch = result.stderr.match(
+    /__METRICS__\|(\d+)\|(\d+)\|(\d+)/
+  );
+  if (metricsMatch) {
+    const startNs = BigInt(metricsMatch[2]);
+    const endNs = BigInt(metricsMatch[3]);
+    timeMs = Number((endNs - startNs) / BigInt(1000000));
+    if (timeMs < 0) timeMs = 0;
+    cpuTime = timeMs / 1000;
   }
 
-  const cleanedStderr = result.stderr
-    .replace(/CPU:[\d.]+\|[\d.]+ MEM:\d+/, '')
-    .replace(/real [\d.]+\nuser [\d.]+\nsys [\d.]+/, '')
+  // Extract memory from GNU time verbose output
+  const memMatch = result.stderr.match(
+    /Maximum resident set size.*?:\s*(\d+)/
+  );
+  if (memMatch) {
+    memoryKB = parseInt(memMatch[1], 10);
+  }
+
+  // Clean stderr: remove GNU time output and our metrics line
+  cleanedStderr = result.stderr
+    .replace(/__METRICS__\|\d+\|\d+\|\d+\n?/, '')
+    .replace(/\s*Command being timed:.*\n?/g, '')
+    .replace(/\s*User time.*\n?/g, '')
+    .replace(/\s*System time.*\n?/g, '')
+    .replace(/\s*Percent of CPU.*\n?/g, '')
+    .replace(/\s*Elapsed \(wall clock\).*\n?/g, '')
+    .replace(/\s*Average shared.*\n?/g, '')
+    .replace(/\s*Average unshared.*\n?/g, '')
+    .replace(/\s*Average stack.*\n?/g, '')
+    .replace(/\s*Average total.*\n?/g, '')
+    .replace(/\s*Maximum resident.*\n?/g, '')
+    .replace(/\s*Average resident.*\n?/g, '')
+    .replace(/\s*Major.*page faults.*\n?/g, '')
+    .replace(/\s*Minor.*page faults.*\n?/g, '')
+    .replace(/\s*Voluntary.*\n?/g, '')
+    .replace(/\s*Involuntary.*\n?/g, '')
+    .replace(/\s*Swaps.*\n?/g, '')
+    .replace(/\s*File system.*\n?/g, '')
+    .replace(/\s*Socket.*\n?/g, '')
+    .replace(/\s*Signals.*\n?/g, '')
+    .replace(/\s*Page size.*\n?/g, '')
+    .replace(/\s*Exit status.*\n?/g, '')
     .trim();
 
   return {
@@ -168,7 +198,7 @@ java -cp /tmp/${uniqueId} $MAIN_CLASS
     is_hidden,
     cpuTime,
     memoryKB,
-    time_ms: Math.round(cpuTime * 1000),
+    time_ms: timeMs,
     memory_kb: memoryKB,
   };
 }
@@ -268,12 +298,31 @@ module.exports = async function runBatchCode(
       logger.info(`Using local execution for batch on ${normalizedLang}`);
       const results = [];
       for (const tc of batch) {
+        const timeoutSec = Math.max(1, Math.ceil((tc.time_limit_ms || 5000) / 1000));
         const result = await localRunner.runCode(
           code,
           poolLang,
           tc.stdinInput,
-          Math.max(1, Math.ceil((tc.time_limit_ms || 5000) / 1000))
+          timeoutSec
         );
+
+        // Use centralized verdict logic
+        const compResult = compareOutput(
+          result.stdout,
+          tc.expectedOutput,
+          tc.comparison_mode || 'ignore_trailing_whitespace',
+          { floatTolerance: tc.float_tolerance }
+        );
+
+        const verdict = determineVerdict({
+          exitCode: result.exitCode,
+          stderr: result.stderr,
+          stdout: result.stdout,
+          timedOut: result.exitCode === 124,
+          isCompileError: false,
+          outputMatch: typeof tc.expectedOutput === 'string' ? compResult.match : true,
+        });
+
         results.push({
           test_case_id: tc.id,
           input: tc.stdinInput,
@@ -282,18 +331,14 @@ module.exports = async function runBatchCode(
           stderr: result.stderr,
           exitCode: result.exitCode,
           is_hidden: tc.is_hidden,
-          cpuTime: 0,
-          memoryKB: 0,
-          time_ms: 0,
-          memory_kb: 0,
+          cpuTime: (result.time_ms || 0) / 1000,
+          memoryKB: result.memory_kb || 0,
+          time_ms: result.time_ms || 0,
+          memory_kb: result.memory_kb || 0,
+          status: verdict,
         });
 
-        const hasExpectedOutput = typeof tc.expectedOutput === 'string';
-        const outputMismatch =
-          hasExpectedOutput &&
-          normalizeOutput(result.stdout) !== normalizeOutput(tc.expectedOutput);
-
-        if (effectiveFailFast && (result.exitCode !== 0 || outputMismatch)) {
+        if (effectiveFailFast && verdict !== VERDICTS.ACCEPTED) {
           break;
         }
       }
@@ -325,7 +370,7 @@ module.exports = async function runBatchCode(
         batch,
         compileResult.stderr || 'Compilation failed',
         compileResult.exitCode || 1,
-        'compile_error'
+        VERDICTS.COMPILE_ERROR
       );
     }
 
@@ -360,14 +405,31 @@ module.exports = async function runBatchCode(
           normalizedLang,
           uniqueId
         );
+
+        // Use centralized verdict logic
+        const hasExpectedOutput = typeof tc.expectedOutput === 'string';
+        const compResult = hasExpectedOutput
+          ? compareOutput(
+              result.stdout,
+              tc.expectedOutput,
+              tc.comparison_mode || 'ignore_trailing_whitespace',
+              { floatTolerance: tc.float_tolerance }
+            )
+          : { match: true };
+
+        const verdict = determineVerdict({
+          exitCode: result.exitCode,
+          stderr: result.stderr,
+          stdout: result.stdout,
+          timedOut: result.exitCode === 124,
+          isCompileError: false,
+          outputMatch: compResult.match,
+        });
+
+        result.status = verdict;
         results.push(result);
 
-        const hasExpectedOutput = typeof tc.expectedOutput === 'string';
-        const outputMismatch =
-          hasExpectedOutput &&
-          normalizeOutput(result.stdout) !== normalizeOutput(tc.expectedOutput);
-
-        if (result.exitCode !== 0 || outputMismatch) {
+        if (verdict !== VERDICTS.ACCEPTED) {
           hasFailed = true;
         }
       }

@@ -27,38 +27,13 @@ import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import SubmissionsSidebar from "../../faculty/submissions/SubmissionsSidebar";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
-import StatCard from "@/components/dashboard/student/StatCard";
 import { cn } from "@/lib/utils";
-
-const containerVariants = {
-  hidden: { opacity: 0 },
-  visible: {
-    opacity: 1,
-    transition: {
-      staggerChildren: 0.1,
-      delayChildren: 0.2,
-    },
-  },
-} as const;
 
 const shellVariants = {
   hidden: { opacity: 0 },
   visible: {
     opacity: 1,
     transition: { duration: 0.3 },
-  },
-} as const;
-
-const itemVariants = {
-  hidden: { y: 20, opacity: 0 },
-  visible: {
-    y: 0,
-    opacity: 1,
-    transition: {
-      type: "spring",
-      stiffness: 260,
-      damping: 20,
-    },
   },
 } as const;
 
@@ -129,6 +104,49 @@ interface SidebarSubject {
   practicals: { id: number; title: string }[];
 }
 
+const GRADE_FILTERS = [
+  "all",
+  "excellent",
+  "very_good",
+  "good",
+  "needs_improvement",
+  "poor",
+  "pending",
+] as const;
+
+const getGradeStatusFromPercentage = (percentage: number): string => {
+  if (percentage >= 90) return "excellent";
+  if (percentage >= 75) return "very_good";
+  if (percentage >= 60) return "good";
+  if (percentage >= 40) return "needs_improvement";
+  return "poor";
+};
+
+const getSubmissionDisplayStatus = (
+  submission: Pick<Submission, "status" | "marks_obtained" | "max_marks" | "level_max_marks">
+): string => {
+  const normalizedStatus = submission.status?.toLowerCase();
+
+  if (["pending", "submitted"].includes(normalizedStatus)) {
+    return "pending";
+  }
+
+  if (["compile_error", "runtime_error", "timeout"].includes(normalizedStatus)) {
+    return "poor";
+  }
+
+  const maxMarks = submission.level_max_marks || submission.max_marks || 10;
+  if (submission.marks_obtained !== null && submission.marks_obtained !== undefined && maxMarks > 0) {
+    const percentage = (submission.marks_obtained / maxMarks) * 100;
+    return getGradeStatusFromPercentage(percentage);
+  }
+
+  if (normalizedStatus === "failed") return "poor";
+  if (["passed", "completed"].includes(normalizedStatus)) return "good";
+
+  return normalizedStatus || "pending";
+};
+
 // ============================================================================
 // COMPONENTS
 // ============================================================================
@@ -138,6 +156,31 @@ function StatusBadge({ status }: { status: string }) {
     string,
     { bg: string; text: string; icon: React.ReactNode }
   > = {
+    excellent: {
+      bg: "bg-emerald-100 dark:bg-emerald-900/30 border-emerald-200 dark:border-emerald-800",
+      text: "text-emerald-700 dark:text-emerald-400",
+      icon: <CheckCircle2 className="w-3.5 h-3.5" />,
+    },
+    very_good: {
+      bg: "bg-blue-100 dark:bg-blue-900/30 border-blue-200 dark:border-blue-800",
+      text: "text-blue-700 dark:text-blue-400",
+      icon: <CheckCircle2 className="w-3.5 h-3.5" />,
+    },
+    good: {
+      bg: "bg-cyan-100 dark:bg-cyan-900/30 border-cyan-200 dark:border-cyan-800",
+      text: "text-cyan-700 dark:text-cyan-400",
+      icon: <CheckCircle2 className="w-3.5 h-3.5" />,
+    },
+    needs_improvement: {
+      bg: "bg-amber-100 dark:bg-amber-900/30 border-amber-200 dark:border-amber-800",
+      text: "text-amber-700 dark:text-amber-400",
+      icon: <AlertCircle className="w-3.5 h-3.5" />,
+    },
+    poor: {
+      bg: "bg-red-100 dark:bg-red-900/30 border-red-200 dark:border-red-800",
+      text: "text-red-700 dark:text-red-400",
+      icon: <AlertCircle className="w-3.5 h-3.5" />,
+    },
     passed: {
       bg: "bg-emerald-100 dark:bg-emerald-900/30 border-emerald-200 dark:border-emerald-800",
       text: "text-emerald-700 dark:text-emerald-400",
@@ -506,18 +549,10 @@ function StudentSubmissionsPageContent() {
       const matchSubject = selectedSubjectId ? s.subject_id === selectedSubjectId : true;
       const matchPractical = selectedPracticalId ? s.practical_id === selectedPracticalId : true;
       const matchSearch = searchQuery ? (s.practical_title.toLowerCase().includes(searchQuery.toLowerCase()) || s.subject_name?.toLowerCase().includes(searchQuery.toLowerCase())) : true;
-      const matchStatus = filterStatus === 'all' ? true : s.status === filterStatus;
 
-      return matchSubject && matchPractical && matchSearch && matchStatus;
+      return matchSubject && matchPractical && matchSearch;
     });
-  }, [submissions, selectedSubjectId, selectedPracticalId, searchQuery, filterStatus]);
-
-  const stats = useMemo(() => ({
-    total: submissions.length,
-    passed: submissions.filter(s => s.status === 'passed').length,
-    failed: submissions.filter(s => s.status === 'failed').length,
-    pending: submissions.filter(s => ['pending', 'submitted'].includes(s.status)).length
-  }), [submissions]);
+  }, [submissions, selectedSubjectId, selectedPracticalId, searchQuery]);
 
   const groupedSubmissions = useMemo(() => {
     const map = new Map<number, GroupedSubmission>();
@@ -551,11 +586,10 @@ function StudentSubmissionsPageContent() {
     });
 
     map.forEach(group => {
+      let allPending = true;
       let isAllGraded = true;
       let totalObtained = 0;
       let totalMax = 0;
-      let hasFailed = false;
-      let hasPending = false;
 
       const levelMap = new Map<number | null, Submission>();
       group.submissions.forEach(sub => {
@@ -569,12 +603,12 @@ function StudentSubmissionsPageContent() {
       group.submissions = uniqueSubmissions.sort((a, b) => (a.level_id ?? 0) - (b.level_id ?? 0));
 
       uniqueSubmissions.forEach(sub => {
-        if (sub.status !== "passed" && sub.status !== "completed") {
-          if (sub.status === "failed") hasFailed = true;
-          else hasPending = true;
+        const normalizedStatus = sub.status?.toLowerCase();
+        if (!["pending", "submitted"].includes(normalizedStatus)) {
+          allPending = false;
         }
 
-        if (sub.marks_obtained !== null) {
+        if (sub.marks_obtained !== null && sub.marks_obtained !== undefined) {
           totalObtained += sub.marks_obtained;
         } else {
           isAllGraded = false;
@@ -586,13 +620,37 @@ function StudentSubmissionsPageContent() {
       group.totalMarks = isAllGraded ? totalObtained : null;
       group.totalMaxMarks = totalMax;
 
-      if (hasFailed) group.overallStatus = "failed";
-      else if (hasPending) group.overallStatus = "pending";
-      else group.overallStatus = "passed";
+      if (isAllGraded && totalMax > 0) {
+        const percentage = (totalObtained / totalMax) * 100;
+        group.overallStatus = getGradeStatusFromPercentage(percentage);
+      } else if (allPending) {
+        group.overallStatus = "pending";
+      } else {
+        const derivedStatuses = uniqueSubmissions.map(getSubmissionDisplayStatus);
+        const hasPending = derivedStatuses.includes("pending");
+        const hasNeedsImprovement = derivedStatuses.includes("needs_improvement");
+        const hasPoor = derivedStatuses.includes("poor");
+        const hasGood = derivedStatuses.includes("good");
+        const hasVeryGood = derivedStatuses.includes("very_good");
+        const hasExcellent = derivedStatuses.includes("excellent");
+
+        if (hasPending) group.overallStatus = "pending";
+        else if (hasPoor) group.overallStatus = "poor";
+        else if (hasNeedsImprovement) group.overallStatus = "needs_improvement";
+        else if (hasGood) group.overallStatus = "good";
+        else if (hasVeryGood) group.overallStatus = "very_good";
+        else if (hasExcellent) group.overallStatus = "excellent";
+        else group.overallStatus = "pending";
+      }
     });
 
     return Array.from(map.values());
   }, [filteredSubmissions]);
+
+  const visibleGroupedSubmissions = useMemo(() => {
+    if (filterStatus === "all") return groupedSubmissions;
+    return groupedSubmissions.filter(group => group.overallStatus === filterStatus);
+  }, [groupedSubmissions, filterStatus]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50/30 to-purple-50/30 dark:from-gray-950 dark:via-indigo-950/10 dark:to-purple-950/10 flex flex-col md:flex-row pt-16">
@@ -664,47 +722,6 @@ function StudentSubmissionsPageContent() {
             </div>
           </motion.div>
 
-          {/* Stats Row */}
-          <motion.div
-            variants={containerVariants}
-            initial="hidden"
-            animate="visible"
-            className="grid grid-cols-2 md:grid-cols-4 gap-6"
-          >
-            <StatCard
-              label="Pending"
-              value={stats.pending}
-              icon={Clock}
-              colorClass="text-amber-600 dark:text-amber-400"
-              itemVariants={itemVariants}
-              loading={loading}
-            />
-            <StatCard
-              label="Passed"
-              value={stats.passed}
-              icon={CheckCircle2}
-              colorClass="text-emerald-600 dark:text-emerald-400"
-              itemVariants={itemVariants}
-              loading={loading}
-            />
-            <StatCard
-              label="Failed"
-              value={stats.failed}
-              icon={AlertCircle}
-              colorClass="text-red-600 dark:text-red-400"
-              itemVariants={itemVariants}
-              loading={loading}
-            />
-            <StatCard
-              label="Total"
-              value={stats.total}
-              icon={LayoutGrid}
-              colorClass="text-indigo-600 dark:text-indigo-400"
-              itemVariants={itemVariants}
-              loading={loading}
-            />
-          </motion.div>
-
           {/* Submissions Table Card */}
           <motion.div
             variants={shellVariants}
@@ -714,7 +731,7 @@ function StudentSubmissionsPageContent() {
           >
             {/* Filters Bar */}
             <div className="p-4 border-b border-gray-100 dark:border-gray-800 flex items-center gap-4 bg-white/40 dark:bg-gray-900/40 backdrop-blur-md overflow-x-auto no-scrollbar">
-              {['all', 'pending', 'passed', 'failed'].map(status => (
+              {GRADE_FILTERS.map(status => (
                 <button
                   key={status}
                   onClick={() => setFilterStatus(status)}
@@ -723,7 +740,7 @@ function StudentSubmissionsPageContent() {
                     : 'text-gray-600 hover:bg-white/60 dark:hover:bg-gray-800/60 hover:text-indigo-600'
                     }`}
                 >
-                  {status}
+                  {status.replace(/_/g, ' ')}
                 </button>
               ))}
             </div>
@@ -745,7 +762,7 @@ function StudentSubmissionsPageContent() {
                 <tbody className="divide-y divide-gray-100/50 dark:divide-gray-800/50">
                   {loading ? (
                     [1, 2, 3, 4, 5].map(i => <SkeletonRow key={i} />)
-                  ) : groupedSubmissions.length === 0 ? (
+                  ) : visibleGroupedSubmissions.length === 0 ? (
                     <tr><td colSpan={7} className="p-12 text-center text-gray-500">
                       <div className="flex flex-col items-center justify-center gap-3 opacity-60">
                         <LayoutGrid className="w-10 h-10" />
@@ -753,14 +770,17 @@ function StudentSubmissionsPageContent() {
                       </div>
                     </td></tr>
                   ) : (
-                    groupedSubmissions.map((group) => {
+                    visibleGroupedSubmissions.map((group) => {
                       const isMultiLevel = group.submissions.length > 1;
                       const isExpanded = expandedGroups[group.practical_id.toString()];
 
                       let statusColor = "bg-gray-300 dark:bg-gray-600";
-                      if (group.overallStatus === 'passed') statusColor = "bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.3)]";
-                      else if (group.overallStatus === 'failed') statusColor = "bg-red-500 shadow-[0_0_10px_rgba(239,68,68,0.3)]";
-                      else if (group.overallStatus === 'pending' || group.overallStatus === 'submitted') statusColor = "bg-amber-500 shadow-[0_0_10px_rgba(245,158,11,0.3)]";
+                      if (group.overallStatus === 'excellent') statusColor = "bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.3)]";
+                      else if (group.overallStatus === 'very_good') statusColor = "bg-blue-500 shadow-[0_0_10px_rgba(59,130,246,0.3)]";
+                      else if (group.overallStatus === 'good') statusColor = "bg-cyan-500 shadow-[0_0_10px_rgba(6,182,212,0.3)]";
+                      else if (group.overallStatus === 'needs_improvement') statusColor = "bg-amber-500 shadow-[0_0_10px_rgba(245,158,11,0.3)]";
+                      else if (group.overallStatus === 'poor') statusColor = "bg-red-500 shadow-[0_0_10px_rgba(239,68,68,0.3)]";
+                      else if (group.overallStatus === 'pending' || group.overallStatus === 'submitted') statusColor = "bg-slate-500 shadow-[0_0_10px_rgba(100,116,139,0.3)]";
 
                       return (
                         <React.Fragment key={`group-${group.practical_id}`}>
@@ -855,7 +875,7 @@ function StudentSubmissionsPageContent() {
                                 </span>
                               </td>
                               <td className="py-3 px-6 text-center">
-                                <StatusBadge status={sub.status} />
+                                <StatusBadge status={getSubmissionDisplayStatus(sub)} />
                               </td>
                               <td className="py-3 px-6 text-right w-full">
                                 <div className="flex items-center justify-end gap-2 outline-none">
@@ -903,7 +923,7 @@ function StudentSubmissionsPageContent() {
                     {viewingSubmission.practical_title}
                   </h3>
                   <div className="flex items-center gap-3 text-sm text-gray-500 mt-1">
-                    <StatusBadge status={viewingSubmission.status} />
+                    <StatusBadge status={getSubmissionDisplayStatus(viewingSubmission)} />
                     {!viewingSubmission.is_exam && viewingSubmission.marks_obtained !== null && (
                       <>
                         <span className="text-gray-300">•</span>

@@ -22,6 +22,9 @@ import {
   ChevronDown,
   ChevronRight,
   Layers,
+  Award,
+  TrendingUp,
+  AlertCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { motion } from "framer-motion";
@@ -424,7 +427,14 @@ function FacultySubmissionsContentInner() {
         .from("submissions")
         .update({
           marks_obtained: marksNum,
-          status: marksNum >= 6 ? 'passed' : 'failed'
+          status: (() => {
+            const pct = (marksNum / 10) * 100;
+            if (pct >= 90) return 'excellent';
+            if (pct >= 75) return 'very_good';
+            if (pct >= 60) return 'good';
+            if (pct >= 40) return 'needs_improvement';
+            return 'poor';
+          })()
         } as never)
         .eq("id", submissionId);
 
@@ -443,7 +453,7 @@ function FacultySubmissionsContentInner() {
       .from("submissions")
       .update({
         marks_obtained: marks,
-        status: status as "passed" | "failed" | "pending" | "submitted"
+        status: status
       } as never)
       .eq("id", sid);
 
@@ -645,7 +655,7 @@ function FacultySubmissionsContentInner() {
       if (action === 'pass') {
         const { error } = await supabase
           .from("submissions")
-          .update({ status: 'passed' as const, marks_obtained: 10 } as never)
+          .update({ status: 'excellent' as const, marks_obtained: 10 } as never)
           .in("id", Array.from(selectedSubmissionIds));
         if (error) throw error;
       } else {
@@ -764,8 +774,8 @@ function FacultySubmissionsContentInner() {
           if (s.marks_obtained !== null && s.marks_obtained !== undefined) {
             totalMarks += s.marks_obtained;
           }
-          if (s.status !== 'passed') allPassed = false;
-          if (s.status === 'failed') anyFailed = true;
+          if (!['excellent','very_good','good','passed'].includes(s.status)) allPassed = false;
+          if (['poor','failed','needs_improvement'].includes(s.status)) anyFailed = true;
           if (s.status === 'pending' || s.status === 'submitted') allGraded = false;
         });
 
@@ -773,8 +783,13 @@ function FacultySubmissionsContentInner() {
         group.totalMaxMarks = totalMaxMarks;
 
         if (allGraded) {
-          const passThreshold = Math.ceil(totalMaxMarks * 0.6);
-          group.overallStatus = totalMarks >= passThreshold ? 'passed' : 'failed';
+          // Compute grade from percentage
+          const pct = totalMaxMarks > 0 ? (totalMarks / totalMaxMarks) * 100 : 0;
+          if (pct >= 90) group.overallStatus = 'excellent';
+          else if (pct >= 75) group.overallStatus = 'very_good';
+          else if (pct >= 60) group.overallStatus = 'good';
+          else if (pct >= 40) group.overallStatus = 'needs_improvement';
+          else group.overallStatus = 'poor';
         } else {
           group.overallStatus = 'pending';
         }
@@ -805,14 +820,20 @@ function FacultySubmissionsContentInner() {
   const stats = hasSetData
     ? {
         total: groupedSubmissions.length,
-        passed: groupedSubmissions.filter(g => g.overallStatus === 'passed').length,
-        failed: groupedSubmissions.filter(g => g.overallStatus === 'failed').length,
+        excellent: groupedSubmissions.filter(g => g.overallStatus === 'excellent').length,
+        very_good: groupedSubmissions.filter(g => g.overallStatus === 'very_good').length,
+        good: groupedSubmissions.filter(g => g.overallStatus === 'good').length,
+        needs_improvement: groupedSubmissions.filter(g => g.overallStatus === 'needs_improvement').length,
+        poor: groupedSubmissions.filter(g => ['poor','failed'].includes(g.overallStatus)).length,
         pending: groupedSubmissions.filter(g => g.overallStatus === 'pending').length,
       }
     : {
         total: submissions.length,
-        passed: submissions.filter(s => s.status === 'passed').length,
-        failed: submissions.filter(s => s.status === 'failed').length,
+        excellent: submissions.filter(s => s.status === 'excellent').length,
+        very_good: submissions.filter(s => s.status === 'very_good').length,
+        good: submissions.filter(s => s.status === 'good').length,
+        needs_improvement: submissions.filter(s => s.status === 'needs_improvement').length,
+        poor: submissions.filter(s => ['poor','failed'].includes(s.status)).length,
         pending: submissions.filter(s => ['pending', 'submitted'].includes(s.status)).length,
       };
 
@@ -829,8 +850,11 @@ function FacultySubmissionsContentInner() {
       return {
         setName,
         total: groups.length,
-        passed: groups.filter(g => g.overallStatus === 'passed').length,
-        failed: groups.filter(g => g.overallStatus === 'failed').length,
+        excellent: groups.filter(g => g.overallStatus === 'excellent').length,
+        very_good: groups.filter(g => g.overallStatus === 'very_good').length,
+        good: groups.filter(g => g.overallStatus === 'good').length,
+        needs_improvement: groups.filter(g => g.overallStatus === 'needs_improvement').length,
+        poor: groups.filter(g => ['poor','failed'].includes(g.overallStatus)).length,
         pending: groups.filter(g => g.overallStatus === 'pending').length,
       };
     });
@@ -968,12 +992,14 @@ function FacultySubmissionsContentInner() {
             variants={containerVariants}
             initial="hidden"
             animate="visible"
-            className="grid gap-4 sm:gap-6 grid-cols-2 md:grid-cols-4"
+            className="grid gap-3 sm:gap-4 grid-cols-3 md:grid-cols-6"
           >
-            <StatCard label="Pending" value={stats.pending} icon={Clock} colorClass="text-amber-600 dark:text-amber-400" itemVariants={itemVariants} loading={loading} />
-            <StatCard label="Passed" value={stats.passed} icon={CheckCircle2} colorClass="text-emerald-600 dark:text-emerald-400" itemVariants={itemVariants} loading={loading} />
-            <StatCard label="Failed" value={stats.failed} icon={XCircle} colorClass="text-red-600 dark:text-red-400" itemVariants={itemVariants} loading={loading} />
-            <StatCard label="Total" value={stats.total} icon={LayoutGrid} colorClass="text-indigo-600 dark:text-indigo-400" itemVariants={itemVariants} loading={loading} />
+            <StatCard label="Excellent" value={stats.excellent} icon={Award} colorClass="text-emerald-600 dark:text-emerald-400" itemVariants={itemVariants} loading={loading} />
+            <StatCard label="Very Good" value={stats.very_good} icon={TrendingUp} colorClass="text-blue-600 dark:text-blue-400" itemVariants={itemVariants} loading={loading} />
+            <StatCard label="Good" value={stats.good} icon={CheckCircle2} colorClass="text-cyan-600 dark:text-cyan-400" itemVariants={itemVariants} loading={loading} />
+            <StatCard label="Needs Imp." value={stats.needs_improvement} icon={AlertCircle} colorClass="text-amber-600 dark:text-amber-400" itemVariants={itemVariants} loading={loading} />
+            <StatCard label="Poor" value={stats.poor} icon={XCircle} colorClass="text-red-600 dark:text-red-400" itemVariants={itemVariants} loading={loading} />
+            <StatCard label="Pending" value={stats.pending} icon={Clock} colorClass="text-gray-500 dark:text-gray-400" itemVariants={itemVariants} loading={loading} />
           </motion.div>
 
           {/* Submissions Table Card */}
@@ -987,7 +1013,7 @@ function FacultySubmissionsContentInner() {
             {/* Filters Bar */}
             <div className="p-4 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between gap-4 bg-white/40 dark:bg-gray-900/40 backdrop-blur-md">
               <div className="flex items-center gap-2 overflow-x-auto no-scrollbar">
-                {['all', 'pending', 'passed', 'failed'].map(status => (
+                {['all', 'excellent', 'very_good', 'good', 'needs_improvement', 'poor', 'pending'].map(status => (
                   <button
                     key={status}
                     onClick={() => setFilterStatus(status)}
@@ -1131,16 +1157,28 @@ function FacultySubmissionsContentInner() {
                             )}
                             <td className="px-4 py-3">
                               <div className="flex items-center gap-2">
-                                <div className={`w-1.5 h-8 rounded-full ${group.overallStatus === 'passed' ? 'bg-emerald-500' :
-                                  group.overallStatus === 'failed' ? 'bg-red-500' :
-                                    'bg-amber-400'
-                                  }`} />
-                                <span className={`text-xs font-semibold px-2 py-0.5 rounded uppercase ${group.overallStatus === 'passed' ? 'text-emerald-700 bg-emerald-50 dark:text-emerald-400 dark:bg-emerald-900/20' :
-                                  group.overallStatus === 'failed' ? 'text-red-700 bg-red-50 dark:text-red-400 dark:bg-red-900/20' :
-                                    'text-amber-700 bg-amber-50 dark:text-amber-400 dark:bg-amber-900/20'
-                                  }`}>
-                                  {group.overallStatus}
-                                </span>
+                                {(() => {
+                                  const gradeConfig: Record<string, { bar: string; text: string; bg: string, label: string }> = {
+                                    excellent: { bar: 'bg-emerald-500', text: 'text-emerald-700 dark:text-emerald-400', bg: 'bg-emerald-50 dark:bg-emerald-900/20', label: 'Excellent' },
+                                    very_good: { bar: 'bg-blue-500', text: 'text-blue-700 dark:text-blue-400', bg: 'bg-blue-50 dark:bg-blue-900/20', label: 'Very Good' },
+                                    good: { bar: 'bg-cyan-500', text: 'text-cyan-700 dark:text-cyan-400', bg: 'bg-cyan-50 dark:bg-cyan-900/20', label: 'Good' },
+                                    needs_improvement: { bar: 'bg-amber-500', text: 'text-amber-700 dark:text-amber-400', bg: 'bg-amber-50 dark:bg-amber-900/20', label: 'Needs Improvement' },
+                                    poor: { bar: 'bg-red-500', text: 'text-red-700 dark:text-red-400', bg: 'bg-red-50 dark:bg-red-900/20', label: 'Poor' },
+                                    failed: { bar: 'bg-red-500', text: 'text-red-700 dark:text-red-400', bg: 'bg-red-50 dark:bg-red-900/20', label: 'Poor' },
+                                    passed: { bar: 'bg-emerald-500', text: 'text-emerald-700 dark:text-emerald-400', bg: 'bg-emerald-50 dark:bg-emerald-900/20', label: 'Excellent' },
+                                    pending: { bar: 'bg-amber-400', text: 'text-amber-700 dark:text-amber-400', bg: 'bg-amber-50 dark:bg-amber-900/20', label: 'Pending' },
+                                    submitted: { bar: 'bg-amber-400', text: 'text-amber-700 dark:text-amber-400', bg: 'bg-amber-50 dark:bg-amber-900/20', label: 'Submitted' },
+                                  };
+                                  const gc = gradeConfig[group.overallStatus] || gradeConfig.pending;
+                                  return (
+                                    <>
+                                      <div className={`w-1.5 h-8 rounded-full ${gc.bar}`} />
+                                      <span className={`text-xs font-semibold px-2 py-0.5 rounded ${gc.text} ${gc.bg}`}>
+                                        {gc.label}
+                                      </span>
+                                    </>
+                                  );
+                                })()}
                               </div>
                             </td>
                             <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
@@ -1166,7 +1204,7 @@ function FacultySubmissionsContentInner() {
                             </td>
                             <td className="px-4 py-3 text-right" onClick={e => e.stopPropagation()}>
                               <div className="flex items-center justify-end gap-2">
-                                {group.overallStatus === 'failed' && group.attempt_count >= group.max_attempts && (
+                                {['poor','failed','needs_improvement'].includes(group.overallStatus) && group.attempt_count >= group.max_attempts && (
                                   <Button
                                     variant="ghost"
                                     size="sm"
@@ -1228,19 +1266,32 @@ function FacultySubmissionsContentInner() {
                               {!selectedPracticalId && <td className="px-4 py-2" />}
                               <td className="px-4 py-2">
                                 <div className="flex items-center gap-2">
-                                  <div className={`w-1 h-5 rounded-full ${sub.status === 'passed' ? 'bg-emerald-500' :
-                                    sub.status === 'failed' ? 'bg-red-500' : 'bg-amber-400'
-                                    }`} />
-                                  <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded uppercase ${sub.status === 'passed' ? 'text-emerald-700 bg-emerald-50 dark:text-emerald-400 dark:bg-emerald-900/20' :
-                                    sub.status === 'failed' ? 'text-red-700 bg-red-50 dark:text-red-400 dark:bg-red-900/20' :
-                                      'text-amber-700 bg-amber-50 dark:text-amber-400 dark:bg-amber-900/20'
-                                    }`}>
-                                    {sub.status}
-                                  </span>
+                                  {(() => {
+                                    const gc: Record<string, { bar: string; text: string; bg: string; label: string }> = {
+                                      excellent: { bar: 'bg-emerald-500', text: 'text-emerald-700 dark:text-emerald-400', bg: 'bg-emerald-50 dark:bg-emerald-900/20', label: 'Excellent' },
+                                      very_good: { bar: 'bg-blue-500', text: 'text-blue-700 dark:text-blue-400', bg: 'bg-blue-50 dark:bg-blue-900/20', label: 'Very Good' },
+                                      good: { bar: 'bg-cyan-500', text: 'text-cyan-700 dark:text-cyan-400', bg: 'bg-cyan-50 dark:bg-cyan-900/20', label: 'Good' },
+                                      needs_improvement: { bar: 'bg-amber-500', text: 'text-amber-700 dark:text-amber-400', bg: 'bg-amber-50 dark:bg-amber-900/20', label: 'Needs Improvement' },
+                                      poor: { bar: 'bg-red-500', text: 'text-red-700 dark:text-red-400', bg: 'bg-red-50 dark:bg-red-900/20', label: 'Poor' },
+                                      failed: { bar: 'bg-red-500', text: 'text-red-700 dark:text-red-400', bg: 'bg-red-50 dark:bg-red-900/20', label: 'Poor' },
+                                      passed: { bar: 'bg-emerald-500', text: 'text-emerald-700 dark:text-emerald-400', bg: 'bg-emerald-50 dark:bg-emerald-900/20', label: 'Excellent' },
+                                      pending: { bar: 'bg-amber-400', text: 'text-amber-700 dark:text-amber-400', bg: 'bg-amber-50 dark:bg-amber-900/20', label: 'Pending' },
+                                      submitted: { bar: 'bg-amber-400', text: 'text-amber-700 dark:text-amber-400', bg: 'bg-amber-50 dark:bg-amber-900/20', label: 'Submitted' },
+                                    };
+                                    const c = gc[sub.status] || gc.pending;
+                                    return (
+                                      <>
+                                        <div className={`w-1 h-5 rounded-full ${c.bar}`} />
+                                        <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${c.text} ${c.bg}`}>
+                                          {c.label}
+                                        </span>
+                                      </>
+                                    );
+                                  })()}
                                 </div>
                               </td>
                               <td className="px-4 py-2" onClick={e => e.stopPropagation()}>
-                                {sub.status === 'passed' || sub.status === 'failed' ? (
+                                {!['pending','submitted'].includes(sub.status) ? (
                                   <span className="font-mono text-sm font-bold text-gray-900 dark:text-white">
                                     {sub.marks_obtained}/{sub.level_max_marks || 10}
                                   </span>

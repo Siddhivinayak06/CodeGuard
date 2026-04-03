@@ -6,6 +6,8 @@ const path = require('path');
 const logger = require('../utils/logger');
 const config = require('../config');
 const { z } = require('zod');
+const { determineVerdict, VERDICTS } = require('../utils/execution/verdicts');
+const { compareOutput } = require('../utils/execution/outputComparator');
 
 // Validation Schema
 const executeSchema = z.object({
@@ -85,13 +87,8 @@ const LANG_EXT = {
   java: 'java',
 };
 
-function normalizeOutput(s = '') {
-  return (s ?? '')
-    .split('\n')
-    .map((line) => line.trimEnd())
-    .join('\n')
-    .trim();
-}
+// Legacy normalizeOutput kept for backward compatibility
+const { normalizeOutput } = require('../utils/execution/batchResultUtils');
 
 // small helper function removed (ensureCallable)
 
@@ -207,27 +204,32 @@ router.post('/', async (req, res) => {
           const tc = normalizedBatch.find((b) => b.id === result.test_case_id);
           if (!tc) continue;
           const runnerStatus = String(result.status || '').toLowerCase();
+          const hasExpectedOutput =
+            typeof tc.expectedOutput === 'string' && tc.expectedOutput !== '';
 
           // Ensure field exists
           result.reference_stdout = result.reference_stdout ?? '';
 
-          if (runnerStatus === 'skipped_fail_fast') {
-            result.reference_stdout = tc.expectedOutput ?? '';
-            result.status = 'skipped_fail_fast';
-            continue;
-          }
-
+          // If the runner already set a definitive verdict, preserve it
           if (
-            runnerStatus === 'compile_error' ||
-            runnerStatus === 'runtime_error' ||
-            runnerStatus === 'time_limit_exceeded'
+            runnerStatus === VERDICTS.SKIPPED ||
+            runnerStatus === VERDICTS.COMPILE_ERROR ||
+            runnerStatus === VERDICTS.TIME_LIMIT_EXCEEDED ||
+            runnerStatus === VERDICTS.MEMORY_LIMIT_EXCEEDED ||
+            runnerStatus === VERDICTS.OUTPUT_LIMIT_EXCEEDED ||
+            runnerStatus === VERDICTS.RUNTIME_ERROR ||
+            runnerStatus === VERDICTS.WRONG_ANSWER ||
+            runnerStatus === VERDICTS.ACCEPTED
           ) {
             result.reference_stdout = tc.expectedOutput ?? '';
-            result.status = runnerStatus;
             continue;
           }
 
-          if (!tc.is_hidden && reference_code) {
+          // Prefer persisted expected output from the test case payload.
+          // Only re-run reference code when expected output is unavailable.
+          if (hasExpectedOutput) {
+            result.reference_stdout = tc.expectedOutput;
+          } else if (!tc.is_hidden && reference_code) {
             try {
               if (!localRunCode || !localBatchCode) {
                 const runner = require('../utils/localRunner');
@@ -246,36 +248,27 @@ router.post('/', async (req, res) => {
               logger.error('Reference runCode error:', e);
               result.reference_stdout = tc.expectedOutput ?? '';
             }
-          } else if (tc.is_hidden) {
+          } else {
             result.reference_stdout = tc.expectedOutput ?? '';
           }
 
-          const userOut = (result.stdout ?? '').trimEnd();
-          const refOut = (result.reference_stdout ?? '').trimEnd();
-          const lowErr = (result.stderr ?? '').toLowerCase();
+          // Use centralized verdict determination (exit-code-first, no regex)
+          const refOut = result.reference_stdout ?? '';
+          const compResult = compareOutput(
+            result.stdout ?? '',
+            refOut,
+            tc.comparison_mode || 'ignore_trailing_whitespace',
+            { floatTolerance: tc.float_tolerance }
+          );
 
-          if (runnerStatus === 'passed' || runnerStatus === 'failed') {
-            result.status = runnerStatus;
-            continue;
-          }
-
-          // Verdict logic
-          if (
-            lowErr.includes('compile') ||
-            lowErr.includes('javac') ||
-            lowErr.includes('error:')
-          ) {
-            result.status = 'compile_error';
-          } else if (
-            lowErr.includes('timeout') ||
-            lowErr.includes('timed out')
-          ) {
-            result.status = 'time_limit_exceeded';
-          } else if (result.stderr && result.stderr !== '') {
-            result.status = 'runtime_error';
-          } else {
-            result.status = userOut === refOut ? 'passed' : 'failed';
-          }
+          result.status = determineVerdict({
+            exitCode: result.exitCode,
+            stderr: result.stderr ?? '',
+            stdout: result.stdout ?? '',
+            timedOut: result.exitCode === 124,
+            isCompileError: false,
+            outputMatch: compResult.match,
+          });
         }
         return res.json({ verdict: 'evaluated', details: runnerResults });
       } catch (e) {
@@ -346,24 +339,23 @@ router.post('/', async (req, res) => {
 
       const userOut = normalizeOutput(userResult.output);
       const expectedOut = normalizeOutput(refOut || userOut);
-      const passed = refOut ? userOut === refOut : true;
 
-      let verdict = passed ? 'passed' : 'failed';
-      if (!userResult) {
-        verdict = 'failed';
-      } else if (
-        userResult.exitCode === 124 ||
-        (userResult.error && userResult.error.toLowerCase().includes('timeout'))
-      ) {
-        verdict = 'time_limit_exceeded';
-      } else if (
-        userResult.error &&
-        /compile|javac|error:/i.test(userResult.error)
-      ) {
-        verdict = 'compile_error';
-      } else if (userResult.error && userResult.error.trim() !== '') {
-        verdict = 'runtime_error';
-      }
+      // Use centralized verdict determination
+      const hasRef = refOut && refOut.trim() !== '';
+      const compResult = hasRef
+        ? compareOutput(userOut, refOut, 'ignore_trailing_whitespace')
+        : { match: true };
+
+      const verdict = !userResult
+        ? VERDICTS.RUNTIME_ERROR
+        : determineVerdict({
+            exitCode: userResult.exitCode,
+            stderr: userResult.error || userResult.stderr || '',
+            stdout: userOut,
+            timedOut: userResult.exitCode === 124,
+            isCompileError: false,
+            outputMatch: compResult.match,
+          });
 
       return res.json({
         mode: 'manual',
@@ -373,6 +365,7 @@ router.post('/', async (req, res) => {
         output: userOut,
         verdict,
         user_stderr: userResult.error || userResult.stderr || '',
+        time_ms: userResult.time_ms || 0,
       });
     } catch (e) {
       logger.error('Single execution failed:', e);

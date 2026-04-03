@@ -395,16 +395,64 @@ export async function POST(req: Request) {
 
     const details = runnerResults.details ?? [];
 
-    const normalizeOutputText = (s: any) =>
+    const sanitizeOutputText = (s: any) =>
       String(s ?? "")
+        .replace(/\r\n/g, "\n")
+        .replace(/\r/g, "\n")
+        .replace(/\u00A0/g, " ")
+        .replace(/\0/g, "")
+        .replace(/\x1B\[[0-9;]*[A-Za-z]/g, "")
+        .replace(/[\u200B-\u200D\uFEFF]/g, "")
+        .normalize("NFKC");
+
+    const normalizeOutputText = (s: any) =>
+      sanitizeOutputText(s)
         .split("\n")
-        .map((line) => line.trim())
-        .filter(Boolean)
-        .join("\n");
+        .map((line) => line.trimEnd())
+        .join("\n")
+        .trim();
+
+    const outputsLooselyEqual = (a: any, b: any) => {
+      const normA = normalizeOutputText(a);
+      const normB = normalizeOutputText(b);
+      if (normA === normB) return true;
+
+      const compactA = normA.replace(/\s+/g, " ").trim();
+      const compactB = normB.replace(/\s+/g, " ").trim();
+      return compactA === compactB;
+    };
 
     const batchMap = new Map(batch.map((b) => [String(b.id), b]));
 
-    // Build results
+    // Grade helper — maps percentage to college grades
+    const getGrade = (obtained: number, maxTotal: number): string => {
+      if (maxTotal <= 0) return 'poor';
+      const pct = (obtained / maxTotal) * 100;
+      if (pct >= 90) return 'excellent';
+      if (pct >= 75) return 'very_good';
+      if (pct >= 60) return 'good';
+      if (pct >= 40) return 'needs_improvement';
+      return 'poor';
+    };
+
+    const gradeLabel = (grade: string): string => {
+      const labels: Record<string, string> = {
+        excellent: 'Excellent',
+        very_good: 'Very Good',
+        good: 'Good',
+        needs_improvement: 'Needs Improvement',
+        poor: 'Poor',
+      };
+      return labels[grade] || grade;
+    };
+
+    const gradeToSubmissionStatus = (grade: string): "passed" | "failed" => {
+      return ["excellent", "very_good", "good"].includes(grade)
+        ? "passed"
+        : "failed";
+    };
+
+    // Build results — preserve the backend's granular verdicts
     const allResults = details.map((d: any) => {
       const idStr = String(d.test_case_id);
       const isUser = idStr.startsWith("user-");
@@ -415,27 +463,43 @@ export async function POST(req: Request) {
       const input = batchItem?.stdinInput ?? "";
       const runnerStatus = String(d.status ?? "").toLowerCase();
 
+      // Preserve granular verdicts from backend
       let status: string;
-      if (runnerStatus === "compile_error") {
-        status = "compile_error";
-      } else if (runnerStatus === "runtime_error") {
-        status = "runtime_error";
-      } else if (runnerStatus === "time_limit_exceeded") {
-        status = "timeout";
-      } else if (runnerStatus === "skipped_fail_fast") {
-        status = "failed";
+      if (
+        runnerStatus === "accepted" ||
+        runnerStatus === "wrong_answer" ||
+        runnerStatus === "compile_error" ||
+        runnerStatus === "runtime_error" ||
+        runnerStatus === "time_limit_exceeded" ||
+        runnerStatus === "memory_limit_exceeded" ||
+        runnerStatus === "output_limit_exceeded" ||
+        runnerStatus === "skipped_fail_fast"
+      ) {
+        status = runnerStatus;
+
+        // Guardrail: if backend says wrong_answer but normalized output matches
+        // expected text, classify as accepted to avoid false negatives.
+        if (
+          runnerStatus === "wrong_answer" &&
+          expected !== "" &&
+          outputsLooselyEqual(stdout, expected)
+        ) {
+          status = "accepted";
+        }
+      } else if (runnerStatus === "passed") {
+        status = "accepted";
       } else if (isUser) {
         if (expected && expected !== "") {
-          const normStdout = normalizeOutputText(stdout);
-          const normExpected = normalizeOutputText(expected);
-          status = normStdout === normExpected ? "passed" : "failed";
+          status = outputsLooselyEqual(stdout, expected)
+            ? "accepted"
+            : "wrong_answer";
         } else {
-          status = "ran";
+          status = "accepted"; // ran successfully, no expected to compare
         }
       } else {
-        const normStdout = normalizeOutputText(stdout);
-        const normExpected = normalizeOutputText(expected);
-        status = normStdout === normExpected ? "passed" : "failed";
+        status = outputsLooselyEqual(stdout, expected)
+          ? "accepted"
+          : "wrong_answer";
       }
 
       return {
@@ -444,6 +508,7 @@ export async function POST(req: Request) {
         input,
         expected,
         stdout,
+        stderr: d.stderr || null,
         error: d.stderr || null,
         is_hidden: isUser ? false : (batchItem?.is_hidden ?? true),
         time_ms: d.time_ms ?? 0,
@@ -462,7 +527,7 @@ export async function POST(req: Request) {
     if (mode === "submit" && submissionId) {
       // Calculate marks first
       passed = predefinedResults.filter(
-        (r: any) => r.status === "passed",
+        (r: any) => r.status === "accepted" || r.status === "passed",
       ).length;
       total = predefinedResults.length;
       const baseMarks = total > 0 ? Math.round((passed / total) * maxMarks) : 0;
@@ -533,12 +598,12 @@ export async function POST(req: Request) {
         console.error("Error checking existing marks:", e);
       }
 
-      const passThreshold = Math.ceil(maxMarks * 0.6);
-      const newStatus = marksObtained >= passThreshold ? "passed" : "failed";
+      const grade = getGrade(marksObtained, maxMarks);
+      const newStatus = gradeToSubmissionStatus(grade);
 
       if (shouldUpdate) {
         try {
-          await (supabase
+          const { error: updateError } = await (supabase
             .from("submissions") as any)
             .update({
               status: newStatus,
@@ -549,19 +614,25 @@ export async function POST(req: Request) {
               output:
                 predefinedResults.length > 0 ? predefinedResults[0].stdout : "",
               execution_details: {
-                verdict: newStatus,
+                verdict: grade,
+                db_status: newStatus,
                 results: predefinedResults,
                 judged_at: new Date().toISOString(),
               },
             })
             .eq("id", submissionId);
+
+          if (updateError) {
+            throw updateError;
+          }
         } catch (e) {
           console.error("Failed to update submission:", e);
+          throw e;
         }
       } else {
         passed = predefinedResults.filter(
-          (r: any) => r.status === "passed",
-        ).length;
+        (r: any) => r.status === "accepted" || r.status === "passed",
+      ).length;
         total = predefinedResults.length;
         marksObtained = total > 0 ? Math.round((passed / total) * maxMarks) : 0;
       }
@@ -569,15 +640,19 @@ export async function POST(req: Request) {
       // attempt_count is consumed at start time (/api/practical/start or /api/exam/start).
     } else {
       passed = predefinedResults.filter(
-        (r: any) => r.status === "passed",
+        (r: any) => r.status === "accepted" || r.status === "passed",
       ).length;
       total = predefinedResults.length;
       marksObtained = total > 0 ? Math.round((passed / total) * maxMarks) : 0;
     }
 
+    const overallGrade = getGrade(marksObtained, maxMarks);
+
     return NextResponse.json({
       results: allResults,
-      verdict: marksObtained >= Math.ceil(maxMarks * 0.6) ? "passed" : "failed",
+      verdict: overallGrade,
+      verdictLabel: gradeLabel(overallGrade),
+      grade: overallGrade,
       marksObtained,
       passedTestCases: passed,
       totalTestCases: total,
@@ -586,8 +661,9 @@ export async function POST(req: Request) {
     });
   } catch (err) {
     console.error("Run API error:", err);
+    const message = err instanceof Error ? err.message : "Internal server error";
     return NextResponse.json(
-      { error: "Internal server error" },
+      { error: message },
       { status: 500 },
     );
   }

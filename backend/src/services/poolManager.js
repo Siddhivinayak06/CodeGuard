@@ -8,6 +8,8 @@ const {
   isDockerAvailable,
 } = require('../utils/runtimeDetector');
 
+const isDev = config.isDevelopment;
+
 class PoolManager {
   constructor() {
     this.pools = {
@@ -42,6 +44,58 @@ class PoolManager {
     // Check Docker availability
     this.dockerAvailable = isDockerAvailable();
 
+    // In development mode, prefer local execution per-language.
+    // Docker containers are only spun up for languages NOT installed locally.
+    if (isDev) {
+      const allSupported = ['python', 'c', 'cpp', 'java'];
+      const locallyAvailable = allSupported.filter((l) => isLocalAvailable(l));
+      const needDocker = allSupported.filter((l) => !isLocalAvailable(l));
+
+      logger.info(
+        `[PoolManager] 🛠️  DEV MODE — local-first execution strategy`
+      );
+      logger.info(
+        `[PoolManager]   ✅ Local:  ${locallyAvailable.length > 0 ? locallyAvailable.join(', ') : 'none'}`
+      );
+      logger.info(
+        `[PoolManager]   🐳 Docker: ${needDocker.length > 0 ? needDocker.join(', ') : 'none (all local!)'}`
+      );
+
+      if (needDocker.length === 0 || !this.dockerAvailable) {
+        // All languages are local, or Docker is unavailable — skip pool init
+        this.useLocal = true;
+        this.initialized = true;
+
+        if (needDocker.length > 0 && !this.dockerAvailable) {
+          logger.warn(
+            `[PoolManager] ⚠️  Docker unavailable. Languages without local runtime will fail: ${needDocker.join(', ')}`
+          );
+        }
+        return;
+      }
+
+      // Only create Docker containers for languages missing locally
+      logger.info(
+        `🚀 Initializing Container Pool for docker-only languages: ${needDocker.join(', ')}...`
+      );
+      const promises = [];
+      for (const lang of needDocker) {
+        const poolSize = config.docker.pool[lang] || 0;
+        for (let i = 0; i < poolSize; i++) {
+          promises.push(this._createContainer(lang));
+        }
+      }
+      await Promise.allSettled(promises);
+      this.initialized = true;
+
+      const totalContainers = Object.values(this.pools).flat().length;
+      logger.info(
+        `✅ DEV Pool Initialized (${totalContainers} containers for ${needDocker.join(', ')})`
+      );
+      return;
+    }
+
+    // --- Production / non-dev path ---
     if (!this.dockerAvailable) {
       logger.warn(
         '[PoolManager] ⚠️  Docker is not available. Using local execution only.'
@@ -166,7 +220,13 @@ class PoolManager {
   }
 
   async acquire(lang) {
-    // If Docker is unavailable and local execution is allowed, return local token
+    // DEV MODE: prefer local execution per-language before trying Docker
+    if (isDev && config.allowLocalExecution && isLocalAvailable(lang)) {
+      logger.info(`[PoolManager] 🛠️  DEV: Using local execution for ${lang}`);
+      return 'local';
+    }
+
+    // Non-dev fallback: use local only when Docker is entirely unavailable
     if (this.useLocal && config.allowLocalExecution && isLocalAvailable(lang)) {
       logger.info(`[PoolManager] Using local execution for ${lang}`);
       return 'local';

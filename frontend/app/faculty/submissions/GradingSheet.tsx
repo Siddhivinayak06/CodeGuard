@@ -128,18 +128,31 @@ export default function GradingSheet({
         }
     };
 
-    // Helper for Status Badge in Header
+    // Helper for Status Badge in Header — supports both legacy and new grade statuses
     const StatusBadge = ({ status }: { status: string }) => {
         const styles: Record<string, string> = {
+            excellent: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 border-emerald-200",
+            very_good: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 border-blue-200",
+            good: "bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-400 border-cyan-200",
+            needs_improvement: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 border-amber-200",
+            poor: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 border-red-200",
             passed: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 border-emerald-200",
             failed: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 border-red-200",
             pending: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 border-amber-200",
             submitted: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 border-amber-200",
         };
+        const labels: Record<string, string> = {
+            excellent: "Excellent",
+            very_good: "Very Good",
+            good: "Good",
+            needs_improvement: "Needs Improvement",
+            poor: "Poor",
+        };
         const style = styles[status?.toLowerCase()] || styles.pending;
+        const label = labels[status?.toLowerCase()] || status;
         return (
             <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold border ${style} capitalize`}>
-                {status}
+                {label}
             </span>
         )
     }
@@ -229,8 +242,11 @@ export default function GradingSheet({
                                             <SelectValue />
                                         </SelectTrigger>
                                         <SelectContent>
-                                            <SelectItem value="passed">Passed</SelectItem>
-                                            <SelectItem value="failed">Failed</SelectItem>
+                                            <SelectItem value="excellent">🏆 Excellent</SelectItem>
+                                            <SelectItem value="very_good">⭐ Very Good</SelectItem>
+                                            <SelectItem value="good">✅ Good</SelectItem>
+                                            <SelectItem value="needs_improvement">📝 Needs Improvement</SelectItem>
+                                            <SelectItem value="poor">❌ Poor</SelectItem>
                                         </SelectContent>
                                     </Select>
                                 </div>
@@ -284,21 +300,60 @@ export default function GradingSheet({
                                 {submission.testCaseResults && submission.testCaseResults.length > 0 ? (
                                     submission.testCaseResults.map((result, idx) => {
                                         const tc = testCases.find(t => Number(t.id) === Number(result.test_case_id));
-                                        const isPassed = result.status.toLowerCase() === 'passed';
+                                    const isPassed = result.status.toLowerCase() === 'passed' || result.status.toLowerCase() === 'accepted';
                                         
+                                        // Verdict config for the test case
+                                        const tcVerdictConfig: Record<string, { label: string; color: string }> = {
+                                            accepted: { label: 'Accepted', color: 'emerald' },
+                                            passed: { label: 'Accepted', color: 'emerald' },
+                                            wrong_answer: { label: 'Wrong Answer', color: 'red' },
+                                            time_limit_exceeded: { label: 'TLE', color: 'amber' },
+                                            memory_limit_exceeded: { label: 'MLE', color: 'purple' },
+                                            runtime_error: { label: 'Runtime Error', color: 'rose' },
+                                            compile_error: { label: 'Compile Error', color: 'orange' },
+                                            failed: { label: 'Failed', color: 'red' },
+                                        };
+                                        const tcVC = tcVerdictConfig[result.status.toLowerCase()] || { label: result.status, color: 'gray' };
+                                        
+                                        const colorClasses: Record<string, string> = {
+                                            emerald: 'bg-emerald-50/50 border-emerald-100 dark:bg-emerald-900/10 dark:border-emerald-900/50',
+                                            red: 'bg-red-50/50 border-red-100 dark:bg-red-900/10 dark:border-red-900/50',
+                                            amber: 'bg-amber-50/50 border-amber-100 dark:bg-amber-900/10 dark:border-amber-900/50',
+                                            purple: 'bg-purple-50/50 border-purple-100 dark:bg-purple-900/10 dark:border-purple-900/50',
+                                            rose: 'bg-rose-50/50 border-rose-100 dark:bg-rose-900/10 dark:border-rose-900/50',
+                                            orange: 'bg-orange-50/50 border-orange-100 dark:bg-orange-900/10 dark:border-orange-900/50',
+                                            gray: 'bg-gray-50/50 border-gray-100 dark:bg-gray-900/10 dark:border-gray-900/50',
+                                        };
+                                        const badgeClasses: Record<string, string> = {
+                                            emerald: 'bg-emerald-600',
+                                            red: 'bg-red-600',
+                                            amber: 'bg-amber-600',
+                                            purple: 'bg-purple-600',
+                                            rose: 'bg-rose-600',
+                                            orange: 'bg-orange-600',
+                                            gray: 'bg-gray-600',
+                                        };
                                         // Use result.input/expected if available (embedded in execution_details), otherwise fallback to tc
                                         const displayInput = result.input || tc?.input || "-";
                                         const displayExpected = result.expected || tc?.expected_output || "-";
 
                                         return (
-                                            <div key={idx} className={`p-4 rounded-xl border ${isPassed ? 'bg-emerald-50/50 border-emerald-100 dark:bg-emerald-900/10 dark:border-emerald-900/50' : 'bg-red-50/50 border-red-100 dark:bg-red-900/10 dark:border-red-900/50'}`}>
+                                            <div key={idx} className={`p-4 rounded-xl border ${colorClasses[tcVC.color] || colorClasses.gray}`}>
                                                 <div className="flex items-center justify-between mb-2">
                                                     <span className="font-medium text-sm text-gray-900 dark:text-gray-100">
                                                         Test Case #{idx + 1}
                                                     </span>
-                                                    <Badge variant={isPassed ? "default" : "destructive"} className={isPassed ? "bg-emerald-600" : ""}>
-                                                        {result.status}
-                                                    </Badge>
+                                                    <div className="flex items-center gap-2">
+                                                        {result.execution_time_ms > 0 && (
+                                                            <span className="text-[10px] font-mono text-gray-400">{result.execution_time_ms}ms</span>
+                                                        )}
+                                                        {result.memory_used_kb > 0 && (
+                                                            <span className="text-[10px] font-mono text-gray-400">{result.memory_used_kb > 1024 ? `${(result.memory_used_kb/1024).toFixed(1)}MB` : `${result.memory_used_kb}KB`}</span>
+                                                        )}
+                                                        <Badge variant={isPassed ? "default" : "destructive"} className={badgeClasses[tcVC.color] || ''}>
+                                                            {tcVC.label}
+                                                        </Badge>
+                                                    </div>
                                                 </div>
                                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs font-mono mt-2">
                                                     <div>

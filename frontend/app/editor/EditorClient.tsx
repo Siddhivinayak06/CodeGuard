@@ -35,10 +35,21 @@ type TestCaseResult = {
   expected: string;
   stdout: string;
   error: string | null;
-  status: "passed" | "failed" | "timeout" | "runtime_error" | "compile_error";
+  status:
+    | "accepted"
+    | "passed"
+    | "wrong_answer"
+    | "failed"
+    | "time_limit_exceeded"
+    | "memory_limit_exceeded"
+    | "runtime_error"
+    | "compile_error"
+    | "output_limit_exceeded"
+    | "skipped_fail_fast";
   time_ms?: number | null;
   memory_kb?: number | null;
   is_hidden?: boolean;
+  stderr?: string;
 };
 
 type UserTestCase = {
@@ -272,7 +283,12 @@ int main() {
   const [submissionStatus, setSubmissionStatus] = useState<
     "idle" | "pending" | "evaluated" | "submitted"
   >("idle");
+  const [showContinueAfterSubmit, setShowContinueAfterSubmit] = useState(false);
+  const [showFloatingResultWindow, setShowFloatingResultWindow] = useState(false);
+  const [lastSubmittedAt, setLastSubmittedAt] = useState<string | null>(null);
   const [isSubmitted, setIsSubmitted] = useState(false);
+  const [isSubmittingFinal, setIsSubmittingFinal] = useState(false);
+  const resultTabContentRef = useRef<HTMLDivElement | null>(null);
 
   // Exam mode state
   const [examConfig, setExamConfig] = useState<{
@@ -431,7 +447,7 @@ int main() {
   const { showInvalidModal, registerSession, dismissModal } =
     useSessionValidator({
       onSessionInvalidated: autoSubmitOnInvalidation,
-      enabled: !!user && !isSubmitted,
+      enabled: !!user && !isSubmitted && !isSubmittingFinal,
       userId: user?.id || null,
     });
 
@@ -456,7 +472,7 @@ int main() {
 
   // Proctoring Hook (Only active after exam starts)
   const { violations, locked } = useProctoring({
-    active: hasExamStarted && !isSubmitted && !isExporting,
+    active: hasExamStarted && !isSubmitted && !isSubmittingFinal && !isExporting,
     maxViolations: examConfig?.max_violations ?? 3,
     storageKey: proctoringStorageKey ?? undefined,
   });
@@ -600,7 +616,7 @@ int main() {
   // Exam countdown timer
   const examTimerStarted = useRef(false);
   useEffect(() => {
-    if (!isExamMode || examTimeRemaining === null || isSubmitted) return;
+    if (!isExamMode || examTimeRemaining === null || isSubmitted || isSubmittingFinal) return;
 
     // Prevent starting the timer if the exam was already expired on load
     if (examTimeRemaining <= 0) {
@@ -636,11 +652,11 @@ int main() {
       clearInterval(intervalId);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isExamMode, examTimeRemaining === null, isSubmitted]);
+  }, [isExamMode, examTimeRemaining === null, isSubmitted, isSubmittingFinal]);
 
   // Exam anti-cheating: block copy/paste/cut/right-click/DevTools
   useEffect(() => {
-    if (!isExamMode || !hasExamStarted || isSubmitted) return;
+    if (!isExamMode || !hasExamStarted || isSubmitted || isSubmittingFinal) return;
     if (examConfig?.allow_copy_paste) return;
 
     const blockEvent = (e: Event) => {
@@ -673,12 +689,12 @@ int main() {
       document.removeEventListener("contextmenu", blockContextMenu);
       clearInterval(devToolsInterval);
     };
-  }, [isExamMode, hasExamStarted, isSubmitted, examConfig?.allow_copy_paste]);
+  }, [isExamMode, hasExamStarted, isSubmitted, isSubmittingFinal, examConfig?.allow_copy_paste]);
 
   // Auto-submit on Proctoring Lock
   const hasLockSubmittedRef = useRef(false);
   useEffect(() => {
-    if (locked && !hasLockSubmittedRef.current && hasExamStarted && !isSubmitted) {
+    if (locked && !hasLockSubmittedRef.current && hasExamStarted && !isSubmitted && !isSubmittingFinal) {
       console.warn("Proctoring Limit Reached: Auto-submitting code...");
       hasLockSubmittedRef.current = true;
       // Auto-submit and then redirect to dashboard
@@ -686,7 +702,7 @@ int main() {
         router.push("/student/submissions");
       });
     }
-  }, [locked, hasExamStarted, isSubmitted, autoSubmitOnInvalidation, router]);
+  }, [locked, hasExamStarted, isSubmitted, isSubmittingFinal, autoSubmitOnInvalidation, router]);
 
   // Check lock status on mount (Prevents Refresh/Re-entry)
   useEffect(() => {
@@ -1026,6 +1042,8 @@ int main() {
     if (!code || !practicalId) return;
 
     setLoading(true);
+    setShowContinueAfterSubmit(false);
+    setShowFloatingResultWindow(false);
     setTestCaseResults([]);
     try {
       const customCases = userTestCases.filter((tc) => tc.input.trim() !== "");
@@ -1068,7 +1086,10 @@ int main() {
       );
 
       setTestCaseResults(results);
-      setShowUserTestCases(false); // ← Add this line to switch to results tab
+      setShowUserTestCases(false);
+      requestAnimationFrame(() => {
+        resultTabContentRef.current?.scrollTo({ top: 0 });
+      });
       console.log("Run results:", results);
     } catch (err: any) {
       const msg =
@@ -1086,7 +1107,14 @@ int main() {
   const handleSubmit = async () => {
     if (!practicalId || !user) return;
 
+    setIsSubmittingFinal(true);
     setLoading(true);
+    setSubmissionStatus("pending");
+    setShowContinueAfterSubmit(false);
+    setShowFloatingResultWindow(false);
+    setLastSubmittedAt(null);
+    setShowUserTestCases(false);
+    setExpandedCases({});
     try {
       // Save current task's code to the map first
       if (hasLevelsParam && practicalLevels.length > 0) {
@@ -1119,7 +1147,10 @@ int main() {
       let totalMarks = 0;
       let totalPassed = 0;
       let totalTests = 0;
-      let overallVerdict = "passed";
+      const combinedResults: TestCaseResult[] = [];
+      const levelErrors: string[] = [];
+      const normalizeStr = (s: any) =>
+        s === null || s === undefined ? "" : String(s);
 
       setLoading(true);
       try {
@@ -1169,13 +1200,38 @@ int main() {
             totalPassed += levelPassed;
             totalTests += levelTotal;
 
-            if (levelVerdict === "failed" || levelVerdict === "pending") {
-              overallVerdict = "failed";
+            const levelResults: TestCaseResult[] = (runRes.data.results || []).map(
+              (r: any, idx: number) => ({
+                test_case_id: Number(r.test_case_id ?? idx + 1),
+                input: r.input ?? r.stdinInput ?? "",
+                expected: normalizeStr(r.expected ?? r.expected_output),
+                stdout: normalizeStr(r.stdout),
+                error: r.error ?? r.stderr ?? null,
+                status: r.status ?? "failed",
+                time_ms: r.time_ms ?? null,
+                memory_kb: r.memory_kb ?? null,
+                is_hidden: r.is_hidden ?? false,
+                stderr: r.stderr ?? undefined,
+              }),
+            );
+
+            if (levelResults.length === 0) {
+              throw new Error(
+                runRes.data?.error ||
+                `No test results returned for ${levelData.level}`,
+              );
             }
+
+            combinedResults.push(...levelResults);
 
             console.log(`[Submit] ${levelData.level}: ${levelVerdict} (${levelMarks} marks, ${levelPassed}/${levelTotal} tests)`);
           } catch (levelErr) {
             console.error(`Error processing level ${levelData.level}:`, levelErr);
+            const msg =
+              axios.isAxiosError(levelErr)
+                ? (levelErr.response?.data?.error || levelErr.message)
+                : (levelErr instanceof Error ? levelErr.message : String(levelErr));
+            levelErrors.push(`${levelData.level}: ${msg}`);
             // Continue to next level instead of failing everything
           }
         }
@@ -1183,16 +1239,28 @@ int main() {
         console.error("Critical error in evaluation loop:", loopErr);
       }
 
-      setSubmissionStatus("evaluated");
-
-      // Disable proctoring & session checks before navigating
-      setIsSubmitted(true);
-      setHasExamStarted(false);
-
-      // Exit fullscreen gracefully before navigation
-      if (document.fullscreenElement) {
-        try { await document.exitFullscreen(); } catch { /* ignore */ }
+      if (combinedResults.length === 0) {
+        throw new Error(levelErrors[0] || "No test results available after submission.");
       }
+
+      setTestCaseResults(combinedResults);
+      setScoreSummary({ passed: totalPassed, total: totalTests });
+      setSubmissionStatus("evaluated");
+      setShowContinueAfterSubmit(true);
+      setShowFloatingResultWindow(true);
+      setLastSubmittedAt(new Date().toLocaleString());
+      setExpandedCases({ 0: true });
+      requestAnimationFrame(() => {
+        resultTabContentRef.current?.scrollTo({ top: 0 });
+      });
+
+      if (levelErrors.length > 0) {
+        toast.warning(`Submitted with partial issues: ${levelErrors[0]}`);
+      }
+
+      // Stop proctoring once submission is finalized so result view is not blocked
+      // and no additional violations are counted while reviewing outcomes.
+      setIsSubmitted(true);
 
       // If exam mode, finalize the exam session using the new API
       if (isExamMode && practicalId) {
@@ -1214,15 +1282,19 @@ int main() {
       toast.success(
         `All tasks submitted! Marks: ${totalMarks}/${maxTotal} (${totalPassed}/${totalTests} test cases passed)`,
       );
-      router.push("/student/submissions");
     } catch (err: any) {
       console.error(err);
+      setSubmissionStatus("idle");
+      setShowContinueAfterSubmit(false);
+      setShowFloatingResultWindow(false);
+      setLastSubmittedAt(null);
       toast.error(
         err?.response?.data?.error ||
         "Error submitting practical. Please try again.",
       );
     } finally {
       setLoading(false);
+      setIsSubmittingFinal(false);
     }
   };
 
@@ -1305,12 +1377,39 @@ int main() {
 
   // LeetCode-style summary numbers
   const passedCount = testCaseResults.filter(
-    (t) => t.status === "passed",
+    (t) => t.status === "passed" || t.status === "accepted",
   ).length;
   const totalCount = testCaseResults.length;
   const passPercent = totalCount
     ? Math.round((passedCount / totalCount) * 100)
     : 0;
+  const totalRuntime = testCaseResults.reduce((s, r) => s + (r.time_ms || 0), 0);
+  const maxMemory = Math.max(...testCaseResults.map((r) => r.memory_kb || 0), 0);
+
+  // Helper: verdict display config
+  const getVerdictConfig = (status: string) => {
+    switch (status) {
+      case "accepted":
+      case "passed":
+        return { label: "Accepted", color: "emerald", icon: "✓" };
+      case "wrong_answer":
+        return { label: "Wrong Answer", color: "red", icon: "✗" };
+      case "time_limit_exceeded":
+        return { label: "TLE", color: "amber", icon: "⏱" };
+      case "memory_limit_exceeded":
+        return { label: "MLE", color: "purple", icon: "💾" };
+      case "runtime_error":
+        return { label: "Runtime Error", color: "rose", icon: "⚠" };
+      case "compile_error":
+        return { label: "Compile Error", color: "orange", icon: "⚙" };
+      case "output_limit_exceeded":
+        return { label: "Output Limit", color: "yellow", icon: "📤" };
+      case "skipped_fail_fast":
+        return { label: "Skipped", color: "gray", icon: "⏭" };
+      default:
+        return { label: status?.replace(/_/g, " ") || "Failed", color: "red", icon: "✗" };
+    }
+  };
 
   return (
     <div className="h-screen flex flex-col bg-gray-50 dark:bg-gray-950">
@@ -1420,11 +1519,140 @@ int main() {
         </div>
       )}
 
+      {/* Floating Result Window */}
+      {showFloatingResultWindow && submissionStatus === "evaluated" && testCaseResults.length > 0 && (
+        <div className="fixed inset-0 z-[110] bg-black/45 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="w-full max-w-4xl rounded-[28px] border border-white/20 dark:border-gray-700/50 bg-white dark:bg-gray-900 shadow-[0_30px_80px_rgba(15,23,42,0.35)] overflow-hidden">
+            <div className={`relative px-6 md:px-8 py-6 border-b border-gray-100 dark:border-gray-800 overflow-hidden ${passedCount === totalCount
+              ? "bg-gradient-to-r from-emerald-50 via-teal-50 to-cyan-50 dark:from-emerald-950/20 dark:via-teal-950/20 dark:to-cyan-950/20"
+              : "bg-gradient-to-r from-red-50 via-rose-50 to-orange-50 dark:from-red-950/20 dark:via-rose-950/20 dark:to-orange-950/20"
+              }`}>
+              <div className="absolute -right-8 -top-8 w-40 h-40 rounded-full bg-white/40 dark:bg-white/5 blur-2xl pointer-events-none" />
+              <div className="relative flex items-start justify-between gap-4">
+                <div className="flex items-start gap-4">
+                  <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shadow-sm ${passedCount === totalCount ? "bg-emerald-500 text-white" : "bg-red-500 text-white"}`}>
+                    {passedCount === totalCount ? (
+                      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg>
+                    ) : (
+                      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" /></svg>
+                    )}
+                  </div>
+                  <div>
+                    <h3 className={`text-3xl font-black tracking-tight ${passedCount === totalCount ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>
+                      {passedCount === totalCount
+                        ? "Accepted"
+                        : (() => {
+                            const firstFail = testCaseResults.find(
+                              (r) => r.status !== "passed" && r.status !== "accepted" && r.status !== "skipped_fail_fast"
+                            );
+                            return firstFail ? getVerdictConfig(firstFail.status).label : "Failed";
+                          })()}
+                    </h3>
+                    <p className="text-sm text-gray-700 dark:text-gray-300 font-semibold mt-0.5">
+                      {passedCount} / {totalCount} testcases passed
+                    </p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                      {lastSubmittedAt ? `Submitted at ${lastSubmittedAt}` : "Just now"}
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  onClick={() => setShowFloatingResultWindow(false)}
+                  className="w-9 h-9 rounded-lg text-gray-500 hover:bg-white/70 dark:hover:bg-gray-800"
+                  aria-label="Close result window"
+                >
+                  <svg className="w-5 h-5 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            <div className="p-6 md:p-8 space-y-6 bg-gradient-to-b from-white to-gray-50 dark:from-gray-900 dark:to-gray-900">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-4 shadow-sm">
+                  <div className="text-xs font-bold uppercase tracking-widest text-gray-500 dark:text-gray-400">Runtime</div>
+                  <div className="mt-2 text-4xl font-black text-gray-900 dark:text-white font-mono leading-none">{totalRuntime} <span className="text-3xl">ms</span></div>
+                  <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">Total runtime across visible testcases</p>
+                </div>
+
+                <div className="rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-4 shadow-sm">
+                  <div className="text-xs font-bold uppercase tracking-widest text-gray-500 dark:text-gray-400">Memory</div>
+                  <div className="mt-2 text-4xl font-black text-gray-900 dark:text-white font-mono leading-none">
+                    {maxMemory > 1024 ? `${(maxMemory / 1024).toFixed(1)} MB` : `${maxMemory} KB`}
+                  </div>
+                  <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">Peak memory used in judged testcases</p>
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-4 shadow-sm">
+                <div className="text-xs font-bold uppercase tracking-widest text-gray-500 dark:text-gray-400 mb-3">
+                  Runtime Distribution
+                </div>
+
+                {(() => {
+                  const samples = testCaseResults
+                    .map((r) => Number(r.time_ms || 0))
+                    .filter((v) => Number.isFinite(v) && v >= 0)
+                    .slice(0, 80);
+                  const maxSample = samples.length > 0 ? Math.max(...samples, 1) : 1;
+
+                  if (samples.length === 0) {
+                    return (
+                      <div className="h-24 rounded-xl bg-gray-50 dark:bg-gray-800/40 border border-gray-100 dark:border-gray-700 flex items-center justify-center text-xs text-gray-500 dark:text-gray-400">
+                        No runtime samples available
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <div className="h-36 rounded-xl bg-gray-50 dark:bg-gray-800/40 border border-gray-100 dark:border-gray-700 p-3 overflow-x-auto">
+                      <div className="h-full flex items-end gap-1" style={{ minWidth: `${samples.length * 7}px` }}>
+                        {samples.map((value, idx) => {
+                          const pct = Math.max(6, Math.round((value / maxSample) * 100));
+                          return (
+                            <div
+                              key={`runtime-bar-${idx}`}
+                              className="w-1.5 rounded-t bg-gradient-to-t from-indigo-500 to-violet-400"
+                              title={`TC ${idx + 1}: ${value} ms`}
+                              style={{ height: `${pct}%` }}
+                            />
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+
+              <div className="flex items-center justify-end gap-3">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-10 px-4 font-semibold"
+                  onClick={() => setShowFloatingResultWindow(false)}
+                >
+                  Close
+                </Button>
+                <Button
+                  size="sm"
+                  className="h-10 px-5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold"
+                  onClick={() => router.push("/student/submissions")}
+                >
+                  Continue
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Mandatory Fullscreen Overlays */}
 
       {/* 1. Consent & Start Modal (Replaces previous simplified start) */}
       {/* 1. Consent & Start Modal (Replaces previous simplified start) */}
-      {!hasExamStarted && !loading && !isSessionLocked && (
+      {!hasExamStarted && !loading && !isSessionLocked && !isSubmitted && (
         <div className="fixed inset-0 z-[60] bg-gray-50 dark:bg-gray-950 flex flex-col items-center justify-center p-4">
           <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
@@ -1496,7 +1724,7 @@ int main() {
       )}
 
       {/* 2. Returning to Fullscreen Overlay */}
-      {hasExamStarted && !isFullscreenMode && (
+      {hasExamStarted && !isFullscreenMode && !isSubmitted && (
         <div className="fixed inset-0 z-[60] bg-gray-900/95 backdrop-blur-md flex flex-col items-center justify-center p-4">
           <motion.div
             initial={{ scale: 0.9 }}
@@ -2025,43 +2253,78 @@ int main() {
                   </div>
 
                   {/* Tab Content */}
-                  <div className="flex-1 overflow-auto bg-gray-50/50 dark:bg-gray-950/50">
+                  <div ref={resultTabContentRef} className="flex-1 overflow-auto bg-gray-50/50 dark:bg-gray-950/50">
                     {/* Test Case Results Tab */}
                     {!showUserTestCases && (
                       <div className="h-full p-4">
                         {testCaseResults.length > 0 && (
-                          <div className="flex justify-between items-center mb-6 bg-white dark:bg-gray-900 p-4 rounded-xl border border-gray-100 dark:border-gray-800 shadow-sm">
-                            <div className="flex items-center gap-3">
-                              <div className={`w-10 h-10 rounded-full flex items-center justify-center ${passedCount === totalCount ? "bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400" : "bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400"}`}>
-                                {passedCount === totalCount ? (
-                                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
-                                ) : (
-                                  <span className="text-sm font-bold">{Math.round(passPercent)}%</span>
-                                )}
-                              </div>
-                              <div>
-                                <h3 className="text-sm font-bold text-gray-900 dark:text-white">
-                                  {passedCount === totalCount ? "All Test Cases Passed!" : "Some Test Cases Failed"}
-                                </h3>
-                                <p className="text-xs text-gray-500 dark:text-gray-400">
-                                  {passedCount} out of {totalCount} passed
-                                </p>
+                          <div className={`mb-6 rounded-xl border shadow-sm overflow-hidden ${
+                            passedCount === totalCount
+                              ? "bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800/50"
+                              : "bg-white dark:bg-gray-900 border-gray-100 dark:border-gray-800"
+                          }`}>
+                            {/* Verdict Header */}
+                            <div className="p-4">
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-3">
+                                  <div className={`w-11 h-11 rounded-xl flex items-center justify-center shadow-sm ${passedCount === totalCount ? "bg-emerald-500 text-white" : "bg-red-500 text-white"}`}>
+                                    {passedCount === totalCount ? (
+                                      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg>
+                                    ) : (
+                                      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" /></svg>
+                                    )}
+                                  </div>
+                                  <div>
+                                    <h3 className={`text-base font-bold ${passedCount === totalCount ? "text-emerald-700 dark:text-emerald-300" : "text-red-700 dark:text-red-300"}`}>
+                                      {passedCount === totalCount ? "Accepted" : (
+                                        (() => {
+                                          const firstFail = testCaseResults.find((r) => r.status !== "passed" && r.status !== "accepted" && r.status !== "skipped_fail_fast");
+                                          return firstFail ? getVerdictConfig(firstFail.status).label : "Failed";
+                                        })()
+                                      )}
+                                    </h3>
+                                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                                      {passedCount}/{totalCount} test cases passed
+                                    </p>
+                                  </div>
+                                </div>
+
+                                {/* Runtime & Memory Stats */}
+                                <div className="flex items-center gap-4">
+                                  {totalRuntime > 0 && (
+                                    <div className="text-right">
+                                      <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Runtime</div>
+                                      <div className="text-sm font-bold font-mono text-gray-900 dark:text-white">{totalRuntime} ms</div>
+                                    </div>
+                                  )}
+                                  {maxMemory > 0 && (
+                                    <div className="text-right">
+                                      <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Memory</div>
+                                      <div className="text-sm font-bold font-mono text-gray-900 dark:text-white">{maxMemory > 1024 ? `${(maxMemory / 1024).toFixed(1)} MB` : `${maxMemory} KB`}</div>
+                                    </div>
+                                  )}
+                                  {showContinueAfterSubmit && (
+                                    <Button
+                                      size="sm"
+                                      onClick={() => router.push("/student/submissions")}
+                                      className="h-9 px-4 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold"
+                                    >
+                                      Continue
+                                    </Button>
+                                  )}
+                                </div>
                               </div>
                             </div>
+
                             {/* Progress bar */}
-                            <div className="w-32 hidden sm:block">
-                              <div className="bg-gray-100 dark:bg-gray-800 rounded-full h-2 overflow-hidden">
-                                <div
-                                  className="h-full rounded-full transition-all duration-500"
-                                  style={{
-                                    width: `${passPercent}%`,
-                                    backgroundColor:
-                                      passPercent === 100
-                                        ? "#10b981"
-                                        : "#f59e0b",
-                                  }}
-                                />
-                              </div>
+                            <div className="h-1 bg-gray-100 dark:bg-gray-800">
+                              <div
+                                className="h-full transition-all duration-700 ease-out"
+                                style={{
+                                  width: `${passPercent}%`,
+                                  backgroundColor: passPercent === 100 ? "#10b981" : passPercent > 50 ? "#f59e0b" : "#ef4444",
+                                }}
+                              />
                             </div>
                           </div>
                         )}
@@ -2101,15 +2364,21 @@ int main() {
                         <div className="space-y-3">
                           {testCaseResults.map((r, idx) => {
                             const isExpanded = !!expandedCases[idx];
-                            const statusColor = r.status === "passed"
-                              ? "text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20"
-                              : r.status === "failed"
-                                ? "text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20"
-                                : "text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20";
+                            const vc = getVerdictConfig(r.status);
+                            const isPassed = r.status === "passed" || r.status === "accepted";
+                            const isSkipped = r.status === "skipped_fail_fast";
 
-                            const statusIcon = r.status === "passed"
-                              ? <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
-                              : <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>;
+                            const colorMap: Record<string, { bg: string; text: string; badge: string }> = {
+                              emerald: { bg: "bg-emerald-50 dark:bg-emerald-900/20", text: "text-emerald-600 dark:text-emerald-400", badge: "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800" },
+                              red: { bg: "bg-red-50 dark:bg-red-900/20", text: "text-red-600 dark:text-red-400", badge: "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 border-red-200 dark:border-red-800" },
+                              amber: { bg: "bg-amber-50 dark:bg-amber-900/20", text: "text-amber-600 dark:text-amber-400", badge: "bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800" },
+                              purple: { bg: "bg-purple-50 dark:bg-purple-900/20", text: "text-purple-600 dark:text-purple-400", badge: "bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-800" },
+                              rose: { bg: "bg-rose-50 dark:bg-rose-900/20", text: "text-rose-600 dark:text-rose-400", badge: "bg-rose-100 dark:bg-rose-900/30 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-800" },
+                              orange: { bg: "bg-orange-50 dark:bg-orange-900/20", text: "text-orange-600 dark:text-orange-400", badge: "bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300 border-orange-200 dark:border-orange-800" },
+                              yellow: { bg: "bg-yellow-50 dark:bg-yellow-900/20", text: "text-yellow-600 dark:text-yellow-400", badge: "bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300 border-yellow-200 dark:border-yellow-800" },
+                              gray: { bg: "bg-gray-50 dark:bg-gray-900/20", text: "text-gray-500 dark:text-gray-400", badge: "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 border-gray-200 dark:border-gray-700" },
+                            };
+                            const colors = colorMap[vc.color] || colorMap.red;
 
                             return (
                               <div
@@ -2117,9 +2386,9 @@ int main() {
                                 className={`rounded-xl overflow-hidden transition-all duration-200 border ${isExpanded ? "ring-1 ring-indigo-500/20 shadow-md bg-white dark:bg-gray-900 border-indigo-200 dark:border-indigo-800" : "bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 shadow-sm hover:border-gray-300 dark:hover:border-gray-600"}`}
                               >
                                 <div
-                                  className={`flex items-center justify-between p-3 ${r.is_hidden ? "cursor-default" : "cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50"}`}
+                                  className={`flex items-center justify-between p-3 ${r.is_hidden || isSkipped ? "cursor-default" : "cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50"}`}
                                   onClick={() =>
-                                    !r.is_hidden &&
+                                    !r.is_hidden && !isSkipped &&
                                     setExpandedCases((prev) => ({
                                       ...prev,
                                       [idx]: !prev[idx],
@@ -2127,8 +2396,8 @@ int main() {
                                   }
                                 >
                                   <div className="flex items-center gap-3">
-                                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold ${statusColor}`}>
-                                      {idx + 1}
+                                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold ${colors.bg} ${colors.text}`}>
+                                      {isPassed ? "✓" : isSkipped ? "⏭" : idx + 1}
                                     </div>
                                     <div>
                                       <div className="flex items-center gap-2">
@@ -2141,20 +2410,28 @@ int main() {
                                           </span>
                                         )}
                                       </div>
-                                      <div className="text-[10px] font-medium text-gray-500 dark:text-gray-400 capitalize">
-                                        {r.status.replace('_', ' ')} {r.time_ms ? `• ${r.time_ms}ms` : ''}
+                                      <div className="flex items-center gap-2 mt-0.5">
+                                        {r.time_ms != null && r.time_ms > 0 && (
+                                          <span className="text-[10px] font-mono font-medium text-gray-400 dark:text-gray-500">
+                                            {r.time_ms}ms
+                                          </span>
+                                        )}
+                                        {r.memory_kb != null && r.memory_kb > 0 && (
+                                          <span className="text-[10px] font-mono font-medium text-gray-400 dark:text-gray-500">
+                                            {r.memory_kb > 1024 ? `${(r.memory_kb / 1024).toFixed(1)}MB` : `${r.memory_kb}KB`}
+                                          </span>
+                                        )}
                                       </div>
                                     </div>
                                   </div>
 
-                                  <div className="flex items-center gap-3">
-                                    <div
-                                      className={`flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider ${r.status === "passed" ? "text-emerald-600 dark:text-emerald-400" : r.status === "failed" ? "text-red-600 dark:text-red-400" : "text-amber-600 dark:text-amber-400"}`}
-                                    >
-                                      {statusIcon}
-                                      {r.status === "passed" ? "Passed" : "Failed"}
-                                    </div>
-                                    {!r.is_hidden && (
+                                  <div className="flex items-center gap-2">
+                                    {/* Verdict badge */}
+                                    <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider border ${colors.badge}`}>
+                                      <span>{vc.icon}</span>
+                                      {vc.label}
+                                    </span>
+                                    {!r.is_hidden && !isSkipped && (
                                       <svg
                                         className={`w-4 h-4 text-gray-400 transition-transform ${isExpanded ? "rotate-180" : ""}`}
                                         fill="none"
@@ -2167,8 +2444,18 @@ int main() {
                                   </div>
                                 </div>
 
-                                {isExpanded && !r.is_hidden && (
+                                {isExpanded && !r.is_hidden && !isSkipped && (
                                   <div className="p-4 border-t border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-900/50">
+                                    {/* Stderr banner for errors */}
+                                    {(r.status === "compile_error" || r.status === "runtime_error") && (r.error || r.stderr) && (
+                                      <div className="mb-4 p-3 rounded-lg bg-red-50 dark:bg-red-900/10 border border-red-200 dark:border-red-800/30">
+                                        <div className="text-[10px] font-bold text-red-600 dark:text-red-400 uppercase tracking-wider mb-1">Error</div>
+                                        <pre className="text-xs font-mono text-red-700 dark:text-red-300 whitespace-pre-wrap">
+                                          {r.error || r.stderr}
+                                        </pre>
+                                      </div>
+                                    )}
+
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                       <div>
                                         <div className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1.5">
@@ -2193,18 +2480,36 @@ int main() {
                                         Your Output
                                       </div>
                                       <div className="relative">
-                                        <pre className={`p-3 rounded-lg border text-xs font-mono whitespace-pre-wrap ${r.error ? "bg-red-50 dark:bg-red-900/10 border-red-200 dark:border-red-900/30 text-red-700 dark:text-red-300" : "bg-white dark:bg-gray-950 border-gray-200 dark:border-gray-800 text-gray-700 dark:text-gray-300"}`}>
-                                          {r.stdout || r.error || (
+                                        <pre className={`p-3 rounded-lg border text-xs font-mono whitespace-pre-wrap ${!isPassed ? "bg-red-50/50 dark:bg-red-900/5 border-red-200 dark:border-red-900/30 text-red-700 dark:text-red-300" : "bg-white dark:bg-gray-950 border-gray-200 dark:border-gray-800 text-gray-700 dark:text-gray-300"}`}>
+                                          {r.stdout || (
                                             <span className="italic text-gray-400">No output</span>
                                           )}
                                         </pre>
-                                        {r.status === "passed" && (
+                                        {isPassed && (
                                           <div className="absolute top-2 right-2 text-emerald-500">
                                             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
                                           </div>
                                         )}
                                       </div>
                                     </div>
+
+                                    {/* Metrics bar */}
+                                    {(r.time_ms || r.memory_kb) && (
+                                      <div className="mt-3 flex items-center gap-4 pt-3 border-t border-gray-100 dark:border-gray-800">
+                                        {r.time_ms != null && r.time_ms > 0 && (
+                                          <div className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
+                                            <span>⏱</span>
+                                            <span className="font-mono font-semibold">{r.time_ms} ms</span>
+                                          </div>
+                                        )}
+                                        {r.memory_kb != null && r.memory_kb > 0 && (
+                                          <div className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
+                                            <span>💾</span>
+                                            <span className="font-mono font-semibold">{r.memory_kb > 1024 ? `${(r.memory_kb / 1024).toFixed(1)} MB` : `${r.memory_kb} KB`}</span>
+                                          </div>
+                                        )}
+                                      </div>
+                                    )}
                                   </div>
                                 )}
                               </div>
