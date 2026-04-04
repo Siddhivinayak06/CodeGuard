@@ -46,6 +46,9 @@ const isPublicRoute = (path: string) =>
 const isProtectedRoute = (path: string) =>
   PROTECTED_ROOTS.some((root) => path === root || path.startsWith(root + "/"))
 
+const shouldDisablePageCache = (path: string) =>
+  path === "/" || path.startsWith("/auth")
+
 /**
  * 🔐 Controlled Redirect Safety
  * Sanitizes and validates internal redirect paths.
@@ -179,6 +182,11 @@ export async function middleware(request: NextRequest) {
 
   /* 5. Supabase Initialization */
   const response = injectSecurityHeaders(NextResponse.next())
+  if (shouldDisablePageCache(pathname)) {
+    response.headers.set("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
+    response.headers.set("Pragma", "no-cache")
+    response.headers.set("Expires", "0")
+  }
   const supabase = createServerClient<Database>(supabaseUrl, supabaseAnonKey, {
     cookies: {
       getAll: () => request.cookies.getAll(),
