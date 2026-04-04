@@ -158,6 +158,17 @@ export async function middleware(request: NextRequest) {
     return response
   }
 
+  const hasSupabaseAuthCookie = request.cookies.getAll().some((cookie) => {
+    const name = cookie.name.toLowerCase()
+    return name.includes("auth-token") || name.startsWith("sb-") || name.includes("supabase")
+  })
+
+  if (pathname === "/auth/login" && request.nextUrl.searchParams.get("reset") !== "1" && !hasSupabaseAuthCookie) {
+    const url = request.nextUrl.clone()
+    url.searchParams.set("reset", "1")
+    return injectSecurityHeaders(NextResponse.redirect(url))
+  }
+
   const resetSessionRequested =
     pathname === "/auth/login" && request.nextUrl.searchParams.get("reset") === "1"
 
