@@ -9,7 +9,7 @@ export default async function HomePage() {
   } = await supabase.auth.getUser();
 
   if (!user) {
-    redirect("/auth/login");
+    redirect("/auth/login?reset=1");
   }
 
   // ✅ Fetch role from your 'profiles' table or user metadata

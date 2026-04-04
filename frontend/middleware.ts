@@ -11,7 +11,7 @@ const PUBLIC_ROUTES = ["/unauthorized", "/maintenance", "/lockdown", "/api"]
 
 const PROTECTED_ROOTS = ["/dashboard", "/admin", "/faculty", "/student", "/profile", "/interactive", "/notifications"]
 
-const AUTH_REDIRECT = "/auth/login"
+const AUTH_REDIRECT = "/auth/login?reset=1"
 
 /**
  * 🧱 Permission Engine (ABAC Ready)
