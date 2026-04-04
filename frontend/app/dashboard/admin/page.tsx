@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
@@ -169,6 +169,25 @@ export default function AdminDashboard() {
   const mountedRef = useRef<boolean>(false);
   const supabase = useMemo(() => createClient(), []);
 
+  const recoverFromStaleSession = useCallback(() => {
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("cg_session_id");
+      document.cookie = "device_session_id=; path=/; max-age=0; SameSite=Lax";
+
+      Object.keys(localStorage).forEach((key) => {
+        const lowered = key.toLowerCase();
+        if (lowered.startsWith("sb-") || lowered.includes("supabase")) {
+          localStorage.removeItem(key);
+        }
+      });
+
+      window.location.href = "/auth/login?reset=1";
+      return;
+    }
+
+    router.replace("/auth/login?reset=1");
+  }, [router]);
+
   const [user, setUser] = useState<any | null>(null);
   const [userName, setUserName] = useState<string>("");
   const [stats, setStats] = useState<Record<string, number>>({});
@@ -202,7 +221,7 @@ export default function AdminDashboard() {
         } = await supabase.auth.getUser();
 
         if (!user) {
-          router.push("/auth/login");
+          recoverFromStaleSession();
           return;
         }
         if (mountedRef.current) setUser(user);
@@ -216,7 +235,7 @@ export default function AdminDashboard() {
         if (userData) setUserName((userData as any).name);
       } catch (err) {
         console.error("Auth fetch error:", err);
-        router.push("/auth/login");
+        recoverFromStaleSession();
       }
     };
 
@@ -224,7 +243,7 @@ export default function AdminDashboard() {
     return () => {
       mountedRef.current = false;
     };
-  }, [router, supabase]);
+  }, [supabase, recoverFromStaleSession]);
 
   // Get access token
   const getAccessToken = async (): Promise<string | null> => {

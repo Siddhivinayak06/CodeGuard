@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 const Calendar = dynamic(() => import("@/components/ui/calendar").then(mod => mod.Calendar), { ssr: false, loading: () => <div className="h-64 w-full bg-gray-100/50 dark:bg-gray-800/50 rounded-xl animate-pulse" /> });
@@ -187,6 +187,25 @@ export default function FacultyDashboardPage() {
   const router = useRouter();
   const supabase = useMemo(() => createClient(), []);
 
+  const recoverFromStaleSession = useCallback(() => {
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("cg_session_id");
+      document.cookie = "device_session_id=; path=/; max-age=0; SameSite=Lax";
+
+      Object.keys(localStorage).forEach((key) => {
+        const lowered = key.toLowerCase();
+        if (lowered.startsWith("sb-") || lowered.includes("supabase")) {
+          localStorage.removeItem(key);
+        }
+      });
+
+      window.location.href = "/auth/login?reset=1";
+      return;
+    }
+
+    router.replace("/auth/login?reset=1");
+  }, [router]);
+
   const [user, setUser] = useState<User | null>(null);
   const [userName, setUserName] = useState<string>("");
   const [loading, setLoading] = useState(true);
@@ -214,125 +233,132 @@ export default function FacultyDashboardPage() {
   // Fetch data
   useEffect(() => {
     const init = async () => {
-      // 1. Get user
-      const { data, error } = await supabase.auth.getUser();
-      if (error || !data.user) {
-        router.push("/auth/login");
-        return;
-      }
-      setUser(data.user);
+      try {
+        // 1. Get user
+        const { data, error } = await supabase.auth.getUser();
+        if (error || !data.user) {
+          recoverFromStaleSession();
+          return;
+        }
+        setUser(data.user);
 
-      // Get display name
-      const { data: userData } = await supabase
-        .from("users")
-        .select("name")
-        .eq("uid", data.user.id)
-        .single();
-      if (userData) setUserName((userData as any).name);
+        // Get display name
+        const { data: userData } = await supabase
+          .from("users")
+          .select("name")
+          .eq("uid", data.user.id)
+          .single();
+        if (userData) setUserName((userData as any).name);
 
-      setLoading(false);
+        setLoading(false);
 
-      // 2. Fetch subjects for this faculty via junction table
-      setDataLoading(true);
-      const { data: facultyBatches, error: fbErr } = await supabase
-        .from("subject_faculty_batches")
-        .select("subject_id")
-        .eq("faculty_id", data.user.id);
+        // 2. Fetch subjects for this faculty via junction table
+        setDataLoading(true);
+        const { data: facultyBatches } = await supabase
+          .from("subject_faculty_batches")
+          .select("subject_id")
+          .eq("faculty_id", data.user.id);
 
-      const subjectIds = [...new Set(((facultyBatches as any[]) || []).map((fb) => fb.subject_id))];
+        const subjectIds = [...new Set(((facultyBatches as any[]) || []).map((fb) => fb.subject_id))];
 
-      if (subjectIds.length > 0) {
-        const { data: subjData, error: subjErr } = await supabase
-          .from("subjects")
-          .select("*")
-          .in("id", subjectIds);
+        if (subjectIds.length > 0) {
+          const { data: subjData, error: subjErr } = await supabase
+            .from("subjects")
+            .select("*")
+            .in("id", subjectIds);
 
-        if (!subjErr && subjData) {
-          setSubjects(subjData as Subject[]);
+          if (!subjErr && subjData) {
+            setSubjects(subjData as Subject[]);
+          } else {
+            setSubjects([]);
+          }
+
+          // 3. Fetch practicals using subjectIds from junction table
+          const { data: pracData } = await supabase
+            .from("practicals")
+            .select("*")
+            .in("subject_id", subjectIds)
+            .order("created_at", { ascending: false });
+
+          if (pracData) {
+            let practicalsWithSchedules = pracData as Practical[];
+            const pIds = (pracData as any[]).map((p) => p.id);
+
+            if (pIds.length > 0) {
+              // Fetch Schedules
+              const { data: schedData } = await supabase
+                .from("schedules")
+                .select("practical_id, batch_name, date")
+                .in("practical_id", pIds);
+
+              // Fetch Exams
+              const { data: examData } = await supabase
+                .from("exams")
+                .select("practical_id, start_time")
+                .in("practical_id", pIds);
+
+              const schedMap = new Map<number, { batch_name: string | null; date: string }[]>();
+
+              if (schedData) {
+                (schedData as any[]).forEach((s) => {
+                  if (s.practical_id) {
+                    const list = schedMap.get(s.practical_id) || [];
+                    list.push({ batch_name: s.batch_name, date: s.date });
+                    schedMap.set(s.practical_id, list);
+                  }
+                });
+              }
+
+              if (examData) {
+                (examData as any[]).forEach((e) => {
+                  if (e.practical_id && e.start_time) {
+                    const list = schedMap.get(e.practical_id) || [];
+                    list.push({ batch_name: "Exam", date: e.start_time });
+                    schedMap.set(e.practical_id, list);
+                  }
+                });
+              }
+
+              practicalsWithSchedules = practicalsWithSchedules.map((p) => ({
+                ...p,
+                schedules: schedMap.get(p.id) || [],
+              }));
+            }
+            setPracticals(practicalsWithSchedules);
+
+            // 4. Fetch Submissions (for charts)
+            const pIdsForSubs = (pracData as any[]).map((p) => p.id);
+            if (pIdsForSubs.length > 0) {
+              const { data: subData } = await supabase
+                .from("submissions")
+                .select("id, status, created_at, practical_id")
+                .in("practical_id", pIdsForSubs);
+
+              if (subData) {
+                const mappedSubmissions = (subData as any[]).map((s) => ({
+                  id: s.id,
+                  status: s.status || "pending",
+                  created_at: s.created_at,
+                  practical_id: s.practical_id,
+                }));
+                setSubmissions(mappedSubmissions as Submission[]);
+              }
+            }
+          }
         } else {
           setSubjects([]);
         }
-
-        // 3. Fetch practicals using subjectIds from junction table
-        const { data: pracData } = await supabase
-          .from("practicals")
-          .select("*")
-          .in("subject_id", subjectIds)
-          .order("created_at", { ascending: false });
-
-        if (pracData) {
-          let practicalsWithSchedules = pracData as Practical[];
-          const pIds = (pracData as any[]).map((p) => p.id);
-
-          if (pIds.length > 0) {
-            // Fetch Schedules
-            const { data: schedData } = await supabase
-              .from("schedules")
-              .select("practical_id, batch_name, date")
-              .in("practical_id", pIds);
-
-            // Fetch Exams
-            const { data: examData } = await supabase
-              .from("exams")
-              .select("practical_id, start_time")
-              .in("practical_id", pIds);
-
-            const schedMap = new Map<number, { batch_name: string | null; date: string }[]>();
-
-            if (schedData) {
-              (schedData as any[]).forEach((s) => {
-                if (s.practical_id) {
-                  const list = schedMap.get(s.practical_id) || [];
-                  list.push({ batch_name: s.batch_name, date: s.date });
-                  schedMap.set(s.practical_id, list);
-                }
-              });
-            }
-
-            if (examData) {
-              (examData as any[]).forEach((e) => {
-                if (e.practical_id && e.start_time) {
-                  const list = schedMap.get(e.practical_id) || [];
-                  list.push({ batch_name: "Exam", date: e.start_time });
-                  schedMap.set(e.practical_id, list);
-                }
-              });
-            }
-
-            practicalsWithSchedules = practicalsWithSchedules.map((p) => ({
-              ...p,
-              schedules: schedMap.get(p.id) || [],
-            }));
-          }
-          setPracticals(practicalsWithSchedules);
-
-          // 4. Fetch Submissions (for charts)
-          const pIdsForSubs = (pracData as any[]).map((p) => p.id);
-          if (pIdsForSubs.length > 0) {
-            const { data: subData } = await supabase
-              .from("submissions")
-              .select("id, status, created_at, practical_id")
-              .in("practical_id", pIdsForSubs);
-
-            if (subData) {
-              const mappedSubmissions = (subData as any[]).map((s) => ({
-                id: s.id,
-                status: s.status || "pending",
-                created_at: s.created_at,
-                practical_id: s.practical_id,
-              }));
-              setSubmissions(mappedSubmissions as Submission[]);
-            }
-          }
-        }
-      } else {
-        setSubjects([]);
+      } catch (error) {
+        console.error("Faculty dashboard session/data init failed:", error);
+        recoverFromStaleSession();
+      } finally {
+        setLoading(false);
+        setDataLoading(false);
       }
-      setDataLoading(false);
     };
 
     init();
-  }, [supabase, router]);
+  }, [supabase, recoverFromStaleSession]);
 
   const fetchPracticals = async () => {
     if (!user) return;
