@@ -225,13 +225,13 @@ router.post(
 
       const ioInstructions =
         {
-          java: 'CRITICAL REQUIREMENT: For Java, write a public class named "Main" with a "public static void main(String[] args)" method. Use Scanner or BufferedReader for I/O. The code MUST read all inputs from stdin and print strictly the expected output to stdout. NO markdown fences.',
+          java: 'CRITICAL REQUIREMENT: For Java, write a public class named "Main" with a "public static void main(String[] args)" method. Use Scanner or BufferedReader for I/O. Both reference_code and starter_code MUST read user-provided runtime input from stdin and MUST NOT hardcode sample/testcase values. starter_code must still include stdin-reading scaffold with TODO placeholders. Print strictly the expected output to stdout. NO markdown fences.',
           python:
-            'CRITICAL REQUIREMENT: For Python, read all inputs using input() or sys.stdin.read(). Print strictly the expected output to stdout. NO markdown fences.',
-          cpp: 'CRITICAL REQUIREMENT: For C++, use cin/cout or scanf/printf. The code MUST read all inputs from stdin and print strictly the expected output to stdout. NO markdown fences.',
-          c: 'CRITICAL REQUIREMENT: For C, use scanf/printf. The code MUST read all inputs from stdin and print strictly the expected output to stdout. NO markdown fences.',
+            'CRITICAL REQUIREMENT: For Python, read all inputs using input() or sys.stdin.read(). Both reference_code and starter_code MUST read user-provided runtime input from stdin and MUST NOT hardcode sample/testcase values. starter_code must still include stdin-reading scaffold with TODO placeholders. Print strictly the expected output to stdout. NO markdown fences.',
+          cpp: 'CRITICAL REQUIREMENT: For C++, use cin/cout or scanf/printf. Both reference_code and starter_code MUST read user-provided runtime input from stdin and MUST NOT hardcode sample/testcase values. starter_code must still include stdin-reading scaffold with TODO placeholders. Print strictly the expected output to stdout. NO markdown fences.',
+          c: 'CRITICAL REQUIREMENT: For C, use scanf/printf. Both reference_code and starter_code MUST read user-provided runtime input from stdin and MUST NOT hardcode sample/testcase values. starter_code must still include stdin-reading scaffold with TODO placeholders. Print strictly the expected output to stdout. NO markdown fences.',
         }[language] ||
-        'The code MUST read all inputs from stdin and print strictly the expected output to stdout.';
+        'Both reference_code and starter_code MUST read user-provided runtime input from stdin, MUST NOT hardcode sample/testcase values, and must print strictly the expected output to stdout.';
 
       const processChunk = async (chunkText, index) => {
         const prompt = isExam
@@ -300,7 +300,7 @@ OUTPUT JSON STRUCTURE (STRICT - return ONLY raw JSON, no markdown fences, no exp
           "description": "{FULL Markdown description following the format above — all sections present, newlines as \\n}",
           "max_marks": {Exact marks from PDF},
           "reference_code": "COMPLETE WORKING SOLUTION in ${language.toUpperCase()}. ${ioInstructions}",
-          "starter_code": "Incomplete template in ${language.toUpperCase()} with function signature and TODO comments for student to fill in. ${ioInstructions}",
+          "starter_code": "Incomplete template in ${language.toUpperCase()} with function signature, stdin input-reading scaffold, and TODO comments for student to fill in. ${ioInstructions}",
           "testCases": [{"input": "{sample input}", "expected_output": "{sample output}"}]
         }
       ],
@@ -326,8 +326,8 @@ CRITICAL RULES:
 5. **LITERAL MARKS:** Extract exact marks as they appear in the PDF.
 6. **Sub-parts:** If a question has sub-parts (a), (b), (c) with separate marks, combine them into ONE level. Include all sub-parts in the Problem Statement section of the description. Sum their marks for max_marks.
 7. **NO HALLUCINATIONS:** Use only actual data from the provided text.
-8. **reference_code:** Must be complete, compilable ${language.toUpperCase()} code reading from stdin and printing to stdout. NEVER initialize variables with sample input data.
-9. **starter_code:** Must be an incomplete template with TODO placeholders.
+8. **reference_code:** Must be complete, compilable ${language.toUpperCase()} code reading user-provided runtime input from stdin and printing to stdout. NEVER initialize variables with sample input data.
+9. **starter_code:** Must be an incomplete template with TODO placeholders AND include stdin input-reading scaffold that accepts user-provided runtime input.
 10. **I/O CONSISTENCY:** testCases[0].expected_output MUST be the exact literal result of running testCases[0].input through reference_code.
 
 TEXT:
@@ -389,7 +389,7 @@ OUTPUT JSON STRUCTURE (STRICT - return ONLY raw JSON, no markdown fences, no exp
       "enableLevels": false,
       "language": "${language}",
       "reference_code": "MANDATORY: Complete ${language.toUpperCase()} solution. ${ioInstructions}",
-      "starter_code": "Incomplete template in ${language.toUpperCase()} with function signature and TODO comments. ${ioInstructions}",
+      "starter_code": "Incomplete template in ${language.toUpperCase()} with function signature, stdin input-reading scaffold, and TODO comments. ${ioInstructions}",
       "testCases": [{ "input": "{input}", "expected_output": "{output}" }]
     }
   ]
@@ -399,8 +399,8 @@ CRITICAL EXECUTION RULES:
 1. **LITERAL MARKS & COUNTS:** Extract exact marks as they appear in the PDF.
 2. **DISTINCT PROBLEMS:** Every distinct problem/experiment MUST be a separate entry.
 3. **NO HALLUCINATIONS:** Use only actual data from the provided text.
-4. **reference_code:** Must be complete, compilable ${language.toUpperCase()} code reading from stdin and printing to stdout. NO HARDCODED INPUT.
-5. **starter_code:** Must be an incomplete template with TODO placeholders.
+4. **reference_code:** Must be complete, compilable ${language.toUpperCase()} code reading user-provided runtime input from stdin and printing to stdout. NO HARDCODED INPUT.
+5. **starter_code:** Must be an incomplete template with TODO placeholders and stdin input-reading scaffold for user-provided runtime input.
 6. **I/O CONSISTENCY:** testCases[0].expected_output MUST be the exact literal result of running testCases[0].input through reference_code.
 
 TEXT:
