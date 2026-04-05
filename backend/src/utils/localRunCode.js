@@ -11,6 +11,38 @@ const logger = require('./logger');
 const DEFAULT_TIMEOUT_MS = 5000;
 const MAX_OUTPUT = 64 * 1024; // 64 KB
 
+function resolveJavaClassNames(code = '') {
+  const source = String(code || '');
+
+  const publicClassMatch = source.match(
+    /^\s*public\s+class\s+([A-Za-z_][A-Za-z0-9_]*)/m
+  );
+  const firstClassMatch = source.match(/^\s*class\s+([A-Za-z_][A-Za-z0-9_]*)/m);
+
+  const compileClassName =
+    publicClassMatch?.[1] || firstClassMatch?.[1] || 'Main';
+
+  let runClassName = compileClassName;
+  const mainIndex = source.search(/\bpublic\s+static\s+void\s+main\s*\(/);
+
+  if (mainIndex !== -1) {
+    const classRegex = /(?:public\s+)?class\s+([A-Za-z_][A-Za-z0-9_]*)/g;
+    const beforeMain = source.slice(0, mainIndex);
+    let match;
+    let lastClassBeforeMain = null;
+
+    while ((match = classRegex.exec(beforeMain)) !== null) {
+      lastClassBeforeMain = match[1];
+    }
+
+    if (lastClassBeforeMain) {
+      runClassName = lastClassBeforeMain;
+    }
+  }
+
+  return { compileClassName, runClassName };
+}
+
 /**
  * Spawn a process with a timeout that kills it if it exceeds the limit.
  * Returns { stdout, stderr, exitCode, timedOut, time_ms }.
@@ -180,12 +212,8 @@ module.exports = async function localRunCode(
         time_ms: result.time_ms,
       };
     } else if (lang === 'java') {
-      // Detect class name from code
-      const classMatch = code.match(
-        /(?:public\s+)?class\s+([A-Za-z_][A-Za-z0-9_]*)/
-      );
-      const className = classMatch ? classMatch[1] : 'Main';
-      const codeFile = path.join(workDir, `${className}.java`);
+      const { compileClassName, runClassName } = resolveJavaClassNames(code);
+      const codeFile = path.join(workDir, `${compileClassName}.java`);
       fs.writeFileSync(codeFile, code);
 
       // Compile
@@ -209,7 +237,7 @@ module.exports = async function localRunCode(
       // Run
       const result = await spawnWithTimeout(
         'java',
-        ['-cp', workDir, className],
+        ['-cp', workDir, runClassName],
         { stdio: ['pipe', 'pipe', 'pipe'], cwd: workDir, input: stdinInput },
         DEFAULT_TIMEOUT_MS
       );

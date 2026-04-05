@@ -7,6 +7,41 @@ const logger = require('./logger');
 
 const isMacOS = process.platform === 'darwin';
 
+function resolveJavaClassNames(code = '') {
+  const source = String(code || '');
+
+  const publicClassMatch = source.match(
+    /^\s*public\s+class\s+([A-Za-z_][A-Za-z0-9_]*)/m
+  );
+  const firstClassMatch = source.match(/^\s*class\s+([A-Za-z_][A-Za-z0-9_]*)/m);
+
+  // Java requires the file name to match the public class (if present).
+  const compileClassName =
+    publicClassMatch?.[1] || firstClassMatch?.[1] || 'Main';
+
+  // Prefer the class declaration immediately preceding the main method.
+  // This handles files that contain helper classes before the entry class.
+  let runClassName = compileClassName;
+  const mainIndex = source.search(/\bpublic\s+static\s+void\s+main\s*\(/);
+
+  if (mainIndex !== -1) {
+    const classRegex = /(?:public\s+)?class\s+([A-Za-z_][A-Za-z0-9_]*)/g;
+    const beforeMain = source.slice(0, mainIndex);
+    let match;
+    let lastClassBeforeMain = null;
+
+    while ((match = classRegex.exec(beforeMain)) !== null) {
+      lastClassBeforeMain = match[1];
+    }
+
+    if (lastClassBeforeMain) {
+      runClassName = lastClassBeforeMain;
+    }
+  }
+
+  return { compileClassName, runClassName };
+}
+
 class LocalRunner {
   constructor() {
     this.tempDir = path.join(os.tmpdir(), 'codeguard-local');
@@ -261,13 +296,9 @@ class LocalRunner {
           timeoutMs
         );
       } else if (lang === 'java') {
-        let className = 'UserCode';
-        const classMatch = code.match(
-          /^\s*(?:public\s+)?class\s+([A-Za-z_][A-Za-z0-9_]*)/m
-        );
-        if (classMatch) className = classMatch[1];
+        const { compileClassName, runClassName } = resolveJavaClassNames(code);
 
-        const sourceFile = path.join(workDir, `${className}.java`);
+        const sourceFile = path.join(workDir, `${compileClassName}.java`);
         fs.writeFileSync(sourceFile, code);
 
         try {
@@ -289,7 +320,7 @@ class LocalRunner {
 
         return await this._runWithTimeMeasurement(
           runtime.run,
-          ['-cp', workDir, className],
+          ['-cp', workDir, runClassName],
           workDir,
           stdinInput,
           timeoutMs
@@ -368,13 +399,9 @@ class LocalRunner {
         runCmd = executableFile;
         runArgs = [];
       } else if (lang === 'java') {
-        let className = 'UserCode';
-        const classMatch = code.match(
-          /^\s*(?:public\s+)?class\s+([A-Za-z_][A-Za-z0-9_]*)/m
-        );
-        if (classMatch) className = classMatch[1];
+        const { compileClassName, runClassName } = resolveJavaClassNames(code);
 
-        const sourceFile = path.join(workDir, `${className}.java`);
+        const sourceFile = path.join(workDir, `${compileClassName}.java`);
         fs.writeFileSync(sourceFile, code);
 
         try {
@@ -397,7 +424,7 @@ class LocalRunner {
           }));
         }
         runCmd = runtime.run;
-        runArgs = ['-cp', workDir, className];
+        runArgs = ['-cp', workDir, runClassName];
       }
 
       // ── Execute per test case (binary already compiled) ────────────

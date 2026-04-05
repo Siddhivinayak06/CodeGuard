@@ -14,6 +14,38 @@ function writeBase64FileCommand(content = '', filePath) {
   return `echo "${b64}" | base64 -d > ${filePath}`;
 }
 
+function resolveJavaClassNames(code = '') {
+  const source = String(code || '');
+
+  const publicClassMatch = source.match(
+    /^\s*public\s+class\s+([A-Za-z_][A-Za-z0-9_]*)/m
+  );
+  const firstClassMatch = source.match(/^\s*class\s+([A-Za-z_][A-Za-z0-9_]*)/m);
+
+  const compileClassName =
+    publicClassMatch?.[1] || firstClassMatch?.[1] || 'Main';
+
+  let runClassName = compileClassName;
+  const mainIndex = source.search(/\bpublic\s+static\s+void\s+main\s*\(/);
+
+  if (mainIndex !== -1) {
+    const classRegex = /(?:public\s+)?class\s+([A-Za-z_][A-Za-z0-9_]*)/g;
+    const beforeMain = source.slice(0, mainIndex);
+    let match;
+    let lastClassBeforeMain = null;
+
+    while ((match = classRegex.exec(beforeMain)) !== null) {
+      lastClassBeforeMain = match[1];
+    }
+
+    if (lastClassBeforeMain) {
+      runClassName = lastClassBeforeMain;
+    }
+  }
+
+  return { compileClassName, runClassName };
+}
+
 async function execInContainer(containerName, cmd) {
   return new Promise((resolve, reject) => {
     const docker = spawn('docker', ['exec', containerName, 'sh', '-c', cmd]);
@@ -113,27 +145,20 @@ module.exports = async function runCode(
       compileCmd = `mkdir -p /tmp/${uniqueId} && ${writeBase64FileCommand(escapedCode, `/tmp/${uniqueId}/code.cpp`)} && g++ -O2 /tmp/${uniqueId}/code.cpp -o /tmp/${uniqueId}/a.out -lm 2>/tmp/${uniqueId}/gcc_err.txt || (cat /tmp/${uniqueId}/gcc_err.txt 1>&2 && exit 1)`;
       baseRunCmd = `/tmp/${uniqueId}/a.out`;
     } else if (poolLang === 'java') {
-      let className = 'UserCode';
-      const publicClassMatch = escapedCode.match(
-        /^\s*public\s+class\s+([A-Za-z_][A-Za-z0-9_]*)/m
+      const { compileClassName, runClassName } = resolveJavaClassNames(
+        escapedCode
       );
-      if (publicClassMatch) {
-        className = publicClassMatch[1];
-      } else {
-        const classMatch = escapedCode.match(
-          /^\s*class\s+([A-Za-z_][A-Za-z0-9_]*)/m
-        );
-        if (classMatch) className = classMatch[1];
-      }
       compileCmd = `
 mkdir -p /tmp/${uniqueId} &&
-${writeBase64FileCommand(escapedCode, `/tmp/${uniqueId}/${className}.java`)} &&
+${writeBase64FileCommand(escapedCode, `/tmp/${uniqueId}/${compileClassName}.java`)} &&
+${writeBase64FileCommand(runClassName, `/tmp/${uniqueId}/main_class.txt`)} &&
 javac /tmp/${uniqueId}/*.java 2> /tmp/${uniqueId}/compile_err.txt || (cat /tmp/${uniqueId}/compile_err.txt 1>&2 && exit 1)
 `;
       baseRunCmd = `
-MAIN_CLASS=$(grep -l "public static void main" /tmp/${uniqueId}/*.java | head -n1 | xargs basename -s .java)
+MAIN_CLASS=$(cat /tmp/${uniqueId}/main_class.txt 2>/dev/null || true)
+if [ -z "$MAIN_CLASS" ]; then MAIN_CLASS=$(grep -l "public static void main" /tmp/${uniqueId}/*.java | head -n1 | xargs basename -s .java); fi
 if [ -z "$MAIN_CLASS" ]; then MAIN_CLASS=$(ls /tmp/${uniqueId}/*.class | head -n1 | xargs basename -s .class); fi
-java -cp /tmp/${uniqueId} $MAIN_CLASS
+java -cp /tmp/${uniqueId} "$MAIN_CLASS"
 `;
     }
 
