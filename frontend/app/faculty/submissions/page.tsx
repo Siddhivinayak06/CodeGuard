@@ -713,21 +713,11 @@ function FacultySubmissionsContentInner() {
     }
   };
 
-  // Filter Submissions locally
-  const filteredSubmissions = useMemo(() => {
-    return submissions.filter((s) => {
-      const matchesQuery = s.student_name.toLowerCase().includes(query.toLowerCase()) ||
-        s.roll_no?.toLowerCase().includes(query.toLowerCase());
-      const matchesStatus = filterStatus === 'all' || s.status === filterStatus;
-      return matchesQuery && matchesStatus;
-    });
-  }, [submissions, query, filterStatus]);
-
-  // Group submissions by student + practical
-  const groupedSubmissions = useMemo<GroupedSubmission[]>(() => {
+  // Group submissions by student + practical FIRST (before filtering)
+  const allGroupedSubmissions = useMemo<GroupedSubmission[]>(() => {
     const map = new Map<string, GroupedSubmission>();
 
-    filteredSubmissions.forEach((sub) => {
+    submissions.forEach((sub) => {
       const key = `${sub.student_id}_${sub.practical_id}`;
       if (!map.has(key)) {
         map.set(key, {
@@ -803,7 +793,22 @@ function FacultySubmissionsContentInner() {
     });
 
     return Array.from(map.values());
-  }, [filteredSubmissions]);
+  }, [submissions]);
+
+  // Now filter the grouped submissions by query and status
+  const groupedSubmissions = useMemo<GroupedSubmission[]>(() => {
+    return allGroupedSubmissions.filter((group) => {
+      const matchesQuery = group.student_name.toLowerCase().includes(query.toLowerCase()) ||
+        group.roll_no?.toLowerCase().includes(query.toLowerCase());
+      const matchesStatus = filterStatus === 'all' || group.overallStatus === filterStatus;
+      return matchesQuery && matchesStatus;
+    });
+  }, [allGroupedSubmissions, query, filterStatus]);
+
+  // Keep filteredSubmissions for backward compatibility with next/prev navigation
+  const filteredSubmissions = useMemo(() => {
+    return groupedSubmissions.flatMap(g => g.submissions);
+  }, [groupedSubmissions]);
 
   const toggleGroupExpansion = (key: string) => {
     setExpandedGroups(prev => {
@@ -817,25 +822,15 @@ function FacultySubmissionsContentInner() {
   // Check if we have set-based exam data
   const hasSetData = groupedSubmissions.some(g => g.assigned_set_name);
 
-  const stats = hasSetData
-    ? {
-        total: groupedSubmissions.length,
-        excellent: groupedSubmissions.filter(g => g.overallStatus === 'excellent').length,
-        very_good: groupedSubmissions.filter(g => g.overallStatus === 'very_good').length,
-        good: groupedSubmissions.filter(g => g.overallStatus === 'good').length,
-        needs_improvement: groupedSubmissions.filter(g => g.overallStatus === 'needs_improvement').length,
-        poor: groupedSubmissions.filter(g => ['poor','failed'].includes(g.overallStatus)).length,
-        pending: groupedSubmissions.filter(g => g.overallStatus === 'pending').length,
-      }
-    : {
-        total: submissions.length,
-        excellent: submissions.filter(s => s.status === 'excellent').length,
-        very_good: submissions.filter(s => s.status === 'very_good').length,
-        good: submissions.filter(s => s.status === 'good').length,
-        needs_improvement: submissions.filter(s => s.status === 'needs_improvement').length,
-        poor: submissions.filter(s => ['poor','failed'].includes(s.status)).length,
-        pending: submissions.filter(s => ['pending', 'submitted'].includes(s.status)).length,
-      };
+  const stats = {
+    total: groupedSubmissions.length,
+    excellent: groupedSubmissions.filter(g => g.overallStatus === 'excellent').length,
+    very_good: groupedSubmissions.filter(g => g.overallStatus === 'very_good').length,
+    good: groupedSubmissions.filter(g => g.overallStatus === 'good').length,
+    needs_improvement: groupedSubmissions.filter(g => g.overallStatus === 'needs_improvement').length,
+    poor: groupedSubmissions.filter(g => ['poor','failed'].includes(g.overallStatus)).length,
+    pending: groupedSubmissions.filter(g => g.overallStatus === 'pending').length,
+  };
 
   // Set-wise stats (computed from grouped submissions)
   const setStats = useMemo(() => {
