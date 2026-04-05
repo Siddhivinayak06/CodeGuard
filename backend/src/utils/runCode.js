@@ -145,9 +145,8 @@ module.exports = async function runCode(
       compileCmd = `mkdir -p /tmp/${uniqueId} && ${writeBase64FileCommand(escapedCode, `/tmp/${uniqueId}/code.cpp`)} && g++ -O2 /tmp/${uniqueId}/code.cpp -o /tmp/${uniqueId}/a.out -lm 2>/tmp/${uniqueId}/gcc_err.txt || (cat /tmp/${uniqueId}/gcc_err.txt 1>&2 && exit 1)`;
       baseRunCmd = `/tmp/${uniqueId}/a.out`;
     } else if (poolLang === 'java') {
-      const { compileClassName, runClassName } = resolveJavaClassNames(
-        escapedCode
-      );
+      const { compileClassName, runClassName } =
+        resolveJavaClassNames(escapedCode);
       compileCmd = `
 mkdir -p /tmp/${uniqueId} &&
 ${writeBase64FileCommand(escapedCode, `/tmp/${uniqueId}/${compileClassName}.java`)} &&

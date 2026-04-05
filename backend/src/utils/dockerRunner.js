@@ -104,9 +104,8 @@ async function compileInContainer(containerName, code, lang, uniqueId) {
       `/tmp/${uniqueId}/code.cpp`
     )} && g++ -O2 /tmp/${uniqueId}/code.cpp -o /tmp/${uniqueId}/a.out -lm 2>/tmp/${uniqueId}/gcc_err.txt || (cat /tmp/${uniqueId}/gcc_err.txt 1>&2 && exit 1)`;
   } else if (normalizedLang === 'java') {
-    const { compileClassName, runClassName } = resolveJavaClassNames(
-      escapedCode
-    );
+    const { compileClassName, runClassName } =
+      resolveJavaClassNames(escapedCode);
 
     cmd = `
 mkdir -p /tmp/${uniqueId} &&
