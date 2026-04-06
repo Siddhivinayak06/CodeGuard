@@ -14,22 +14,90 @@ function writeBase64FileCommand(content = '', filePath) {
   return `echo "${b64}" | base64 -d > ${filePath}`;
 }
 
-function resolveJavaClassNames(code = '') {
+function buildJavaMainLauncherCode(packageName, mainFqcn) {
+  const packageDecl = packageName ? `package ${packageName};\n` : '';
+  return `${packageDecl}public class __RunnerLauncher {
+    public static void main(String[] args) {
+        try {
+            java.lang.reflect.Method mainMethod =
+                Class.forName("${mainFqcn}").getMethod("main", String[].class);
+            mainMethod.invoke(null, (Object) args);
+        } catch (Throwable t) {
+          Throwable cause = (t instanceof java.lang.reflect.InvocationTargetException && t.getCause() != null)
+            ? t.getCause()
+            : t;
+          if (cause instanceof java.awt.HeadlessException) {
+            System.out.println("GUI execution skipped in headless environment.");
+            return;
+          }
+            cause.printStackTrace();
+            System.exit(1);
+        }
+    }
+}`;
+}
+
+function buildJavaAppletLauncherCode(packageName, appletFqcn) {
+  const packageDecl = packageName ? `package ${packageName};\n` : '';
+  return `${packageDecl}public class __RunnerLauncher {
+    public static void main(String[] args) {
+        System.setProperty("java.awt.headless", "true");
+        try {
+            Object instance = Class.forName("${appletFqcn}").getDeclaredConstructor().newInstance();
+            if (instance instanceof java.applet.Applet) {
+                java.applet.Applet applet = (java.applet.Applet) instance;
+                applet.init();
+                applet.start();
+                java.awt.image.BufferedImage canvas = new java.awt.image.BufferedImage(
+                    1,
+                    1,
+                    java.awt.image.BufferedImage.TYPE_INT_ARGB
+                );
+                java.awt.Graphics2D g = canvas.createGraphics();
+                applet.paint(g);
+                g.dispose();
+            }
+            System.out.println("Applet executed in headless mode.");
+        } catch (Throwable t) {
+          Throwable cause = (t instanceof java.lang.reflect.InvocationTargetException && t.getCause() != null)
+            ? t.getCause()
+            : t;
+          if (cause instanceof java.awt.HeadlessException) {
+            System.out.println("Applet compiled successfully (headless runtime skipped).");
+            return;
+          }
+            t.printStackTrace();
+            System.exit(1);
+        }
+    }
+}`;
+}
+
+function resolveJavaExecutionPlan(code = '') {
   const source = String(code || '');
+  const packageMatch = source.match(
+    /^\s*package\s+([A-Za-z_][A-Za-z0-9_.]*)\s*;/m
+  );
+  const packageName = packageMatch?.[1] || null;
 
   const publicClassMatch = source.match(
-    /^\s*public\s+class\s+([A-Za-z_][A-Za-z0-9_]*)/m
+    /^(?:public\s+class\s+([A-Za-z_][A-Za-z0-9_]*))/m
   );
-  const firstClassMatch = source.match(/^\s*class\s+([A-Za-z_][A-Za-z0-9_]*)/m);
+  const firstClassMatch = source.match(
+    /^(?:class\s+([A-Za-z_][A-Za-z0-9_]*))/m
+  );
 
   const compileClassName =
     publicClassMatch?.[1] || firstClassMatch?.[1] || 'Main';
 
   let runClassName = compileClassName;
   const mainIndex = source.search(/\bpublic\s+static\s+void\s+main\s*\(/);
+  const hasMain = mainIndex !== -1;
 
-  if (mainIndex !== -1) {
-    const classRegex = /(?:public\s+)?class\s+([A-Za-z_][A-Za-z0-9_]*)/g;
+  let launcherCode = '';
+
+  if (hasMain) {
+    const classRegex = /^(?:public\s+)?class\s+([A-Za-z_][A-Za-z0-9_]*)/gm;
     const beforeMain = source.slice(0, mainIndex);
     let match;
     let lastClassBeforeMain = null;
@@ -41,9 +109,36 @@ function resolveJavaClassNames(code = '') {
     if (lastClassBeforeMain) {
       runClassName = lastClassBeforeMain;
     }
+
+    const mainFqcn = packageName
+      ? `${packageName}.${runClassName}`
+      : runClassName;
+    launcherCode = buildJavaMainLauncherCode(packageName, mainFqcn);
+    runClassName = packageName
+      ? `${packageName}.__RunnerLauncher`
+      : '__RunnerLauncher';
+  } else {
+    const appletClassMatch = source.match(
+      /(?:public\s+)?class\s+([A-Za-z_][A-Za-z0-9_]*)\s+extends\s+(?:java\.applet\.Applet|javax\.swing\.JApplet|Applet|JApplet)\b/
+    );
+
+    if (appletClassMatch?.[1]) {
+      const appletClassName = appletClassMatch[1];
+      const appletFqcn = packageName
+        ? `${packageName}.${appletClassName}`
+        : appletClassName;
+      launcherCode = buildJavaAppletLauncherCode(packageName, appletFqcn);
+      runClassName = packageName
+        ? `${packageName}.__RunnerLauncher`
+        : '__RunnerLauncher';
+    }
   }
 
-  return { compileClassName, runClassName };
+  if (!launcherCode && packageName) {
+    runClassName = `${packageName}.${runClassName}`;
+  }
+
+  return { compileClassName, runClassName, launcherCode };
 }
 
 async function execInContainer(containerName, cmd) {
@@ -145,11 +240,12 @@ module.exports = async function runCode(
       compileCmd = `mkdir -p /tmp/${uniqueId} && ${writeBase64FileCommand(escapedCode, `/tmp/${uniqueId}/code.cpp`)} && g++ -O2 /tmp/${uniqueId}/code.cpp -o /tmp/${uniqueId}/a.out -lm 2>/tmp/${uniqueId}/gcc_err.txt || (cat /tmp/${uniqueId}/gcc_err.txt 1>&2 && exit 1)`;
       baseRunCmd = `/tmp/${uniqueId}/a.out`;
     } else if (poolLang === 'java') {
-      const { compileClassName, runClassName } =
-        resolveJavaClassNames(escapedCode);
+      const { compileClassName, runClassName, launcherCode } =
+        resolveJavaExecutionPlan(escapedCode);
       compileCmd = `
 mkdir -p /tmp/${uniqueId} &&
 ${writeBase64FileCommand(escapedCode, `/tmp/${uniqueId}/${compileClassName}.java`)} &&
+${launcherCode ? writeBase64FileCommand(launcherCode, `/tmp/${uniqueId}/__RunnerLauncher.java`) + ' &&' : ''}
 ${writeBase64FileCommand(runClassName, `/tmp/${uniqueId}/main_class.txt`)} &&
 javac /tmp/${uniqueId}/*.java 2> /tmp/${uniqueId}/compile_err.txt || (cat /tmp/${uniqueId}/compile_err.txt 1>&2 && exit 1)
 `;

@@ -14,8 +14,10 @@ public class InteractiveWrapper {
     private static final int TIMEOUT_SECONDS = 60;
     private static final String CPU_LIMIT = "15";
     private static final Pattern PACKAGE_PATTERN = Pattern.compile("^\\s*package\\s+([a-zA-Z0-9_.]+)\\s*;", Pattern.MULTILINE);
-    private static final Pattern CLASS_PATTERN = Pattern.compile("(?:public\\s+)?class\\s+([A-Za-z_][A-Za-z0-9_]*)");
+    private static final Pattern CLASS_PATTERN = Pattern.compile("(?m)^(?:public\\s+)?class\\s+([A-Za-z_][A-Za-z0-9_]*)");
     private static final Pattern MAIN_METHOD_PATTERN = Pattern.compile("\\bpublic\\s+static\\s+void\\s+main\\s*\\(");
+    private static final Pattern APPLET_CLASS_PATTERN = Pattern.compile(
+            "(?:public\\s+)?class\\s+([A-Za-z_][A-Za-z0-9_]*)\\s+extends\\s+(?:java\\.applet\\.Applet|javax\\.swing\\.JApplet|Applet|JApplet)\\b");
 
     // ANSI Colors
     private static final String RED = "\033[91m";
@@ -154,6 +156,11 @@ public class InteractiveWrapper {
         return null;
     }
 
+    private static String extractAppletClassName(String source) {
+        Matcher appletMatcher = APPLET_CLASS_PATTERN.matcher(source);
+        return appletMatcher.find() ? appletMatcher.group(1) : null;
+    }
+
     private static String resolveMainClassFromFile(Path dir, String relativePath) {
         try {
             Path javaFile = resolveSafePath(dir, normalizeJavaFileName(relativePath));
@@ -174,17 +181,143 @@ public class InteractiveWrapper {
         }
     }
 
+    private static String resolveAppletClassFromFile(Path dir, String relativePath) {
+        try {
+            Path javaFile = resolveSafePath(dir, normalizeJavaFileName(relativePath));
+            if (!Files.exists(javaFile)) {
+                return null;
+            }
+
+            String source = Files.readString(javaFile, StandardCharsets.UTF_8);
+            String className = extractAppletClassName(source);
+            if (className == null) {
+                return null;
+            }
+
+            String packageName = extractPackageName(source);
+            return packageName == null ? className : packageName + "." + className;
+        } catch (IOException e) {
+            return null;
+        }
+    }
+
+    private static String buildAppletLauncherCode(String packageName, String appletFqcn) {
+        String packageDecl = packageName != null ? "package " + packageName + ";\n" : "";
+        return packageDecl + "public class __RunnerLauncher {\n"
+                + "    public static void main(String[] args) {\n"
+                + "        System.setProperty(\"java.awt.headless\", \"true\");\n"
+                + "        try {\n"
+                + "            Object instance = Class.forName(\"" + appletFqcn
+                + "\").getDeclaredConstructor().newInstance();\n"
+                + "            if (instance instanceof java.applet.Applet) {\n"
+                + "                java.applet.Applet applet = (java.applet.Applet) instance;\n"
+                + "                applet.init();\n"
+                + "                applet.start();\n"
+                + "                java.awt.image.BufferedImage canvas = new java.awt.image.BufferedImage(\n"
+                + "                    1,\n"
+                + "                    1,\n"
+                + "                    java.awt.image.BufferedImage.TYPE_INT_ARGB\n"
+                + "                );\n"
+                + "                java.awt.Graphics2D g = canvas.createGraphics();\n"
+                + "                applet.paint(g);\n"
+                + "                g.dispose();\n"
+                + "            }\n"
+                + "            System.out.println(\"Applet executed in headless mode.\");\n"
+                + "        } catch (Throwable t) {\n"
+                + "            Throwable cause = (t instanceof java.lang.reflect.InvocationTargetException && t.getCause() != null)\n"
+                + "                ? t.getCause()\n"
+                + "                : t;\n"
+                + "            if (cause instanceof java.awt.HeadlessException) {\n"
+                + "                System.out.println(\"Applet compiled successfully (headless runtime skipped).\");\n"
+                + "                return;\n"
+                + "            }\n"
+                + "            t.printStackTrace();\n"
+                + "            System.exit(1);\n"
+                + "        }\n"
+                + "    }\n"
+                + "}\n";
+    }
+
+    private static String buildMainLauncherCode(String packageName, String mainFqcn) {
+        String packageDecl = packageName != null ? "package " + packageName + ";\n" : "";
+        return packageDecl + "public class __RunnerLauncher {\n"
+                + "    public static void main(String[] args) {\n"
+                + "        try {\n"
+                + "            java.lang.reflect.Method mainMethod = Class.forName(\"" + mainFqcn
+                + "\").getMethod(\"main\", String[].class);\n"
+                + "            mainMethod.invoke(null, (Object) args);\n"
+                + "        } catch (Throwable t) {\n"
+                + "            Throwable cause = (t instanceof java.lang.reflect.InvocationTargetException && t.getCause() != null)\n"
+                + "                ? t.getCause()\n"
+                + "                : t;\n"
+                + "            if (cause instanceof java.awt.HeadlessException) {\n"
+                + "                System.out.println(\"GUI execution skipped in headless environment.\");\n"
+                + "                return;\n"
+                + "            }\n"
+                + "            cause.printStackTrace();\n"
+                + "            System.exit(1);\n"
+                + "        }\n"
+                + "    }\n"
+                + "}\n";
+    }
+
+    private static String createMainLauncher(Path dir, String mainFqcn) throws IOException {
+        String packageName = null;
+        int lastDot = mainFqcn.lastIndexOf('.');
+        if (lastDot > 0) {
+            packageName = mainFqcn.substring(0, lastDot);
+        }
+
+        String launcherCode = buildMainLauncherCode(packageName, mainFqcn);
+        Path launcherPath = resolveSafePath(dir, "__RunnerLauncher.java");
+        Files.writeString(launcherPath, launcherCode, StandardCharsets.UTF_8);
+        return packageName == null ? "__RunnerLauncher" : packageName + ".__RunnerLauncher";
+    }
+
+    private static String createAppletLauncher(Path dir, String appletFqcn) throws IOException {
+        String packageName = null;
+        int lastDot = appletFqcn.lastIndexOf('.');
+        if (lastDot > 0) {
+            packageName = appletFqcn.substring(0, lastDot);
+        }
+
+        String launcherCode = buildAppletLauncherCode(packageName, appletFqcn);
+        Path launcherPath = resolveSafePath(dir, "__RunnerLauncher.java");
+        Files.writeString(launcherPath, launcherCode, StandardCharsets.UTF_8);
+        return packageName == null ? "__RunnerLauncher" : packageName + ".__RunnerLauncher";
+    }
+
     private static String resolveRunClassName(Path dir, String preferredFile) {
         String preferredClass = resolveMainClassFromFile(dir, preferredFile);
         if (preferredClass != null) {
-            return preferredClass;
+            try {
+                return createMainLauncher(dir, preferredClass);
+            } catch (IOException e) {
+                return null;
+            }
+        }
+
+        String preferredApplet = resolveAppletClassFromFile(dir, preferredFile);
+        if (preferredApplet != null) {
+            try {
+                return createAppletLauncher(dir, preferredApplet);
+            } catch (IOException e) {
+                return null;
+            }
         }
 
         try {
             for (String relativePath : listJavaFiles(dir)) {
                 String className = resolveMainClassFromFile(dir, relativePath);
                 if (className != null) {
-                    return className;
+                    return createMainLauncher(dir, className);
+                }
+            }
+
+            for (String relativePath : listJavaFiles(dir)) {
+                String appletClass = resolveAppletClassFromFile(dir, relativePath);
+                if (appletClass != null) {
+                    return createAppletLauncher(dir, appletClass);
                 }
             }
         } catch (IOException e) {
@@ -196,6 +329,12 @@ public class InteractiveWrapper {
 
     private static void executeSession(Path dir, String mainFileHint) {
         try {
+            String runClassName = resolveRunClassName(dir, mainFileHint);
+            if (runClassName == null || runClassName.isEmpty()) {
+                System.err.println(RED + "❌ No class with a main method or applet entry was found." + RESET);
+                return;
+            }
+
             List<String> javaFiles = listJavaFiles(dir);
             if (javaFiles.isEmpty()) {
                 System.err.println(RED + "❌ No Java files found to compile." + RESET);
@@ -224,16 +363,10 @@ public class InteractiveWrapper {
 
             System.out.println(GREEN + "✅ Compilation successful" + RESET);
 
-            String runClassName = resolveRunClassName(dir, mainFileHint);
-            if (runClassName == null || runClassName.isEmpty()) {
-                System.err.println(RED + "❌ No class with a main method was found." + RESET);
-                return;
-            }
-
             // Run with performance-tuned JVM flags
             ProcessBuilder runPb = new ProcessBuilder(
                     "sh", "-c",
-                    "ulimit -t " + CPU_LIMIT + " && java -XX:TieredStopAtLevel=1 -cp . " + runClassName);
+                "ulimit -t " + CPU_LIMIT + " && java -XX:TieredStopAtLevel=1 -cp . " + runClassName);
             runPb.directory(dir.toFile());
             runPb.inheritIO();
 

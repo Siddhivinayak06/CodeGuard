@@ -7,13 +7,78 @@ const logger = require('./logger');
 
 const isMacOS = process.platform === 'darwin';
 
-function resolveJavaClassNames(code = '') {
+function buildJavaMainLauncherCode(packageName, mainFqcn) {
+  const packageDecl = packageName ? `package ${packageName};\n` : '';
+  return `${packageDecl}public class __RunnerLauncher {
+    public static void main(String[] args) {
+        try {
+            java.lang.reflect.Method mainMethod =
+                Class.forName("${mainFqcn}").getMethod("main", String[].class);
+            mainMethod.invoke(null, (Object) args);
+        } catch (Throwable t) {
+          Throwable cause = (t instanceof java.lang.reflect.InvocationTargetException && t.getCause() != null)
+            ? t.getCause()
+            : t;
+          if (cause instanceof java.awt.HeadlessException) {
+            System.out.println("GUI execution skipped in headless environment.");
+            return;
+          }
+            cause.printStackTrace();
+            System.exit(1);
+        }
+    }
+}`;
+}
+
+function buildJavaAppletLauncherCode(packageName, appletFqcn) {
+  const packageDecl = packageName ? `package ${packageName};\n` : '';
+  return `${packageDecl}public class __RunnerLauncher {
+    public static void main(String[] args) {
+        System.setProperty("java.awt.headless", "true");
+        try {
+            Object instance = Class.forName("${appletFqcn}").getDeclaredConstructor().newInstance();
+            if (instance instanceof java.applet.Applet) {
+                java.applet.Applet applet = (java.applet.Applet) instance;
+                applet.init();
+                applet.start();
+                java.awt.image.BufferedImage canvas = new java.awt.image.BufferedImage(
+                    1,
+                    1,
+                    java.awt.image.BufferedImage.TYPE_INT_ARGB
+                );
+                java.awt.Graphics2D g = canvas.createGraphics();
+                applet.paint(g);
+                g.dispose();
+            }
+            System.out.println("Applet executed in headless mode.");
+        } catch (Throwable t) {
+          Throwable cause = (t instanceof java.lang.reflect.InvocationTargetException && t.getCause() != null)
+            ? t.getCause()
+            : t;
+          if (cause instanceof java.awt.HeadlessException) {
+            System.out.println("Applet compiled successfully (headless runtime skipped).");
+            return;
+          }
+            t.printStackTrace();
+            System.exit(1);
+        }
+    }
+}`;
+}
+
+function resolveJavaExecutionPlan(code = '') {
   const source = String(code || '');
+  const packageMatch = source.match(
+    /^\s*package\s+([A-Za-z_][A-Za-z0-9_.]*)\s*;/m
+  );
+  const packageName = packageMatch?.[1] || null;
 
   const publicClassMatch = source.match(
-    /^\s*public\s+class\s+([A-Za-z_][A-Za-z0-9_]*)/m
+    /^(?:public\s+class\s+([A-Za-z_][A-Za-z0-9_]*))/m
   );
-  const firstClassMatch = source.match(/^\s*class\s+([A-Za-z_][A-Za-z0-9_]*)/m);
+  const firstClassMatch = source.match(
+    /^(?:class\s+([A-Za-z_][A-Za-z0-9_]*))/m
+  );
 
   // Java requires the file name to match the public class (if present).
   const compileClassName =
@@ -23,9 +88,12 @@ function resolveJavaClassNames(code = '') {
   // This handles files that contain helper classes before the entry class.
   let runClassName = compileClassName;
   const mainIndex = source.search(/\bpublic\s+static\s+void\s+main\s*\(/);
+  const hasMain = mainIndex !== -1;
 
-  if (mainIndex !== -1) {
-    const classRegex = /(?:public\s+)?class\s+([A-Za-z_][A-Za-z0-9_]*)/g;
+  let launcherCode = '';
+
+  if (hasMain) {
+    const classRegex = /^(?:public\s+)?class\s+([A-Za-z_][A-Za-z0-9_]*)/gm;
     const beforeMain = source.slice(0, mainIndex);
     let match;
     let lastClassBeforeMain = null;
@@ -37,9 +105,36 @@ function resolveJavaClassNames(code = '') {
     if (lastClassBeforeMain) {
       runClassName = lastClassBeforeMain;
     }
+
+    const mainFqcn = packageName
+      ? `${packageName}.${runClassName}`
+      : runClassName;
+    launcherCode = buildJavaMainLauncherCode(packageName, mainFqcn);
+    runClassName = packageName
+      ? `${packageName}.__RunnerLauncher`
+      : '__RunnerLauncher';
+  } else {
+    const appletClassMatch = source.match(
+      /(?:public\s+)?class\s+([A-Za-z_][A-Za-z0-9_]*)\s+extends\s+(?:java\.applet\.Applet|javax\.swing\.JApplet|Applet|JApplet)\b/
+    );
+
+    if (appletClassMatch?.[1]) {
+      const appletClassName = appletClassMatch[1];
+      const appletFqcn = packageName
+        ? `${packageName}.${appletClassName}`
+        : appletClassName;
+      launcherCode = buildJavaAppletLauncherCode(packageName, appletFqcn);
+      runClassName = packageName
+        ? `${packageName}.__RunnerLauncher`
+        : '__RunnerLauncher';
+    }
   }
 
-  return { compileClassName, runClassName };
+  if (!launcherCode && packageName) {
+    runClassName = `${packageName}.${runClassName}`;
+  }
+
+  return { compileClassName, runClassName, launcherCode };
 }
 
 class LocalRunner {
@@ -296,13 +391,22 @@ class LocalRunner {
           timeoutMs
         );
       } else if (lang === 'java') {
-        const { compileClassName, runClassName } = resolveJavaClassNames(code);
+        const { compileClassName, runClassName, launcherCode } =
+          resolveJavaExecutionPlan(code);
 
         const sourceFile = path.join(workDir, `${compileClassName}.java`);
         fs.writeFileSync(sourceFile, code);
 
+        const javaFiles = [sourceFile];
+        if (launcherCode) {
+          const launcherFile = path.join(workDir, '__RunnerLauncher.java');
+          fs.writeFileSync(launcherFile, launcherCode);
+          javaFiles.push(launcherFile);
+        }
+
         try {
-          execSync(`"${runtime.compile}" "${sourceFile}"`, {
+          const quotedFiles = javaFiles.map((file) => `"${file}"`).join(' ');
+          execSync(`"${runtime.compile}" ${quotedFiles}`, {
             cwd: workDir,
             stdio: 'pipe',
           });
@@ -399,13 +503,22 @@ class LocalRunner {
         runCmd = executableFile;
         runArgs = [];
       } else if (lang === 'java') {
-        const { compileClassName, runClassName } = resolveJavaClassNames(code);
+        const { compileClassName, runClassName, launcherCode } =
+          resolveJavaExecutionPlan(code);
 
         const sourceFile = path.join(workDir, `${compileClassName}.java`);
         fs.writeFileSync(sourceFile, code);
 
+        const javaFiles = [sourceFile];
+        if (launcherCode) {
+          const launcherFile = path.join(workDir, '__RunnerLauncher.java');
+          fs.writeFileSync(launcherFile, launcherCode);
+          javaFiles.push(launcherFile);
+        }
+
         try {
-          execSync(`"${runtime.compile}" "${sourceFile}"`, {
+          const quotedFiles = javaFiles.map((file) => `"${file}"`).join(' ');
+          execSync(`"${runtime.compile}" ${quotedFiles}`, {
             cwd: workDir,
             stdio: 'pipe',
           });
