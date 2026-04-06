@@ -955,9 +955,19 @@ export function FileExplorer({
     <>
       {/* Desktop: Sidebar */}
       <div
-        className={`hidden md:flex flex-col h-full bg-background text-foreground border-r border-border transition-all duration-200 ${isCollapsed ? "w-12" : "w-64"} ${className}`}
+        className={`hidden md:flex relative flex-col h-full bg-background text-foreground transition-all duration-200 ${
+          isCollapsed
+            ? "w-2 border-r border-border/70 bg-background/70 overflow-visible shrink-0"
+            : "w-64 border-r border-border overflow-hidden"
+        } ${className}`}
       >
-        <div className="px-3 py-2 border-b border-border flex items-center justify-between">
+        <div
+          className={`flex items-center justify-between ${
+            isCollapsed
+              ? "absolute top-3 left-2 z-40"
+              : "px-3 py-2 border-b border-border"
+          }`}
+        >
           {!isCollapsed && (
             <span className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
               Explorer
@@ -966,7 +976,11 @@ export function FileExplorer({
           <Button
             variant="ghost"
             size="icon"
-            className="h-7 w-7 ml-auto text-muted-foreground hover:text-sidebar-accent-foreground hover:bg-sidebar-accent"
+            className={`text-muted-foreground hover:text-sidebar-accent-foreground hover:bg-sidebar-accent ${
+              isCollapsed
+                ? "h-8 w-8 bg-card/95 border border-border shadow-md backdrop-blur text-foreground hover:text-foreground hover:bg-muted"
+                : "h-7 w-7 ml-auto"
+            }`}
             onClick={() => setIsCollapsed(!isCollapsed)}
             title={isCollapsed ? "Expand" : "Collapse"}
           >

@@ -48,6 +48,55 @@ interface CodeEditorProps {
   disableClipboardActions?: boolean;
 }
 
+const INTERNAL_FILE_TEMPLATES: Record<string, string> = {
+  java: `public class Main {
+    public static void main(String[] args) {
+        System.out.println("Hello, World!");
+    }
+}`,
+  python: `print("Hello, World!")`,
+  c: `#include <stdio.h>
+
+int main(void) {
+    printf("Hello, World!\\n");
+    return 0;
+}`,
+  cpp: `#include <iostream>
+
+int main() {
+    std::cout << "Hello, World!" << std::endl;
+    return 0;
+}`,
+  csv: "Name,Age\nAlice,21",
+};
+
+const RUNNABLE_LANGUAGES = new Set(["java", "python", "c", "cpp"]);
+
+const getDefaultFileNameForLanguage = (language: string) => {
+  switch (String(language || "").toLowerCase()) {
+    case "python":
+      return "main.py";
+    case "java":
+      return "Main.java";
+    case "cpp":
+      return "main.cpp";
+    case "c":
+      return "main.c";
+    default:
+      return "main.txt";
+  }
+};
+
+const getLanguageFromFileName = (fileName: string, fallback: string) => {
+  const ext = fileName.split(".").pop()?.toLowerCase();
+  if (ext === "py") return "python";
+  if (ext === "java") return "java";
+  if (ext === "cpp" || ext === "cc" || ext === "hpp") return "cpp";
+  if (ext === "c" || ext === "h") return "c";
+  if (ext === "csv" || ext === "xlsx" || ext === "xls") return "csv";
+  return fallback;
+};
+
 export default function CodeEditor({
   code,
   setCode,
@@ -143,6 +192,260 @@ export default function CodeEditor({
 
   const showModeSection =
     pathname === "/compiler" || pathname === "/interactive";
+
+  const hasExternalFileModel = Boolean(
+    files &&
+      activeFileName &&
+      onFileSelect &&
+      onFileCreate &&
+      onFileDelete &&
+      onFileChange,
+  );
+
+  const [internalFiles, setInternalFiles] = useState<FileData[]>(() => {
+    const defaultFileName = getDefaultFileNameForLanguage(lang);
+    const fileLanguage = getLanguageFromFileName(defaultFileName, lang);
+    const defaultTemplate = INTERNAL_FILE_TEMPLATES[fileLanguage] || code || "";
+
+    return [
+      {
+        name: defaultFileName,
+        content: code || defaultTemplate,
+        language: fileLanguage,
+      },
+    ];
+  });
+  const [internalActiveFileName, setInternalActiveFileName] = useState<string>(
+    () => getDefaultFileNameForLanguage(lang),
+  );
+
+  const handleInternalFileSelect = (fileName: string) => {
+    const selected = internalFiles.find((file) => file.name === fileName);
+    if (!selected) {
+      return;
+    }
+
+    setInternalActiveFileName(fileName);
+    setCode(selected.content);
+    if (RUNNABLE_LANGUAGES.has(selected.language)) {
+      onLangChange(selected.language);
+    }
+  };
+
+  const handleInternalFileCreate = (fileName: string) => {
+    const normalizedName = String(fileName || "").trim();
+    if (!normalizedName) {
+      return;
+    }
+
+    if (internalFiles.some((file) => file.name === normalizedName)) {
+      return;
+    }
+
+    const fileLanguage = getLanguageFromFileName(normalizedName, lang);
+    const nextContent = INTERNAL_FILE_TEMPLATES[fileLanguage] || "";
+
+    setInternalFiles((prev) => [
+      ...prev,
+      {
+        name: normalizedName,
+        content: nextContent,
+        language: fileLanguage,
+      },
+    ]);
+    setInternalActiveFileName(normalizedName);
+    setCode(nextContent);
+    if (RUNNABLE_LANGUAGES.has(fileLanguage)) {
+      onLangChange(fileLanguage);
+    }
+  };
+
+  const handleInternalFileDelete = (fileName: string) => {
+    setInternalFiles((prev) => {
+      if (prev.length <= 1) {
+        return prev;
+      }
+
+      const nextFiles = prev.filter((file) => file.name !== fileName);
+      if (nextFiles.length === prev.length) {
+        return prev;
+      }
+
+      if (internalActiveFileName === fileName) {
+        const fallbackFile = nextFiles[0];
+        if (fallbackFile) {
+          setInternalActiveFileName(fallbackFile.name);
+          setCode(fallbackFile.content);
+          if (RUNNABLE_LANGUAGES.has(fallbackFile.language)) {
+            onLangChange(fallbackFile.language);
+          }
+        }
+      }
+
+      return nextFiles;
+    });
+  };
+
+  const handleInternalFileChange = (fileName: string, newContent: string) => {
+    setInternalFiles((prev) => {
+      let changed = false;
+      const nextFiles = prev.map((file) => {
+        if (file.name !== fileName || file.content === newContent) {
+          return file;
+        }
+        changed = true;
+        return {
+          ...file,
+          content: newContent,
+        };
+      });
+      return changed ? nextFiles : prev;
+    });
+
+    if (internalActiveFileName === fileName) {
+      setCode(newContent);
+    }
+  };
+
+  const handleInternalFileRename = (oldName: string, newName: string) => {
+    const normalizedNewName = String(newName || "").trim();
+    if (!normalizedNewName || normalizedNewName === oldName) {
+      return;
+    }
+
+    setInternalFiles((prev) => {
+      if (prev.some((file) => file.name === normalizedNewName)) {
+        return prev;
+      }
+
+      const current = prev.find((file) => file.name === oldName);
+      if (!current) {
+        return prev;
+      }
+
+      const nextLanguage = getLanguageFromFileName(normalizedNewName, current.language || lang);
+      const nextFiles = prev.map((file) =>
+        file.name === oldName
+          ? {
+              ...file,
+              name: normalizedNewName,
+              language: nextLanguage,
+            }
+          : file,
+      );
+
+      if (internalActiveFileName === oldName) {
+        setInternalActiveFileName(normalizedNewName);
+        if (RUNNABLE_LANGUAGES.has(nextLanguage)) {
+          onLangChange(nextLanguage);
+        }
+      }
+
+      return nextFiles;
+    });
+  };
+
+  const handleInternalFileUpload = (fileName: string, content: string) => {
+    const normalizedName = String(fileName || "").trim();
+    if (!normalizedName) {
+      return;
+    }
+
+    if (internalFiles.some((file) => file.name === normalizedName)) {
+      return;
+    }
+
+    const fileLanguage = getLanguageFromFileName(normalizedName, lang);
+    setInternalFiles((prev) => [
+      ...prev,
+      {
+        name: normalizedName,
+        content,
+        language: fileLanguage,
+      },
+    ]);
+    setInternalActiveFileName(normalizedName);
+    setCode(content);
+    if (RUNNABLE_LANGUAGES.has(fileLanguage)) {
+      onLangChange(fileLanguage);
+    }
+  };
+
+  const handleEditorLangChange = (nextLang: string) => {
+    onLangChange(nextLang);
+
+    if (hasExternalFileModel) {
+      return;
+    }
+
+    const defaultFileName = getDefaultFileNameForLanguage(nextLang);
+    const existingFile = internalFiles.find((file) => file.name === defaultFileName);
+    if (existingFile) {
+      setInternalActiveFileName(defaultFileName);
+      setCode(existingFile.content);
+      return;
+    }
+
+    const template = INTERNAL_FILE_TEMPLATES[nextLang] || "";
+    const fileLanguage = getLanguageFromFileName(defaultFileName, nextLang);
+
+    setInternalFiles((prev) => [
+      ...prev,
+      {
+        name: defaultFileName,
+        content: template,
+        language: fileLanguage,
+      },
+    ]);
+    setInternalActiveFileName(defaultFileName);
+    setCode(template);
+  };
+
+  const effectiveFiles = hasExternalFileModel ? files || [] : internalFiles;
+  const effectiveActiveFileName = hasExternalFileModel
+    ? activeFileName || ""
+    : internalActiveFileName;
+
+  const effectiveOnFileSelect = hasExternalFileModel
+    ? onFileSelect
+    : handleInternalFileSelect;
+  const effectiveOnFileCreate = hasExternalFileModel
+    ? onFileCreate
+    : handleInternalFileCreate;
+  const effectiveOnFileDelete = hasExternalFileModel
+    ? onFileDelete
+    : handleInternalFileDelete;
+  const effectiveOnFileChange = hasExternalFileModel
+    ? onFileChange
+    : handleInternalFileChange;
+  const effectiveOnFileRename = hasExternalFileModel
+    ? onFileRename
+    : handleInternalFileRename;
+  const effectiveOnFileUpload = hasExternalFileModel
+    ? onFileUpload
+    : handleInternalFileUpload;
+
+  useEffect(() => {
+    if (hasExternalFileModel) {
+      return;
+    }
+
+    setInternalFiles((prev) => {
+      let changed = false;
+      const nextFiles = prev.map((file) => {
+        if (file.name !== internalActiveFileName || file.content === code) {
+          return file;
+        }
+        changed = true;
+        return {
+          ...file,
+          content: code,
+        };
+      });
+
+      return changed ? nextFiles : prev;
+    });
+  }, [code, hasExternalFileModel, internalActiveFileName]);
 
   const showToast = (message: string) => {
     setShowWarning(message);
@@ -339,7 +642,7 @@ export default function CodeEditor({
     >
       <EditorToolbar
         lang={lang}
-        onLangChange={onLangChange}
+        onLangChange={handleEditorLangChange}
         showLangSelector={showLangSelector}
         currentMode={currentMode}
         handleModeChange={handleModeChange}
@@ -365,53 +668,52 @@ export default function CodeEditor({
 
       {/* Main Content Area */}
       <div className="flex-1 flex relative overflow-hidden">
-        {files &&
-          activeFileName &&
-          onFileSelect &&
-          onFileCreate &&
-          onFileDelete && (
+        {effectiveActiveFileName &&
+          effectiveOnFileSelect &&
+          effectiveOnFileCreate &&
+          effectiveOnFileDelete && (
             <FileExplorer
-              files={files}
-              activeFile={activeFileName}
-              onFileSelect={onFileSelect}
-              onFileCreate={onFileCreate}
-              onFileDelete={onFileDelete}
-              onFileRename={onFileRename}
-              onFileUpload={onFileUpload}
+              files={effectiveFiles}
+              activeFile={effectiveActiveFileName}
+              onFileSelect={effectiveOnFileSelect}
+              onFileCreate={effectiveOnFileCreate}
+              onFileDelete={effectiveOnFileDelete}
+              onFileRename={effectiveOnFileRename}
+              onFileUpload={effectiveOnFileUpload}
             />
           )}
 
         <div className="flex-1 relative flex flex-col min-w-0">
           {/* Tab Bar */}
-          {files && files.length > 0 && onFileSelect && (
+          {effectiveFiles.length > 0 && effectiveOnFileSelect && (
             <div className="flex items-center bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 overflow-x-auto scrollbar-hide">
-              {files.map((file) => (
+              {effectiveFiles.map((file) => (
                 <div
                   key={file.name}
                   className={`
                                         group flex items-center gap-2 px-3 py-2 text-sm border-r border-gray-200 dark:border-gray-800 cursor-pointer min-w-[120px] max-w-[200px] select-none transition-colors
-                                        ${activeFileName === file.name
+                                        ${effectiveActiveFileName === file.name
                       ? "bg-white dark:bg-gray-900 text-blue-600 dark:text-blue-400 border-t-2 border-t-blue-500 font-medium"
                       : "bg-gray-100 dark:bg-gray-950 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800"
                     }
                                     `}
-                  onClick={() => onFileSelect(file.name)}
+                  onClick={() => effectiveOnFileSelect(file.name)}
                 >
                   <FileCode2
                     size={14}
                     className={
-                      activeFileName === file.name
+                      effectiveActiveFileName === file.name
                         ? "text-blue-500"
                         : "text-gray-400"
                     }
                   />
                   <span className="truncate flex-1">{file.name}</span>
-                  {onFileDelete && files.length > 1 && (
+                  {effectiveOnFileDelete && effectiveFiles.length > 1 && (
                     <button
                       className="opacity-0 group-hover:opacity-100 p-0.5 rounded-md hover:bg-red-100 dark:hover:bg-red-900/30 hover:text-red-500 transition-all"
                       onClick={(e) => {
                         e.stopPropagation();
-                        onFileDelete(file.name);
+                        effectiveOnFileDelete(file.name);
                       }}
                     >
                       <X size={12} />
@@ -424,7 +726,9 @@ export default function CodeEditor({
 
           <div className="flex-1 relative">
             {(() => {
-              const activeFile = files?.find((f) => f.name === activeFileName);
+              const activeFile = effectiveFiles.find(
+                (file) => file.name === effectiveActiveFileName,
+              );
               const isCsv = /\.(csv|xlsx|xls)$/i.test(activeFile?.name || "");
 
               if (isCsv && activeFile) {
@@ -432,9 +736,9 @@ export default function CodeEditor({
                   <CsvViewer
                     content={activeFile.content}
                     onChange={
-                      onFileChange
+                      effectiveOnFileChange
                         ? (newContent) =>
-                          onFileChange(activeFile.name, newContent)
+                            effectiveOnFileChange(activeFile.name, newContent)
                         : undefined
                     }
                     readOnly={disabled || locked || !isFullscreen}
@@ -447,19 +751,23 @@ export default function CodeEditor({
                 <Editor
                   height="100%"
                   language={
-                    files
+                    effectiveFiles.length > 0
                       ? activeFile?.language || lang
                       : lang
                   }
                   value={
-                    files
+                    effectiveFiles.length > 0
                       ? activeFile?.content || ""
                       : code
                   }
                   theme={theme === "dark" ? "glass-dark" : "glass-light"}
                   onChange={(value) => {
-                    if (files && activeFileName && onFileChange) {
-                      onFileChange(activeFileName, value || "");
+                    if (
+                      effectiveFiles.length > 0 &&
+                      effectiveActiveFileName &&
+                      effectiveOnFileChange
+                    ) {
+                      effectiveOnFileChange(effectiveActiveFileName, value || "");
                     } else {
                       setCode(value || "");
                     }
@@ -468,7 +776,7 @@ export default function CodeEditor({
                   options={{
                     readOnly: disabled || locked || !isFullscreen,
                     minimap: { enabled: false },
-                    fontSize: 16,
+                    fontSize: 15,
                     fontFamily: "'Fira Code', monospace",
                     wordWrap: "on",
                     lineNumbers: "on",
@@ -544,13 +852,14 @@ export default function CodeEditor({
 
             <AssistantPanel
               codeContext={{
-                code: files
-                  ? files.find((f) => f.name === activeFileName)?.content || ""
+                code: effectiveFiles.length > 0
+                  ? effectiveFiles.find((file) => file.name === effectiveActiveFileName)
+                      ?.content || ""
                   : code,
-                activeFile: activeFileName,
-                files: files?.map((f) => ({
-                  name: f.name,
-                  language: f.language,
+                activeFile: effectiveActiveFileName,
+                files: effectiveFiles.map((file) => ({
+                  name: file.name,
+                  language: file.language,
                 })),
                 cursorPosition: cursorPosition,
               }}
@@ -563,8 +872,9 @@ export default function CodeEditor({
       {/* Status Bar */}
       <StatusBar
         lang={
-          files
-            ? files.find((f) => f.name === activeFileName)?.language || lang
+          effectiveFiles.length > 0
+            ? effectiveFiles.find((file) => file.name === effectiveActiveFileName)
+                ?.language || lang
             : lang
         }
         cursorPosition={cursorPosition}

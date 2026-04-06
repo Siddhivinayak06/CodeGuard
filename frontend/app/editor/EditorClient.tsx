@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useRef, useState, useMemo } from "react";
+import React, { useEffect, useLayoutEffect, useRef, useState, useMemo } from "react";
 import axios from "axios";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
@@ -28,6 +28,7 @@ import type { User } from "@supabase/supabase-js";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
 import ReactMarkdown from "react-markdown";
+import type { ImperativePanelHandle } from "react-resizable-panels";
 
 type TestCaseResult = {
   test_case_id: number;
@@ -288,7 +289,61 @@ int main() {
   const [lastSubmittedAt, setLastSubmittedAt] = useState<string | null>(null);
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [isSubmittingFinal, setIsSubmittingFinal] = useState(false);
+  const [isResultPanelCollapsed, setIsResultPanelCollapsed] = useState(true);
   const resultTabContentRef = useRef<HTMLDivElement | null>(null);
+  const resultPanelRef = useRef<ImperativePanelHandle | null>(null);
+  const hasInitializedResultPanelRef = useRef(false);
+
+  const expandResultPanel = (size = 32) => {
+    const panel = resultPanelRef.current;
+    if (!panel) return;
+
+    if (panel.isCollapsed()) {
+      panel.expand();
+    }
+    panel.resize(size);
+    setIsResultPanelCollapsed(false);
+  };
+
+  const toggleResultPanel = () => {
+    const panel = resultPanelRef.current;
+    if (!panel) return;
+
+    if (panel.isCollapsed()) {
+      expandResultPanel(30);
+      return;
+    }
+
+    panel.collapse();
+    setIsResultPanelCollapsed(true);
+  };
+
+  useLayoutEffect(() => {
+    const collapsePanel = () => {
+      const panel = resultPanelRef.current;
+      if (!panel) {
+        return false;
+      }
+
+      panel.collapse();
+      setIsResultPanelCollapsed(true);
+      return true;
+    };
+
+    const collapsedImmediately = collapsePanel();
+
+    if (collapsedImmediately) {
+      hasInitializedResultPanelRef.current = true;
+      return;
+    }
+
+    const frame = requestAnimationFrame(() => {
+      collapsePanel();
+      hasInitializedResultPanelRef.current = true;
+    });
+
+    return () => cancelAnimationFrame(frame);
+  }, []);
 
   // Exam mode state
   const [examConfig, setExamConfig] = useState<{
@@ -1087,6 +1142,7 @@ int main() {
 
       setTestCaseResults(results);
       setShowUserTestCases(false);
+      expandResultPanel();
       requestAnimationFrame(() => {
         resultTabContentRef.current?.scrollTo({ top: 0 });
       });
@@ -1250,6 +1306,7 @@ int main() {
       setShowFloatingResultWindow(true);
       setLastSubmittedAt(new Date().toLocaleString());
       setExpandedCases({ 0: true });
+      expandResultPanel(36);
       requestAnimationFrame(() => {
         resultTabContentRef.current?.scrollTo({ top: 0 });
       });
@@ -1903,7 +1960,7 @@ int main() {
 
       {/* Main Content */}
       <div className="flex-1 p-4 overflow-hidden min-h-0">
-        <ResizablePanelGroup direction="horizontal" className="h-full gap-4">
+        <ResizablePanelGroup direction="horizontal" className="h-full gap-1.5">
           {/* LEFT: Problem Panel - Clean & Focused */}
           <ResizablePanel defaultSize={40} minSize={20}>
             <div className="h-full overflow-auto bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800">
@@ -2194,7 +2251,7 @@ int main() {
             </div>
           </ResizablePanel>
 
-          <ResizableHandle className="w-1 bg-gray-200 dark:bg-gray-700 hover:bg-indigo-500 dark:hover:bg-indigo-500 transition-colors duration-200 rounded" />
+          <ResizableHandle className="w-px bg-gray-300/70 dark:bg-gray-600/70 hover:bg-indigo-500 dark:hover:bg-indigo-500 transition-colors duration-200 rounded" />
 
           {/* RIGHT: Code Editor + Bottom Section */}
           <ResizablePanel defaultSize={60} minSize={40}>
@@ -2225,35 +2282,84 @@ int main() {
                 </div>
               </ResizablePanel>
 
-              <ResizableHandle className="h-1 bg-gray-200 dark:bg-gray-700 hover:bg-blue-400 dark:hover:bg-blue-600 transition-colors duration-200 rounded" />
+              <ResizableHandle className="h-px bg-gray-300/70 dark:bg-gray-600/70 hover:bg-blue-400 dark:hover:bg-blue-600 transition-colors duration-200 rounded" />
 
               {/* Bottom Section - Tabs like LeetCode */}
-              <ResizablePanel defaultSize={35} minSize={20}>
+              <ResizablePanel
+                ref={resultPanelRef}
+                defaultSize={6}
+                minSize={6}
+                collapsible
+                collapsedSize={6}
+                onCollapse={() => setIsResultPanelCollapsed(true)}
+                onExpand={() => {
+                  if (!hasInitializedResultPanelRef.current) {
+                    return;
+                  }
+                  setIsResultPanelCollapsed(false);
+                }}
+              >
                 <div className="h-full flex flex-col bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 overflow-hidden">
                   {/* Tab Headers */}
-                  <div className="flex-shrink-0 flex items-center px-4 py-2 border-b border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 gap-4">
+                  <div
+                    className={`flex-shrink-0 flex items-center justify-between px-4 bg-white dark:bg-gray-900 gap-3 ${
+                      isResultPanelCollapsed
+                        ? "h-11 border-b-0"
+                        : "py-2 border-b border-gray-100 dark:border-gray-800"
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
                     <button
-                      onClick={() => setShowUserTestCases(false)}
-                      className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${!showUserTestCases
+                      onClick={() => {
+                        if (isResultPanelCollapsed) {
+                          expandResultPanel(30);
+                        }
+                        setShowUserTestCases(false);
+                      }}
+                      className={`px-2.5 py-1.5 text-sm font-semibold rounded-lg transition-all ${!showUserTestCases
                         ? "bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-white"
                         : "text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800/50"
                         }`}
                     >
-                      Test Results
+                      Testcase
                     </button>
+                    <span className="text-gray-300 dark:text-gray-700">|</span>
                     <button
-                      onClick={() => setShowUserTestCases(true)}
-                      className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${showUserTestCases
+                      onClick={() => {
+                        if (isResultPanelCollapsed) {
+                          expandResultPanel(30);
+                        }
+                        setShowUserTestCases(true);
+                      }}
+                      className={`px-2.5 py-1.5 text-sm font-semibold rounded-lg transition-all ${showUserTestCases
                         ? "bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-white"
                         : "text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800/50"
                         }`}
                     >
-                      Custom Tests
+                      Test Result
+                    </button>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={toggleResultPanel}
+                      className="h-7 w-7 inline-flex items-center justify-center rounded-md text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
+                      title={isResultPanelCollapsed ? "Expand tests panel" : "Collapse tests panel"}
+                    >
+                      <svg
+                        className={`w-4 h-4 transition-transform ${isResultPanelCollapsed ? "rotate-180" : ""}`}
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                      </svg>
                     </button>
                   </div>
 
                   {/* Tab Content */}
-                  <div ref={resultTabContentRef} className="flex-1 overflow-auto bg-gray-50/50 dark:bg-gray-950/50">
+                  {!isResultPanelCollapsed && (
+                    <div ref={resultTabContentRef} className="flex-1 overflow-auto bg-gray-50/50 dark:bg-gray-950/50">
                     {/* Test Case Results Tab */}
                     {!showUserTestCases && (
                       <div className="h-full p-4">
@@ -2605,7 +2711,8 @@ int main() {
                         </div>
                       </div>
                     )}
-                  </div>
+                    </div>
+                  )}
                 </div>
               </ResizablePanel>
             </ResizablePanelGroup>

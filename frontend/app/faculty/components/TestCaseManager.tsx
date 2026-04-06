@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   FlaskConical as TestIcon,
   Plus as PlusIcon,
@@ -47,8 +47,18 @@ export default function TestCaseManager({
   generatingTests,
   description,
 }: TestCaseManagerProps) {
-  const [expandedCases, setExpandedCases] = useState<Set<number>>(new Set([0]));
+  const [expandedCases, setExpandedCases] = useState<Set<number>>(new Set());
   const [focusedField, setFocusedField] = useState<string | null>(null);
+
+  const allExpanded = testCases.length > 0 && expandedCases.size === testCases.length;
+
+  useEffect(() => {
+    // Keep expanded indexes in sync when cases are removed.
+    setExpandedCases((prev) => {
+      const filtered = new Set([...prev].filter((idx) => idx < testCases.length));
+      return filtered.size === prev.size ? prev : filtered;
+    });
+  }, [testCases.length]);
 
   const toggleExpanded = (idx: number) => {
     setExpandedCases((prev) => {
@@ -74,6 +84,15 @@ export default function TestCaseManager({
       handleTestCaseChange(newIdx, "is_hidden", tc.is_hidden || false);
       setExpandedCases((prev) => new Set([...prev, newIdx]));
     }, 0);
+  };
+
+  const toggleAllCases = () => {
+    if (allExpanded) {
+      setExpandedCases(new Set());
+      return;
+    }
+
+    setExpandedCases(new Set(testCases.map((_, idx) => idx)));
   };
 
   const inputClass = (field: string) =>
@@ -114,6 +133,20 @@ export default function TestCaseManager({
         </div>
 
         <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={toggleAllCases}
+            className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-gray-700 dark:text-gray-300 hover:border-teal-300 dark:hover:border-teal-700 hover:text-teal-600 dark:hover:text-teal-400 transition-colors"
+          >
+            <motion.span
+              animate={{ rotate: allExpanded ? 180 : 0 }}
+              transition={{ duration: 0.2 }}
+            >
+              <ChevronDown size={14} />
+            </motion.span>
+            {allExpanded ? "Collapse All" : "Expand All"}
+          </button>
+
           <select
             value={fuzzerCount}
             onChange={(e) => setFuzzerCount(Number(e.target.value) || 100)}
@@ -220,9 +253,14 @@ export default function TestCaseManager({
                     <motion.div
                       animate={{ rotate: isExpanded ? 180 : 0 }}
                       transition={{ duration: 0.2 }}
-                      className="p-1.5 rounded-lg hover:bg-white/50 dark:hover:bg-gray-800/50"
+                      className={cx(
+                        "p-2 rounded-lg border transition-all",
+                        isExpanded
+                          ? "bg-teal-500 text-white border-teal-500 shadow-md shadow-teal-500/30"
+                          : "bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-300 border-gray-200 dark:border-gray-700 group-hover:border-teal-300 dark:group-hover:border-teal-700 group-hover:text-teal-600 dark:group-hover:text-teal-400",
+                      )}
                     >
-                      <ChevronDown size={16} className="text-gray-400" />
+                      <ChevronDown size={15} />
                     </motion.div>
                   </div>
                 </div>
