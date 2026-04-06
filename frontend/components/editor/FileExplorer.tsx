@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from "react";
+import { createPortal } from "react-dom";
 import {
   File,
   FilePlus,
@@ -98,6 +99,8 @@ type ContextMenuState = {
   targetType: ContextMenuTargetType;
   path: string;
 };
+
+const CONTEXT_MENU_VIEWPORT_PADDING = 8;
 
 const createFolderNode = (name: string, path: string): ExplorerTreeNode => ({
   type: "folder",
@@ -297,6 +300,7 @@ export function FileExplorer({
   const [mobileOpen, setMobileOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
+  const [isClient, setIsClient] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const contextMenuRef = useRef<HTMLDivElement>(null);
@@ -381,6 +385,10 @@ export function FileExplorer({
     const handleClick = () => setContextMenu(null);
     window.addEventListener("click", handleClick);
     return () => window.removeEventListener("click", handleClick);
+  }, []);
+
+  useEffect(() => {
+    setIsClient(true);
   }, []);
 
   const handleFileRead = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -474,20 +482,38 @@ export function FileExplorer({
     }
   }, [editingFile]);
 
+  const resolvePathInSelectedFolder = (value: string) => {
+    const normalizedValue = normalizePath(value);
+    if (!normalizedValue) {
+      return "";
+    }
+
+    const baseFolder = normalizePath(selectedFolder);
+    if (!baseFolder) {
+      return normalizedValue;
+    }
+
+    if (
+      normalizedValue === baseFolder ||
+      normalizedValue.startsWith(`${baseFolder}/`)
+    ) {
+      return normalizedValue;
+    }
+
+    return `${baseFolder}/${normalizedValue}`;
+  };
+
   const handleCreateSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const rawName = newFileName.trim();
     if (rawName) {
-      let name = normalizePath(rawName);
-      if (selectedFolder && !name.includes("/")) {
-        name = `${selectedFolder}/${name}`;
-      }
+      const name = resolvePathInSelectedFolder(rawName);
 
       if (!isAllowedFile(name)) {
         setError("Only .py, .java, .c, .cpp, .csv, .xlsx, .xls files are allowed!");
         return;
       }
-      if (files.some((f) => f.name === name)) {
+      if (files.some((f) => normalizePath(f.name) === name)) {
         setError("File with this name already exists!");
         return;
       }
@@ -515,11 +541,7 @@ export function FileExplorer({
 
   const handleCreateFolderSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const rawFolder = normalizePath(newFolderName);
-    const folder =
-      selectedFolder && rawFolder && !rawFolder.includes("/")
-        ? `${selectedFolder}/${rawFolder}`
-        : rawFolder;
+    const folder = resolvePathInSelectedFolder(newFolderName);
 
     if (!folder) {
       return;
@@ -676,12 +698,51 @@ export function FileExplorer({
     contextMenu?.targetType === "file" ? normalizePath(contextMenu.path) : "";
   const canRenameContextFile = Boolean(onFileRename && contextFilePath);
 
+  useEffect(() => {
+    if (!contextMenu || !contextMenuRef.current) {
+      return;
+    }
+
+    const { innerWidth, innerHeight } = window;
+    const menuRect = contextMenuRef.current.getBoundingClientRect();
+
+    let nextX = contextMenu.x;
+    let nextY = contextMenu.y;
+
+    if (nextX + menuRect.width > innerWidth - CONTEXT_MENU_VIEWPORT_PADDING) {
+      nextX = Math.max(
+        CONTEXT_MENU_VIEWPORT_PADDING,
+        innerWidth - menuRect.width - CONTEXT_MENU_VIEWPORT_PADDING,
+      );
+    }
+
+    if (nextY + menuRect.height > innerHeight - CONTEXT_MENU_VIEWPORT_PADDING) {
+      nextY = Math.max(
+        CONTEXT_MENU_VIEWPORT_PADDING,
+        innerHeight - menuRect.height - CONTEXT_MENU_VIEWPORT_PADDING,
+      );
+    }
+
+    if (nextX !== contextMenu.x || nextY !== contextMenu.y) {
+      setContextMenu((prev) =>
+        prev
+          ? {
+              ...prev,
+              x: nextX,
+              y: nextY,
+            }
+          : prev,
+      );
+    }
+  }, [contextMenu]);
+
   const renderTreeNodes = (nodes: ExplorerTreeNode[], depth = 0): React.ReactNode => {
     return nodes.map((node) => {
       if (node.type === "folder") {
         const isExpanded = expandedFolders.has(node.path);
         const isSelected = selectedFolder === node.path;
         const leftPad = 8 + depth * 14;
+        const childLeftPad = 24 + (depth + 1) * 14;
 
         return (
           <div key={`folder-${node.path}`}>
@@ -714,8 +775,74 @@ export function FileExplorer({
               </span>
             </button>
 
-            {isExpanded && node.children.length > 0 && (
-              <div>{renderTreeNodes(node.children, depth + 1)}</div>
+            {isExpanded && (
+              <div>
+                {node.children.length > 0 && (
+                  <div>{renderTreeNodes(node.children, depth + 1)}</div>
+                )}
+
+                {isSelected && isCreatingFolder && (
+                  <form
+                    onSubmit={handleCreateFolderSubmit}
+                    className="relative py-1"
+                    style={{ paddingLeft: `${childLeftPad}px`, paddingRight: "8px" }}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <div className="flex items-center gap-2">
+                      <FolderOpen size={14} className="text-muted-foreground" />
+                      <Input
+                        autoFocus
+                        value={newFolderName}
+                        onChange={(e) => {
+                          setNewFolderName(e.target.value);
+                          setError(null);
+                        }}
+                        onBlur={() => {
+                          if (!error) setIsCreatingFolder(false);
+                        }}
+                        placeholder="new-folder"
+                        className={`h-7 text-xs bg-background border-border text-foreground placeholder:text-muted-foreground ${error ? "border-destructive focus-visible:ring-destructive" : "focus-visible:ring-ring"}`}
+                      />
+                    </div>
+                    {error && (
+                      <p className="mt-1 text-[10px] text-red-500 font-medium animate-in fade-in slide-in-from-top-1">
+                        {error}
+                      </p>
+                    )}
+                  </form>
+                )}
+
+                {isSelected && isCreating && (
+                  <form
+                    onSubmit={handleCreateSubmit}
+                    className="relative py-1"
+                    style={{ paddingLeft: `${childLeftPad}px`, paddingRight: "8px" }}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <div className="flex items-center gap-2">
+                      <FileCode2 size={14} className="text-muted-foreground" />
+                      <Input
+                        autoFocus
+                        value={newFileName}
+                        onChange={(e) => {
+                          setNewFileName(e.target.value);
+                          setError(null);
+                        }}
+                        onBlur={() => {
+                          if (!error) setIsCreating(false);
+                        }}
+                        placeholder="Main.java"
+                        className={`h-7 text-xs bg-background border-border text-foreground placeholder:text-muted-foreground ${error ? "border-destructive focus-visible:ring-destructive" : "focus-visible:ring-ring"}`}
+                      />
+                    </div>
+                    {error && (
+                      <p className="mt-1 text-[10px] text-red-500 font-medium animate-in fade-in slide-in-from-top-1">
+                        {error}
+                      </p>
+                    )}
+                  </form>
+                )}
+              </div>
             )}
           </div>
         );
@@ -953,7 +1080,7 @@ export function FileExplorer({
                 onContextMenu={(e) => handleContextMenu(e, "workspace", "")}
               >
 
-                {isCreatingFolder && (
+                {isCreatingFolder && selectedFolder === "" && (
                   <form onSubmit={handleCreateFolderSubmit} className="px-2 py-1">
                     <div className="flex items-center gap-2">
                       <FolderOpen size={14} className="text-muted-foreground" />
@@ -983,7 +1110,7 @@ export function FileExplorer({
                   </form>
                 )}
 
-                {isCreating && (
+                {isCreating && selectedFolder === "" && (
                   <form onSubmit={handleCreateSubmit} className="px-2 py-1">
                     <div className="flex items-center gap-2">
                       <FileCode2 size={14} className="text-muted-foreground" />
@@ -1211,99 +1338,102 @@ export function FileExplorer({
       </div>
 
       {/* Context Menu Portal */}
-      {contextMenu && (
-        <div
-          ref={contextMenuRef}
-          className="fixed z-50 bg-popover text-popover-foreground border border-border rounded-md shadow-md py-1 w-52"
-          style={{ top: contextMenu.y, left: contextMenu.x }}
-          onClick={(e) => e.stopPropagation()}
-        >
-          <button
-            className="w-full text-left px-4 py-2 text-sm hover:bg-muted hover:text-foreground flex items-center gap-2"
-            onClick={() => {
-              openCreateFileAt(contextFolderPath);
-              setContextMenu(null);
-            }}
+      {isClient &&
+        contextMenu &&
+        createPortal(
+          <div
+            ref={contextMenuRef}
+            className="fixed z-50 bg-popover text-popover-foreground border border-border rounded-md shadow-md py-1 w-52"
+            style={{ top: contextMenu.y, left: contextMenu.x }}
+            onClick={(e) => e.stopPropagation()}
           >
-            <FilePlus size={14} /> New File...
-          </button>
+            <button
+              className="w-full text-left px-4 py-2 text-sm hover:bg-muted hover:text-foreground flex items-center gap-2"
+              onClick={() => {
+                openCreateFileAt(contextFolderPath);
+                setContextMenu(null);
+              }}
+            >
+              <FilePlus size={14} /> New File...
+            </button>
 
-          <button
-            className="w-full text-left px-4 py-2 text-sm hover:bg-muted hover:text-foreground flex items-center gap-2"
-            onClick={() => {
-              openCreateFolderAt(contextFolderPath);
-              setContextMenu(null);
-            }}
-          >
-            <FolderPlus size={14} /> New Folder...
-          </button>
+            <button
+              className="w-full text-left px-4 py-2 text-sm hover:bg-muted hover:text-foreground flex items-center gap-2"
+              onClick={() => {
+                openCreateFolderAt(contextFolderPath);
+                setContextMenu(null);
+              }}
+            >
+              <FolderPlus size={14} /> New Folder...
+            </button>
 
-          <div className="my-1 border-t border-border" />
-
-          <button
-            className="w-full text-left px-4 py-2 text-sm hover:bg-muted hover:text-foreground flex items-center gap-2"
-            onClick={() => {
-              handleRefreshExplorer();
-              setContextMenu(null);
-            }}
-          >
-            <RefreshCw size={14} /> Refresh
-          </button>
-
-          <button
-            className="w-full text-left px-4 py-2 text-sm hover:bg-muted hover:text-foreground flex items-center gap-2"
-            onClick={() => {
-              handleCollapseAll();
-              setContextMenu(null);
-            }}
-          >
-            <ChevronDown size={14} /> Collapse All
-          </button>
-
-          {contextMenu.targetType === "file" && (
             <div className="my-1 border-t border-border" />
-          )}
 
-          {contextMenu.targetType === "file" && (
             <button
               className="w-full text-left px-4 py-2 text-sm hover:bg-muted hover:text-foreground flex items-center gap-2"
               onClick={() => {
-                if (!contextFilePath) return;
-                handleDownload(contextFilePath);
+                handleRefreshExplorer();
                 setContextMenu(null);
               }}
             >
-              <Download size={14} /> Download
+              <RefreshCw size={14} /> Refresh
             </button>
-          )}
 
-          {contextMenu.targetType === "file" && canRenameContextFile && (
             <button
               className="w-full text-left px-4 py-2 text-sm hover:bg-muted hover:text-foreground flex items-center gap-2"
               onClick={() => {
-                if (!contextFilePath) return;
-                openRenameForPath(contextFilePath);
+                handleCollapseAll();
                 setContextMenu(null);
               }}
             >
-              <Edit2 size={14} /> Rename
+              <ChevronDown size={14} /> Collapse All
             </button>
-          )}
 
-          {contextMenu.targetType === "file" && files.length > 1 && (
-            <button
-              className="w-full text-left px-4 py-2 text-sm text-destructive hover:bg-destructive/10 flex items-center gap-2"
-              onClick={() => {
-                if (!contextFilePath) return;
-                onFileDelete(contextFilePath);
-                setContextMenu(null);
-              }}
-            >
-              <Trash2 size={14} /> Delete
-            </button>
-          )}
-        </div>
-      )}
+            {contextMenu.targetType === "file" && (
+              <div className="my-1 border-t border-border" />
+            )}
+
+            {contextMenu.targetType === "file" && (
+              <button
+                className="w-full text-left px-4 py-2 text-sm hover:bg-muted hover:text-foreground flex items-center gap-2"
+                onClick={() => {
+                  if (!contextFilePath) return;
+                  handleDownload(contextFilePath);
+                  setContextMenu(null);
+                }}
+              >
+                <Download size={14} /> Download
+              </button>
+            )}
+
+            {contextMenu.targetType === "file" && canRenameContextFile && (
+              <button
+                className="w-full text-left px-4 py-2 text-sm hover:bg-muted hover:text-foreground flex items-center gap-2"
+                onClick={() => {
+                  if (!contextFilePath) return;
+                  openRenameForPath(contextFilePath);
+                  setContextMenu(null);
+                }}
+              >
+                <Edit2 size={14} /> Rename
+              </button>
+            )}
+
+            {contextMenu.targetType === "file" && files.length > 1 && (
+              <button
+                className="w-full text-left px-4 py-2 text-sm text-destructive hover:bg-destructive/10 flex items-center gap-2"
+                onClick={() => {
+                  if (!contextFilePath) return;
+                  onFileDelete(contextFilePath);
+                  setContextMenu(null);
+                }}
+              >
+                <Trash2 size={14} /> Delete
+              </button>
+            )}
+          </div>,
+          document.body,
+        )}
     </>
   );
 }
