@@ -150,6 +150,126 @@ const workDir = process.argv[2];
 const lang = process.argv[3];
 const isWindows = process.platform === 'win32';
 
+const MAIN_METHOD_RE = /\\bpublic\\s+static\\s+void\\s+main\\s*\\(/;
+const PACKAGE_RE = /^\\s*package\\s+([a-zA-Z0-9_.]+)\\s*;/m;
+
+function normalizeRelPath(fileName) {
+  return String(fileName || '').replace(/\\\\/g, '/').replace(/^[/]+/, '');
+}
+
+function resolveSafePath(baseDir, relativePath) {
+  const normalized = normalizeRelPath(relativePath);
+  const absoluteBase = path.resolve(baseDir);
+  const absoluteTarget = path.resolve(baseDir, normalized);
+
+  if (
+    absoluteTarget !== absoluteBase &&
+    !absoluteTarget.startsWith(absoluteBase + path.sep)
+  ) {
+    throw new Error('Invalid path: ' + relativePath);
+  }
+
+  return absoluteTarget;
+}
+
+function writeBufferedFile(baseDir, fileName, contentLines) {
+  const relative = normalizeRelPath(fileName);
+  if (!relative) return;
+
+  const targetPath = resolveSafePath(baseDir, relative);
+  fs.mkdirSync(path.dirname(targetPath), { recursive: true });
+  fs.writeFileSync(targetPath, contentLines.join('\\n'));
+}
+
+function listFilesRecursive(rootDir, extension) {
+  const stack = [rootDir];
+  const files = [];
+
+  while (stack.length > 0) {
+    const currentDir = stack.pop();
+    const entries = fs.readdirSync(currentDir, { withFileTypes: true });
+
+    for (const entry of entries) {
+      const entryPath = path.join(currentDir, entry.name);
+      if (entry.isDirectory()) {
+        stack.push(entryPath);
+      } else if (entry.isFile() && entry.name.endsWith(extension)) {
+        files.push(entryPath);
+      }
+    }
+  }
+
+  files.sort((a, b) => a.localeCompare(b));
+  return files;
+}
+
+function resolveMainClassFromSource(source) {
+  if (!MAIN_METHOD_RE.test(source)) {
+    return null;
+  }
+
+  const mainMatch = source.match(MAIN_METHOD_RE);
+  const mainIndex = mainMatch && typeof mainMatch.index === 'number'
+    ? mainMatch.index
+    : -1;
+
+  const classRegex = /(?:public\\s+)?class\\s+([A-Za-z_][A-Za-z0-9_]*)/g;
+  const beforeMain = mainIndex >= 0 ? source.slice(0, mainIndex) : source;
+
+  let className = null;
+  let classMatch;
+  while ((classMatch = classRegex.exec(beforeMain)) !== null) {
+    className = classMatch[1];
+  }
+
+  if (!className) {
+    const anyClassMatch = source.match(
+      /(?:public\\s+)?class\\s+([A-Za-z_][A-Za-z0-9_]*)/
+    );
+    className = anyClassMatch ? anyClassMatch[1] : null;
+  }
+
+  if (!className) {
+    return null;
+  }
+
+  const pkgMatch = source.match(PACKAGE_RE);
+  return pkgMatch ? pkgMatch[1] + '.' + className : className;
+}
+
+function resolveJavaMainClass(baseDir, preferredFile) {
+  const preferred = normalizeRelPath(preferredFile);
+  if (preferred) {
+    try {
+      const preferredPath = resolveSafePath(baseDir, preferred);
+      if (fs.existsSync(preferredPath)) {
+        const source = fs.readFileSync(preferredPath, 'utf-8');
+        const className = resolveMainClassFromSource(source);
+        if (className) {
+          return className;
+        }
+      }
+    } catch (_err) {
+      // Fall through and search all files.
+    }
+  }
+
+  const javaFiles = listFilesRecursive(baseDir, '.java');
+  for (const javaFile of javaFiles) {
+    try {
+      const source = fs.readFileSync(javaFile, 'utf-8');
+      const className = resolveMainClassFromSource(source);
+      if (className) {
+        return className;
+      }
+    } catch (_err) {
+      // Ignore unreadable files and continue.
+    }
+  }
+
+  return '';
+}
+
 const rl = readline.createInterface({
   input: process.stdin,
   terminal: false
@@ -160,13 +280,15 @@ let files = {};
 
 rl.on('line', (line) => {
   if (line.startsWith('__FILE_START__ ')) {
-    currentFile = line.substring(15).trim();
+    currentFile = normalizeRelPath(line.substring(15).trim());
     files[currentFile] = [];
   } else if (line === '__RUN_CODE__') {
+    const mainFileHint = currentFile;
+
     // Write files
     for (const [fname, contentLines] of Object.entries(files)) {
       try {
-        fs.writeFileSync(path.join(workDir, fname), contentLines.join('\\n'));
+        writeBufferedFile(workDir, fname, contentLines);
       } catch (err) {
         console.error('Failed to write file ' + fname + ': ' + err.message);
       }
@@ -181,44 +303,36 @@ rl.on('line', (line) => {
       
       if (srcFile) {
         const comp = spawnSync(compiler, ['-O2', path.join(workDir, srcFile), '-o', exeFile, '-lm'], { 
-          stdio: ['ignore', 'inherit', 'inherit'], 
+          stdio: ['inherit', 'inherit', 'inherit'], 
           cwd: workDir,
           shell: isWindows 
         });
         if (comp.status === 0) {
-          spawnSync(exeFile, [], { stdio: ['ignore', 'inherit', 'inherit'], cwd: workDir });
+          spawnSync(exeFile, [], { stdio: ['inherit', 'inherit', 'inherit'], cwd: workDir });
         }
       }
     } else if (lang === 'java') {
-      const comp = spawnSync('javac', ['*.java'], { 
-        stdio: ['ignore', 'inherit', 'inherit'], 
-        cwd: workDir, 
-        shell: true 
-      });
-      if (comp.status === 0) {
-        let mainClass = '';
-        try {
-          const javaFiles = fs.readdirSync(workDir).filter(f => f.endsWith('.java'));
-          for (const f of javaFiles) {
-            const content = fs.readFileSync(path.join(workDir, f), 'utf-8');
-            if (content.includes('public static void main')) {
-              mainClass = path.basename(f, '.java');
-              break;
-            }
+      const javaFiles = listFilesRecursive(workDir, '.java');
+      if (javaFiles.length === 0) {
+        console.error('No Java files found to compile');
+      } else {
+        const relativeJavaFiles = javaFiles.map((f) => path.relative(workDir, f));
+        const comp = spawnSync('javac', ['-g:none', ...relativeJavaFiles], {
+          stdio: ['inherit', 'inherit', 'inherit'],
+          cwd: workDir,
+          shell: isWindows,
+        });
+
+        if (comp.status === 0) {
+          const mainClass = resolveJavaMainClass(workDir, mainFileHint);
+          if (mainClass) {
+            spawnSync('java', ['-XX:+UseSerialGC', '-Xmx128M', '-cp', '.', mainClass], {
+              stdio: ['inherit', 'inherit', 'inherit'],
+              cwd: workDir,
+            });
+          } else {
+            console.error('No class with a main method was found');
           }
-          if (!mainClass) {
-            const classes = fs.readdirSync(workDir).filter(f => f.endsWith('.class'));
-            if (classes.length > 0) mainClass = path.basename(classes[0], '.class');
-          }
-        } catch (err) {
-          console.error('Error finding main class: ' + err.message);
-        }
-        
-        if (mainClass) {
-          spawnSync('java', ['-XX:+UseSerialGC', '-Xmx128M', '-cp', '.', mainClass], { 
-            stdio: ['ignore', 'inherit', 'inherit'], 
-            cwd: workDir 
-          });
         }
       }
     }

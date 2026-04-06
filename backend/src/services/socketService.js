@@ -475,7 +475,16 @@ const handleConnection = async (ws, req) => {
           cppProcess.write('__RUN_CODE__\n');
         } else if (lang === 'java' && javaProcess) {
           safeSend(ws, '\x1b[2J\x1b[H');
-          fileBuffer.forEach((file) => {
+          const orderedJavaFiles = (() => {
+            const activeIdx = fileBuffer.findIndex((file) => file.isActive);
+            if (activeIdx === -1) return [...fileBuffer];
+            const reordered = [...fileBuffer];
+            const [activeFile] = reordered.splice(activeIdx, 1);
+            reordered.push(activeFile);
+            return reordered;
+          })();
+
+          orderedJavaFiles.forEach((file) => {
             javaProcess.stdin.write(`__FILE_START__ ${file.name}\n`);
             file.content
               .split('\n')
