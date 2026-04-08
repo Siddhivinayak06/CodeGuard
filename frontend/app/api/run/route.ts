@@ -8,8 +8,10 @@ type StudentErrorFormatInput = {
   stderr?: string | null;
 };
 
-const ANSI_ESCAPE_REGEX = /\u001b\[[0-9;?]*[ -/]*[@-~]/g;
-const OSC_ESCAPE_REGEX = /\u001b\][^\u0007]*(?:\u0007|\u001b\\)/g;
+const ESC = String.fromCharCode(27);
+const BEL = String.fromCharCode(7);
+const ANSI_ESCAPE_REGEX = new RegExp(`${ESC}\\[[0-9;?]*[ -/]*[@-~]`, "g");
+const OSC_ESCAPE_REGEX = new RegExp(`${ESC}\\][^${BEL}]*(?:${BEL}|${ESC}\\\\)`, "g");
 
 const normalizeRunnerErrorText = (raw?: string | null): string => {
   const text = String(raw ?? "")

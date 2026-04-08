@@ -82,7 +82,9 @@ function tokenizeKeywords(text, minLen = 2) {
   if (!normalized) return [];
 
   const tokens = normalized.split(/\s+/).filter(Boolean);
-  return tokens.filter((token) => token.length >= minLen || /^\d+$/.test(token));
+  return tokens.filter(
+    (token) => token.length >= minLen || /^\d+$/.test(token)
+  );
 }
 
 function compareKeywordContains(actual, expected, options = {}) {
@@ -275,10 +277,9 @@ function compareOutput(actual, expected, mode, options = {}) {
       const keywordFallback = compareKeywordContains(actual, expected, options);
       return {
         match: keywordFallback.match,
-        details:
-          keywordFallback.match
-            ? 'Match (keyword fallback)'
-            : 'Output differs',
+        details: keywordFallback.match
+          ? 'Match (keyword fallback)'
+          : 'Output differs',
       };
     }
 

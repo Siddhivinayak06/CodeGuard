@@ -69,8 +69,10 @@ const ERROR_PANEL_STATUSES = new Set([
   "output_limit_exceeded",
 ]);
 
-const ANSI_ESCAPE_REGEX = /\u001b\[[0-9;?]*[ -/]*[@-~]/g;
-const OSC_ESCAPE_REGEX = /\u001b\][^\u0007]*(?:\u0007|\u001b\\)/g;
+const ESC = String.fromCharCode(27);
+const BEL = String.fromCharCode(7);
+const ANSI_ESCAPE_REGEX = new RegExp(`${ESC}\\[[0-9;?]*[ -/]*[@-~]`, "g");
+const OSC_ESCAPE_REGEX = new RegExp(`${ESC}\\][^${BEL}]*(?:${BEL}|${ESC}\\\\)`, "g");
 
 const cleanErrorForDisplay = (message?: string | null) =>
   String(message || "")
@@ -2418,11 +2420,11 @@ int main() {
           <ResizablePanel defaultSize={60} minSize={40}>
             <ResizablePanelGroup
               direction="vertical"
-              className="h-full gap-3 rounded-2xl overflow-hidden bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800"
+              className="relative h-full min-h-0 gap-3 rounded-2xl overflow-hidden bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800"
             >
               {/* Code Editor */}
-              <ResizablePanel defaultSize={65} minSize={30}>
-                <div className="h-full">
+              <ResizablePanel defaultSize={100} minSize={30} className="min-h-0 overflow-hidden">
+                <div className="h-full min-h-0 overflow-hidden">
                   <CodeEditor
                     code={code}
                     setCode={setCode}
@@ -2443,15 +2445,18 @@ int main() {
                 </div>
               </ResizablePanel>
 
-              <ResizableHandle className="h-px bg-gray-300/70 dark:bg-gray-600/70 hover:bg-blue-400 dark:hover:bg-blue-600 transition-colors duration-200 rounded" />
+              {!isResultPanelCollapsed && (
+                <ResizableHandle className="h-px bg-gray-300/70 dark:bg-gray-600/70 hover:bg-blue-400 dark:hover:bg-blue-600 transition-colors duration-200 rounded" />
+              )}
 
               {/* Bottom Section - Tabs like LeetCode */}
               <ResizablePanel
                 ref={resultPanelRef}
-                defaultSize={6}
-                minSize={6}
+                defaultSize={0}
+                minSize={0}
+                className="min-h-0 overflow-hidden"
                 collapsible
-                collapsedSize={6}
+                collapsedSize={0}
                 onCollapse={() => setIsResultPanelCollapsed(true)}
                 onExpand={() => {
                   if (!hasInitializedResultPanelRef.current) {
@@ -2901,6 +2906,20 @@ int main() {
                   )}
                 </div>
               </ResizablePanel>
+
+              {isResultPanelCollapsed && (
+                <button
+                  type="button"
+                  onClick={() => expandResultPanel(30)}
+                  className="absolute bottom-3 right-3 z-20 inline-flex items-center gap-2 rounded-lg border border-blue-200 bg-white/95 px-3 py-2 text-xs font-semibold text-blue-700 shadow-sm transition hover:bg-blue-50 dark:border-blue-900/60 dark:bg-gray-900/95 dark:text-blue-300 dark:hover:bg-blue-950/20"
+                >
+                  <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7-7-7" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-7 7-7-7" />
+                  </svg>
+                  <span>Tests</span>
+                </button>
+              )}
             </ResizablePanelGroup>
           </ResizablePanel>
         </ResizablePanelGroup>
