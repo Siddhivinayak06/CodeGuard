@@ -1,30 +1,89 @@
 "use client";
 
-import { useState, useEffect, Suspense } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
-import { motion, AnimatePresence } from "framer-motion";
-import { createClient } from "@/lib/supabase/client";
+import { useSearchParams } from "next/navigation";
+import { AnimatePresence, motion } from "framer-motion";
 import {
-  Mail,
-  Lock,
   ArrowRight,
-  Shield,
-  Code,
-  Zap,
-  CheckCircle,
+  Building2,
+  CheckCircle2,
+  CircleAlert,
+  Code2,
   Eye,
   EyeOff,
+  Lock,
+  Mail,
+  ShieldCheck,
+  Sparkles,
+  type LucideIcon,
 } from "lucide-react";
+import { createClient } from "@/lib/supabase/client";
 import { getURL } from "@/lib/utils";
+
+type ValueProp = {
+  icon: LucideIcon;
+  title: string;
+  description: string;
+  label: string;
+};
+
+const valueProps: ValueProp[] = [
+  {
+    icon: ShieldCheck,
+    title: "Verified Exam Security",
+    description: "Session lock, single-device policy, and violation tracking.",
+    label: "Policy-first",
+  },
+  {
+    icon: Code2,
+    title: "Language-Isolated Runtime",
+    description: "Execute Python, C, and Java in tightly controlled containers.",
+    label: "Docker-isolated",
+  },
+  {
+    icon: Sparkles,
+    title: "Fast Workflow",
+    description: "Move from login to dashboard in a few seconds, without friction.",
+    label: "Low-latency",
+  },
+];
+
+const authMetrics = [
+  { value: "99.9%", label: "Session integrity" },
+  { value: "< 2s", label: "Auth response" },
+  { value: "24/7", label: "Policy monitoring" },
+];
+
+const staggerContainer = {
+  hidden: { opacity: 0 },
+  show: {
+    opacity: 1,
+    transition: {
+      staggerChildren: 0.12,
+      delayChildren: 0.2,
+    },
+  },
+};
+
+const fadeInUp = {
+  hidden: { y: 20, opacity: 0 },
+  show: {
+    y: 0,
+    opacity: 1,
+    transition: { type: "spring" as const, stiffness: 280, damping: 24 },
+  },
+};
 
 export default function LoginPage() {
   return (
-    <Suspense fallback={
-      <div className="flex min-h-screen items-center justify-center bg-gray-50 dark:bg-gray-950">
-        <div className="w-10 h-10 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin" />
-      </div>
-    }>
+    <Suspense
+      fallback={
+        <div className="flex min-h-screen items-center justify-center bg-slate-100 dark:bg-slate-950">
+          <div className="h-11 w-11 rounded-full border-4 border-indigo-500 border-t-transparent animate-spin" />
+        </div>
+      }
+    >
       <LoginContent />
     </Suspense>
   );
@@ -32,21 +91,21 @@ export default function LoginPage() {
 
 function LoginContent() {
   const isProduction = process.env.NODE_ENV === "production";
+  const searchParams = useSearchParams();
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
-  const router = useRouter();
-  const searchParams = useSearchParams();
 
-  // Handle URL error parameters (e.g., from OAuth callback)
   useEffect(() => {
     const errorParam = searchParams.get("error");
     if (errorParam) {
       const errorMessages: Record<string, string> = {
-        UserNotRegistered: "Your account is not registered in CodeGuard. Please contact your administrator to get access.",
+        UserNotRegistered:
+          "Your account is not registered in CodeGuard. Please contact your administrator to get access.",
         AuthCodeError: "Authentication failed. Please try again.",
         AuthError: "An authentication error occurred. Please try again.",
       };
@@ -69,7 +128,6 @@ function LoginContent() {
     });
   }, [searchParams]);
 
-
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
@@ -77,8 +135,6 @@ function LoginContent() {
 
     try {
       const supabase = createClient();
-
-      // 1. Sign in directly from browser → Supabase (bypasses BunkerWeb)
       const { error: signInError } = await supabase.auth.signInWithPassword({
         email,
         password,
@@ -88,26 +144,26 @@ function LoginContent() {
         throw new Error(signInError.message);
       }
 
-      // 2. Get the authenticated user
-      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      const {
+        data: { user },
+        error: userError,
+      } = await supabase.auth.getUser();
+
       if (userError || !user) {
         throw new Error("User not found after login.");
       }
 
-      // 3. Enforce single session — update DB via Supabase client
       const sessionId = crypto.randomUUID();
       await supabase
         .from("users")
         .update({
           active_session_id: sessionId,
-          session_updated_at: new Date().toISOString()
+          session_updated_at: new Date().toISOString(),
         } as never)
         .eq("uid", user.id);
 
-      // 4. Set session cookie client-side
       document.cookie = `device_session_id=${sessionId}; path=/; max-age=${60 * 60 * 24 * 7}; SameSite=Lax${window.location.protocol === "https:" ? "; Secure" : ""}`;
 
-      // 5. Determine redirect based on role
       const role = user.user_metadata?.role;
       const normalizedRole = role?.toLowerCase();
 
@@ -117,7 +173,9 @@ function LoginContent() {
 
       setIsSuccess(true);
       setIsLoading(false);
-      window.location.href = target;
+      window.setTimeout(() => {
+        window.location.href = target;
+      }, 520);
     } catch (err: unknown) {
       const errorMessage =
         err instanceof Error ? err.message : "An error occurred during login";
@@ -126,410 +184,308 @@ function LoginContent() {
     }
   };
 
-  const containerVariants = {
-    hidden: { opacity: 0 },
-    visible: {
-      opacity: 1,
-      transition: {
-        staggerChildren: 0.1,
-        delayChildren: 0.2,
-      },
-    },
-  };
-
-  const itemVariants = {
-    hidden: { y: 20, opacity: 0 },
-    visible: {
-      y: 0,
-      opacity: 1,
-      transition: { type: "spring" as const, stiffness: 300, damping: 24 },
-    },
-  };
-
-  const featureVariants = {
-    hidden: { x: -20, opacity: 0 },
-    visible: {
-      x: 0,
-      opacity: 1,
-      transition: { type: "spring" as const, stiffness: 300, damping: 24 },
-    },
-  };
-
   return (
-    <div className="flex min-h-screen selection:bg-purple-500/30">
-      {/* Left Panel - Animated Background */}
-      <motion.div
-        initial={{ x: "-100%" }}
-        animate={{ x: 0 }}
-        transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
-        className="hidden lg:flex lg:w-1/2 relative overflow-hidden bg-gradient-to-br from-indigo-600 via-purple-600 to-pink-600"
-      >
-        {/* Animated gradient overlay */}
-        <div className="absolute inset-0 bg-gradient-to-br from-indigo-600/90 via-purple-600/90 to-pink-600/90 animate-gradient-slow" />
+    <div className="relative h-[100dvh] overflow-hidden bg-gradient-to-br from-slate-50 via-purple-50 to-blue-50 text-slate-900 selection:bg-purple-400/30 dark:from-slate-950 dark:via-purple-950/30 dark:to-blue-950/30 dark:text-slate-100">
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(129,140,248,0.20),transparent_45%),radial-gradient(circle_at_bottom_left,rgba(236,72,153,0.16),transparent_42%)]" />
 
-        {/* Floating shapes with Parallax */}
-        <div className="absolute inset-0 overflow-hidden pointer-events-none">
-          <motion.div
-            animate={{
-              y: [0, -20, 0],
-              rotate: [0, 5, 0],
-            }}
-            transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }}
-            className="absolute w-96 h-96 bg-white/10 rounded-full -top-20 -left-20 blur-3xl opacity-50"
-          />
-          <motion.div
-            animate={{
-              y: [0, 20, 0],
-              rotate: [0, -5, 0],
-            }}
-            transition={{
-              duration: 7,
-              repeat: Infinity,
-              ease: "easeInOut",
-              delay: 1,
-            }}
-            className="absolute w-72 h-72 bg-pink-400/20 rounded-full top-1/3 left-1/4 blur-3xl opacity-40"
-          />
-          <motion.div
-            animate={{
-              scale: [1, 1.1, 1],
-            }}
-            transition={{
-              duration: 8,
-              repeat: Infinity,
-              ease: "easeInOut",
-              delay: 2,
-            }}
-            className="absolute w-64 h-64 bg-cyan-400/20 rounded-full bottom-20 left-10 blur-3xl opacity-30"
-          />
-        </div>
-
-        {/* Content */}
-        <motion.div
-          variants={containerVariants}
-          initial="hidden"
-          animate="visible"
-          className="relative z-10 flex flex-col justify-center px-12 xl:px-20"
+      <div className="relative z-10 mx-auto flex h-full w-full max-w-[1400px] flex-col lg:grid lg:grid-cols-[1.05fr_0.95fr]">
+        <motion.aside
+          initial={{ opacity: 0, x: -36 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
+          className="hidden h-full border-r border-slate-200/60 px-10 py-10 dark:border-slate-800/80 lg:flex lg:items-center xl:px-16"
         >
-          {/* Logo */}
-          <motion.div variants={itemVariants} className="mb-12">
-            <h1 className="text-5xl xl:text-6xl font-black text-white tracking-tight">
-              Code<span className="text-pink-200">Guard</span>
-            </h1>
-            <p className="mt-3 text-lg text-white/80 font-medium tracking-wide">
-              Secure Programming Environment
-            </p>
-          </motion.div>
-
-          {/* Features */}
-          <div className="space-y-8">
-            {[
-              {
-                icon: Shield,
-                title: "Proctored Environment",
-                desc: "Secure code execution with violation tracking",
-              },
-              {
-                icon: Code,
-                title: "Multi-Language Support",
-                desc: "Python, C, Java with Docker isolation",
-              },
-              {
-                icon: Zap,
-                title: "AI-Powered Assistance",
-                desc: "Get intelligent help while learning",
-              },
-            ].map((feature, index) => (
-              <motion.div
-                key={index}
-                variants={featureVariants}
-                whileHover={{ x: 10 }}
-                className="flex items-start gap-4"
-              >
-                <div className="flex-shrink-0 w-12 h-12 rounded-2xl bg-white/10 backdrop-blur-md flex items-center justify-center border border-white/20 shadow-xl">
-                  <feature.icon className="w-6 h-6 text-white" />
-                </div>
-                <div>
-                  <h3 className="text-xl font-bold text-white leading-tight">
-                    {feature.title}
-                  </h3>
-                  <p className="mt-1 text-white/70 font-medium">
-                    {feature.desc}
-                  </p>
-                </div>
-              </motion.div>
-            ))}
-          </div>
-        </motion.div>
-      </motion.div>
-
-      {/* Right Panel - Login Form */}
-      <motion.div
-        initial={{ opacity: 0, x: 20 }}
-        animate={{ opacity: 1, x: 0 }}
-        transition={{ duration: 0.6, delay: 0.3 }}
-        className="flex-1 flex items-center justify-center p-6 sm:p-12 bg-gray-50 dark:bg-gray-950"
-      >
-        <div className="w-full max-w-md">
-          {/* Mobile Logo */}
           <motion.div
-            initial={{ y: -20, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            transition={{ delay: 0.5 }}
-            className="lg:hidden text-center mb-10"
+            variants={staggerContainer}
+            initial="hidden"
+            animate="show"
+            className="mx-auto flex w-full max-w-xl flex-col gap-8"
           >
-            <h1 className="text-4xl font-black text-gradient">CodeGuard</h1>
-            <p className="mt-2 text-gray-600 dark:text-gray-400">
-              Secure Programming Environment
-            </p>
-          </motion.div>
+            <motion.div variants={fadeInUp} className="space-y-5">
+              <p className="inline-flex w-fit items-center gap-2 rounded-full border border-indigo-200/80 bg-indigo-50/80 px-4 py-1.5 text-xs font-semibold uppercase tracking-[0.16em] text-indigo-700 shadow-sm dark:border-indigo-800/70 dark:bg-indigo-900/30 dark:text-indigo-300">
+                <Building2 className="h-3.5 w-3.5" />
+                Trusted by labs and exam cells
+              </p>
+              <h1 className="text-balance text-5xl font-black leading-tight text-slate-900 dark:text-slate-50 xl:text-6xl">
+                Secure Sign-In for <span className="text-gradient">CodeGuard</span>
+              </h1>
+              <p className="max-w-xl text-lg leading-relaxed text-slate-600 dark:text-slate-300">
+                Access your proctored coding workspace with enterprise-grade safeguards and a streamlined experience.
+              </p>
+            </motion.div>
 
-          {/* Form Card */}
-          <AnimatePresence mode="wait">
-            {!isSuccess ? (
-              <motion.div
-                key="login-form"
-                initial={{ scale: 0.95, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                exit={{ scale: 1.05, opacity: 0, filter: "blur(10px)" }}
-                transition={{ duration: 0.5, delay: 0.4 }}
-                className="glass-card-premium rounded-3xl p-8 sm:p-10 border border-white/20 dark:border-gray-800 shadow-2xl"
-              >
-                {/* Header */}
-                <div className="text-center mb-8">
-                  <motion.div
-                    whileHover={{ rotate: 360 }}
-                    transition={{ duration: 0.8, ease: "anticipate" }}
-                    className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 flex items-center justify-center shadow-lg shadow-purple-500/30 animate-pulse-glow"
-                  >
-                    <Lock className="w-8 h-8 text-white" />
-                  </motion.div>
-                  <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
-                    Welcome Back
-                  </h2>
-                  <p className="mt-2 text-gray-600 dark:text-gray-400 font-medium">
-                    Sign in to continue to your dashboard
+            <div className="grid gap-4">
+              {valueProps.map((feature) => (
+                <motion.article
+                  key={feature.title}
+                  variants={fadeInUp}
+                  whileHover={{ x: 8, transition: { duration: 0.22 } }}
+                  className="glass-card-premium rounded-2xl p-4 hover-lift"
+                >
+                  <div className="mb-3 flex items-center justify-between">
+                    <span className="inline-flex items-center rounded-full bg-indigo-500/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.15em] text-indigo-700 dark:text-indigo-300">
+                      {feature.label}
+                    </span>
+                    <feature.icon className="h-5 w-5 text-indigo-600 dark:text-indigo-300" />
+                  </div>
+                  <h3 className="text-base font-bold text-slate-900 dark:text-slate-100">{feature.title}</h3>
+                  <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">{feature.description}</p>
+                </motion.article>
+              ))}
+            </div>
+
+            <motion.div variants={fadeInUp} className="grid grid-cols-3 gap-3">
+              {authMetrics.map((item) => (
+                <div
+                  key={item.label}
+                  className="rounded-xl border border-slate-200/80 bg-white/75 px-3 py-2 text-center dark:border-slate-700 dark:bg-slate-900/70"
+                >
+                  <p className="text-base font-black text-slate-900 dark:text-slate-100">{item.value}</p>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500 dark:text-slate-400">
+                    {item.label}
                   </p>
                 </div>
+              ))}
+            </motion.div>
+          </motion.div>
+        </motion.aside>
 
-                {/* Error Message */}
-                <AnimatePresence mode="wait">
-                  {error && (
-                    <motion.div
-                      initial={{ height: 0, opacity: 0, y: -10 }}
-                      animate={{ height: "auto", opacity: 1, y: 0 }}
-                      exit={{ height: 0, opacity: 0, y: -10 }}
-                      className="mb-6 p-4 rounded-xl bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 overflow-hidden"
-                    >
-                      <p className="text-sm text-red-600 dark:text-red-400 flex items-center gap-2 font-medium">
-                        <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
-                        {error}
-                      </p>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
+        <motion.main
+          initial={{ opacity: 0, x: 24 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ duration: 0.65, delay: 0.12 }}
+          className="flex h-full items-start justify-center overflow-y-auto px-4 py-5 sm:px-8 sm:py-6 lg:items-center lg:overflow-hidden lg:px-12 lg:py-8"
+        >
+          <div className="w-full max-w-md">
+            <motion.div
+              initial={{ opacity: 0, y: -16 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.25 }}
+              className="mb-6 glass-card-premium rounded-2xl p-4 text-center lg:hidden"
+            >
+              <p className="text-[11px] font-semibold uppercase tracking-[0.15em] text-indigo-700 dark:text-indigo-300">
+                Secure Access
+              </p>
+              <h1 className="mt-1 text-2xl font-black text-slate-900 dark:text-white sm:text-3xl">CodeGuard Login</h1>
+              <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">
+                Proctored environment for practical evaluations
+              </p>
+            </motion.div>
 
-                {/* Form */}
-                <form onSubmit={handleLogin} className="space-y-5">
-                  <div className="space-y-2">
-                    <label className="text-sm font-semibold text-gray-700 dark:text-gray-300 ml-1">
-                      Email Address
-                    </label>
-                    <motion.div
-                      whileFocus={{ scale: 1.01 }}
-                      className="relative"
-                    >
-                      <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                      <input
-                        type="email"
-                        placeholder="you@example.com"
-                        className="input-premium pl-12 h-14"
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                        required
-                        disabled={isLoading}
-                      />
-                    </motion.div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <label className="text-sm font-semibold text-gray-700 dark:text-gray-300 ml-1">
-                      Password
-                    </label>
-                    <motion.div
-                      whileFocus={{ scale: 1.01 }}
-                      className="relative"
-                    >
-                      <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                      <input
-                        type={showPassword ? "text" : "password"}
-                        placeholder="••••••••"
-                        className="input-premium pl-12 pr-12 h-14 w-full"
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        required
-                        disabled={isLoading}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowPassword(!showPassword)}
-                        className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors focus:outline-none"
-                        tabIndex={-1}
+            <AnimatePresence mode="wait">
+              {!isSuccess ? (
+                <motion.section
+                  key="login-form"
+                  initial={{ opacity: 0, scale: 0.97, y: 16 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 1.02, y: -10, filter: "blur(8px)" }}
+                  transition={{ duration: 0.4 }}
+                  className="glass-card-premium relative overflow-hidden rounded-2xl sm:rounded-3xl"
+                >
+                  <div className="pointer-events-none absolute inset-x-0 top-0 h-20 bg-gradient-to-r from-indigo-400/20 via-transparent to-pink-400/20" />
+                  <div className="relative p-6 sm:p-8">
+                    <div className="mb-7 text-center">
+                      <motion.div
+                        whileHover={{ rotate: 8, scale: 1.05 }}
+                        transition={{ type: "spring", stiffness: 250, damping: 12 }}
+                        className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 text-white shadow-lg shadow-purple-700/30"
                       >
-                        {showPassword ? (
-                          <EyeOff className="w-5 h-5" />
-                        ) : (
-                          <Eye className="w-5 h-5" />
-                        )}
-                      </button>
-                    </motion.div>
-                  </div>
+                        <Lock className="h-7 w-7" />
+                      </motion.div>
+                      <h2 className="text-2xl font-black text-slate-900 dark:text-slate-100">Welcome back</h2>
+                      <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
+                        Sign in to continue to your personalized dashboard.
+                      </p>
+                    </div>
 
-                  {/* Submit Button */}
-                  <motion.button
-                    whileHover={{ scale: 1.02, translateY: -2 }}
-                    whileTap={{ scale: 0.98 }}
-                    type="submit"
-                    disabled={isLoading}
-                    className="w-full py-4 px-6 rounded-xl btn-primary flex items-center justify-center gap-3 text-lg font-bold disabled:opacity-60 shadow-xl overflow-hidden relative group"
-                  >
-                    {isLoading ? (
-                      <>
+                    <AnimatePresence mode="wait">
+                      {error && (
                         <motion.div
-                          animate={{ rotate: 360 }}
-                          transition={{
-                            duration: 1,
-                            repeat: Infinity,
-                            ease: "linear",
-                          }}
-                          className="w-5 h-5 border-2 border-white border-t-transparent rounded-full"
-                        />
-                        Signing In...
-                      </>
-                    ) : (
+                          key="auth-error"
+                          initial={{ opacity: 0, y: -10, height: 0 }}
+                          animate={{ opacity: 1, y: 0, height: "auto" }}
+                          exit={{ opacity: 0, y: -10, height: 0 }}
+                          className="mb-5 overflow-hidden rounded-xl border border-rose-200 bg-rose-50/90 px-4 py-3 dark:border-rose-900 dark:bg-rose-950/40"
+                        >
+                          <p className="flex items-start gap-2 text-sm font-medium text-rose-700 dark:text-rose-300">
+                            <CircleAlert className="mt-0.5 h-4 w-4 shrink-0" />
+                            <span>{error}</span>
+                          </p>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+
+                    <form onSubmit={handleLogin} className="space-y-4">
+                      <label className="block space-y-2">
+                        <span className="text-xs font-bold uppercase tracking-[0.12em] text-slate-600 dark:text-slate-300">
+                          Email address
+                        </span>
+                        <div className="relative">
+                          <Mail className="pointer-events-none absolute left-3.5 top-1/2 h-4.5 w-4.5 -translate-y-1/2 text-slate-400" />
+                          <input
+                            type="email"
+                            placeholder="you@college.edu"
+                            className="h-12 w-full rounded-xl border border-slate-300 bg-white/90 pl-11 pr-4 text-sm font-medium text-slate-900 outline-none transition focus:border-purple-500 focus:ring-4 focus:ring-purple-500/20 dark:border-slate-700 dark:bg-slate-900/80 dark:text-slate-100"
+                            value={email}
+                            onChange={(e) => setEmail(e.target.value)}
+                            required
+                            disabled={isLoading}
+                          />
+                        </div>
+                      </label>
+
+                      <label className="block space-y-2">
+                        <span className="text-xs font-bold uppercase tracking-[0.12em] text-slate-600 dark:text-slate-300">
+                          Password
+                        </span>
+                        <div className="relative">
+                          <Lock className="pointer-events-none absolute left-3.5 top-1/2 h-4.5 w-4.5 -translate-y-1/2 text-slate-400" />
+                          <input
+                            type={showPassword ? "text" : "password"}
+                            placeholder="Enter your password"
+                            className="h-12 w-full rounded-xl border border-slate-300 bg-white/90 pl-11 pr-12 text-sm font-medium text-slate-900 outline-none transition focus:border-purple-500 focus:ring-4 focus:ring-purple-500/20 dark:border-slate-700 dark:bg-slate-900/80 dark:text-slate-100"
+                            value={password}
+                            onChange={(e) => setPassword(e.target.value)}
+                            required
+                            disabled={isLoading}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowPassword((prev) => !prev)}
+                            aria-label={showPassword ? "Hide password" : "Show password"}
+                            className="absolute right-3 top-1/2 -translate-y-1/2 rounded-md p-1 text-slate-500 transition hover:text-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 dark:text-slate-400 dark:hover:text-slate-100"
+                          >
+                            {showPassword ? <EyeOff className="h-4.5 w-4.5" /> : <Eye className="h-4.5 w-4.5" />}
+                          </button>
+                        </div>
+                      </label>
+
+                      <motion.button
+                        whileHover={{ y: -2, scale: 1.01 }}
+                        whileTap={{ scale: 0.98 }}
+                        type="submit"
+                        disabled={isLoading}
+                        className="group relative flex h-12 w-full items-center justify-center gap-2 overflow-hidden rounded-xl btn-primary px-4 text-sm font-bold disabled:cursor-not-allowed disabled:opacity-65"
+                      >
+                        <span className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/35 to-transparent transition-transform duration-1000 group-hover:translate-x-full" />
+                        {isLoading ? (
+                          <>
+                            <motion.div
+                              animate={{ rotate: 360 }}
+                              transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                              className="h-4 w-4 rounded-full border-2 border-white border-t-transparent"
+                            />
+                            <span className="relative z-10">Signing in...</span>
+                          </>
+                        ) : (
+                          <>
+                            <span className="relative z-10">Sign In</span>
+                            <ArrowRight className="relative z-10 h-4.5 w-4.5" />
+                          </>
+                        )}
+                      </motion.button>
+
+                      <div className="relative py-2">
+                        <div className="absolute inset-0 flex items-center">
+                          <div className="w-full border-t border-slate-200 dark:border-slate-800" />
+                        </div>
+                        <p className="relative mx-auto w-fit bg-white/80 px-2 text-xs font-semibold uppercase tracking-[0.08em] text-slate-500 dark:bg-slate-900/75 dark:text-slate-400">
+                          Or continue with
+                        </p>
+                      </div>
+
+                      <motion.button
+                        whileHover={{ scale: 1.01 }}
+                        whileTap={{ scale: 0.98 }}
+                        type="button"
+                        onClick={async () => {
+                          const supabase = createClient();
+                          const { error: oauthError } = await supabase.auth.signInWithOAuth({
+                            provider: "azure",
+                            options: {
+                              scopes: "email",
+                              redirectTo: `${getURL()}/auth/callback`,
+                            },
+                          });
+
+                          if (oauthError) {
+                            setError(oauthError.message);
+                          }
+                        }}
+                        disabled={isLoading}
+                        className="flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white text-sm font-semibold text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-65 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800"
+                      >
+                        <svg className="h-4.5 w-4.5" viewBox="0 0 21 21" xmlns="http://www.w3.org/2000/svg">
+                          <rect x="1" y="1" width="9" height="9" fill="#F25022" />
+                          <rect x="1" y="11" width="9" height="9" fill="#00A4EF" />
+                          <rect x="11" y="1" width="9" height="9" fill="#7FBA00" />
+                          <rect x="11" y="11" width="9" height="9" fill="#FFB900" />
+                        </svg>
+                        <span>Sign in with Microsoft</span>
+                      </motion.button>
+                    </form>
+
+                    {!isProduction && (
                       <>
-                        <span className="relative z-10">Sign In</span>
-                        <ArrowRight className="w-5 h-5 relative z-10" />
-                        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000" />
+                        <div className="my-5 flex items-center gap-3">
+                          <div className="h-px flex-1 bg-slate-200 dark:bg-slate-800" />
+                          <span className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">
+                            Need an account?
+                          </span>
+                          <div className="h-px flex-1 bg-slate-200 dark:bg-slate-800" />
+                        </div>
+                        <motion.div whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.99 }}>
+                          <Link
+                            href="/auth/register"
+                            className="flex h-11 items-center justify-center rounded-xl btn-secondary text-sm font-bold"
+                          >
+                            Create account
+                          </Link>
+                        </motion.div>
                       </>
                     )}
-                  </motion.button>
-
-                  <div className="relative my-6">
-                    <div className="absolute inset-0 flex items-center">
-                      <div className="w-full border-t border-gray-200 dark:border-gray-800" />
-                    </div>
-                    <div className="relative flex justify-center text-sm">
-                      <span className="px-2 bg-white dark:bg-gray-950 text-gray-500">
-                        Or continue with
-                      </span>
-                    </div>
                   </div>
-
-                  <motion.button
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                    type="button"
-                    onClick={async () => {
-                      const supabase = createClient();
-                      const { error } = await supabase.auth.signInWithOAuth({
-                        provider: "azure",
-                        options: {
-                          scopes: "email",
-                          redirectTo: `${getURL()}/auth/callback`,
-                        },
-                      });
-                      if (error) setError(error.message);
-                    }}
-                    disabled={isLoading}
-                    className="w-full py-3.5 px-6 rounded-xl bg-[#2F2F2F] hover:bg-[#1a1a1a] dark:bg-white dark:hover:bg-gray-100 text-white dark:text-gray-900 border border-transparent flex items-center justify-center gap-3 font-semibold transition-all shadow-lg"
-                  >
-                    <svg
-                      className="w-5 h-5"
-                      viewBox="0 0 21 21"
-                      xmlns="http://www.w3.org/2000/svg"
-                    >
-                      <rect x="1" y="1" width="9" height="9" fill="#F25022" />
-                      <rect x="1" y="11" width="9" height="9" fill="#00A4EF" />
-                      <rect x="11" y="1" width="9" height="9" fill="#7FBA00" />
-                      <rect x="11" y="11" width="9" height="9" fill="#FFB900" />
-                    </svg>
-                    <span>Sign in with Microsoft</span>
-                  </motion.button>
-                </form>
-
-                {!isProduction && (
-                  <>
-                    {/* Divider */}
-                    <div className="my-8 flex items-center gap-4">
-                      <div className="flex-1 h-px bg-gray-200 dark:bg-gray-800" />
-                      <span className="text-sm text-gray-500 font-medium">
-                        New here?
-                      </span>
-                      <div className="flex-1 h-px bg-gray-200 dark:bg-gray-800" />
-                    </div>
-
-                    {/* Register Link */}
-                    <motion.div whileHover={{ scale: 1.02 }}>
-                      <Link
-                        href="/auth/register"
-                        className="block w-full py-4 px-6 rounded-xl btn-secondary text-center font-bold text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800/50 transition-colors shadow-md"
-                      >
-                        Create an Account
-                      </Link>
-                    </motion.div>
-                  </>
-                )}
-              </motion.div>
-            ) : (
-              <motion.div
-                key="success-overlay"
-                initial={{ scale: 0.8, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                className="text-center p-12 glass-card-premium rounded-3xl border border-white/20 dark:border-gray-800 shadow-2xl flex flex-col items-center gap-6"
-              >
-                <motion.div
-                  initial={{ scale: 0 }}
-                  animate={{ scale: 1 }}
-                  transition={{
-                    type: "spring",
-                    stiffness: 200,
-                    damping: 10,
-                    delay: 0.2,
-                  }}
-                  className="w-24 h-24 rounded-full bg-green-500 flex items-center justify-center shadow-lg shadow-green-500/30"
+                </motion.section>
+              ) : (
+                <motion.section
+                  key="success"
+                  initial={{ opacity: 0, scale: 0.9, y: 10 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  className="rounded-2xl border border-emerald-200 bg-emerald-50/90 p-6 text-center shadow-xl backdrop-blur dark:border-emerald-900 dark:bg-emerald-950/40 sm:rounded-3xl sm:p-8"
                 >
-                  <CheckCircle className="w-12 h-12 text-white" />
-                </motion.div>
-                <div>
-                  <h2 className="text-3xl font-black text-gray-900 dark:text-white">
-                    Sign In Successful!
-                  </h2>
-                  <p className="mt-2 text-gray-600 dark:text-gray-400 font-semibold text-lg">
-                    Redirecting you to your dashboard...
+                  <motion.div
+                    initial={{ scale: 0.2, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    transition={{ type: "spring", stiffness: 250, damping: 15 }}
+                    className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-emerald-500 text-white shadow-lg shadow-emerald-700/30"
+                  >
+                    <CheckCircle2 className="h-9 w-9" />
+                  </motion.div>
+                  <h2 className="text-2xl font-black text-emerald-900 dark:text-emerald-200">Sign in successful</h2>
+                  <p className="mt-2 text-sm font-medium text-emerald-700 dark:text-emerald-300">
+                    Preparing your dashboard...
                   </p>
-                </div>
-                <motion.div
-                  initial={{ width: 0 }}
-                  animate={{ width: "100%" }}
-                  transition={{ duration: 1.5, ease: "easeInOut" }}
-                  className="h-1.5 bg-green-500 rounded-full mt-4"
-                />
-              </motion.div>
-            )}
-          </AnimatePresence>
+                  <motion.div
+                    initial={{ width: 0 }}
+                    animate={{ width: "100%" }}
+                    transition={{ duration: 0.45, ease: "easeOut" }}
+                    className="mx-auto mt-5 h-1.5 rounded-full bg-emerald-500"
+                  />
+                </motion.section>
+              )}
+            </AnimatePresence>
 
-          {/* Footer */}
-          <motion.p
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 1 }}
-            className="mt-8 text-center text-sm text-gray-500 font-medium"
-          >
-            Protected by CodeGuard Security
-          </motion.p>
-        </div>
-      </motion.div>
+            <motion.p
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.6 }}
+              className="mt-6 text-center text-xs font-semibold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400"
+            >
+              Protected by CodeGuard policy controls
+            </motion.p>
+          </div>
+        </motion.main>
+      </div>
     </div>
   );
 }
