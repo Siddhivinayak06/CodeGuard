@@ -62,28 +62,28 @@ const roleOptions: RoleOption[] = [
 const valueProps: ValueProp[] = [
   {
     icon: ShieldCheck,
-    title: "Verified Exam Security",
-    description: "Session lock, single-device policy, and violation tracking.",
-    label: "Policy-first",
+    title: "Identity & Session Control",
+    description: "Single-device enforcement with tracked policy events.",
+    label: "Zero-trust",
   },
   {
     icon: Code2,
-    title: "Language-Isolated Runtime",
-    description: "Execute Python, C, and Java in tightly controlled containers.",
-    label: "Docker-isolated",
+    title: "Containerized Runtime",
+    description: "Run Python, C, and Java in isolated execution sandboxes.",
+    label: "Sandboxed",
   },
   {
     icon: Sparkles,
-    title: "Fast Workflow",
-    description: "Move from login to dashboard in a few seconds, without friction.",
-    label: "Low-latency",
+    title: "Audit-Friendly Workflow",
+    description: "Move quickly while preserving a clear, reviewable activity trail.",
+    label: "Audit-ready",
   },
 ];
 
 const authMetrics = [
-  { value: "99.9%", label: "Session integrity" },
-  { value: "< 2s", label: "Auth response" },
-  { value: "24/7", label: "Policy monitoring" },
+  { value: "<1.8s", label: "Median sign-in" },
+  { value: "3 layers", label: "Runtime isolation" },
+  { value: "24x7", label: "Integrity watch" },
 ];
 
 const staggerContainer = {
@@ -213,51 +213,59 @@ export default function RegisterPage() {
   };
 
   return (
-    <div className="relative h-[100dvh] overflow-hidden bg-gradient-to-br from-slate-50 via-purple-50 to-blue-50 text-slate-900 selection:bg-purple-400/30 dark:from-slate-950 dark:via-purple-950/30 dark:to-blue-950/30 dark:text-slate-100">
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(129,140,248,0.20),transparent_45%),radial-gradient(circle_at_bottom_left,rgba(236,72,153,0.16),transparent_42%)]" />
+    <div className="relative min-h-[100dvh] overflow-x-hidden bg-gradient-to-br from-slate-100 via-cyan-50 to-amber-50 text-slate-900 selection:bg-cyan-300/40 dark:from-slate-950 dark:via-slate-900 dark:to-cyan-950/30 dark:text-slate-100 lg:h-[100dvh] lg:overflow-hidden">
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(14,165,233,0.18),transparent_46%),radial-gradient(circle_at_bottom_left,rgba(245,158,11,0.16),transparent_42%)]" />
+      <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(to_right,rgba(148,163,184,0.08)_1px,transparent_1px),linear-gradient(to_bottom,rgba(148,163,184,0.08)_1px,transparent_1px)] bg-[size:42px_42px] [mask-image:radial-gradient(circle_at_60%_40%,black,transparent_78%)]" />
 
-      <div className="relative z-10 mx-auto flex h-full w-full max-w-[1400px] flex-col lg:grid lg:grid-cols-[1.05fr_0.95fr]">
+      <div className="relative z-10 mx-auto w-full max-w-[1440px] px-3 py-3 sm:px-5 sm:py-5 lg:px-8 lg:py-7">
+        <div className="grid min-h-[calc(100dvh-1.5rem)] overflow-hidden rounded-[30px] border border-slate-200/80 bg-white/45 backdrop-blur-xl dark:border-slate-800/80 dark:bg-slate-950/35 lg:h-[calc(100dvh-3.5rem)] lg:min-h-0 lg:grid-cols-[1.02fr_0.98fr]">
         <motion.aside
           initial={{ opacity: 0, x: -36 }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
-          className="hidden h-full border-r border-slate-200/60 px-10 py-10 dark:border-slate-800/80 lg:flex lg:items-center xl:px-16"
+          className="relative hidden h-full overflow-hidden bg-slate-900 px-8 py-9 text-slate-100 dark:bg-slate-950 lg:flex lg:flex-col lg:justify-center xl:px-12"
         >
+          <div className="pointer-events-none absolute -left-20 -top-20 h-64 w-64 rounded-full bg-cyan-400/20 blur-3xl" />
+          <div className="pointer-events-none absolute -bottom-24 -right-24 h-72 w-72 rounded-full bg-blue-500/20 blur-3xl" />
           <motion.div
             variants={staggerContainer}
             initial="hidden"
             animate="show"
-            className="mx-auto flex w-full max-w-xl flex-col gap-8"
+            className="relative z-10 mx-auto flex w-full max-w-lg flex-col gap-6"
           >
             <motion.div variants={fadeInUp} className="space-y-5">
-              <p className="inline-flex w-fit items-center gap-2 rounded-full border border-indigo-200/80 bg-indigo-50/80 px-4 py-1.5 text-xs font-semibold uppercase tracking-[0.16em] text-indigo-700 shadow-sm dark:border-indigo-800/70 dark:bg-indigo-900/30 dark:text-indigo-300">
+              <p className="inline-flex w-fit items-center gap-2 rounded-full border border-cyan-300/40 bg-cyan-400/10 px-4 py-1.5 text-xs font-semibold uppercase tracking-[0.16em] text-cyan-100 shadow-sm">
                 <Building2 className="h-3.5 w-3.5" />
-                Trusted by labs and exam cells
+                Secure access workspace
               </p>
-              <h1 className="text-balance text-5xl font-black leading-tight text-slate-900 dark:text-slate-50 xl:text-6xl">
-                Create your <span className="text-gradient">CodeGuard</span> account
+              <h1 className="text-balance text-4xl font-black leading-tight text-white xl:text-5xl">
+                Create your{" "}
+                <span className="bg-gradient-to-r from-cyan-200 via-sky-200 to-blue-200 bg-clip-text text-transparent">
+                  CodeGuard
+                </span>{" "}
+                account
               </h1>
-              <p className="max-w-xl text-lg leading-relaxed text-slate-600 dark:text-slate-300">
-                Register once and access a role-specific dashboard built for secure practical evaluations.
+              <p className="max-w-lg text-base leading-relaxed text-slate-300">
+                Register once and enter a role-based workspace designed for secure and accountable practical evaluations.
               </p>
             </motion.div>
 
-            <div className="grid gap-4">
+            <div className="grid gap-3">
               {valueProps.map((feature) => (
                 <motion.article
                   key={feature.title}
                   variants={fadeInUp}
-                  whileHover={{ x: 8, transition: { duration: 0.22 } }}
-                  className="glass-card-premium rounded-2xl p-4 hover-lift"
+                  whileHover={{ y: -3, transition: { duration: 0.2 } }}
+                  className="rounded-2xl border border-slate-700/80 bg-slate-800/60 p-3.5 shadow-[0_16px_36px_-26px_rgba(2,6,23,0.9)] backdrop-blur-md transition hover:border-cyan-400/70"
                 >
                   <div className="mb-3 flex items-center justify-between">
-                    <span className="inline-flex items-center rounded-full bg-indigo-500/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.15em] text-indigo-700 dark:text-indigo-300">
+                    <span className="inline-flex items-center rounded-full bg-cyan-400/15 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.15em] text-cyan-200">
                       {feature.label}
                     </span>
-                    <feature.icon className="h-5 w-5 text-indigo-600 dark:text-indigo-300" />
+                    <feature.icon className="h-5 w-5 text-cyan-200" />
                   </div>
-                  <h3 className="text-base font-bold text-slate-900 dark:text-slate-100">{feature.title}</h3>
-                  <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">{feature.description}</p>
+                  <h3 className="text-base font-bold text-slate-100">{feature.title}</h3>
+                  <p className="mt-1 text-sm text-slate-300">{feature.description}</p>
                 </motion.article>
               ))}
             </div>
@@ -266,10 +274,10 @@ export default function RegisterPage() {
               {authMetrics.map((item) => (
                 <div
                   key={item.label}
-                  className="rounded-xl border border-slate-200/80 bg-white/75 px-3 py-2 text-center dark:border-slate-700 dark:bg-slate-900/70"
+                  className="rounded-xl border border-slate-700/80 bg-slate-800/55 px-3 py-2 text-center"
                 >
-                  <p className="text-base font-black text-slate-900 dark:text-slate-100">{item.value}</p>
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500 dark:text-slate-400">
+                  <p className="text-base font-black text-slate-100">{item.value}</p>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-400">
                     {item.label}
                   </p>
                 </div>
@@ -282,16 +290,16 @@ export default function RegisterPage() {
           initial={{ opacity: 0, x: 24 }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ duration: 0.65, delay: 0.12 }}
-          className="flex h-full items-start justify-center overflow-y-auto px-4 py-5 sm:px-8 sm:py-6 lg:items-center lg:overflow-hidden lg:px-12 lg:py-8"
+          className="flex h-full items-center justify-center bg-slate-50/70 px-4 py-6 sm:px-8 sm:py-8 dark:bg-slate-950/40 lg:px-10 lg:py-10"
         >
-          <div className="w-full max-w-md">
+          <div className="w-full max-w-xl">
             <motion.div
               initial={{ opacity: 0, y: -16 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.25 }}
-              className="mb-6 glass-card-premium rounded-2xl p-4 text-center lg:hidden"
+              className="mb-6 rounded-2xl border border-slate-200/80 bg-white/90 p-4 text-center shadow-[0_18px_40px_-30px_rgba(15,23,42,0.6)] backdrop-blur-xl dark:border-slate-700 dark:bg-slate-900/75 lg:hidden"
             >
-              <p className="text-[11px] font-semibold uppercase tracking-[0.15em] text-indigo-700 dark:text-indigo-300">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.15em] text-cyan-800 dark:text-cyan-300">
                 New account
               </p>
               <h1 className="mt-1 text-2xl font-black text-slate-900 dark:text-white sm:text-3xl">CodeGuard Register</h1>
@@ -304,16 +312,16 @@ export default function RegisterPage() {
               initial={{ opacity: 0, scale: 0.97, y: 16 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               transition={{ duration: 0.4 }}
-              className="glass-card-premium relative overflow-visible rounded-2xl sm:rounded-3xl"
+              className="relative overflow-visible rounded-2xl border border-slate-200/85 bg-white/90 shadow-[0_28px_70px_-42px_rgba(15,23,42,0.62)] backdrop-blur-2xl dark:border-slate-700 dark:bg-slate-900/80 sm:rounded-3xl"
             >
-              <div className="pointer-events-none absolute inset-x-0 top-0 h-20 bg-gradient-to-r from-indigo-400/20 via-transparent to-pink-400/20" />
+              <div className="pointer-events-none absolute inset-x-0 top-0 h-16 bg-gradient-to-r from-cyan-400/25 via-white/10 to-amber-400/20" />
 
-              <div className="relative p-6 sm:p-8">
+              <div className="relative p-6 sm:p-7">
                 <div className="mb-6 text-center">
                   <motion.div
                     whileHover={{ rotate: -8, scale: 1.05 }}
                     transition={{ type: "spring", stiffness: 250, damping: 12 }}
-                    className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 text-white shadow-lg shadow-purple-700/30"
+                    className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-cyan-600 via-sky-600 to-blue-700 text-white shadow-lg shadow-cyan-900/30"
                   >
                     <GraduationCap className="h-6 w-6" />
                   </motion.div>
@@ -351,7 +359,7 @@ export default function RegisterPage() {
                         <input
                           type="text"
                           placeholder="John Doe"
-                          className="h-11 w-full rounded-xl border border-slate-300 bg-white/90 pl-11 pr-4 text-sm font-medium text-slate-900 outline-none transition focus:border-purple-500 focus:ring-4 focus:ring-purple-500/20 dark:border-slate-700 dark:bg-slate-900/80 dark:text-slate-100"
+                          className="h-11 w-full rounded-xl border border-slate-300 bg-white/95 pl-11 pr-4 text-sm font-medium text-slate-900 outline-none transition focus:border-sky-500 focus:ring-4 focus:ring-sky-500/20 dark:border-slate-700 dark:bg-slate-900/85 dark:text-slate-100"
                           value={formData.name}
                           onChange={(e) => handleInputChange("name", e.target.value)}
                           required
@@ -370,9 +378,9 @@ export default function RegisterPage() {
                           type="button"
                           onClick={() => setRoleMenuOpen((prev) => !prev)}
                           disabled={isLoading}
-                          className="flex h-11 w-full items-center gap-2 rounded-xl border border-slate-300 bg-white/90 px-3 text-left text-sm font-medium text-slate-900 outline-none transition hover:bg-slate-50 focus-visible:ring-4 focus-visible:ring-purple-500/20 disabled:cursor-not-allowed disabled:opacity-70 dark:border-slate-700 dark:bg-slate-900/80 dark:text-slate-100 dark:hover:bg-slate-800"
+                          className="flex h-11 w-full items-center gap-2 rounded-xl border border-slate-300 bg-white/95 px-3 text-left text-sm font-medium text-slate-900 outline-none transition hover:bg-slate-50 focus-visible:ring-4 focus-visible:ring-sky-500/20 disabled:cursor-not-allowed disabled:opacity-70 dark:border-slate-700 dark:bg-slate-900/85 dark:text-slate-100 dark:hover:bg-slate-800"
                         >
-                          {selectedRole && <selectedRole.icon className="h-4.5 w-4.5 text-indigo-600 dark:text-indigo-300" />}
+                          {selectedRole && <selectedRole.icon className="h-4.5 w-4.5 text-cyan-700 dark:text-cyan-300" />}
                           <span className="flex-1 truncate">{selectedRole?.label}</span>
                           <ChevronDown
                             className={`h-4 w-4 text-slate-500 transition-transform ${roleMenuOpen ? "rotate-180" : ""}`}
@@ -411,7 +419,7 @@ export default function RegisterPage() {
                                       }}
                                       className={`w-full px-3 py-2.5 text-left transition ${
                                         active
-                                          ? "bg-indigo-50 text-indigo-900 dark:bg-indigo-950/30 dark:text-indigo-200"
+                                          ? "bg-cyan-50 text-cyan-900 dark:bg-cyan-950/30 dark:text-cyan-200"
                                           : "text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800"
                                       }`}
                                     >
@@ -440,7 +448,7 @@ export default function RegisterPage() {
                       <input
                         type="email"
                         placeholder="you@college.edu"
-                        className="h-11 w-full rounded-xl border border-slate-300 bg-white/90 pl-11 pr-4 text-sm font-medium text-slate-900 outline-none transition focus:border-purple-500 focus:ring-4 focus:ring-purple-500/20 dark:border-slate-700 dark:bg-slate-900/80 dark:text-slate-100"
+                        className="h-11 w-full rounded-xl border border-slate-300 bg-white/95 pl-11 pr-4 text-sm font-medium text-slate-900 outline-none transition focus:border-sky-500 focus:ring-4 focus:ring-sky-500/20 dark:border-slate-700 dark:bg-slate-900/85 dark:text-slate-100"
                         value={formData.email}
                         onChange={(e) => handleInputChange("email", e.target.value)}
                         required
@@ -459,7 +467,7 @@ export default function RegisterPage() {
                         <input
                           type={showPassword ? "text" : "password"}
                           placeholder="Create password"
-                          className="h-11 w-full rounded-xl border border-slate-300 bg-white/90 pl-11 pr-12 text-sm font-medium text-slate-900 outline-none transition focus:border-purple-500 focus:ring-4 focus:ring-purple-500/20 dark:border-slate-700 dark:bg-slate-900/80 dark:text-slate-100"
+                          className="h-11 w-full rounded-xl border border-slate-300 bg-white/95 pl-11 pr-12 text-sm font-medium text-slate-900 outline-none transition focus:border-sky-500 focus:ring-4 focus:ring-sky-500/20 dark:border-slate-700 dark:bg-slate-900/85 dark:text-slate-100"
                           value={formData.password}
                           onChange={(e) => handleInputChange("password", e.target.value)}
                           required
@@ -469,7 +477,7 @@ export default function RegisterPage() {
                           type="button"
                           onClick={() => setShowPassword((prev) => !prev)}
                           aria-label={showPassword ? "Hide password" : "Show password"}
-                          className="absolute right-3 top-1/2 -translate-y-1/2 rounded-md p-1 text-slate-500 transition hover:text-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 dark:text-slate-400 dark:hover:text-slate-100"
+                          className="absolute right-3 top-1/2 -translate-y-1/2 rounded-md p-1 text-slate-500 transition hover:text-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 dark:text-slate-400 dark:hover:text-slate-100"
                         >
                           {showPassword ? <EyeOff className="h-4.5 w-4.5" /> : <Eye className="h-4.5 w-4.5" />}
                         </button>
@@ -485,7 +493,7 @@ export default function RegisterPage() {
                         <input
                           type={showConfirmPassword ? "text" : "password"}
                           placeholder="Re-enter password"
-                          className="h-11 w-full rounded-xl border border-slate-300 bg-white/90 pl-11 pr-12 text-sm font-medium text-slate-900 outline-none transition focus:border-purple-500 focus:ring-4 focus:ring-purple-500/20 dark:border-slate-700 dark:bg-slate-900/80 dark:text-slate-100"
+                          className="h-11 w-full rounded-xl border border-slate-300 bg-white/95 pl-11 pr-12 text-sm font-medium text-slate-900 outline-none transition focus:border-sky-500 focus:ring-4 focus:ring-sky-500/20 dark:border-slate-700 dark:bg-slate-900/85 dark:text-slate-100"
                           value={formData.confirmPassword}
                           onChange={(e) => handleInputChange("confirmPassword", e.target.value)}
                           required
@@ -495,7 +503,7 @@ export default function RegisterPage() {
                           type="button"
                           onClick={() => setShowConfirmPassword((prev) => !prev)}
                           aria-label={showConfirmPassword ? "Hide confirm password" : "Show confirm password"}
-                          className="absolute right-3 top-1/2 -translate-y-1/2 rounded-md p-1 text-slate-500 transition hover:text-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 dark:text-slate-400 dark:hover:text-slate-100"
+                          className="absolute right-3 top-1/2 -translate-y-1/2 rounded-md p-1 text-slate-500 transition hover:text-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 dark:text-slate-400 dark:hover:text-slate-100"
                         >
                           {showConfirmPassword ? (
                             <EyeOff className="h-4.5 w-4.5" />
@@ -523,7 +531,7 @@ export default function RegisterPage() {
                             : passwordScore === 2
                               ? "bg-amber-500"
                               : passwordScore === 3
-                                ? "bg-indigo-500"
+                                ? "bg-sky-500"
                                 : "bg-emerald-500"
                         }`}
                       />
@@ -535,7 +543,7 @@ export default function RegisterPage() {
                     whileTap={{ scale: 0.98 }}
                     type="submit"
                     disabled={isLoading}
-                    className="group relative flex h-12 w-full items-center justify-center gap-2 overflow-hidden rounded-xl btn-primary px-4 text-sm font-bold disabled:cursor-not-allowed disabled:opacity-65"
+                    className="group relative flex h-12 w-full items-center justify-center gap-2 overflow-hidden rounded-xl bg-gradient-to-r from-cyan-600 via-sky-600 to-blue-700 px-4 text-sm font-bold text-white shadow-lg shadow-cyan-900/25 transition disabled:cursor-not-allowed disabled:opacity-65"
                   >
                     <span className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/35 to-transparent transition-transform duration-1000 group-hover:translate-x-full" />
                     {isLoading ? (
@@ -567,7 +575,7 @@ export default function RegisterPage() {
                 <motion.div whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.99 }}>
                   <Link
                     href="/auth/login"
-                    className="flex h-11 items-center justify-center rounded-xl btn-secondary text-sm font-bold"
+                    className="flex h-11 items-center justify-center rounded-xl border border-slate-300 bg-white text-sm font-bold text-slate-700 transition hover:border-cyan-300 hover:bg-cyan-50/60 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:border-cyan-900 dark:hover:bg-cyan-950/20"
                   >
                     Sign in instead
                   </Link>
@@ -581,10 +589,11 @@ export default function RegisterPage() {
               transition={{ delay: 0.6 }}
               className="mt-6 text-center text-xs font-semibold text-slate-500 dark:text-slate-400"
             >
-              By registering you agree to our <Link href="#" className="underline decoration-purple-400 underline-offset-4">Terms</Link> and <Link href="#" className="underline decoration-purple-400 underline-offset-4">Privacy Policy</Link>.
+              By registering you agree to our <Link href="#" className="underline decoration-cyan-400 underline-offset-4">Terms</Link> and <Link href="#" className="underline decoration-cyan-400 underline-offset-4">Privacy Policy</Link>.
             </motion.p>
           </div>
         </motion.main>
+      </div>
       </div>
     </div>
   );
