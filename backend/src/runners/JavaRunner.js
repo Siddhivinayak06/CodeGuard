@@ -80,8 +80,17 @@ class JavaRunner extends BaseRunner {
       wrapperCode = `
   ${pkgName ? `package ${pkgName};` : ''}
   public class __RunnerLauncher {
+    private static java.io.InputStream nonClosingStdIn() {
+      return new java.io.FilterInputStream(System.in) {
+        @Override
+        public void close() throws java.io.IOException {
+          // Keep stdin available even if user code calls Scanner.close().
+        }
+      };
+    }
     public static void main(String[] args) {
       try {
+        System.setIn(nonClosingStdIn());
         java.lang.reflect.Method mainMethod =
           Class.forName("${runClassFqcn}").getMethod("main", String[].class);
         mainMethod.invoke(null, (Object) args);
@@ -153,7 +162,7 @@ mkdir -p /tmp/${uniqueId} &&
 ${this.writeBase64FileCommand(code, `/tmp/${uniqueId}/${compileClassName}.java`)} &&
 ${wrapperCode ? this.writeBase64FileCommand(wrapperCode, `/tmp/${uniqueId}/__RunnerLauncher.java`) + ' &&' : ''}
 ${this.writeBase64FileCommand(stdinInput, `/tmp/${uniqueId}/input.txt`)} &&
-javac /tmp/${uniqueId}/*.java 2> /tmp/${uniqueId}/compile_err.txt || true &&
+javac -d /tmp/${uniqueId} /tmp/${uniqueId}/*.java 2> /tmp/${uniqueId}/compile_err.txt || true &&
 if [ -s /tmp/${uniqueId}/compile_err.txt ]; then
   cat /tmp/${uniqueId}/compile_err.txt 1>&2
   exit 1

@@ -36,6 +36,14 @@ function cx(...parts: Array<string | false | null | undefined>) {
   return parts.filter(Boolean).join(" ");
 }
 
+const MIN_FUZZER_COUNT = 1;
+const MAX_FUZZER_COUNT = 100;
+
+function sanitizeFuzzerCount(value: number) {
+  if (!Number.isFinite(value)) return MAX_FUZZER_COUNT;
+  return Math.min(MAX_FUZZER_COUNT, Math.max(MIN_FUZZER_COUNT, Math.round(value)));
+}
+
 export default function TestCaseManager({
   testCases,
   handleTestCaseChange,
@@ -147,16 +155,24 @@ export default function TestCaseManager({
             {allExpanded ? "Collapse All" : "Expand All"}
           </button>
 
-          <select
-            value={fuzzerCount}
-            onChange={(e) => setFuzzerCount(Number(e.target.value) || 100)}
-            disabled={generatingTests}
-            className="px-2.5 py-2 text-xs font-semibold bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-gray-700 dark:text-gray-300"
-          >
-            <option value={25}>25 cases</option>
-            <option value={50}>50 cases</option>
-            <option value={100}>100 cases</option>
-          </select>
+          <div className="flex items-center gap-1.5 px-2.5 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-gray-700 dark:text-gray-300">
+            <input
+              type="number"
+              inputMode="numeric"
+              min={MIN_FUZZER_COUNT}
+              max={MAX_FUZZER_COUNT}
+              step={1}
+              value={fuzzerCount}
+              onChange={(e) => setFuzzerCount(sanitizeFuzzerCount(e.target.valueAsNumber))}
+              onBlur={(e) => setFuzzerCount(sanitizeFuzzerCount(e.target.valueAsNumber))}
+              disabled={generatingTests}
+              aria-label="Fuzzer test case count"
+              className="w-14 bg-transparent text-center text-xs font-semibold outline-none"
+            />
+            <span className="text-[11px] text-gray-500 dark:text-gray-400 whitespace-nowrap">
+              cases
+            </span>
+          </div>
 
           <motion.button
             type="button"

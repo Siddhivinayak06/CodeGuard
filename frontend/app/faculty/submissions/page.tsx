@@ -82,8 +82,8 @@ interface Submission {
   student_name: string;
   practical_id: number;
   practical_title: string;
-  code: string;
-  output: string;
+  code?: string;
+  output?: string;
   language: string;
   status: string;
   marks_obtained: number | null;
@@ -190,228 +190,97 @@ function FacultySubmissionsContentInner() {
   }
 
 
-  // 1. Fetch Subjects Hierarchy (Sidebar Data)
+  // Keep URL-driven practical selection in sync.
   useEffect(() => {
-    const fetchHierarchy = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+    const paramPracticalId = searchParams.get("practical");
+    if (!paramPracticalId) return;
 
-      // Get subjects for faculty
-      const { data: facultyBatches } = await supabase
-        .from("subject_faculty_batches")
-        .select("subject_id")
-        .eq("faculty_id", user.id);
+    const parsed = Number(paramPracticalId);
+    if (Number.isFinite(parsed) && parsed > 0) {
+      setSelectedPracticalId(parsed);
+    }
+  }, [searchParams]);
 
-      const subjectIds = [...new Set((facultyBatches || []).map((fb: any) => fb.subject_id))];
-
-      if (subjectIds.length === 0) return;
-
-      const { data: subjectsDataPlain } = await supabase
-        .from("subjects")
-        .select(`
-          id, 
-          subject_name, 
-          subject_code, 
-          practicals (id, title)
-        `)
-        .in("id", subjectIds)
-        .order("subject_name");
-
-      // Format for sidebar
-      const formatted = (subjectsDataPlain || []).map((s: any) => ({
-        ...s,
-        practicals: s.practicals || [],
-      }));
-
-      setSubjects(formatted);
-
-      // Handle URL params for initial selection
-      const paramPracticalId = searchParams.get("practical");
-      if (paramPracticalId) {
-        const pid = parseInt(paramPracticalId);
-        setSelectedPracticalId(pid);
-        // Find subject for this practical
-        const subj = formatted.find((s: any) => s.practicals.some((p: any) => p.id === pid));
-        if (subj) setSelectedSubjectId(subj.id);
-      }
-    };
-
-    fetchHierarchy();
-  }, [supabase, searchParams]);
-
-
-  // 2. Fetch Submissions based on Selection
+  // Fetch hierarchy + submissions through one server API call.
   const fetchSubmissions = useCallback(async () => {
     setLoading(true);
     try {
-      let queryBuilder = supabase
-        .from("submissions")
-        .select(`
-            id,
-            student_id,
-            practical_id,
-            level_id,
-            code,
-            language,
-            status,
-            marks_obtained,
-            created_at,
-            output,
-            execution_details,
-            practicals ( title, subject_id ),
-            practical_levels ( title, max_marks )
-        `)
-        .order("created_at", { ascending: false });
-
+      const params = new URLSearchParams();
       if (selectedPracticalId) {
-        queryBuilder = queryBuilder.eq("practical_id", selectedPracticalId);
+        params.set("practicalId", String(selectedPracticalId));
       } else if (selectedSubjectId) {
-        // Find all practical IDs for this subject
-        const subject = subjects.find(s => s.id === selectedSubjectId);
-        if (subject) {
-          const pIds = subject.practicals.map((p: any) => p.id);
-          if (pIds.length > 0) {
-            queryBuilder = queryBuilder.in("practical_id", pIds);
-          } else {
-            setSubmissions([]);
-            setLoading(false);
-            return;
-          }
-        }
-      } else {
-        // "All Submissions" - maybe limit or filter by faculty's subjects
-        const allPracticalIds = subjects.flatMap(s => s.practicals.map((p: any) => p.id));
-        if (allPracticalIds.length > 0) {
-          queryBuilder = queryBuilder.in("practical_id", allPracticalIds);
-        } else {
-          setSubmissions([]);
-          setLoading(false);
-          return;
-        }
+        params.set("subjectId", String(selectedSubjectId));
       }
 
-      const { data, error } = await queryBuilder;
-      if (error) throw error;
+      const endpoint =
+        params.size > 0
+          ? `/api/faculty/submissions?${params.toString()}`
+          : "/api/faculty/submissions";
 
-      // Enrich with Student Info (Name, Roll No)
-      const studentIds = [...new Set(((data || []) as any[]).map(s => s.student_id).filter((id): id is string => id !== null))];
-      const { data: students } = await supabase
-        .from("users")
-        .select("uid, name, roll_no")
-        .in("uid", studentIds);
+      const response = await fetch(endpoint, { cache: "no-store" });
+      const payload = await response.json();
 
-      const studentMap = new Map((students as any[])?.map(s => [s.uid, s]));
-
-      // Fetch student_practicals for attempt counts
-      const practicalIdsForSps = [...new Set(((data || []) as any[]).map(s => s.practical_id).filter(id => id !== null))];
-      let spMap = new Map();
-      if (studentIds.length > 0 && practicalIdsForSps.length > 0) {
-        const { data: sps } = await supabase
-          .from("student_practicals")
-          .select("student_id, practical_id, attempt_count, max_attempts")
-          .in("student_id", studentIds)
-          .in("practical_id", practicalIdsForSps);
-
-        spMap = new Map((sps as any[])?.map(sp => [`${sp.student_id}_${sp.practical_id}`, sp]));
+      if (!response.ok || !payload?.success) {
+        throw new Error(payload?.error || "Failed to fetch submissions");
       }
 
-      // Fetch exam sessions with assigned set names for exam practicals
-      // Maps student_id+practical_id -> set_name
-      const examSetMap = new Map<string, string>();
-      try {
-        // Find exams for the practicals in this result set
-        const { data: exams } = await (supabase
-          .from("exams") as any)
-          .select("id, practical_id")
-          .in("practical_id", practicalIdsForSps);
+      const nextSubjects = Array.isArray(payload?.subjects)
+        ? payload.subjects
+        : [];
+      const nextSubmissions = Array.isArray(payload?.submissions)
+        ? payload.submissions
+        : [];
 
-        if (exams && exams.length > 0) {
-          const examIds = exams.map((e: any) => e.id);
-          const examPracticalMap = new Map<string, number>(exams.map((e: any) => [e.id, e.practical_id]));
+      setSubjects(nextSubjects);
+      setSubmissions(nextSubmissions);
 
-          // Fetch all exam_sessions with assigned set info
-          const { data: sessions } = await (supabase
-            .from("exam_sessions") as any)
-            .select("student_id, exam_id, assigned_set_id, exam_question_sets ( set_name )")
-            .in("exam_id", examIds)
-            .in("student_id", studentIds);
+      if (selectedPracticalId && !selectedSubjectId) {
+        const subjectForPractical = nextSubjects.find((subject: any) =>
+          (subject?.practicals || []).some(
+            (practical: any) => Number(practical?.id) === Number(selectedPracticalId),
+          ),
+        );
 
-          (sessions || []).forEach((sess: any) => {
-            const practicalId = examPracticalMap.get(sess.exam_id);
-            if (practicalId !== undefined) {
-              const setName = sess.exam_question_sets?.set_name || null;
-              if (setName) {
-                examSetMap.set(`${sess.student_id}_${practicalId}`, setName);
-              }
-            }
-          });
+        if (subjectForPractical?.id) {
+          setSelectedSubjectId(Number(subjectForPractical.id));
         }
-      } catch (examFetchErr) {
-        console.error("Error fetching exam set names:", examFetchErr);
       }
-
-      const formatted: Submission[] = ((data || []) as any[]).map((s: any) => ({
-        id: s.id,
-        submission_id: s.id,
-        student_id: s.student_id,
-        student_name: studentMap.get(s.student_id)?.name || "Unknown",
-        roll_no: studentMap.get(s.student_id)?.roll_no || "N/A",
-        practical_id: s.practical_id,
-        practical_title: s.practicals?.title || "Unknown",
-        attempt_count: spMap.get(`${s.student_id}_${s.practical_id}`)?.attempt_count || 0,
-        max_attempts: spMap.get(`${s.student_id}_${s.practical_id}`)?.max_attempts || 1,
-        code: s.code,
-        output: s.output,
-        language: s.language,
-        status: s.status,
-        marks_obtained: s.marks_obtained,
-        created_at: s.created_at,
-        testCaseResults: s.execution_details?.results || [],
-        level_id: s.level_id,
-        level_title: s.practical_levels?.title || null,
-        level_max_marks: s.practical_levels?.max_marks || null,
-        assigned_set_name: examSetMap.get(`${s.student_id}_${s.practical_id}`) || null,
-      }));
-
-      setSubmissions(formatted);
     } catch (err) {
       console.error("Error fetching submissions:", err);
+      toast.error("Failed to load submissions");
+      setSubmissions([]);
     } finally {
       setLoading(false);
     }
-  }, [supabase, selectedPracticalId, selectedSubjectId, subjects]);
+  }, [selectedPracticalId, selectedSubjectId]);
 
   useEffect(() => {
-    if (subjects.length > 0) {
-      fetchSubmissions();
-    }
-  }, [fetchSubmissions, subjects.length]);
-
-  // Fetch test cases when viewing a submission
-  const loadTestCases = async (practicalId: number) => {
-    const { data } = await supabase
-      .from("test_cases")
-      .select("*")
-      .eq("practical_id", practicalId)
-      .order("id");
-    // Cast to our TestCase interface, filtering out any with null practical_id
-    const validTestCases: TestCase[] = ((data || []) as any[]).filter(
-      (tc): tc is typeof tc & { practical_id: number; is_hidden: boolean } =>
-        tc.practical_id !== null
-    ).map((tc: any) => ({
-      id: tc.id,
-      practical_id: tc.practical_id,
-      input: tc.input,
-      expected_output: tc.expected_output,
-      is_hidden: tc.is_hidden ?? false,
-    }));
-    setTestCases(validTestCases);
-  };
+    void fetchSubmissions();
+  }, [fetchSubmissions]);
 
   const handleOpenSheet = async (sub: Submission) => {
-    await loadTestCases(sub.practical_id);
-    setViewingSubmission({ ...sub, testCaseResults: sub.testCaseResults }); // cast to ViewingSubmission
-    setIsSheetOpen(true);
+    try {
+      const response = await fetch(`/api/faculty/submissions/${sub.id}`, {
+        cache: "no-store",
+      });
+      const payload = await response.json();
+
+      if (!response.ok || !payload?.success) {
+        throw new Error(payload?.error || "Failed to load submission detail");
+      }
+
+      const detailSubmission: ViewingSubmission = payload.submission;
+      const detailTestCases: TestCase[] = Array.isArray(payload.testCases)
+        ? payload.testCases
+        : [];
+
+      setTestCases(detailTestCases);
+      setViewingSubmission(detailSubmission);
+      setIsSheetOpen(true);
+    } catch (err) {
+      console.error("Error opening grading sheet:", err);
+      toast.error("Failed to open submission details");
+    }
   };
 
 

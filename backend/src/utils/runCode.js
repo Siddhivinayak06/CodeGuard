@@ -17,8 +17,17 @@ function writeBase64FileCommand(content = '', filePath) {
 function buildJavaMainLauncherCode(packageName, mainFqcn) {
   const packageDecl = packageName ? `package ${packageName};\n` : '';
   return `${packageDecl}public class __RunnerLauncher {
+  private static java.io.InputStream nonClosingStdIn() {
+    return new java.io.FilterInputStream(System.in) {
+      @Override
+      public void close() throws java.io.IOException {
+        // Keep stdin available even if user code calls Scanner.close().
+      }
+    };
+  }
     public static void main(String[] args) {
         try {
+      System.setIn(nonClosingStdIn());
             java.lang.reflect.Method mainMethod =
                 Class.forName("${mainFqcn}").getMethod("main", String[].class);
             mainMethod.invoke(null, (Object) args);
@@ -247,7 +256,7 @@ mkdir -p /tmp/${uniqueId} &&
 ${writeBase64FileCommand(escapedCode, `/tmp/${uniqueId}/${compileClassName}.java`)} &&
 ${launcherCode ? writeBase64FileCommand(launcherCode, `/tmp/${uniqueId}/__RunnerLauncher.java`) + ' &&' : ''}
 ${writeBase64FileCommand(runClassName, `/tmp/${uniqueId}/main_class.txt`)} &&
-javac /tmp/${uniqueId}/*.java 2> /tmp/${uniqueId}/compile_err.txt || (cat /tmp/${uniqueId}/compile_err.txt 1>&2 && exit 1)
+javac -d /tmp/${uniqueId} /tmp/${uniqueId}/*.java 2> /tmp/${uniqueId}/compile_err.txt || (cat /tmp/${uniqueId}/compile_err.txt 1>&2 && exit 1)
 `;
       baseRunCmd = `
 MAIN_CLASS=$(cat /tmp/${uniqueId}/main_class.txt 2>/dev/null || true)

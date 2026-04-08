@@ -2,6 +2,202 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 
+type StudentErrorFormatInput = {
+  status?: string | null;
+  language?: string | null;
+  stderr?: string | null;
+};
+
+const ANSI_ESCAPE_REGEX = /\u001b\[[0-9;?]*[ -/]*[@-~]/g;
+const OSC_ESCAPE_REGEX = /\u001b\][^\u0007]*(?:\u0007|\u001b\\)/g;
+
+const normalizeRunnerErrorText = (raw?: string | null): string => {
+  const text = String(raw ?? "")
+    .replace(/\r\n/g, "\n")
+    .replace(/\r/g, "\n")
+    .replace(ANSI_ESCAPE_REGEX, "")
+    .replace(OSC_ESCAPE_REGEX, "");
+
+  const noiseLinePatterns: RegExp[] = [
+    /^__SERVER_LOG__/,
+    /^---\s*Execution Finished\s*---$/,
+    /^✅\s*Compilation successful$/,
+    /^\.\.\.Program finished with exit code\s+\d+$/,
+  ];
+
+  return text
+    .split("\n")
+    .map((line) => line.replace(/\s+$/g, ""))
+    .filter((line) => !noiseLinePatterns.some((pattern) => pattern.test(line)))
+    .join("\n")
+    .trim();
+};
+
+const getErrorTitle = (status?: string | null, language?: string | null) => {
+  const normalizedStatus = String(status || "runtime_error").toLowerCase();
+  const langLabel = String(language || "code").toUpperCase();
+
+  if (normalizedStatus === "compile_error") {
+    return `Compilation Error (${langLabel})`;
+  }
+  if (normalizedStatus === "time_limit_exceeded") {
+    return "Time Limit Exceeded";
+  }
+  if (normalizedStatus === "memory_limit_exceeded") {
+    return "Memory Limit Exceeded";
+  }
+  if (normalizedStatus === "output_limit_exceeded") {
+    return "Output Limit Exceeded";
+  }
+  return `Runtime Error (${langLabel})`;
+};
+
+const extractPrimaryErrorLine = (cleaned: string) => {
+  if (!cleaned) return "Unknown error.";
+
+  const lines = cleaned
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  const priorityPatterns: RegExp[] = [
+    /\berror:/i,
+    /\bexception\b/i,
+    /\btraceback\b/i,
+    /\bsyntaxerror\b/i,
+    /\bindentationerror\b/i,
+    /\bnameerror\b/i,
+    /\bsegmentation fault\b/i,
+    /\bcannot find symbol\b/i,
+    /\bcould not find or load main class\b/i,
+    /\btime limit exceeded\b/i,
+    /\bmemory limit exceeded\b/i,
+  ];
+
+  for (const pattern of priorityPatterns) {
+    const match = lines.find((line) => pattern.test(line));
+    if (match) return match;
+  }
+
+  return lines[0] || "Unknown error.";
+};
+
+const extractLocationLine = (cleaned: string) => {
+  if (!cleaned) return null;
+
+  const lines = cleaned
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  const locationPatterns: RegExp[] = [
+    /File\s+"[^"]+",\s+line\s+\d+/i,
+    /[A-Za-z0-9_./-]+\.(?:c|cc|cpp|cxx|h|hpp|java|py|js|ts|tsx|jsx):\d+(?::\d+)?/i,
+    /\bline\s+\d+\b/i,
+  ];
+
+  for (const pattern of locationPatterns) {
+    const match = lines.find((line) => pattern.test(line));
+    if (match) return match;
+  }
+
+  return null;
+};
+
+const inferFixHint = (
+  cleaned: string,
+  status?: string | null,
+  language?: string | null,
+) => {
+  const text = String(cleaned || "").toLowerCase();
+  const normalizedStatus = String(status || "runtime_error").toLowerCase();
+  const normalizedLanguage = String(language || "").toLowerCase();
+
+  if (text.includes("cannot find symbol")) {
+    return "Check spelling of class, method, and variable names, and ensure required imports are present.";
+  }
+  if (text.includes("expected ';'")) {
+    return "Add the missing semicolon near the reported line.";
+  }
+  if (text.includes("syntaxerror")) {
+    return "Fix the syntax near the shown line (missing bracket, quote, or punctuation).";
+  }
+  if (text.includes("indentationerror")) {
+    return "Fix indentation to use a consistent block structure in Python.";
+  }
+  if (text.includes("nameerror")) {
+    return "A variable or function name is undefined. Define it first or correct its spelling.";
+  }
+  if (
+    text.includes("indexerror") ||
+    text.includes("index out of range") ||
+    text.includes("arrayindexoutofboundsexception") ||
+    text.includes("stringindexoutofboundsexception")
+  ) {
+    return "An index is outside valid bounds. Check loop limits and array/string lengths before access.";
+  }
+  if (text.includes("nullpointerexception")) {
+    return "A value is null before use. Initialize it or add null checks before accessing methods/fields.";
+  }
+  if (text.includes("zerodivisionerror") || text.includes("/ by zero")) {
+    return "Guard against division by zero before performing division.";
+  }
+  if (text.includes("segmentation fault")) {
+    return "Check pointer usage, array bounds, and memory access in C/C++.";
+  }
+  if (normalizedStatus === "time_limit_exceeded") {
+    return "Your program took too long. Optimize loops/recursion and avoid unnecessary repeated computation.";
+  }
+  if (normalizedStatus === "memory_limit_exceeded") {
+    return "Your program exceeded memory limits. Reduce large allocations and release unused data structures.";
+  }
+
+  if (normalizedStatus === "compile_error") {
+    if (normalizedLanguage === "python") {
+      return "Fix the syntax issue shown above and run again.";
+    }
+    return "Fix the compile errors listed above, then run again.";
+  }
+
+  return "Check the failing line and edge cases, then run again.";
+};
+
+const formatStudentError = ({
+  status,
+  language,
+  stderr,
+}: StudentErrorFormatInput) => {
+  const cleaned = normalizeRunnerErrorText(stderr);
+  if (!cleaned) return null;
+
+  const title = getErrorTitle(status, language);
+  const summary = extractPrimaryErrorLine(cleaned);
+  const location = extractLocationLine(cleaned);
+  const hint = inferFixHint(cleaned, status, language);
+
+  const detailLines = cleaned
+    .split("\n")
+    .map((line) => line.trimEnd())
+    .filter((line) => line.trim().length > 0)
+    .slice(0, 14);
+
+  const blocks: string[] = [title, "", `What failed:\n${summary}`];
+
+  if (location && location !== summary) {
+    blocks.push("", `Where:\n${location}`);
+  }
+
+  if (hint) {
+    blocks.push("", `How to fix:\n${hint}`);
+  }
+
+  if (detailLines.length > 1) {
+    blocks.push("", `Details:\n${detailLines.join("\n")}`);
+  }
+
+  return blocks.join("\n").trim();
+};
+
 export async function POST(req: Request) {
   try {
     const supabase = await createClient();
@@ -32,6 +228,22 @@ export async function POST(req: Request) {
       );
     }
 
+    const requestedLevel =
+      typeof level === "string" ? level.trim().toLowerCase() : "";
+    const normalizedUserTestCases = Array.isArray(userTestCases)
+      ? userTestCases
+          .filter((tc: any) => tc && typeof tc === "object")
+          .map((tc: any) => ({
+            ...tc,
+            // Empty stdin is valid for many problems; do not drop it.
+            input: String(tc?.input ?? ""),
+          }))
+      : [];
+    const shouldUseCustomTestCases =
+      mode === "run" &&
+      useCustomTestCases &&
+      normalizedUserTestCases.length > 0;
+
     // --- Required Checks (Attempts, Locks, Deadlines) ---
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) {
@@ -49,18 +261,37 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Allocation not found" }, { status: 404 });
     }
 
+    const [examResult, levelsResult] = await Promise.all([
+      (supabase
+        .from("exams")
+        .select("end_time")
+        .eq("practical_id", pid)
+        .maybeSingle()) as any,
+      requestedLevel
+        ? (supabase
+            .from("practical_levels")
+            .select("id, level, max_marks")
+            .eq("practical_id", pid))
+        : Promise.resolve({ data: [], error: null }),
+    ]);
+
+    const examData = examResult?.data;
+    const practicalLevels: any[] = (levelsResult?.data as any[]) || [];
+
+    if (levelsResult?.error) {
+      console.error("Failed to fetch practical levels:", levelsResult.error);
+      return NextResponse.json(
+        { error: "Failed to fetch practical levels" },
+        { status: 500 },
+      );
+    }
+
     if (spRecord.is_locked) {
       // For multi-level practicals, skip the lock check when running a specific level.
       // The lock may have been set by a sibling task passing in the same submission batch.
       let skipLock = false;
-      if (level) {
-        const { count } = await supabase
-          .from("practical_levels")
-          .select("*", { count: "exact", head: true })
-          .eq("practical_id", pid);
-        if (count && count > 0) {
-          skipLock = true;
-        }
+      if (requestedLevel && practicalLevels.length > 0) {
+        skipLock = true;
       }
 
       if (!skipLock) {
@@ -77,12 +308,6 @@ export async function POST(req: Request) {
     }
 
     // Deadline check for exams
-    const { data: examData } = (await supabase
-      .from("exams")
-      .select("end_time")
-      .eq("practical_id", pid)
-      .maybeSingle()) as any;
-
     if (examData?.end_time) {
       const now = new Date();
       const endTime = new Date(examData.end_time);
@@ -95,99 +320,131 @@ export async function POST(req: Request) {
 
     // Determine max marks and level filter
     let maxMarks = 10; // Default
-    let levelId: string | null = null;
+    let levelId: number | null = null;
 
-    if (level) {
-      const { data: levelData } = (await supabase
-        .from("practical_levels")
-        .select("id, max_marks")
-        .eq("practical_id", pid)
-        .eq("level", level)
-        .single()) as any;
+    if (requestedLevel) {
+      const levelData = practicalLevels.find(
+        (lvl: any) =>
+          String(lvl?.level || "").trim().toLowerCase() === requestedLevel,
+      );
 
       if (levelData) {
-        levelId = String(levelData.id);
-        maxMarks = levelData.max_marks || 10;
+        levelId = Number(levelData.id);
+        maxMarks = Number(levelData.max_marks || 10);
+      } else if (practicalLevels.length > 0) {
+        if (mode === "submit") {
+          return NextResponse.json(
+            { error: `Invalid level '${level}' for this practical` },
+            { status: 400 },
+          );
+        }
+
+        // In run mode, be forgiving: fallback to first level to prevent transient UI race failures.
+        levelId = Number(practicalLevels[0].id);
+        maxMarks = Number(practicalLevels[0].max_marks || 10);
       }
     }
 
-    // Fetch DB test cases (filtered by level if applicable)
-    let query = supabase
-      .from("test_cases")
-      .select("*")
-      .eq("practical_id", pid)
-      .order("id", { ascending: true });
+    const shouldFetchDbTestCases = mode === "submit" || !shouldUseCustomTestCases;
+    let dbTestCases: any[] = [];
 
-    // Key filtering logic:
-    // If levelId exists, only get test cases for that level.
-    // If no levelId (single level mode), only get test cases where level_id IS NULL.
-    if (levelId) {
-      query = query.eq("level_id", Number(levelId));
-    } else {
-      query = query.is("level_id", null);
+    if (shouldFetchDbTestCases) {
+      // Fetch only fields used by runner payload/response mapping.
+      let query = supabase
+        .from("test_cases")
+        .select(
+          "id, input, expected_output, is_hidden, time_limit_ms, memory_limit_kb, level_id",
+        )
+        .eq("practical_id", pid)
+        .order("id", { ascending: true });
+
+      // If no resolved level exists, fetch non-leveled test cases by default.
+      if (levelId !== null) {
+        query = query.eq("level_id", levelId);
+      } else {
+        query = query.is("level_id", null);
+      }
+
+      const { data: dbTestCasesData, error: tcErr } = await query;
+
+      if (tcErr) {
+        console.error("Failed to fetch test cases:", tcErr);
+        return NextResponse.json(
+          { error: "Failed to fetch test cases" },
+          { status: 500 },
+        );
+      }
+
+      dbTestCases = dbTestCasesData || [];
     }
 
-    const { data: dbTestCasesData, error: tcErr } = await query;
-    const dbTestCases = dbTestCasesData || [];
+    // Fetch reference code only when it is required to derive expected outputs
+    // for custom user-provided test cases.
+    let referenceCode = "";
+    let referenceLang = "";
 
-    if (tcErr) console.error("Failed to fetch test cases:", tcErr);
+    if (shouldUseCustomTestCases) {
+      let refsData: any[] | null = null;
+      try {
+        const { supabaseAdmin } = await import("@/lib/supabase/service");
 
-    // Fetch reference code. Prefer admin client, but gracefully fall back to standard client.
-    let refsData: any[] | null = null;
-    try {
-      const { supabaseAdmin } = await import("@/lib/supabase/service");
-
-      const { data: primaryData } = (await supabaseAdmin
-        .from("reference_codes")
-        .select("id, language, code, is_primary, created_at")
-        .eq("practical_id", pid)
-        .eq("language", lang)
-        .limit(1)) as any as { data: any[] };
-
-      refsData = primaryData || [];
-
-      // If no language-specific match, fallback to primary/latest
-      if (!refsData || refsData.length === 0) {
-        const { data: fallbackData } = (await supabaseAdmin
+        const { data: primaryData } = (await supabaseAdmin
           .from("reference_codes")
           .select("id, language, code, is_primary, created_at")
           .eq("practical_id", pid)
-          .order("is_primary", { ascending: false })
-          .order("created_at", { ascending: false })
+          .eq("language", lang)
           .limit(1)) as any as { data: any[] };
-        refsData = fallbackData || [];
-      }
-    } catch (refErr) {
-      console.warn("[Run API] Admin reference fetch failed, using regular client:", refErr);
 
-      const { data: primaryData } = (await supabase
-        .from("reference_codes")
-        .select("id, language, code, is_primary, created_at")
-        .eq("practical_id", pid)
-        .eq("language", lang)
-        .limit(1)) as any as { data: any[] };
+        refsData = primaryData || [];
 
-      refsData = primaryData || [];
+        // If no language-specific match, fallback to primary/latest
+        if (!refsData || refsData.length === 0) {
+          const { data: fallbackData } = (await supabaseAdmin
+            .from("reference_codes")
+            .select("id, language, code, is_primary, created_at")
+            .eq("practical_id", pid)
+            .order("is_primary", { ascending: false })
+            .order("created_at", { ascending: false })
+            .limit(1)) as any as { data: any[] };
+          refsData = fallbackData || [];
+        }
+      } catch (refErr) {
+        console.warn(
+          "[Run API] Admin reference fetch failed, using regular client:",
+          refErr,
+        );
 
-      if (!refsData || refsData.length === 0) {
-        const { data: fallbackData } = (await supabase
+        const { data: primaryData } = (await supabase
           .from("reference_codes")
           .select("id, language, code, is_primary, created_at")
           .eq("practical_id", pid)
-          .order("is_primary", { ascending: false })
-          .order("created_at", { ascending: false })
+          .eq("language", lang)
           .limit(1)) as any as { data: any[] };
-        refsData = fallbackData || [];
+
+        refsData = primaryData || [];
+
+        if (!refsData || refsData.length === 0) {
+          const { data: fallbackData } = (await supabase
+            .from("reference_codes")
+            .select("id, language, code, is_primary, created_at")
+            .eq("practical_id", pid)
+            .order("is_primary", { ascending: false })
+            .order("created_at", { ascending: false })
+            .limit(1)) as any as { data: any[] };
+          refsData = fallbackData || [];
+        }
       }
+
+      const refs = refsData || [];
+      const ref = refs[0] || null;
+      referenceCode = ref?.code ?? "";
+      referenceLang = (ref?.language ?? "").toLowerCase();
+
+      console.log(`[Debug] PracticalID: ${pid}, Lang: ${lang}`);
+      console.log(
+        `[Debug] Reference Code Found: ${!!referenceCode}, RefLang: ${referenceLang}`,
+      );
     }
-
-    const refs = refsData || [];
-    const ref = refs[0] || null;
-    const referenceCode = ref?.code ?? "";
-    const referenceLang = (ref?.language ?? "").toLowerCase();
-
-    console.log(`[Debug] PracticalID: ${pid}, Lang: ${lang}`);
-    console.log(`[Debug] Reference Code Found: ${!!referenceCode}, RefLang: ${referenceLang}`);
 
     const normalizeLang = (l: string) => {
       const ll = l.toLowerCase();
@@ -235,13 +492,22 @@ export async function POST(req: Request) {
       currentMode: "run" | "submit",
       source: "user" | "db" | "none",
     ) => {
+      const normalizedError = normalizeRunnerErrorText(message);
+      const formattedError =
+        formatStudentError({
+          status: "runtime_error",
+          language: reqLangNorm,
+          stderr: normalizedError,
+        }) || normalizedError || message;
+
       const results = (currentBatch || []).map((b: any) => ({
         test_case_id: b?.id ?? 0,
         status: "runtime_error",
         input: b?.stdinInput ?? "",
         expected: b?.expectedOutput ?? "",
         stdout: "",
-        error: message,
+        stderr: normalizedError || null,
+        error: formattedError,
         is_hidden: b?.is_hidden ?? false,
         time_ms: 0,
         memory_kb: 0,
@@ -259,7 +525,7 @@ export async function POST(req: Request) {
         totalTestCases: predefinedResults.length,
         usedTestCaseSource: source,
         raw_details: [],
-        executionError: message,
+        executionError: formattedError,
         mode: currentMode,
       });
     };
@@ -269,9 +535,9 @@ export async function POST(req: Request) {
     let usedTestCaseSource: "user" | "db" | "none" = "none";
 
     if (mode === "run") {
-      if (useCustomTestCases && userTestCases.length > 0) {
+      if (shouldUseCustomTestCases) {
         // Build user batch (ids prefixed with user-)
-        const userBatch = userTestCases.map((utc: any, idx: number) => ({
+        const userBatch = normalizedUserTestCases.map((utc: any, idx: number) => ({
           id: `user-${idx + 1}`,
           stdinInput: utc.input ?? "",
           expectedOutput: utc.expectedOutput ?? "",
@@ -370,6 +636,21 @@ export async function POST(req: Request) {
       );
     }
 
+    if (batch.length === 0 && mode === "run") {
+      // Fallback so users can still run code even when no DB testcases are configured.
+      batch = [
+        {
+          id: "user-1",
+          stdinInput: "",
+          expectedOutput: "",
+          is_hidden: false,
+          time_limit_ms: 2000,
+          memory_limit_kb: reqLangNorm === "java" ? 262144 : 65536,
+        },
+      ];
+      usedTestCaseSource = "user";
+    }
+
     if (batch.length === 0) {
       return NextResponse.json({ results: [], verdict: "no_testcases" });
     }
@@ -383,7 +664,7 @@ export async function POST(req: Request) {
         reference_lang: refLangNorm || referenceLang || undefined,
         mode,
         executionModel: "wrapper_harness",
-        failFast: true,
+        failFast: false,
         lang: reqLangNorm || lang,
         batch,
       });
@@ -504,14 +785,29 @@ export async function POST(req: Request) {
           : "wrong_answer";
       }
 
+      const rawStderr = normalizeRunnerErrorText(d.stderr || "");
+      const shouldShowErrorBlock =
+        status === "compile_error" ||
+        status === "runtime_error" ||
+        status === "time_limit_exceeded" ||
+        status === "memory_limit_exceeded" ||
+        status === "output_limit_exceeded";
+      const formattedError = shouldShowErrorBlock
+        ? formatStudentError({
+            status,
+            language: reqLangNorm,
+            stderr: rawStderr,
+          })
+        : null;
+
       return {
         test_case_id: d.test_case_id,
         status,
         input,
         expected,
         stdout,
-        stderr: d.stderr || null,
-        error: d.stderr || null,
+        stderr: rawStderr || null,
+        error: formattedError || rawStderr || null,
         is_hidden: isUser ? false : (batchItem?.is_hidden ?? true),
         time_ms: d.time_ms ?? 0,
         memory_kb: d.memory_kb ?? 0,

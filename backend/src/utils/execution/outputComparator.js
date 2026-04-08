@@ -1,12 +1,14 @@
 /**
  * Multi-mode output comparison engine.
  *
- * Supports 5 comparison modes:
+ * Supports 7 comparison modes:
  *   - strict:                      Byte-for-byte after trimming trailing whitespace per line
  *   - ignore_trailing_whitespace:  Trim trailing whitespace per line, then compare (DEFAULT)
  *   - ignore_all_whitespace:       Strip ALL whitespace, then compare
  *   - float_tolerance:             Parse numbers, compare with epsilon
  *   - unordered_lines:             Sort lines, then compare
+ *   - ignore_case_punctuation:     Ignore case and punctuation, compare normalized text
+ *   - keyword_contains:            Validate expected keywords exist in actual output
  */
 
 const COMPARISON_MODES = Object.freeze({
@@ -15,6 +17,8 @@ const COMPARISON_MODES = Object.freeze({
   IGNORE_ALL_WS: 'ignore_all_whitespace',
   FLOAT_TOLERANCE: 'float_tolerance',
   UNORDERED_LINES: 'unordered_lines',
+  IGNORE_CASE_PUNCTUATION: 'ignore_case_punctuation',
+  KEYWORD_CONTAINS: 'keyword_contains',
 });
 
 const DEFAULT_FLOAT_EPSILON = 1e-6;
@@ -60,6 +64,57 @@ function normalizeTrailingWhitespace(text) {
  */
 function stripAllWhitespace(text) {
   return sanitizeOutput(text).replace(/\s+/g, '');
+}
+
+/**
+ * Lowercase and strip punctuation to compare semantically similar text.
+ */
+function normalizeCaseAndPunctuation(text) {
+  return sanitizeOutput(text)
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function tokenizeKeywords(text, minLen = 2) {
+  const normalized = normalizeCaseAndPunctuation(text);
+  if (!normalized) return [];
+
+  const tokens = normalized.split(/\s+/).filter(Boolean);
+  return tokens.filter((token) => token.length >= minLen || /^\d+$/.test(token));
+}
+
+function compareKeywordContains(actual, expected, options = {}) {
+  const minKeywordLength = Number(options.minKeywordLength ?? 2);
+  const keywordThreshold = Number(options.keywordThreshold ?? 1);
+
+  const expectedTokens = Array.from(
+    new Set(tokenizeKeywords(expected, minKeywordLength))
+  );
+
+  if (expectedTokens.length === 0) {
+    const a = normalizeCaseAndPunctuation(actual);
+    const e = normalizeCaseAndPunctuation(expected);
+    return {
+      match: a === e,
+      details: a === e ? 'Match (no expected keywords)' : 'Output differs',
+    };
+  }
+
+  const actualTokens = new Set(tokenizeKeywords(actual, minKeywordLength));
+  const matched = expectedTokens.filter((token) => actualTokens.has(token));
+  const ratio = matched.length / expectedTokens.length;
+  const required = Math.max(0, Math.min(1, keywordThreshold));
+  const missing = expectedTokens.filter((token) => !actualTokens.has(token));
+
+  return {
+    match: ratio >= required,
+    details:
+      ratio >= required
+        ? `Match (keywords ${matched.length}/${expectedTokens.length})`
+        : `Missing keywords: ${missing.slice(0, 8).join(', ')}`,
+  };
 }
 
 /**
@@ -174,11 +229,16 @@ function compareOutput(actual, expected, mode, options = {}) {
     case COMPARISON_MODES.IGNORE_TRAILING_WS: {
       const a = normalizeTrailingWhitespace(actual);
       const e = normalizeTrailingWhitespace(expected);
-      const match = a === e || collapseWhitespace(a) === collapseWhitespace(e);
+      const normalizedA = normalizeCaseAndPunctuation(a);
+      const normalizedE = normalizeCaseAndPunctuation(e);
+      const match =
+        a === e ||
+        collapseWhitespace(a) === collapseWhitespace(e) ||
+        normalizedA === normalizedE;
       return {
         match,
         details: match
-          ? 'Match (whitespace/invisible chars normalized)'
+          ? 'Match (whitespace/invisible chars/case/punctuation normalized)'
           : 'Output differs',
       };
     }
@@ -202,11 +262,37 @@ function compareOutput(actual, expected, mode, options = {}) {
       return compareUnorderedLines(actual, expected);
     }
 
+    case COMPARISON_MODES.IGNORE_CASE_PUNCTUATION: {
+      const a = normalizeCaseAndPunctuation(actual);
+      const e = normalizeCaseAndPunctuation(expected);
+      if (a === e) {
+        return {
+          match: true,
+          details: 'Match (case/punctuation ignored)',
+        };
+      }
+
+      const keywordFallback = compareKeywordContains(actual, expected, options);
+      return {
+        match: keywordFallback.match,
+        details:
+          keywordFallback.match
+            ? 'Match (keyword fallback)'
+            : 'Output differs',
+      };
+    }
+
+    case COMPARISON_MODES.KEYWORD_CONTAINS: {
+      return compareKeywordContains(actual, expected, options);
+    }
+
     default: {
       // Fallback to ignore_trailing_whitespace
       const a = normalizeTrailingWhitespace(actual);
       const e = normalizeTrailingWhitespace(expected);
-      const match = a === e;
+      const match =
+        a === e ||
+        normalizeCaseAndPunctuation(a) === normalizeCaseAndPunctuation(e);
       return {
         match,
         details: match ? 'Match (fallback)' : 'Output differs',

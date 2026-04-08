@@ -1,8 +1,10 @@
+#include <ctype.h>
 #include <dirent.h>
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <signal.h>
 #include <sys/resource.h>
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -16,6 +18,10 @@
 #define ERROR_FILE "/app/workspace/compile_errors.txt"
 // MAX_CPU_TIME removed, reading from env now
 
+#ifndef PATH_MAX
+#define PATH_MAX 4096
+#endif
+
 // ANSI Colors
 #define RED "\033[91m"
 #define GREEN "\033[92m"
@@ -24,19 +30,130 @@
 #define BOLD "\033[1m"
 #define RESET "\033[0m"
 
+int remove_path_recursive(const char *path) {
+  struct stat st;
+  if (lstat(path, &st) != 0) {
+    return -1;
+  }
+
+  if (S_ISDIR(st.st_mode)) {
+    DIR *d = opendir(path);
+    if (!d) {
+      return -1;
+    }
+
+    struct dirent *entry;
+    while ((entry = readdir(d)) != NULL) {
+      if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) {
+        continue;
+      }
+
+      char child_path[PATH_MAX];
+      snprintf(child_path, sizeof(child_path), "%s/%s", path, entry->d_name);
+      remove_path_recursive(child_path);
+    }
+
+    closedir(d);
+    return rmdir(path);
+  }
+
+  return unlink(path);
+}
+
 void cleanup_workspace() {
   DIR *d = opendir(WORKSPACE);
   if (!d)
     return;
-  struct dirent *dir;
-  while ((dir = readdir(d)) != NULL) {
-    if (dir->d_type == DT_REG) {
-      char path[512];
-      snprintf(path, sizeof(path), "%s/%s", WORKSPACE, dir->d_name);
-      unlink(path);
+
+  struct dirent *entry;
+  while ((entry = readdir(d)) != NULL) {
+    if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) {
+      continue;
+    }
+
+    char path[PATH_MAX];
+    snprintf(path, sizeof(path), "%s/%s", WORKSPACE, entry->d_name);
+    remove_path_recursive(path);
+  }
+
+  closedir(d);
+}
+
+void normalize_relative_path(const char *src, char *dest, size_t dest_size,
+                            const char *default_name) {
+  size_t j = 0;
+  int seen_non_slash = 0;
+
+  if (!src)
+    src = "";
+
+  for (size_t i = 0; src[i] != '\0' && j < dest_size - 1; i++) {
+    char c = src[i];
+    if (c == '\\')
+      c = '/';
+
+    if (!seen_non_slash && c == '/')
+      continue;
+
+    if (!seen_non_slash && c != '/')
+      seen_non_slash = 1;
+
+    dest[j++] = c;
+  }
+
+  dest[j] = '\0';
+
+  if (j == 0 && default_name) {
+    snprintf(dest, dest_size, "%s", default_name);
+  }
+}
+
+int is_safe_relative_path(const char *path) {
+  if (!path || path[0] == '\0' || path[0] == '/')
+    return 0;
+
+  if (strstr(path, ".."))
+    return 0;
+
+  for (size_t i = 0; path[i] != '\0'; i++) {
+    unsigned char c = (unsigned char)path[i];
+    if (!(isalnum(c) || c == '_' || c == '-' || c == '.' || c == '/')) {
+      return 0;
     }
   }
-  closedir(d);
+
+  return 1;
+}
+
+int ensure_parent_dirs(const char *full_path) {
+  char temp[PATH_MAX];
+  size_t len = strlen(full_path);
+  if (len >= sizeof(temp)) {
+    return -1;
+  }
+
+  strcpy(temp, full_path);
+
+  for (char *p = temp + 1; *p; p++) {
+    if (*p == '/') {
+      *p = '\0';
+      if (mkdir(temp, 0755) != 0 && errno != EEXIST) {
+        return -1;
+      }
+      *p = '/';
+    }
+  }
+
+  return 0;
+}
+
+const char *default_source_file() {
+  char *compiler = getenv("COMPILER");
+  return (compiler && strcmp(compiler, "g++") == 0) ? "main.cpp" : "main.c";
+}
+
+int has_ccache() {
+  return system("command -v ccache >/dev/null 2>&1") == 0;
 }
 
 int compile_code() {
@@ -45,15 +162,21 @@ int compile_code() {
   if (!compiler)
     compiler = "gcc";
 
-  // Build compilation command with ccache and -O0 for speed
+  const char *cache_prefix = has_ccache() ? "ccache " : "";
+
+  // Build compilation command and compile all source files under workspace.
   if (strcmp(compiler, "g++") == 0) {
     snprintf(compile_cmd, sizeof(compile_cmd),
-             "ccache g++ -O0 -o %s %s/*.cpp 2> %s", EXEC_FILE, WORKSPACE,
-             ERROR_FILE);
+             "sh -c 'files=$(find \"%s\" -type f | grep -E \"\\\\.(cpp|cc|cxx)$\" || true); "
+             "if [ -z \"$files\" ]; then echo \"No C++ source files found\" >&2; exit 1; fi; "
+             "%sg++ -O0 -I \"%s\" -o \"%s\" $files 2> \"%s\"'",
+             WORKSPACE, cache_prefix, WORKSPACE, EXEC_FILE, ERROR_FILE);
   } else {
     snprintf(compile_cmd, sizeof(compile_cmd),
-             "ccache gcc -O0 -o %s %s/*.c 2> %s", EXEC_FILE, WORKSPACE,
-             ERROR_FILE);
+             "sh -c 'files=$(find \"%s\" -type f | grep -E \"\\\\.c$\" || true); "
+             "if [ -z \"$files\" ]; then echo \"No C source files found\" >&2; exit 1; fi; "
+             "%sgcc -O0 -I \"%s\" -o \"%s\" $files 2> \"%s\"'",
+             WORKSPACE, cache_prefix, WORKSPACE, EXEC_FILE, ERROR_FILE);
   }
 
   int ret = system(compile_cmd);
@@ -119,7 +242,8 @@ void run_code() {
 int main() {
   char line[MAX_LINE];
   FILE *current_file = NULL;
-  char current_path[512] = "";
+  char current_path[PATH_MAX] = "";
+  int expecting_new_batch = 1;
 
   setvbuf(stdin, NULL, _IONBF, 0);
   setvbuf(stdout, NULL, _IONBF, 0);
@@ -131,14 +255,43 @@ int main() {
     line[strcspn(line, "\r\n")] = 0;
 
     if (strncmp(line, "__FILE_START__", 14) == 0) {
+      if (expecting_new_batch) {
+        cleanup_workspace();
+        expecting_new_batch = 0;
+      }
+
       if (current_file)
         fclose(current_file);
+
       char *filename = line + 14;
       while (*filename == ' ')
         filename++;
+
+      char normalized[PATH_MAX];
+      normalize_relative_path(filename, normalized, sizeof(normalized),
+                              default_source_file());
+
+      if (!is_safe_relative_path(normalized)) {
+        printf("%s❌ Invalid file path: %s%s\n", RED, normalized, RESET);
+        current_file = NULL;
+        continue;
+      }
+
       snprintf(current_path, sizeof(current_path), "%s/%s", WORKSPACE,
-               filename);
+               normalized);
+
+      if (ensure_parent_dirs(current_path) != 0) {
+        printf("%s❌ Failed to create parent directories for %s%s\n", RED,
+               normalized, RESET);
+        current_file = NULL;
+        continue;
+      }
+
       current_file = fopen(current_path, "w");
+      if (!current_file) {
+        printf("%s❌ Failed to open %s: %s%s\n", RED, normalized,
+               strerror(errno), RESET);
+      }
       continue;
     }
 
@@ -156,6 +309,7 @@ int main() {
         run_code();
       }
       printf("\n%s--- Execution Finished ---%s\n", CYAN, RESET);
+      expecting_new_batch = 1;
       continue;
     }
 

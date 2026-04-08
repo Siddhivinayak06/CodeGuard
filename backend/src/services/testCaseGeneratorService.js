@@ -46,6 +46,13 @@ function normalizeInput(value = '') {
     .trimEnd();
 }
 
+function normalizeExpectedOutput(value = '') {
+  return String(value ?? '')
+    .replace(/\r\n/g, '\n')
+    .replace(/\r/g, '\n')
+    .trimEnd();
+}
+
 function buildAttemptCandidateCounts(requestedCount) {
   if (requestedCount >= 80) {
     return [110, 100, 70, 50];
@@ -218,27 +225,18 @@ function extractInputsByRegex(raw = '') {
     return inputs;
   }
 
-  const lineCandidates = text
-    .replace(/```json/gi, '')
-    .replace(/```/g, '')
-    .split('\n')
-    .map((line) =>
-      line
-        .replace(/^\s*[-*]\s*/, '')
-        .replace(/^\s*\d+[).:-]\s*/, '')
-        .trim()
-    )
-    .filter((line) => line.length > 0)
-    .filter(
-      (line) =>
-        !line.startsWith('{') &&
-        !line.startsWith('[') &&
-        !line.startsWith('"inputs"') &&
-        !line.toLowerCase().startsWith('inputs:')
-    )
-    .filter((line) => line.length <= 2000);
+  const arrayMatch = text.match(/"inputs"\s*:\s*\[((?:.|\n|\r)*?)\]/i);
+  if (arrayMatch?.[1]) {
+    const itemMatches = arrayMatch[1].matchAll(/"((?:\\.|[^"\\])*)"/g);
+    for (const match of itemMatches) {
+      const decoded = decodeEscapedJsonString(match[1] || '');
+      if (decoded.trim().length > 0) {
+        inputs.push(decoded);
+      }
+    }
+  }
 
-  return lineCandidates;
+  return inputs;
 }
 
 function parseCandidateInputs(rawResponse = '') {
@@ -257,6 +255,75 @@ function parseCandidateInputs(rawResponse = '') {
 
   logger.warn('Failed to parse AI fuzzer response into candidate inputs');
   return [];
+}
+
+async function verifyGeneratedTestCases({
+  referenceCode,
+  language,
+  testCases,
+  timeLimitMs,
+  memoryLimitKb,
+}) {
+  if (!Array.isArray(testCases) || testCases.length === 0) {
+    return { verifiedCases: [], rejected: 0 };
+  }
+
+  const verificationResults = await executeReferenceBatch({
+    referenceCode,
+    language,
+    inputs: testCases.map((tc) => String(tc.input ?? '')),
+    timeLimitMs,
+    memoryLimitKb,
+    executionModel: 'stdin_legacy',
+  });
+
+  const byId = new Map();
+  verificationResults.forEach((result) => {
+    byId.set(String(result.test_case_id), result);
+  });
+
+  const verifiedCases = [];
+  let rejected = 0;
+
+  for (let index = 0; index < testCases.length; index++) {
+    const id = String(index + 1);
+    const existingCase = testCases[index];
+    const verification = byId.get(id);
+
+    if (!verification) {
+      rejected += 1;
+      continue;
+    }
+
+    const status = String(verification.status || '').toLowerCase();
+    if (status === 'compile_error') {
+      throw new Error(
+        verification.stderr ||
+          'Reference code failed while verifying generated test cases'
+      );
+    }
+
+    if (
+      status === 'runtime_error' ||
+      status === 'time_limit_exceeded' ||
+      Number(verification.exitCode || 0) !== 0
+    ) {
+      rejected += 1;
+      continue;
+    }
+
+    const expected = normalizeExpectedOutput(existingCase.expected_output);
+    const actual = normalizeExpectedOutput(verification.stdout);
+
+    if (expected !== actual) {
+      rejected += 1;
+      continue;
+    }
+
+    verifiedCases.push(existingCase);
+  }
+
+  return { verifiedCases, rejected };
 }
 
 async function collectAiResponse(prompt, aiConfig = {}) {
@@ -285,7 +352,7 @@ async function executeReferenceBatch({
   inputs,
   timeLimitMs,
   memoryLimitKb,
-  executionModel = 'wrapper_harness',
+  executionModel = 'stdin_legacy',
 }) {
   const useLocal = shouldUseDirectLocal(language);
   const runner = useLocal ? localBatchCode : runBatchCode;
@@ -528,17 +595,17 @@ async function generateFuzzTestCases(payload = {}) {
     inputs: uniqueCandidates,
     timeLimitMs,
     memoryLimitKb,
+    executionModel: 'stdin_legacy',
   });
 
-  // Some wrapper-harness executions can return no stdout for all cases even when
-  // legacy stdin execution can produce valid outputs. Auto-fallback in that case.
+  // If legacy mode yields empty stdout everywhere, retry wrapper harness once.
   if (
     !hasAnyNonEmptyStdout(runnerResults) &&
     !hasCompileError(runnerResults) &&
     ['python', 'c', 'java', 'py'].includes(normalizedLanguage)
   ) {
     logger.warn(
-      'Fuzzer wrapper harness produced empty stdout; retrying legacy execution model',
+      'Fuzzer legacy execution produced empty stdout; retrying wrapper harness model',
       {
         language: normalizedLanguage,
         candidateCount: uniqueCandidates.length,
@@ -551,7 +618,7 @@ async function generateFuzzTestCases(payload = {}) {
       inputs: uniqueCandidates,
       timeLimitMs,
       memoryLimitKb,
-      executionModel: 'stdin_legacy',
+      executionModel: 'wrapper_harness',
     });
   }
 
@@ -591,7 +658,7 @@ async function generateFuzzTestCases(payload = {}) {
 
     if (existingSet.has(input)) continue;
 
-    const normalizedExpectedOutput = String(result.stdout ?? '').trimEnd();
+    const normalizedExpectedOutput = normalizeExpectedOutput(result.stdout);
     if (normalizedExpectedOutput.length === 0) {
       emptyOutputRejected += 1;
       continue;
@@ -620,15 +687,25 @@ async function generateFuzzTestCases(payload = {}) {
     );
   }
 
+  const { verifiedCases, rejected: verificationRejected } =
+    await verifyGeneratedTestCases({
+      referenceCode: parsed.referenceCode,
+      language: normalizedLanguage,
+      testCases,
+      timeLimitMs,
+      memoryLimitKb,
+    });
+
   return {
-    testCases,
+    testCases: verifiedCases,
     meta: {
       requestedCount,
-      generatedCount: testCases.length,
+      generatedCount: verifiedCases.length,
       candidateCount: uniqueCandidates.length,
       runtimeRejected,
       timeoutRejected,
       emptyOutputRejected,
+      verificationRejected,
     },
   };
 }

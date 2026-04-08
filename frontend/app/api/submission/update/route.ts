@@ -10,7 +10,11 @@ const VALID_STATUSES = ["pending", "passed", "failed"];
 export async function POST(req: Request) {
   try {
     const supabase = await createClient();
-    const { response: authError } = await requireAuth(supabase);
+    const {
+      user,
+      role,
+      response: authError,
+    } = await requireAuth(supabase);
     if (authError) return authError;
 
     const {
@@ -22,26 +26,47 @@ export async function POST(req: Request) {
       code,
     } = await req.json();
 
-    if (!submissionId) {
+    const submissionIdNum = Number(submissionId);
+    const incomingStatus =
+      status === undefined || status === null
+        ? undefined
+        : String(status).toLowerCase();
+    const hasIncomingMarks =
+      marks_obtained !== undefined && marks_obtained !== null;
+    const incomingMarks = hasIncomingMarks ? Number(marks_obtained) : null;
+
+    if (!submissionIdNum || !Number.isFinite(submissionIdNum) || submissionIdNum <= 0) {
       return NextResponse.json(
-        { error: "Missing submissionId" },
+        { error: "Invalid submissionId" },
         { status: 400 },
       );
     }
 
-    if (status && !VALID_STATUSES.includes(status)) {
+    if (incomingStatus && !VALID_STATUSES.includes(incomingStatus)) {
       return NextResponse.json(
         { error: `Invalid status value: ${status}` },
         { status: 400 },
       );
     }
 
+    if (
+      hasIncomingMarks &&
+      (incomingMarks === null || !Number.isFinite(incomingMarks))
+    ) {
+      return NextResponse.json(
+        { error: "Invalid marks_obtained value" },
+        { status: 400 },
+      );
+    }
+
     // Fetch existing submission to compare marks
-    const { data: existingSubmission, error: fetchError } = await supabase
+    const { data: existingRows, error: fetchError } = await supabase
       .from("submissions")
-      .select("*")
-      .eq("id", submissionId)
-      .single();
+      .select("id, student_id, marks_obtained, status, output, code, execution_details, updated_at")
+      .eq("id", submissionIdNum)
+      .limit(1);
+
+    const existingSubmission = (existingRows as any[] | null)?.[0] || null;
 
     if (fetchError || !existingSubmission) {
       console.error("Failed to fetch existing submission:", fetchError);
@@ -51,37 +76,59 @@ export async function POST(req: Request) {
       );
     }
 
-    const existingMarks = (existingSubmission as any).marks_obtained ?? 0;
-    const newMarks = marks_obtained ?? 0;
+    if (
+      existingSubmission.student_id !== user.id &&
+      !["faculty", "admin"].includes(role)
+    ) {
+      return NextResponse.json(
+        { error: "Forbidden: cannot update another user's submission" },
+        { status: 403 },
+      );
+    }
 
-    // Compare marks: only update if new marks are higher or equal
-    // If new marks are lower, keep the existing submission data but still update status/output for tracking
+    const existingMarks = (existingSubmission as any).marks_obtained ?? 0;
+    const newMarks = hasIncomingMarks ? (incomingMarks as number) : existingMarks;
+
+    // Keep best submission immutable against lower-score regressions.
     const shouldUpdateCode = newMarks >= existingMarks;
+
+    if (hasIncomingMarks && !shouldUpdateCode) {
+      return NextResponse.json({
+        success: true,
+        submission: existingSubmission,
+        keptHigherMarks: true,
+        previousMarks: existingMarks,
+        newMarks,
+      });
+    }
 
     const updateData: Record<string, unknown> = {};
 
-    // Always update status and output for tracking purposes
-    if (status) updateData.status = status;
+    if (incomingStatus) updateData.status = incomingStatus;
     if (output !== undefined) updateData.output = output ?? "";
     if (execution_details !== undefined)
       updateData.execution_details = execution_details;
 
-    // Only update marks and code if new submission is better or equal
     if (shouldUpdateCode) {
-      if (marks_obtained !== undefined)
-        updateData.marks_obtained = marks_obtained;
+      if (hasIncomingMarks)
+        updateData.marks_obtained = newMarks;
       if (code !== undefined) updateData.code = code;
-    } else {
-      // Keep the higher marks from existing submission
-      console.log(
-        `Keeping existing marks (${existingMarks}) as they are higher than new marks (${newMarks})`,
-      );
+    }
+
+    if (Object.keys(updateData).length === 0) {
+      return NextResponse.json({
+        success: true,
+        submission: existingSubmission,
+        keptHigherMarks: !shouldUpdateCode,
+        previousMarks: existingMarks,
+        newMarks,
+      });
     }
 
     const { data, error } = await supabase
       .from("submissions")
       .update(updateData as never)
-      .eq("id", submissionId)
+      .eq("id", submissionIdNum)
       .select("*")
       .single();
 

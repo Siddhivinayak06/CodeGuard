@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useLayoutEffect, useRef, useState, useMemo } from "react";
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState, useMemo } from "react";
 import axios from "axios";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
@@ -59,6 +59,94 @@ type UserTestCase = {
   time_limit_ms: number;
   memory_limit_kb: number;
   expectedOutput: string;
+};
+
+const ERROR_PANEL_STATUSES = new Set([
+  "compile_error",
+  "runtime_error",
+  "time_limit_exceeded",
+  "memory_limit_exceeded",
+  "output_limit_exceeded",
+]);
+
+const ANSI_ESCAPE_REGEX = /\u001b\[[0-9;?]*[ -/]*[@-~]/g;
+const OSC_ESCAPE_REGEX = /\u001b\][^\u0007]*(?:\u0007|\u001b\\)/g;
+
+const cleanErrorForDisplay = (message?: string | null) =>
+  String(message || "")
+    .replace(/\r\n/g, "\n")
+    .replace(/\r/g, "\n")
+    .replace(ANSI_ESCAPE_REGEX, "")
+    .replace(OSC_ESCAPE_REGEX, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+
+const getErrorPanelTitle = (status: string) => {
+  switch (status) {
+    case "compile_error":
+      return "Compilation Error";
+    case "time_limit_exceeded":
+      return "Time Limit Exceeded";
+    case "memory_limit_exceeded":
+      return "Memory Limit Exceeded";
+    case "output_limit_exceeded":
+      return "Output Limit Exceeded";
+    default:
+      return "Runtime Error";
+  }
+};
+
+const getQuickFixHint = (
+  message: string,
+  status: string,
+  language: string,
+) => {
+  const text = String(message || "").toLowerCase();
+  const lang = String(language || "").toLowerCase();
+
+  if (text.includes("cannot find symbol")) {
+    return "Check spelling for class, method, and variable names, and verify imports.";
+  }
+  if (text.includes("expected ';'")) {
+    return "Add the missing semicolon near the line shown in the error.";
+  }
+  if (text.includes("syntaxerror")) {
+    return "Fix the syntax near the reported line (brackets, quotes, or punctuation).";
+  }
+  if (text.includes("indentationerror")) {
+    return "Fix inconsistent indentation in your Python code.";
+  }
+  if (
+    text.includes("indexerror") ||
+    text.includes("index out of range") ||
+    text.includes("arrayindexoutofboundsexception")
+  ) {
+    return "Check index bounds before accessing arrays, lists, or strings.";
+  }
+  if (text.includes("nullpointerexception")) {
+    return "A value is null before use. Initialize it or add null checks.";
+  }
+  if (text.includes("zerodivisionerror") || text.includes("/ by zero")) {
+    return "Handle division-by-zero cases before dividing.";
+  }
+  if (text.includes("segmentation fault")) {
+    return "Check pointer usage, memory access, and array bounds in C/C++.";
+  }
+  if (status === "time_limit_exceeded") {
+    return "Optimize your algorithm and avoid unnecessary loops or repeated work.";
+  }
+  if (status === "memory_limit_exceeded") {
+    return "Reduce memory usage by avoiding large temporary structures.";
+  }
+
+  if (status === "compile_error") {
+    if (lang === "python") {
+      return "Fix the syntax issue and run again.";
+    }
+    return "Fix compile errors shown above, then run again.";
+  }
+
+  return null;
 };
 
 // ---------------------------
@@ -358,6 +446,8 @@ int main() {
   const [assignedSet, setAssignedSet] = useState<{ id: string; set_name: string; level_ids: number[] } | null>(null);
   const examTimerRef = useRef<NodeJS.Timeout | null>(null);
   const examAutoSubmittedRef = useRef(false);
+  const handleSubmitRef = useRef<(() => Promise<boolean>) | null>(null);
+  const isAutoSubmitInFlightRef = useRef(false);
   // userTestCases now include expectedOutput field by default (keeps parity with server)
   const [userTestCases, setUserTestCases] = useState<UserTestCase[]>([
     {
@@ -439,10 +529,26 @@ int main() {
   // ========================
   // Session Validation (Single Active Session)
   // ========================
+  const resolveExamIdToSubmit = useCallback(() => {
+    if (isUuidLike(examIdParam)) return examIdParam;
+    const sessionExamId = String(examSession?.exam_id || "");
+    return isUuidLike(sessionExamId) ? sessionExamId : null;
+  }, [examIdParam, examSession?.exam_id]);
+
   const autoSubmitOnInvalidation = async () => {
     // Auto-submit current code when session is invalidated
     if (code && practicalId && user) {
       try {
+        // In exam mode, force the same full submit path used by manual submit
+        // so tests run and marks are finalized before session logout.
+        if (isExamMode && hasExamStarted && handleSubmitRef.current) {
+          const ok = await handleSubmitRef.current();
+          if (ok) {
+            console.log("Code auto-submitted due to session invalidation");
+            return;
+          }
+        }
+
         // Ensure attempt is consumed for practical mode even on forced auto-submit.
         if (!isExamMode) {
           await axios.post(
@@ -484,7 +590,7 @@ int main() {
 
         // Finalize exam session on auto-submit
         if (isExamMode) {
-          const examIdToSubmit = examIdParam || examSession?.exam_id;
+          const examIdToSubmit = resolveExamIdToSubmit();
           if (examIdToSubmit) {
              await axios.post("/api/exam/submit", { 
                examId: examIdToSubmit, 
@@ -498,6 +604,43 @@ int main() {
       }
     }
   };
+
+  const triggerExamAutoSubmit = useCallback(
+    async (reason: "violation" | "timeout"): Promise<boolean> => {
+      if (!isExamMode || isSubmitted || isSubmittingFinal) return false;
+      if (isAutoSubmitInFlightRef.current) return false;
+
+      isAutoSubmitInFlightRef.current = true;
+      examAutoSubmittedRef.current = true;
+
+      if (reason === "timeout") {
+        console.warn("Exam time expired! Auto-submitting...");
+        toast.error("Time's up! Auto-submitting your exam...");
+      } else {
+        console.warn("Proctoring limit reached! Auto-submitting...");
+        toast.error("Violation limit reached. Auto-submitting your exam...");
+      }
+
+      try {
+        const ok = handleSubmitRef.current
+          ? await handleSubmitRef.current()
+          : false;
+
+        // If submission did not complete, allow retry trigger.
+        if (!ok) {
+          examAutoSubmittedRef.current = false;
+        }
+        return ok;
+      } catch (err) {
+        console.error("Forced auto-submit failed:", err);
+        examAutoSubmittedRef.current = false;
+        return false;
+      } finally {
+        isAutoSubmitInFlightRef.current = false;
+      }
+    },
+    [isExamMode, isSubmitted, isSubmittingFinal],
+  );
 
   const { showInvalidModal, registerSession, dismissModal } =
     useSessionValidator({
@@ -677,10 +820,7 @@ int main() {
     if (examTimeRemaining <= 0) {
       if (!examAutoSubmittedRef.current && examTimerStarted.current) {
         // Only auto-submit if the timer was actively counting down
-        examAutoSubmittedRef.current = true;
-        console.warn("Exam time expired! Auto-submitting...");
-        toast.error("Time's up! Auto-submitting your exam...");
-        handleSubmit();
+        void triggerExamAutoSubmit("timeout");
       }
       return;
     }
@@ -692,11 +832,8 @@ int main() {
         if (prev === null) return null;
         const next = prev - 1000;
         if (next <= 0 && !examAutoSubmittedRef.current) {
-          examAutoSubmittedRef.current = true;
           clearInterval(intervalId);
-          console.warn("Exam time expired! Auto-submitting...");
-          toast.error("Time's up! Auto-submitting your exam...");
-          handleSubmit();
+          void triggerExamAutoSubmit("timeout");
           return 0;
         }
         return Math.max(0, next);
@@ -706,8 +843,7 @@ int main() {
     return () => {
       clearInterval(intervalId);
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isExamMode, examTimeRemaining === null, isSubmitted, isSubmittingFinal]);
+  }, [isExamMode, examTimeRemaining === null, isSubmitted, isSubmittingFinal, triggerExamAutoSubmit]);
 
   // Exam anti-cheating: block copy/paste/cut/right-click/DevTools
   useEffect(() => {
@@ -750,14 +886,15 @@ int main() {
   const hasLockSubmittedRef = useRef(false);
   useEffect(() => {
     if (locked && !hasLockSubmittedRef.current && hasExamStarted && !isSubmitted && !isSubmittingFinal) {
-      console.warn("Proctoring Limit Reached: Auto-submitting code...");
       hasLockSubmittedRef.current = true;
-      // Auto-submit and then redirect to dashboard
-      autoSubmitOnInvalidation().finally(() => {
-        router.push("/student/submissions");
-      });
+      void (async () => {
+        const ok = await triggerExamAutoSubmit("violation");
+        if (!ok) {
+          hasLockSubmittedRef.current = false;
+        }
+      })();
     }
-  }, [locked, hasExamStarted, isSubmitted, isSubmittingFinal, autoSubmitOnInvalidation, router]);
+  }, [locked, hasExamStarted, isSubmitted, isSubmittingFinal, triggerExamAutoSubmit]);
 
   // Check lock status on mount (Prevents Refresh/Re-entry)
   useEffect(() => {
@@ -1101,7 +1238,19 @@ int main() {
     setShowFloatingResultWindow(false);
     setTestCaseResults([]);
     try {
-      const customCases = userTestCases.filter((tc) => tc.input.trim() !== "");
+      const customCases = showUserTestCases
+        ? (userTestCases.length > 0
+            ? userTestCases
+            : [
+                {
+                  id: 1,
+                  input: "",
+                  time_limit_ms: 2000,
+                  memory_limit_kb: 65536,
+                  expectedOutput: "",
+                },
+              ])
+        : [];
 
       const payload: any = {
         code,
@@ -1110,7 +1259,7 @@ int main() {
         mode: "run",
         level: activeLevel,
         // Tell server explicitly whether we want to run custom cases
-        useCustomTestCases: customCases.length > 0,
+        useCustomTestCases: showUserTestCases,
         userTestCases: customCases.map((tc, idx) => ({
           // server expects `input` / `stdinInput` on batch creation
           input: tc.input,
@@ -1160,8 +1309,10 @@ int main() {
     }
   };
 
-  const handleSubmit = async () => {
-    if (!practicalId || !user) return;
+  const handleSubmit = async (): Promise<boolean> => {
+    if (!practicalId || !user) return false;
+
+    let submittedSuccessfully = false;
 
     setIsSubmittingFinal(true);
     setLoading(true);
@@ -1322,7 +1473,7 @@ int main() {
       // If exam mode, finalize the exam session using the new API
       if (isExamMode && practicalId) {
         try {
-           const examIdToSubmit = examIdParam || examSession?.exam_id;
+           const examIdToSubmit = resolveExamIdToSubmit();
            if (examIdToSubmit) {
              await axios.post("/api/exam/submit", { 
                examId: examIdToSubmit, 
@@ -1339,6 +1490,7 @@ int main() {
       toast.success(
         `All tasks submitted! Marks: ${totalMarks}/${maxTotal} (${totalPassed}/${totalTests} test cases passed)`,
       );
+      submittedSuccessfully = true;
     } catch (err: any) {
       console.error(err);
       setSubmissionStatus("idle");
@@ -1353,7 +1505,16 @@ int main() {
       setLoading(false);
       setIsSubmittingFinal(false);
     }
+
+    return submittedSuccessfully;
   };
+
+  useEffect(() => {
+    handleSubmitRef.current = handleSubmit;
+    return () => {
+      handleSubmitRef.current = null;
+    };
+  }, [handleSubmit]);
 
   const downloadPdf = async () => {
     try {
@@ -2553,14 +2714,39 @@ int main() {
                                 {isExpanded && !r.is_hidden && !isSkipped && (
                                   <div className="p-4 border-t border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-900/50">
                                     {/* Stderr banner for errors */}
-                                    {(r.status === "compile_error" || r.status === "runtime_error") && (r.error || r.stderr) && (
-                                      <div className="mb-4 p-3 rounded-lg bg-red-50 dark:bg-red-900/10 border border-red-200 dark:border-red-800/30">
-                                        <div className="text-[10px] font-bold text-red-600 dark:text-red-400 uppercase tracking-wider mb-1">Error</div>
-                                        <pre className="text-xs font-mono text-red-700 dark:text-red-300 whitespace-pre-wrap">
-                                          {r.error || r.stderr}
-                                        </pre>
-                                      </div>
-                                    )}
+                                    {(() => {
+                                      const rawError = r.error || r.stderr;
+                                      if (!rawError || !ERROR_PANEL_STATUSES.has(r.status)) {
+                                        return null;
+                                      }
+
+                                      const readableError = cleanErrorForDisplay(rawError);
+                                      if (!readableError) {
+                                        return null;
+                                      }
+
+                                      const quickHint = getQuickFixHint(
+                                        readableError,
+                                        r.status,
+                                        lang,
+                                      );
+
+                                      return (
+                                        <div className="mb-4 p-3 rounded-lg bg-red-50 dark:bg-red-900/10 border border-red-200 dark:border-red-800/30">
+                                          <div className="text-[10px] font-bold text-red-600 dark:text-red-400 uppercase tracking-wider mb-1">
+                                            {getErrorPanelTitle(r.status)}
+                                          </div>
+                                          <pre className="text-xs font-mono text-red-700 dark:text-red-300 whitespace-pre-wrap">
+                                            {readableError}
+                                          </pre>
+                                          {quickHint && (
+                                            <div className="mt-2 text-[11px] text-red-700 dark:text-red-300">
+                                              <span className="font-semibold">Tip:</span> {quickHint}
+                                            </div>
+                                          )}
+                                        </div>
+                                      );
+                                    })()}
 
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                       <div>

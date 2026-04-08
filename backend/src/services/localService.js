@@ -324,8 +324,17 @@ function buildMainLauncherSource(mainFqcn) {
   return (
     packageDecl +
     'public class __RunnerLauncher {\\n' +
+    '  private static java.io.InputStream nonClosingStdIn() {\\n' +
+    '    return new java.io.FilterInputStream(System.in) {\\n' +
+    '      @Override\\n' +
+    '      public void close() throws java.io.IOException {\\n' +
+    '        // Keep stdin available even if user code calls Scanner.close().\\n' +
+    '      }\\n' +
+    '    };\\n' +
+    '  }\\n' +
     '  public static void main(String[] args) {\\n' +
     '    try {\\n' +
+    '      System.setIn(nonClosingStdIn());\\n' +
     '      java.lang.reflect.Method mainMethod = Class.forName("' + mainFqcn + '").getMethod("main", String[].class);\\n' +
     '      mainMethod.invoke(null, (Object) args);\\n' +
     '    } catch (Throwable t) {\\n' +
@@ -422,7 +431,7 @@ rl.on('line', (line) => {
         console.error('No Java files found to compile');
       } else {
         const relativeJavaFiles = javaFiles.map((f) => path.relative(workDir, f));
-        const comp = spawnSync('javac', ['-g:none', ...relativeJavaFiles], {
+        const comp = spawnSync('javac', ['-g:none', '-d', '.', ...relativeJavaFiles], {
           stdio: ['inherit', 'inherit', 'inherit'],
           cwd: workDir,
           shell: isWindows,
@@ -435,7 +444,7 @@ rl.on('line', (line) => {
             const launcherFile = path.join(workDir, '__RunnerLauncher.java');
             fs.writeFileSync(launcherFile, buildMainLauncherSource(runClass));
 
-            const launcherComp = spawnSync('javac', ['-cp', '.', '__RunnerLauncher.java'], {
+            const launcherComp = spawnSync('javac', ['-cp', '.', '-d', '.', '__RunnerLauncher.java'], {
               stdio: ['inherit', 'inherit', 'inherit'],
               cwd: workDir,
               shell: isWindows,
@@ -456,7 +465,7 @@ rl.on('line', (line) => {
                 buildAppletLauncherSource(appletTarget.packageName, appletTarget.fqcn)
               );
 
-              const launcherComp = spawnSync('javac', ['-cp', '.', '__RunnerLauncher.java'], {
+              const launcherComp = spawnSync('javac', ['-cp', '.', '-d', '.', '__RunnerLauncher.java'], {
                 stdio: ['inherit', 'inherit', 'inherit'],
                 cwd: workDir,
                 shell: isWindows,

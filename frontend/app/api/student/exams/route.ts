@@ -3,6 +3,87 @@ import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
+type SubmissionSummaryRow = {
+  practical_id: number;
+  level_id: number | null;
+  status: string | null;
+  marks_obtained: number | null;
+  updated_at?: string | null;
+  created_at?: string | null;
+};
+
+const PASS_STATUSES = new Set([
+  "passed",
+  "completed",
+  "accepted",
+  "excellent",
+  "very_good",
+  "good",
+]);
+
+const FAIL_STATUSES = new Set([
+  "failed",
+  "poor",
+  "needs_improvement",
+  "compile_error",
+  "runtime_error",
+  "timeout",
+  "time_limit_exceeded",
+  "memory_limit_exceeded",
+]);
+
+const normalizeSubmissionStatus = (status: string | null | undefined) =>
+  String(status || "pending").toLowerCase();
+
+const toEpoch = (value?: string | null) => {
+  const parsed = value ? Date.parse(value) : NaN;
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
+const submissionRank = (status: string) => {
+  const normalized = normalizeSubmissionStatus(status);
+  if (PASS_STATUSES.has(normalized)) return 3;
+  if (normalized === "pending" || normalized === "submitted") return 2;
+  if (FAIL_STATUSES.has(normalized)) return 1;
+  return 0;
+};
+
+const pickBetterSubmission = (
+  a: SubmissionSummaryRow,
+  b: SubmissionSummaryRow,
+) => {
+  const aRank = submissionRank(a.status || "pending");
+  const bRank = submissionRank(b.status || "pending");
+
+  if (aRank !== bRank) return bRank > aRank ? b : a;
+
+  const aMarks = Number(a.marks_obtained || 0);
+  const bMarks = Number(b.marks_obtained || 0);
+  if (aMarks !== bMarks) return bMarks > aMarks ? b : a;
+
+  const aTs = Math.max(toEpoch(a.updated_at), toEpoch(a.created_at));
+  const bTs = Math.max(toEpoch(b.updated_at), toEpoch(b.created_at));
+  return bTs >= aTs ? b : a;
+};
+
+const collapseSubmissionAttempts = (rows: SubmissionSummaryRow[]) => {
+  const byLevel = new Map<string, SubmissionSummaryRow>();
+
+  for (const row of rows) {
+    const key = row.level_id === null || row.level_id === undefined
+      ? "__single__"
+      : String(row.level_id);
+    const existing = byLevel.get(key);
+    if (!existing) {
+      byLevel.set(key, row);
+      continue;
+    }
+    byLevel.set(key, pickBetterSubmission(existing, row));
+  }
+
+  return Array.from(byLevel.values());
+};
+
 /** GET: get assigned exams for the current student via exam_sessions */
 export async function GET() {
   try {
@@ -40,6 +121,7 @@ export async function GET() {
         id,
         exam_id,
         student_id,
+        created_at,
         started_at,
         expires_at,
         submitted_at,
@@ -87,70 +169,85 @@ export async function GET() {
       return NextResponse.json({ success: true, data: [] });
     }
 
-    // Fetch assigned set details for level filtering
-    const assignedSetIds = sessions
+    const assignedSetIds = [...new Set(sessions
       .map((s: any) => s.assigned_set_id)
-      .filter(Boolean);
+      .filter(Boolean)
+      .map((id: any) => String(id)))];
+
+    const practicalIds = [...new Set(sessions
+      .map((s: any) => (s.exams as any)?.practicals?.id)
+      .filter((id: any) => Number.isFinite(Number(id)))
+      .map((id: any) => Number(id)))];
+
+    const [setsRes, setLevelsRes, submissionsRes, spRes] = await Promise.all([
+      assignedSetIds.length > 0
+        ? (supabase
+            .from("exam_question_sets")
+            .select("id, set_name")
+            .in("id", assignedSetIds))
+        : Promise.resolve({ data: [], error: null }),
+      assignedSetIds.length > 0
+        ? (supabase
+            .from("exam_set_levels")
+            .select("question_set_id, level_id")
+            .in("question_set_id", assignedSetIds))
+        : Promise.resolve({ data: [], error: null }),
+      practicalIds.length > 0
+        ? (supabase
+            .from("submissions")
+            .select(
+              "practical_id, level_id, status, marks_obtained, updated_at, created_at",
+            )
+            .eq("student_id", userId)
+            .in("practical_id", practicalIds))
+        : Promise.resolve({ data: [], error: null }),
+      practicalIds.length > 0
+        ? (supabase
+            .from("student_practicals")
+            .select(
+              "practical_id, status, attempt_count, max_attempts, is_locked, lock_reason, assigned_deadline, notes",
+            )
+            .eq("student_id", userId)
+            .in("practical_id", practicalIds))
+        : Promise.resolve({ data: [], error: null }),
+    ]);
+
+    if (setsRes?.error) throw setsRes.error;
+    if (setLevelsRes?.error) throw setLevelsRes.error;
+    if (submissionsRes?.error) throw submissionsRes.error;
+    if (spRes?.error) throw spRes.error;
+
+    const setsData = (setsRes?.data || []) as any[];
+    const setLevelsData = (setLevelsRes?.data || []) as any[];
+    const submissions = (submissionsRes?.data || []) as SubmissionSummaryRow[];
+    const spData = (spRes?.data || []) as any[];
 
     const setLevelsMap = new Map<string, Set<number>>();
     const setNameMap = new Map<string, string>();
+    setsData.forEach((s: any) => {
+      setNameMap.set(String(s.id), s.set_name || "");
+    });
 
-    if (assignedSetIds.length > 0) {
-      const { data: setsData } = await supabase
-        .from("exam_question_sets")
-        .select("id, set_name")
-        .in("id", assignedSetIds);
+    setLevelsData.forEach((sl: any) => {
+      const key = String(sl.question_set_id);
+      if (!setLevelsMap.has(key)) setLevelsMap.set(key, new Set());
+      setLevelsMap.get(key)!.add(Number(sl.level_id));
+    });
 
-      (setsData || []).forEach((s: any) => {
-        setNameMap.set(String(s.id), s.set_name || "");
-      });
+    const submissionGroupMap = new Map<number, SubmissionSummaryRow[]>();
+    submissions.forEach((sub) => {
+      const practicalId = Number(sub.practical_id);
+      if (!Number.isFinite(practicalId)) return;
+      if (!submissionGroupMap.has(practicalId)) {
+        submissionGroupMap.set(practicalId, []);
+      }
+      submissionGroupMap.get(practicalId)!.push(sub);
+    });
 
-      const { data: setLevelsData } = await supabase
-        .from("exam_set_levels")
-        .select("question_set_id, level_id")
-        .in("question_set_id", assignedSetIds);
-
-      (setLevelsData || []).forEach((sl: any) => {
-        const key = String(sl.question_set_id);
-        if (!setLevelsMap.has(key)) setLevelsMap.set(key, new Set());
-        setLevelsMap.get(key)!.add(Number(sl.level_id));
-      });
-    }
-
-    // Fetch submissions for marks & status
-    const practicalIds = sessions
-      .map((s: any) => (s.exams as any)?.practicals?.id)
-      .filter(Boolean);
-
-    const submissionGroupMap = new Map<number, any[]>();
-    if (practicalIds.length > 0) {
-      const { data: submissions } = await supabase
-        .from("submissions")
-        .select("practical_id, status, marks_obtained")
-        .eq("student_id", userId)
-        .in("practical_id", practicalIds);
-
-      (submissions || []).forEach((sub: any) => {
-        if (!submissionGroupMap.has(sub.practical_id)) {
-            submissionGroupMap.set(sub.practical_id, []);
-        }
-        submissionGroupMap.get(sub.practical_id)!.push(sub);
-      });
-    }
-
-    // Also get student_practicals data for attempt tracking
     const studentPracticalMap = new Map<number, any>();
-    if (practicalIds.length > 0) {
-      const { data: spData } = await supabase
-        .from("student_practicals")
-        .select("practical_id, status, attempt_count, max_attempts, is_locked, lock_reason, assigned_deadline, notes")
-        .eq("student_id", userId)
-        .in("practical_id", practicalIds);
-
-      (spData || []).forEach((sp: any) => {
-        studentPracticalMap.set(sp.practical_id, sp);
-      });
-    }
+    spData.forEach((sp: any) => {
+      studentPracticalMap.set(sp.practical_id, sp);
+    });
 
     // Map to desired format
     const practicals = sessions
@@ -158,7 +255,8 @@ export async function GET() {
       .map((session: any) => {
         const exam = session.exams as any;
         const p = exam.practicals as any;
-        const subs = submissionGroupMap.get(p.id) || [];
+        const rawSubs = submissionGroupMap.get(Number(p.id)) || [];
+        const collapsedSubs = collapseSubmissionAttempts(rawSubs);
         const sp = studentPracticalMap.get(p.id);
         const assignedSetId = session.assigned_set_id ? String(session.assigned_set_id) : null;
         const allowedLevelIds = assignedSetId ? setLevelsMap.get(assignedSetId) : null;
@@ -183,23 +281,64 @@ export async function GET() {
           }
         }
 
+        const visibleLevelIds = new Set<number>(
+          (visibleLevels || [])
+            .map((lvl: any) => Number(lvl?.id))
+            .filter((id: number) => Number.isFinite(id)),
+        );
+
+        let relevantSubs =
+          visibleLevelIds.size > 0
+            ? collapsedSubs.filter(
+                (sub) =>
+                  sub.level_id !== null &&
+                  visibleLevelIds.has(Number(sub.level_id)),
+              )
+            : collapsedSubs.filter((sub) => sub.level_id === null);
+
+        let requiredCount = visibleLevelIds.size > 0 ? visibleLevelIds.size : 1;
+
+        if (visibleLevelIds.size > 0 && relevantSubs.length === 0) {
+          const legacySubs = collapsedSubs.filter((sub) => sub.level_id === null);
+          if (legacySubs.length > 0) {
+            relevantSubs = legacySubs;
+            requiredCount = 1;
+          }
+        }
+
+        const sortedVisibleLevels = [...visibleLevels].sort((a: any, b: any) => {
+          const order: Record<string, number> = { easy: 0, medium: 1, hard: 2 };
+          return (order[a.level] || 0) - (order[b.level] || 0);
+        });
+
         // Determine final overall status
         let finalStatus = sp?.status || "assigned";
-        if (subs.length > 0) {
-            const hasFailed = subs.some(s => s.status === "failed");
-            const allPassed = subs.every(s => s.status === "passed" || s.status === "completed");
-            // Also enforce that we have submitted ALL required visible levels to be strictly passed
-            const totalRequired = visibleLevels.length > 0 ? visibleLevels.length : 1;
-            
-            if (allPassed && subs.length >= totalRequired) finalStatus = "passed";
-            else if (hasFailed) finalStatus = "failed";
-            else finalStatus = "pending";
+        if (relevantSubs.length > 0) {
+          const hasFailed = relevantSubs.some((s) =>
+            FAIL_STATUSES.has(normalizeSubmissionStatus(s.status)),
+          );
+          const passedCount =
+            requiredCount > 1
+              ? new Set(
+                  relevantSubs
+                    .filter((s) => PASS_STATUSES.has(normalizeSubmissionStatus(s.status)))
+                    .map((s) => String(s.level_id)),
+                ).size
+              : relevantSubs.some((s) => PASS_STATUSES.has(normalizeSubmissionStatus(s.status)))
+                ? 1
+                : 0;
+
+          if (passedCount >= requiredCount) finalStatus = "passed";
+          else if (hasFailed) finalStatus = "failed";
+          else finalStatus = "pending";
         } else if (sp?.status === "completed") {
-            finalStatus = "completed";
+          finalStatus = "completed";
         }
-        
-        // Sum marks
-        const totalMarks = subs.reduce((acc, curr) => acc + (curr.marks_obtained || 0), 0);
+
+        const totalMarks = relevantSubs.reduce(
+          (acc, curr) => acc + Number(curr.marks_obtained || 0),
+          0,
+        );
 
         return {
           id: p.id,
@@ -224,11 +363,8 @@ export async function GET() {
           subject_name: p.subjects?.subject_name,
           subject_code: p.subjects?.subject_code,
           subject_semester: p.subjects?.semester,
-          hasLevels: visibleLevels.length > 0,
-          levels: visibleLevels.sort((a: any, b: any) => {
-            const order: Record<string, number> = { easy: 0, medium: 1, hard: 2 };
-            return (order[a.level] || 0) - (order[b.level] || 0);
-          }),
+          hasLevels: sortedVisibleLevels.length > 0,
+          levels: sortedVisibleLevels,
           attempt_count: sp?.attempt_count ?? 0,
           max_attempts: sp?.max_attempts ?? 1,
           is_locked: sp?.is_locked ?? false,

@@ -10,8 +10,17 @@ const isMacOS = process.platform === 'darwin';
 function buildJavaMainLauncherCode(packageName, mainFqcn) {
   const packageDecl = packageName ? `package ${packageName};\n` : '';
   return `${packageDecl}public class __RunnerLauncher {
+  private static java.io.InputStream nonClosingStdIn() {
+    return new java.io.FilterInputStream(System.in) {
+      @Override
+      public void close() throws java.io.IOException {
+        // Keep stdin available even if user code calls Scanner.close().
+      }
+    };
+  }
     public static void main(String[] args) {
         try {
+      System.setIn(nonClosingStdIn());
             java.lang.reflect.Method mainMethod =
                 Class.forName("${mainFqcn}").getMethod("main", String[].class);
             mainMethod.invoke(null, (Object) args);
@@ -406,7 +415,7 @@ class LocalRunner {
 
         try {
           const quotedFiles = javaFiles.map((file) => `"${file}"`).join(' ');
-          execSync(`"${runtime.compile}" ${quotedFiles}`, {
+          execSync(`"${runtime.compile}" -d "${workDir}" ${quotedFiles}`, {
             cwd: workDir,
             stdio: 'pipe',
           });
@@ -454,7 +463,7 @@ class LocalRunner {
     }
 
     const results = [];
-    const { failFast } = options;
+    const { failFast = false } = options;
 
     const uniqueId = Math.random().toString(36).substring(7);
     const workDir = path.join(this.tempDir, `batch-${uniqueId}`);
@@ -518,7 +527,7 @@ class LocalRunner {
 
         try {
           const quotedFiles = javaFiles.map((file) => `"${file}"`).join(' ');
-          execSync(`"${runtime.compile}" ${quotedFiles}`, {
+          execSync(`"${runtime.compile}" -d "${workDir}" ${quotedFiles}`, {
             cwd: workDir,
             stdio: 'pipe',
           });

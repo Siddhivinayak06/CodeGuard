@@ -119,10 +119,18 @@ router.post('/', async (req, res) => {
 
     const effectiveExecutionModel =
       executionModel || config.execution.defaultExecutionModel;
-    const effectiveFailFast =
+    const requestedFailFast =
       typeof failFast === 'boolean'
         ? failFast
         : config.execution.strictFailFast;
+    // Always evaluate all test cases; do not stop after first failure.
+    const effectiveFailFast = false;
+
+    if (requestedFailFast) {
+      logger.info(
+        '[Execute] failFast requested but ignored: running all test cases.'
+      );
+    }
 
     const normalizedBatch = Array.isArray(batch)
       ? batch.map((tc) => ({
@@ -257,7 +265,7 @@ router.post('/', async (req, res) => {
           const compResult = compareOutput(
             result.stdout ?? '',
             refOut,
-            tc.comparison_mode || 'ignore_trailing_whitespace',
+            tc.comparison_mode || 'ignore_case_punctuation',
             { floatTolerance: tc.float_tolerance }
           );
 
@@ -343,7 +351,7 @@ router.post('/', async (req, res) => {
       // Use centralized verdict determination
       const hasRef = refOut && refOut.trim() !== '';
       const compResult = hasRef
-        ? compareOutput(userOut, refOut, 'ignore_trailing_whitespace')
+        ? compareOutput(userOut, refOut, 'ignore_case_punctuation')
         : { match: true };
 
       const verdict = !userResult

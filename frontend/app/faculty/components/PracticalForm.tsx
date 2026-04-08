@@ -1137,8 +1137,8 @@ export default function PracticalForm({
           ? "python"
           : normalizedLanguage;
 
-    const requestedCount = [25, 50, 100].includes(fuzzerCount)
-      ? fuzzerCount
+    const requestedCount = Number.isFinite(fuzzerCount)
+      ? Math.min(100, Math.max(1, Math.round(fuzzerCount)))
       : 100;
 
     if (enableLevels && !currentLevel) {

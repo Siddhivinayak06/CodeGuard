@@ -8,6 +8,97 @@ const { isLocalAvailable } = require('../utils/runtimeDetector');
 
 const activeSessions = new Map();
 
+const SAFE_FILE_PATH_PATTERN = /^[A-Za-z0-9._/-]+$/;
+const JAVA_PACKAGE_PATTERN = /^\s*package\s+([A-Za-z0-9_.]+)\s*;/m;
+const JAVA_PUBLIC_CLASS_PATTERN =
+  /\bpublic\s+class\s+([A-Za-z_][A-Za-z0-9_]*)\b/;
+const JAVA_CLASS_PATTERN = /\bclass\s+([A-Za-z_][A-Za-z0-9_]*)\b/;
+
+const normalizeRelativeFilePath = (rawPath, fallbackName) => {
+  const normalized = String(rawPath || '')
+    .replace(/\\/g, '/')
+    .replace(/^\/+/, '')
+    .trim();
+
+  const baseCandidate = normalized || fallbackName;
+  const segments = baseCandidate.split('/').filter(Boolean);
+  if (!segments.length || segments.includes('..')) {
+    return fallbackName;
+  }
+
+  const safePath = segments.join('/');
+  if (!SAFE_FILE_PATH_PATTERN.test(safePath)) {
+    return fallbackName;
+  }
+
+  return safePath;
+};
+
+const ensureLanguageExtension = (fileName, language) => {
+  const normalizedLang = String(language || '').toLowerCase();
+  const extMap = {
+    python: '.py',
+    py: '.py',
+    c: '.c',
+    cpp: '.cpp',
+    java: '.java',
+  };
+
+  const extension = extMap[normalizedLang];
+  if (!extension) {
+    return fileName;
+  }
+
+  return fileName.toLowerCase().endsWith(extension)
+    ? fileName
+    : `${fileName}${extension}`;
+};
+
+const inferJavaFileName = (sourceCode, fallbackName = 'Main.java') => {
+  const source = String(sourceCode || '');
+  const packageMatch = source.match(JAVA_PACKAGE_PATTERN);
+  const publicClassMatch = source.match(JAVA_PUBLIC_CLASS_PATTERN);
+  const classMatch = source.match(JAVA_CLASS_PATTERN);
+
+  const className = publicClassMatch?.[1] || classMatch?.[1] || 'Main';
+  const packagePath = packageMatch?.[1]?.replace(/\./g, '/') || '';
+  const javaFileName = `${className}.java`;
+
+  if (!packagePath) {
+    return javaFileName;
+  }
+
+  return normalizeRelativeFilePath(
+    `${packagePath}/${javaFileName}`,
+    fallbackName
+  );
+};
+
+const inferExecuteFileName = (language, sourceCode, explicitName) => {
+  const normalizedLang = String(language || '').toLowerCase();
+  let defaultName = 'main.py';
+  if (normalizedLang === 'java') {
+    defaultName = 'Main.java';
+  } else if (normalizedLang === 'cpp') {
+    defaultName = 'main.cpp';
+  } else if (normalizedLang === 'c') {
+    defaultName = 'main.c';
+  }
+
+  if (explicitName) {
+    return ensureLanguageExtension(
+      normalizeRelativeFilePath(explicitName, defaultName),
+      normalizedLang
+    );
+  }
+
+  if (normalizedLang === 'java') {
+    return inferJavaFileName(sourceCode, defaultName);
+  }
+
+  return ensureLanguageExtension(defaultName, normalizedLang);
+};
+
 const safeSend = (socket, data) => {
   try {
     if (socket && socket.readyState === 1) {
@@ -432,10 +523,7 @@ const handleConnection = async (ws, req) => {
     } else if (parsed.type === 'code') {
       // Multi-file support
       fileBuffer.push({
-        name:
-          parsed.filename ||
-          'main' +
-            (lang === 'python' ? '.py' : lang === 'java' ? '.java' : '.c'),
+        name: inferExecuteFileName(lang, parsed.data || '', parsed.filename),
         content: parsed.data || '',
         isActive: parsed.activeFile || false,
       });
@@ -500,14 +588,16 @@ const handleConnection = async (ws, req) => {
 
       if (lang === 'python' && pythonProcess) {
         if (parsed.type === 'execute') {
+          const executeFileName = inferExecuteFileName(
+            'python',
+            inputData,
+            parsed.filename
+          );
           safeSend(ws, '\x1b[2J\x1b[H');
           logger.info(
             `[Python] Sending code via execute message, len=${inputData.length}`
           );
-          // Local wrapper needs __FILE_START__ protocol; Docker wrapper handles raw code
-          if (pooledContainer === 'local') {
-            pythonProcess.stdin.write('__FILE_START__ main.py\n');
-          }
+          pythonProcess.stdin.write(`__FILE_START__ ${executeFileName}\n`);
           inputData
             .split('\n')
             .forEach((line) => pythonProcess.stdin.write(line + '\n'));
@@ -517,11 +607,15 @@ const handleConnection = async (ws, req) => {
         }
       } else if (lang === 'c' && cProcess) {
         if (parsed.type === 'execute') {
+          const executeFileName = inferExecuteFileName(
+            'c',
+            inputData,
+            parsed.filename
+          );
           safeSend(ws, '\x1b[2J\x1b[H');
           logger.info('[C] Sending code to compile');
           if (pooledContainer !== 'local') suppressNextOutput = true;
-          // Use __FILE_START__ to ensure file is written. Wrapper ignores __CODE_START__ without opening file.
-          cProcess.write('__FILE_START__ main.c\n');
+          cProcess.write(`__FILE_START__ ${executeFileName}\n`);
           inputData.split('\n').forEach((line) => cProcess.write(line + '\n'));
           cProcess.write('__RUN_CODE__\n');
         } else {
@@ -530,9 +624,13 @@ const handleConnection = async (ws, req) => {
         }
       } else if (lang === 'java' && javaProcess) {
         if (parsed.type === 'execute') {
+          const executeFileName = inferExecuteFileName(
+            'java',
+            inputData,
+            parsed.filename
+          );
           safeSend(ws, '\x1b[2J\x1b[H');
-          // Use __FILE_START__ to ensure file is written
-          javaProcess.stdin.write('__FILE_START__ Main.java\n');
+          javaProcess.stdin.write(`__FILE_START__ ${executeFileName}\n`);
           inputData
             .split('\n')
             .forEach((line) => javaProcess.stdin.write(line + '\n'));
@@ -542,11 +640,15 @@ const handleConnection = async (ws, req) => {
         }
       } else if (lang === 'cpp' && cppProcess) {
         if (parsed.type === 'execute') {
+          const executeFileName = inferExecuteFileName(
+            'cpp',
+            inputData,
+            parsed.filename
+          );
           safeSend(ws, '\x1b[2J\x1b[H');
           logger.info('[CPP] Sending code to compile');
           if (pooledContainer !== 'local') suppressNextOutput = true;
-          // Use __FILE_START__ to ensure file is written.
-          cppProcess.write('__FILE_START__ main.cpp\n');
+          cppProcess.write(`__FILE_START__ ${executeFileName}\n`);
           inputData
             .split('\n')
             .forEach((line) => cppProcess.write(line + '\n'));

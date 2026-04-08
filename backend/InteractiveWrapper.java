@@ -33,6 +33,7 @@ public class InteractiveWrapper {
             Files.createDirectories(workspace);
         }
         Path sessionDir = Files.createTempDirectory(workspace, "java_session_");
+        boolean batchStarted = false;
 
         BufferedReader reader = new BufferedReader(new InputStreamReader(System.in));
         List<String> currentFileBuffer = new ArrayList<>();
@@ -44,6 +45,11 @@ public class InteractiveWrapper {
                 String trimmed = line.trim();
 
                 if (trimmed.startsWith(FILE_START_SENTINEL)) {
+                    if (!batchStarted) {
+                        clearDirectory(sessionDir);
+                        batchStarted = true;
+                    }
+
                     // Save previous file if code existed
                     if (!currentFileBuffer.isEmpty()) {
                         saveFileSafely(sessionDir, currentFileName, currentFileBuffer);
@@ -65,6 +71,7 @@ public class InteractiveWrapper {
                     System.out.flush();
                     // Reset to default name for next batch
                     currentFileName = "Main.java";
+                    batchStarted = false;
                 } else {
                     currentFileBuffer.add(line);
                 }
@@ -241,8 +248,17 @@ public class InteractiveWrapper {
     private static String buildMainLauncherCode(String packageName, String mainFqcn) {
         String packageDecl = packageName != null ? "package " + packageName + ";\n" : "";
         return packageDecl + "public class __RunnerLauncher {\n"
+                + "    private static java.io.InputStream nonClosingStdIn() {\n"
+                + "        return new java.io.FilterInputStream(System.in) {\n"
+                + "            @Override\n"
+                + "            public void close() throws java.io.IOException {\n"
+                + "                // Keep wrapper stdin open when user code calls Scanner.close().\n"
+                + "            }\n"
+                + "        };\n"
+                + "    }\n"
                 + "    public static void main(String[] args) {\n"
                 + "        try {\n"
+                + "            System.setIn(nonClosingStdIn());\n"
                 + "            java.lang.reflect.Method mainMethod = Class.forName(\"" + mainFqcn
                 + "\").getMethod(\"main\", String[].class);\n"
                 + "            mainMethod.invoke(null, (Object) args);\n"
@@ -327,6 +343,20 @@ public class InteractiveWrapper {
         return null;
     }
 
+    private static int intFromEnv(String key, int fallback) {
+        String raw = System.getenv(key);
+        if (raw == null || raw.isBlank()) {
+            return fallback;
+        }
+
+        try {
+            int parsed = Integer.parseInt(raw.trim());
+            return parsed > 0 ? parsed : fallback;
+        } catch (NumberFormatException ignored) {
+            return fallback;
+        }
+    }
+
     private static void executeSession(Path dir, String mainFileHint) {
         try {
             String runClassName = resolveRunClassName(dir, mainFileHint);
@@ -344,6 +374,8 @@ public class InteractiveWrapper {
             List<String> compileCmd = new ArrayList<>();
             compileCmd.add("javac");
             compileCmd.add("-g:none");
+            compileCmd.add("-d");
+            compileCmd.add(".");
             compileCmd.addAll(javaFiles);
 
             // Compile recursively so package-based paths are supported.
@@ -353,7 +385,7 @@ public class InteractiveWrapper {
             Process compileProc = compilePb.start();
 
             String compileOutput = readStream(compileProc.getInputStream());
-            boolean compiled = compileProc.waitFor(15, TimeUnit.SECONDS);
+            boolean compiled = compileProc.waitFor(intFromEnv("COMPILE_TIMEOUT", 20), TimeUnit.SECONDS);
 
             if (!compiled || compileProc.exitValue() != 0) {
                 System.err.println(RED + "❌ Compilation Error:" + RESET);
@@ -372,7 +404,7 @@ public class InteractiveWrapper {
 
             Process runProc = runPb.start();
 
-            boolean finished = runProc.waitFor(TIMEOUT_SECONDS, TimeUnit.SECONDS);
+            boolean finished = runProc.waitFor(intFromEnv("EXECUTION_TIMEOUT", TIMEOUT_SECONDS), TimeUnit.SECONDS);
             if (!finished) {
                 runProc.destroyForcibly();
                 System.err.println("\n" + YELLOW + "⏱️ Code execution timed out!" + RESET);
@@ -406,6 +438,14 @@ public class InteractiveWrapper {
                 }
             }
             dir.delete();
+        }
+    }
+
+    private static void clearDirectory(Path dir) {
+        try (Stream<Path> stream = Files.list(dir)) {
+            stream.forEach(path -> deleteDirectory(path.toFile()));
+        } catch (IOException ignored) {
+            // Non-fatal: stale files may remain if cleanup fails.
         }
     }
 }
