@@ -82,7 +82,7 @@ export default function LogoutOverlay() {
             initial={{ scaleX: 0 }}
             animate={{ scaleX: 1 }}
             transition={{ duration: 1.5, ease: "easeInOut" }}
-            className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-red-500 via-purple-500 to-indigo-500 origin-left"
+            className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-red-500 via-amber-500 to-cyan-500 origin-left"
           />
         </motion.div>
       )}

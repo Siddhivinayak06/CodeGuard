@@ -757,7 +757,7 @@ function FacultySubmissionsContentInner() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50/30 to-purple-50/30 dark:from-gray-950 dark:via-indigo-950/10 dark:to-purple-950/10 flex flex-col md:flex-row pt-16">
+    <div className="min-h-screen bg-gradient-to-br from-slate-100 via-cyan-50/70 to-amber-50/70 dark:from-slate-950 dark:via-slate-900 dark:to-cyan-950/25 flex flex-col md:flex-row pt-16">
       {/* Sidebar - Master View */}
       <div className="w-full md:w-64 lg:w-72 flex-shrink-0 md:h-[calc(100vh-4rem)] md:sticky md:top-16 md:border-r border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 z-20 hidden md:block overflow-y-auto">
         <SubmissionsSidebar
@@ -830,7 +830,7 @@ function FacultySubmissionsContentInner() {
               {selectedSubjectId && (
                 <Button
                   size="sm"
-                  className="h-10 gap-2 bg-indigo-600 hover:bg-indigo-700 text-white shadow-lg shadow-indigo-500/20 hover:shadow-indigo-500/30 transition-all duration-300 font-semibold rounded-xl"
+                  className="h-10 gap-2 bg-indigo-600 hover:bg-indigo-700 text-white shadow-lg shadow-sky-500/20 hover:shadow-sky-500/30 transition-all duration-300 font-semibold rounded-xl"
                   onClick={handleDownloadSubjectReport}
                   disabled={reportLoading}
                 >

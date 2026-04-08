@@ -516,7 +516,7 @@ export function BulkScheduleWizard({ onScheduleCreated }: { onScheduleCreated: (
             <Dialog open={open} onOpenChange={setOpen}>
                 <DialogTrigger asChild>
                     <Button
-                        className="gap-2 bg-gradient-to-r from-indigo-500 to-purple-600 text-white hover:from-indigo-600 hover:to-purple-700 shadow-md transition-all duration-200 hover:scale-[1.05]"
+                        className="gap-2 bg-gradient-to-r from-cyan-500 to-sky-600 text-white hover:from-cyan-600 hover:to-sky-700 shadow-md transition-all duration-200 hover:scale-[1.05]"
                     >
                         <CalendarRange className="w-4 h-4" />
                         Schedule
@@ -525,7 +525,7 @@ export function BulkScheduleWizard({ onScheduleCreated }: { onScheduleCreated: (
 
                 <DialogContent className="w-[96vw] max-w-[1400px] max-h-[92vh] p-0 overflow-hidden bg-white dark:bg-gray-950 border-0 shadow-2xl flex flex-col rounded-2xl">
                     {/* ── Header ── */}
-                    <div className="relative bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-500 px-8 py-6 shrink-0 overflow-hidden">
+                    <div className="relative bg-gradient-to-r from-indigo-600 via-sky-600 to-blue-600 px-8 py-6 shrink-0 overflow-hidden">
                         <div className="absolute inset-0 opacity-10" style={{ backgroundImage: 'url("data:image/svg+xml,%3Csvg width="20" height="20" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"%3E%3Cg fill="%23fff" fill-opacity="0.4"%3E%3Ccircle cx="1" cy="1" r="1"/%3E%3C/g%3E%3C/svg%3E")' }} />
                         <DialogHeader className="relative z-10">
                             <DialogTitle className="text-white text-2xl font-bold flex items-center gap-2.5 tracking-tight">
@@ -712,7 +712,7 @@ export function BulkScheduleWizard({ onScheduleCreated }: { onScheduleCreated: (
                                                                 }
                                                                 return (
                                                                     <td key={`${pid}-${b}`} className="p-2 border-b border-r border-gray-100 dark:border-gray-800 cursor-pointer group" onClick={() => handleCellClick(pid, b)}>
-                                                                        <div className="flex items-center justify-center h-[42px] rounded-xl border border-dashed border-gray-200/80 dark:border-gray-700/60 group-hover:border-indigo-400 dark:group-hover:border-indigo-500 group-hover:bg-gradient-to-br group-hover:from-indigo-50 group-hover:to-purple-50/50 dark:group-hover:from-indigo-900/20 dark:group-hover:to-purple-900/10 transition-all duration-200">
+                                                                        <div className="flex items-center justify-center h-[42px] rounded-xl border border-dashed border-gray-200/80 dark:border-gray-700/60 group-hover:border-cyan-400 dark:group-hover:border-cyan-500 group-hover:bg-gradient-to-br group-hover:from-cyan-50 group-hover:to-sky-50/50 dark:group-hover:from-cyan-900/20 dark:group-hover:to-sky-900/10 transition-all duration-200">
                                                                             <span className="text-gray-300 dark:text-gray-600 group-hover:text-indigo-500 dark:group-hover:text-indigo-400 text-xl font-light transition-colors">+</span>
                                                                         </div>
                                                                     </td>
@@ -767,7 +767,7 @@ export function BulkScheduleWizard({ onScheduleCreated }: { onScheduleCreated: (
                                                 {pdfFile && !pdfLoading && (
                                                     <Button
                                                         onClick={handlePdfAnalyze}
-                                                        className="mt-4 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white shadow-lg shadow-indigo-500/25"
+                                                        className="mt-4 bg-gradient-to-r from-cyan-600 to-sky-700 hover:from-cyan-700 hover:to-sky-800 text-white shadow-lg shadow-sky-500/25"
                                                     >
                                                         <Sparkles className="w-4 h-4 mr-2" />
                                                         Analyze PDF
@@ -954,7 +954,7 @@ export function BulkScheduleWizard({ onScheduleCreated }: { onScheduleCreated: (
                                             <Button
                                                 onClick={handleBulkSave}
                                                 disabled={saving || pendingCount === 0}
-                                                className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white shadow-lg shadow-indigo-500/25 hover:shadow-xl transition-all disabled:opacity-40 disabled:shadow-none px-6"
+                                                className="bg-gradient-to-r from-cyan-600 to-sky-700 hover:from-cyan-700 hover:to-sky-800 text-white shadow-lg shadow-sky-500/25 hover:shadow-xl transition-all disabled:opacity-40 disabled:shadow-none px-6"
                                             >
                                                 {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle2 className="mr-2 h-4 w-4" />}
                                                 Save {pendingCount} {pendingCount === 1 ? "Schedule" : "Schedules"}
@@ -997,7 +997,7 @@ export function BulkScheduleWizard({ onScheduleCreated }: { onScheduleCreated: (
                                     <Button
                                         onClick={handleSaveFaculty}
                                         disabled={savingFaculty || !facultyHasChanges}
-                                        className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white shadow-lg shadow-indigo-500/25 hover:shadow-xl transition-all disabled:opacity-40 disabled:shadow-none px-6"
+                                        className="bg-gradient-to-r from-cyan-600 to-sky-700 hover:from-cyan-700 hover:to-sky-800 text-white shadow-lg shadow-sky-500/25 hover:shadow-xl transition-all disabled:opacity-40 disabled:shadow-none px-6"
                                     >
                                         {savingFaculty ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
                                         Save Faculty
@@ -1013,7 +1013,7 @@ export function BulkScheduleWizard({ onScheduleCreated }: { onScheduleCreated: (
             {editingCell && (
                 <Dialog open={!!editingCell} onOpenChange={(o) => !o && setEditingCell(null)}>
                     <DialogContent className="sm:max-w-[380px] p-0 overflow-hidden border-0 shadow-2xl">
-                        <div className="bg-gradient-to-r from-indigo-500 to-purple-500 px-5 py-4 flex justify-between items-center">
+                        <div className="bg-gradient-to-r from-cyan-500 to-sky-600 px-5 py-4 flex justify-between items-center">
                             <DialogHeader>
                                 <DialogTitle className="text-white text-base">
                                     {editingCell.isExisting ? "Edit Schedule" : "Set Schedule"}

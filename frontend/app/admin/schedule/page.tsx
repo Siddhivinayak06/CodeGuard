@@ -50,7 +50,7 @@ export default function YearlySchedulePage() {
     <div className="min-h-screen pt-20 pb-12 relative overflow-hidden">
       {/* Premium Background Effects */}
       <div className="fixed inset-0 -z-10">
-        <div className="absolute inset-0 bg-gradient-to-br from-slate-50 via-indigo-50/30 to-purple-50/20 dark:from-gray-950 dark:via-indigo-950/20 dark:to-purple-950/10" />
+        <div className="absolute inset-0 bg-gradient-to-br from-slate-100 via-cyan-50/70 to-amber-50/70 dark:from-slate-950 dark:via-slate-900 dark:to-cyan-950/25" />
         <div className="floating-shape w-[600px] h-[600px] bg-indigo-400/20 dark:bg-indigo-500/10 top-20 -right-40 animate-float-slow" />
         <div className="floating-shape w-[500px] h-[500px] bg-purple-400/15 dark:bg-purple-500/10 -bottom-20 -left-40 animate-float-reverse" />
         <div className="floating-shape w-[300px] h-[300px] bg-pink-400/10 dark:bg-pink-500/5 top-1/2 left-1/3 animate-float" />
@@ -61,7 +61,7 @@ export default function YearlySchedulePage() {
         <div className="glass-card-premium rounded-2xl p-6 md:p-8 animate-slideUp">
           <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
             <div className="flex items-start gap-4">
-              <div className="icon-container-lg bg-gradient-to-br from-indigo-500 to-purple-600 text-white shadow-lg shadow-indigo-500/30">
+              <div className="icon-container-lg bg-gradient-to-br from-cyan-500 to-sky-600 text-white shadow-lg shadow-sky-500/30">
                 <CalendarDays className="w-6 h-6" />
               </div>
               <div>

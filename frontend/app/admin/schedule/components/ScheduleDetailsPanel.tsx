@@ -38,7 +38,7 @@ export function ScheduleDetailsPanel({
     return (
         <div className="glass-card-premium rounded-2xl overflow-hidden h-full flex flex-col">
             {/* Header */}
-            <div className="bg-gradient-to-r from-indigo-600 to-purple-600 p-6 text-white shrink-0">
+            <div className="bg-gradient-to-r from-cyan-600 to-sky-700 p-6 text-white shrink-0">
                 <h2 className="text-2xl font-bold flex items-center gap-2">
                     <CalendarDays className="w-6 h-6" />
                     {format(selectedDate, "MMMM d, yyyy")}

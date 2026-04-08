@@ -539,7 +539,7 @@ function StudentSubmissionsPageContent() {
       case "c": return "from-blue-500 to-cyan-500";
       case "cpp": return "from-blue-600 to-blue-400";
       case "javascript": return "from-yellow-300 to-yellow-500";
-      default: return "from-indigo-400 to-indigo-600";
+      default: return "from-cyan-400 to-sky-600";
     }
   };
 
@@ -653,7 +653,7 @@ function StudentSubmissionsPageContent() {
   }, [groupedSubmissions, filterStatus]);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50/30 to-purple-50/30 dark:from-gray-950 dark:via-indigo-950/10 dark:to-purple-950/10 flex flex-col md:flex-row pt-16">
+    <div className="min-h-screen bg-gradient-to-br from-slate-100 via-cyan-50/70 to-amber-50/70 dark:from-slate-950 dark:via-slate-900 dark:to-cyan-950/25 flex flex-col md:flex-row pt-16">
       {/* Sidebar - Master View */}
       <div className="w-full md:w-64 lg:w-72 flex-shrink-0 md:h-[calc(100vh-4rem)] md:sticky md:top-16 md:border-r border-gray-200 dark:border-gray-800 bg-white/50 dark:bg-gray-900/50 backdrop-blur-xl z-20 hidden md:block overflow-y-auto">
         <SubmissionsSidebar
@@ -736,7 +736,7 @@ function StudentSubmissionsPageContent() {
                   key={status}
                   onClick={() => setFilterStatus(status)}
                   className={`px-4 py-2 rounded-xl text-xs font-bold capitalize transition-all whitespace-nowrap ${filterStatus === status
-                    ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-500/25'
+                    ? 'bg-indigo-500 text-white shadow-lg shadow-sky-500/25'
                     : 'text-gray-600 hover:bg-white/60 dark:hover:bg-gray-800/60 hover:text-indigo-600'
                     }`}
                 >
@@ -841,7 +841,7 @@ function StudentSubmissionsPageContent() {
                                   <Button
                                     variant="ghost"
                                     size="sm"
-                                    className="h-8 px-3 rounded-full text-xs font-semibold text-indigo-600 bg-indigo-50/50 dark:bg-indigo-900/10 hover:bg-indigo-500 hover:text-white transition-all shadow-sm hover:shadow-indigo-500/25"
+                                    className="h-8 px-3 rounded-full text-xs font-semibold text-indigo-600 bg-indigo-50/50 dark:bg-indigo-900/10 hover:bg-indigo-500 hover:text-white transition-all shadow-sm hover:shadow-sky-500/25"
                                   >
                                     View
                                   </Button>
@@ -914,7 +914,7 @@ function StudentSubmissionsPageContent() {
             <div className="flex items-center justify-between p-6 border-b border-gray-100 dark:border-gray-800 bg-white/50 dark:bg-gray-900/50 backdrop-blur-sm">
               <div className="flex items-center gap-5">
                 <div
-                  className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${getLanguageColor(viewingSubmission.language)} text-white flex items-center justify-center font-bold shadow-lg shadow-indigo-500/20`}
+                  className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${getLanguageColor(viewingSubmission.language)} text-white flex items-center justify-center font-bold shadow-lg shadow-sky-500/20`}
                 >
                   <Code2 className="w-7 h-7" />
                 </div>

@@ -75,7 +75,7 @@ export default function SingleLevelTestCases({
       <div className="glass-card-premium rounded-2xl p-5 shadow-sm mb-6">
         <div className="flex items-center justify-between pb-3 border-b border-gray-200 dark:border-gray-700 mb-4">
           <div className="flex items-center gap-3">
-            <div className="p-2 bg-gradient-to-br from-indigo-500 to-purple-500 rounded-xl text-white shadow-lg shadow-indigo-500/25">
+            <div className="p-2 bg-gradient-to-br from-cyan-500 to-sky-600 rounded-xl text-white shadow-lg shadow-sky-500/25">
               <CodeIcon size={18} />
             </div>
             <div>
@@ -93,7 +93,7 @@ export default function SingleLevelTestCases({
                 type="button"
                 onClick={() => onGenerateCode('starter')}
                 disabled={isGeneratingCode || !form.description?.trim()}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white rounded-lg text-[10px] font-bold shadow-md shadow-indigo-500/20 transition-all disabled:opacity-50"
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-cyan-500 to-sky-600 hover:from-cyan-600 hover:to-sky-700 text-white rounded-lg text-[10px] font-bold shadow-md shadow-sky-500/20 transition-all disabled:opacity-50"
               >
                 {isGeneratingCode ? (
                   <Loader2 size={12} className="animate-spin" />

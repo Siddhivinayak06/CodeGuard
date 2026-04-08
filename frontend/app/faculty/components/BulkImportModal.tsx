@@ -189,7 +189,7 @@ export default function BulkImportModal({
                 {/* Header */}
                 <div className="flex items-center justify-between p-6 border-b border-gray-100 dark:border-gray-800 bg-white/50 dark:bg-gray-900/50 backdrop-blur-sm">
                     <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 text-white flex items-center justify-center font-bold text-lg shadow-lg">
+                        <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-cyan-500 to-sky-600 text-white flex items-center justify-center font-bold text-lg shadow-lg">
                             <Upload className="w-6 h-6" />
                         </div>
                         <div>
@@ -243,7 +243,7 @@ export default function BulkImportModal({
                                 />
                                 <Button
                                     disabled={loading}
-                                    className="bg-indigo-600 hover:bg-indigo-700 text-white shadow-lg shadow-indigo-500/30 rounded-xl px-8 py-6 h-auto text-base"
+                                    className="bg-indigo-600 hover:bg-indigo-700 text-white shadow-lg shadow-sky-500/30 rounded-xl px-8 py-6 h-auto text-base"
                                 >
                                     {file ? file.name : "Select PDF File"}
                                 </Button>
@@ -336,7 +336,7 @@ export default function BulkImportModal({
                         <Button
                             onClick={handleUpload}
                             disabled={!file || loading}
-                            className="bg-indigo-600 hover:bg-indigo-700 text-white shadow-lg shadow-indigo-500/20"
+                            className="bg-indigo-600 hover:bg-indigo-700 text-white shadow-lg shadow-sky-500/20"
                         >
                             {loading ? (
                                 <>

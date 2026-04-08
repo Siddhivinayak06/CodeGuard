@@ -159,11 +159,11 @@ function getLanguageGradient(lang: string) {
       return "from-blue-400 via-blue-500 to-indigo-600";
     case "c++":
     case "cpp":
-      return "from-purple-500 via-violet-500 to-fuchsia-500";
+      return "from-cyan-500 via-sky-500 to-blue-600";
     case "javascript":
       return "from-yellow-300 via-amber-400 to-orange-400";
     default:
-      return "from-indigo-500 via-purple-500 to-pink-500";
+      return "from-cyan-500 via-sky-500 to-blue-600";
   }
 }
 
@@ -180,7 +180,7 @@ function getLanguageColor(lang: string) {
     case "javascript":
       return "from-yellow-300 to-yellow-500";
     default:
-      return "from-indigo-400 to-indigo-600";
+      return "from-cyan-400 to-sky-600";
   }
 }
 
@@ -1022,7 +1022,7 @@ export default function StudentPracticals() {
       in_progress: "from-amber-500 to-orange-400",
       submitted: "from-blue-500 to-cyan-400",
     };
-    const accent = accentMap[p.status] || "from-indigo-500 to-purple-500";
+    const accent = accentMap[p.status] || "from-cyan-500 to-sky-600";
 
     const scorePercent = (p.marks_obtained !== undefined && p.max_marks)
       ? Math.round((p.marks_obtained / p.max_marks) * 100)
@@ -1039,9 +1039,9 @@ export default function StudentPracticals() {
         key={p.id}
         data-practical-id={p.id}
         className={cn(
-          "group relative rounded-2xl transition-all duration-300 hover:shadow-2xl hover:shadow-indigo-500/10 hover:-translate-y-1 flex flex-col h-full overflow-hidden",
+          "group relative rounded-2xl transition-all duration-300 hover:shadow-2xl hover:shadow-sky-500/10 hover:-translate-y-1 flex flex-col h-full overflow-hidden",
           "bg-white dark:bg-gray-900/80 backdrop-blur-xl border border-gray-200/60 dark:border-gray-700/50",
-          isHighlighted && "ring-2 ring-indigo-500 ring-offset-2 ring-offset-slate-50 dark:ring-offset-gray-950 shadow-xl shadow-indigo-500/20",
+          isHighlighted && "ring-2 ring-indigo-500 ring-offset-2 ring-offset-slate-50 dark:ring-offset-gray-950 shadow-xl shadow-sky-500/20",
           isUrgent && "ring-2 ring-red-500/30",
         )}
       >
@@ -1151,7 +1151,7 @@ export default function StudentPracticals() {
                     "h-full rounded-full transition-all duration-500",
                     attemptState.remainingAttempts <= 1
                       ? "bg-gradient-to-r from-red-500 to-rose-400"
-                      : "bg-gradient-to-r from-indigo-500 to-purple-500"
+                      : "bg-gradient-to-r from-cyan-500 to-sky-600"
                   )}
                   style={{ width: `${Math.min((attemptState.usedAttempts / attemptState.maxAttempts) * 100, 100)}%` }}
                 />
@@ -1173,7 +1173,7 @@ export default function StudentPracticals() {
                     ? "bg-gray-300 dark:bg-gray-700 text-gray-600 dark:text-gray-300"
                     : isUrgent
                     ? "bg-red-600 hover:bg-red-700 shadow-red-500/20"
-                    : "bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 shadow-indigo-500/25"
+                    : "bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 shadow-sky-500/25"
                 )}
                 size="sm"
                 onClick={() => handleStartPractical(p)}
@@ -1298,7 +1298,7 @@ export default function StudentPracticals() {
         data-practical-id={p.id}
         className={cn(
           "group w-full glass-card rounded-xl p-4 transition-all duration-300 hover:bg-white/60 dark:hover:bg-gray-900/60 border border-white/50 dark:border-gray-700/50 flex flex-col md:flex-row items-start md:items-center gap-4 bg-white/40 dark:bg-gray-900/40 backdrop-blur-md",
-          isHighlighted && "ring-2 ring-indigo-500 ring-offset-2 ring-offset-slate-50 dark:ring-offset-gray-950 shadow-lg shadow-indigo-500/20",
+          isHighlighted && "ring-2 ring-indigo-500 ring-offset-2 ring-offset-slate-50 dark:ring-offset-gray-950 shadow-lg shadow-sky-500/20",
           isUrgent && "border-l-4 border-l-red-500 dark:border-l-red-500"
         )}
       >
@@ -1420,7 +1420,7 @@ export default function StudentPracticals() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50/30 to-purple-50/30 dark:from-gray-950 dark:via-indigo-950/10 dark:to-purple-950/10">
+    <div className="min-h-screen bg-gradient-to-br from-slate-100 via-cyan-50/70 to-amber-50/70 dark:from-slate-950 dark:via-slate-900 dark:to-cyan-950/25">
       <div className="pt-24 pb-12 px-4 sm:px-6 lg:px-8 xl:px-12 w-full mx-auto space-y-8">
 
         {/* Header Section */}
@@ -1707,7 +1707,7 @@ export default function StudentPracticals() {
               <div className="flex items-center justify-between p-6 border-b border-gray-100 dark:border-gray-800 bg-white/50 dark:bg-gray-900/50 backdrop-blur-sm">
                 <div className="flex items-center gap-5">
                   <div
-                    className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${getLanguageColor(viewingSubmission.language)} text-white flex items-center justify-center font-bold shadow-lg shadow-indigo-500/20`}
+                    className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${getLanguageColor(viewingSubmission.language)} text-white flex items-center justify-center font-bold shadow-lg shadow-sky-500/20`}
                   >
                     <Code2 className="w-7 h-7" />
                   </div>

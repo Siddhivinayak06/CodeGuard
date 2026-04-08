@@ -41,7 +41,7 @@ export default function RecentSubmissionsList({
             case "c": return "from-blue-500 to-cyan-500";
             case "cpp": return "from-blue-600 to-blue-400";
             case "javascript": return "from-yellow-300 to-yellow-500";
-            default: return "from-indigo-400 to-indigo-600";
+            default: return "from-cyan-400 to-sky-600";
         }
     };
 

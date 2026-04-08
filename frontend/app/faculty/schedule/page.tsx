@@ -362,7 +362,7 @@ export default function FacultySchedulePage() {
                     </Button>
                   ) : (
                     <Button
-                      className="w-full bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white shadow-lg shadow-indigo-500/25"
+                      className="w-full bg-gradient-to-r from-cyan-600 to-sky-700 hover:from-cyan-700 hover:to-sky-800 text-white shadow-lg shadow-sky-500/25"
                       onClick={() => handleCreateClick(schedule)}
                     >
                       <Plus className="mr-2 h-4 w-4" />

@@ -2816,7 +2816,7 @@ export default function PracticalForm({
                       "inline-flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-bold transition-all shadow-lg",
                       (saving || loading)
                         ? "bg-gray-300 dark:bg-gray-700 text-gray-500 cursor-wait"
-                        : "bg-gradient-to-r from-indigo-600 to-purple-600 text-white hover:from-indigo-700 hover:to-purple-700 shadow-indigo-500/30",
+                        : "bg-gradient-to-r from-cyan-600 to-sky-700 text-white hover:from-cyan-700 hover:to-sky-800 shadow-sky-500/30",
                     )}
                   >
                     {(saving || loading) ? <LoadingSpinner /> : null}
@@ -2867,7 +2867,7 @@ export default function PracticalForm({
                       <div className="w-8 h-px bg-gray-200 dark:bg-gray-700" />
                       <button
                         onClick={addDraft}
-                        className="p-2 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-500 text-white shadow-md hover:shadow-lg transition-all"
+                        className="p-2 rounded-lg bg-gradient-to-br from-cyan-500 to-sky-600 text-white shadow-md hover:shadow-lg transition-all"
                         title="Add practical"
                       >
                         <Plus className="w-4 h-4" />
@@ -2908,7 +2908,7 @@ export default function PracticalForm({
                       {/* Add New Button */}
                       <button
                         onClick={addDraft}
-                        className="w-full group flex items-center justify-center gap-2 px-4 py-3 rounded-2xl bg-gradient-to-r from-indigo-600 to-purple-600 text-white text-sm font-bold shadow-lg shadow-indigo-500/20 hover:shadow-indigo-500/40 hover:-translate-y-0.5 transition-all duration-300 mb-6"
+                        className="w-full group flex items-center justify-center gap-2 px-4 py-3 rounded-2xl bg-gradient-to-r from-cyan-600 to-sky-700 text-white text-sm font-bold shadow-lg shadow-sky-500/20 hover:shadow-sky-500/40 hover:-translate-y-0.5 transition-all duration-300 mb-6"
                       >
                         <div className="p-1 rounded-lg bg-white/20 group-hover:bg-white/30 transition-colors">
                           <Plus className="w-4 h-4" />
@@ -2948,7 +2948,7 @@ export default function PracticalForm({
                               className={cx(
                                 "group relative p-4 rounded-2xl cursor-pointer transition-all duration-200 border",
                                 idx === activeDraftIndex
-                                  ? "bg-white dark:bg-gray-800 border-indigo-500/50 shadow-lg shadow-indigo-500/10 ring-1 ring-indigo-500/20"
+                                  ? "bg-white dark:bg-gray-800 border-indigo-500/50 shadow-lg shadow-sky-500/10 ring-1 ring-indigo-500/20"
                                   : "bg-transparent border-transparent hover:bg-gray-50 dark:hover:bg-gray-800/50 hover:border-gray-200 dark:hover:border-gray-700"
                               )}
                             >
@@ -3370,7 +3370,7 @@ export default function PracticalForm({
                             type="button"
                             disabled={isUploading}
                             onClick={() => document.getElementById("step2-pdf-autofill")?.click()}
-                            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-indigo-500/20"
+                            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-sky-500/20"
                           >
                             {isUploading ? (
                               <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />

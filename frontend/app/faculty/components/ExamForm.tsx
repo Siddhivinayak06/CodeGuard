@@ -393,7 +393,7 @@ export default function ExamForm({
                     {/* ================================================================ */}
                     <div className="border-t border-gray-200 dark:border-gray-700 pt-5">
                         {/* Enable toggle */}
-                        <label className="flex items-center justify-between p-3 bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-900/20 dark:to-purple-900/20 rounded-xl border border-indigo-200 dark:border-indigo-800 cursor-pointer hover:from-indigo-100 hover:to-purple-100 dark:hover:from-indigo-900/30 dark:hover:to-purple-900/30 transition-colors">
+                        <label className="flex items-center justify-between p-3 bg-gradient-to-r from-cyan-50 to-sky-50 dark:from-cyan-900/20 dark:to-sky-900/20 rounded-xl border border-indigo-200 dark:border-indigo-800 cursor-pointer hover:from-cyan-100 hover:to-sky-100 dark:hover:from-cyan-900/30 dark:hover:to-sky-900/30 transition-colors">
                             <div className="flex items-center gap-3">
                                 <Shuffle className="w-4 h-4 text-indigo-500" />
                                 <div>

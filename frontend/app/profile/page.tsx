@@ -256,7 +256,7 @@ export default function ProfilePage() {
   if (loading) return <ProfileSkeleton />;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50/30 to-purple-50/50 dark:from-gray-950 dark:via-indigo-950/20 dark:to-purple-950/20 relative overflow-hidden">
+    <div className="min-h-screen bg-gradient-to-br from-slate-100 via-cyan-50/70 to-amber-50/70 dark:from-slate-950 dark:via-slate-900 dark:to-cyan-950/25 relative overflow-hidden">
       {/* Animated background orbs */}
       <FloatingOrb className="w-96 h-96 bg-indigo-400/20 dark:bg-indigo-600/10 -top-48 -left-48" delay={0} />
       <FloatingOrb className="w-80 h-80 bg-purple-400/20 dark:bg-purple-600/10 top-1/3 -right-40" delay={2} />
@@ -275,7 +275,7 @@ export default function ProfilePage() {
         >
           <div className="flex items-center gap-3 mb-2">
             <motion.div
-              className="p-2.5 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 shadow-lg shadow-indigo-500/25"
+              className="p-2.5 rounded-xl bg-gradient-to-br from-cyan-500 to-sky-600 shadow-lg shadow-sky-500/25"
               whileHover={{ scale: 1.05, rotate: 5 }}
               transition={{ type: "spring", stiffness: 400 }}
             >
@@ -302,12 +302,12 @@ export default function ProfilePage() {
             <motion.div
               variants={cardVariants}
               whileHover="hover"
-              className="relative overflow-hidden rounded-3xl bg-white/70 dark:bg-gray-900/70 backdrop-blur-xl border border-white/50 dark:border-gray-800/50 shadow-xl shadow-indigo-500/5"
+              className="relative overflow-hidden rounded-3xl bg-white/70 dark:bg-gray-900/70 backdrop-blur-xl border border-white/50 dark:border-gray-800/50 shadow-xl shadow-sky-500/5"
             >
               {/* Animated gradient header */}
               <div className="absolute top-0 inset-x-0 h-28 overflow-hidden">
                 <motion.div
-                  className="absolute inset-0 bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500"
+                  className="absolute inset-0 bg-gradient-to-br from-cyan-500 via-sky-500 to-blue-600"
                   animate={{
                     backgroundPosition: ["0% 50%", "100% 50%", "0% 50%"],
                   }}
@@ -331,11 +331,11 @@ export default function ProfilePage() {
                   <motion.div
                     variants={glowVariants}
                     animate="animate"
-                    className="absolute inset-0 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 blur-lg"
+                    className="absolute inset-0 rounded-full bg-gradient-to-br from-cyan-500 to-sky-600 blur-lg"
                   />
-                  <div className="relative w-full h-full rounded-full bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 p-1 shadow-2xl">
+                  <div className="relative w-full h-full rounded-full bg-gradient-to-br from-cyan-500 via-sky-500 to-blue-600 p-1 shadow-2xl">
                     <div className="w-full h-full rounded-full bg-white dark:bg-gray-900 flex items-center justify-center">
-                      <span className="text-4xl font-bold bg-gradient-to-br from-indigo-500 to-purple-600 bg-clip-text text-transparent">
+                      <span className="text-4xl font-bold bg-gradient-to-br from-cyan-500 to-sky-600 bg-clip-text text-transparent">
                         {formData.name.charAt(0).toUpperCase()}
                       </span>
                     </div>
@@ -343,7 +343,7 @@ export default function ProfilePage() {
                   <motion.button
                     whileHover={{ scale: 1.1 }}
                     whileTap={{ scale: 0.95 }}
-                    className="absolute -bottom-1 -right-1 p-2.5 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 text-white shadow-lg shadow-indigo-500/30 hover:shadow-indigo-500/50 transition-shadow"
+                    className="absolute -bottom-1 -right-1 p-2.5 rounded-full bg-gradient-to-br from-cyan-500 to-sky-600 text-white shadow-lg shadow-sky-500/30 hover:shadow-sky-500/50 transition-shadow"
                   >
                     <Camera size={14} />
                   </motion.button>
@@ -362,7 +362,7 @@ export default function ProfilePage() {
                   <div className="flex flex-wrap justify-center gap-2">
                     <motion.span
                       whileHover={{ scale: 1.05 }}
-                      className="px-4 py-1.5 rounded-full text-xs font-bold bg-gradient-to-r from-indigo-500/10 to-purple-500/10 dark:from-indigo-500/20 dark:to-purple-500/20 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-700/50 uppercase tracking-wide"
+                      className="px-4 py-1.5 rounded-full text-xs font-bold bg-gradient-to-r from-cyan-500/10 to-sky-500/10 dark:from-cyan-500/20 dark:to-sky-500/20 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-700/50 uppercase tracking-wide"
                     >
                       {formData.role}
                     </motion.span>
@@ -474,7 +474,7 @@ export default function ProfilePage() {
                 <motion.div
                   whileHover={{ rotate: 360 }}
                   transition={{ duration: 0.5 }}
-                  className="p-2.5 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 shadow-lg shadow-indigo-500/25"
+                  className="p-2.5 rounded-xl bg-gradient-to-br from-cyan-500 to-sky-600 shadow-lg shadow-sky-500/25"
                 >
                   <UserIcon className="w-4 h-4 text-white" />
                 </motion.div>
@@ -581,7 +581,7 @@ export default function ProfilePage() {
                     disabled={saving}
                     whileHover={{ scale: 1.02, y: -2 }}
                     whileTap={{ scale: 0.98 }}
-                    className="flex items-center gap-2 px-7 py-3 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-semibold hover:from-indigo-500 hover:to-purple-500 shadow-lg shadow-indigo-500/30 hover:shadow-indigo-500/40 transition-all disabled:opacity-70 disabled:cursor-not-allowed"
+                    className="flex items-center gap-2 px-7 py-3 rounded-xl bg-gradient-to-r from-cyan-600 to-sky-700 text-white font-semibold hover:from-cyan-500 hover:to-sky-600 shadow-lg shadow-sky-500/30 hover:shadow-sky-500/40 transition-all disabled:opacity-70 disabled:cursor-not-allowed"
                   >
                     {saving ? (
                       <Loader2 className="w-4 h-4 animate-spin" />

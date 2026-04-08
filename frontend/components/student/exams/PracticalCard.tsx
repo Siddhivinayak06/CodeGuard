@@ -46,7 +46,7 @@ const PracticalCard = memo(({
     in_progress: "from-amber-500 to-orange-400",
     submitted: "from-blue-500 to-cyan-400",
   };
-  const accent = accentMap[p.status] || "from-indigo-500 to-purple-500";
+  const accent = accentMap[p.status] || "from-cyan-500 to-sky-600";
 
   const scorePercent = (p.marks_obtained !== undefined && p.max_marks)
     ? Math.round((p.marks_obtained / p.max_marks) * 100)
@@ -178,7 +178,7 @@ const PracticalCard = memo(({
                   "h-full rounded-full transition-all duration-500",
                   p.max_attempts - p.attempt_count <= 1
                     ? "bg-gradient-to-r from-red-500 to-rose-400"
-                    : "bg-gradient-to-r from-indigo-500 to-purple-500"
+                    : "bg-gradient-to-r from-cyan-500 to-sky-600"
                 )}
                 style={{ width: `${Math.min((p.attempt_count / p.max_attempts) * 100, 100)}%` }}
               />

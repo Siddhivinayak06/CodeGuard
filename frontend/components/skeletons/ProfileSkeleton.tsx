@@ -5,7 +5,7 @@ import { motion } from "framer-motion";
 
 export default function ProfileSkeleton() {
     return (
-        <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950">
+        <div className="min-h-screen bg-gradient-to-br from-cyan-50 via-sky-50 to-amber-50 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950">
             <main className="pt-24 pb-12 px-4 sm:px-6 lg:px-8 xl:px-12 w-full mx-auto max-w-7xl">
                 {/* Header */}
                 <div className="mb-8 space-y-3">
@@ -18,7 +18,7 @@ export default function ProfileSkeleton() {
                     <div className="lg:col-span-1 space-y-6">
                         {/* User Card */}
                         <div className="glass-card-premium rounded-3xl p-6 flex flex-col items-center text-center relative overflow-hidden">
-                            <div className="absolute top-0 inset-x-0 h-24 bg-gradient-to-br from-indigo-500 to-purple-600 opacity-10" />
+                            <div className="absolute top-0 inset-x-0 h-24 bg-gradient-to-br from-cyan-500 to-sky-600 opacity-10" />
                             <div className="relative mt-8 mb-4">
                                 <Skeleton className="w-28 h-28 rounded-full" />
                                 <div className="absolute bottom-4 right-0 w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-800" />

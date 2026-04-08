@@ -23,7 +23,7 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <head />
       <body
-        className={`${GeistSans.variable} ${GeistMono.variable} antialiased h-screen bg-gradient-to-br from-slate-50 via-purple-50 to-blue-50 dark:from-slate-950 dark:via-purple-950/30 dark:to-blue-950/30 transition-colors duration-300`}
+        className={`${GeistSans.variable} ${GeistMono.variable} antialiased min-h-screen bg-gradient-to-br from-slate-100 via-cyan-50/70 to-amber-50/70 dark:from-slate-950 dark:via-slate-900 dark:to-cyan-950/20 transition-colors duration-300`}
       >
         <ThemeProvider
           attribute="class"

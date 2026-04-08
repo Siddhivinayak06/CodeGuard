@@ -155,7 +155,7 @@ export default function AssignStudentsStep({
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="p-3 bg-gradient-to-br from-indigo-600 to-violet-600 rounded-xl text-white shadow-lg shadow-indigo-500/25">
+          <div className="p-3 bg-gradient-to-br from-indigo-600 to-violet-600 rounded-xl text-white shadow-lg shadow-sky-500/25">
             <UsersIcon size={22} />
           </div>
           <div>
@@ -363,7 +363,7 @@ export default function AssignStudentsStep({
                           className={cx(
                             "w-[18px] h-[18px] mx-auto rounded flex items-center justify-center transition-all duration-150 border-2",
                             isSelected
-                              ? "bg-indigo-600 border-indigo-600 text-white shadow-sm shadow-indigo-500/30"
+                              ? "bg-indigo-600 border-indigo-600 text-white shadow-sm shadow-sky-500/30"
                               : "border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-transparent group-hover:border-indigo-400"
                           )}
                         >

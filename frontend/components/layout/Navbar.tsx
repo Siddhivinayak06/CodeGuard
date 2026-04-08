@@ -41,9 +41,9 @@ const roleBadgeStyles: Record<string, string> = {
   admin:
     "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 border-red-200 dark:border-red-800",
   faculty:
-    "bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400 border-purple-200 dark:border-purple-800",
+    "bg-cyan-100 dark:bg-cyan-900/30 text-cyan-700 dark:text-cyan-300 border-cyan-200 dark:border-cyan-800",
   student:
-    "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 border-blue-200 dark:border-blue-800",
+    "bg-sky-100 dark:bg-sky-900/30 text-sky-700 dark:text-sky-300 border-sky-200 dark:border-sky-800",
 };
 
 // Pre-defined link configs – icons are lightweight Lucide components
@@ -219,7 +219,7 @@ export default function Navbar() {
                         size={17}
                         className={`shrink-0 transition-colors ${
                           isActive
-                            ? "text-purple-600 dark:text-purple-400"
+                            ? "text-sky-600 dark:text-sky-400"
                             : "text-gray-400 dark:text-gray-500"
                         }`}
                       />
@@ -241,7 +241,7 @@ export default function Navbar() {
                       onClick={toggleUserMenu}
                       className="flex items-center gap-2.5 pl-2.5 pr-3 py-1.5 rounded-xl bg-gray-100 dark:bg-gray-800 hover:bg-gray-200/80 dark:hover:bg-gray-700/80 transition-colors border border-transparent hover:border-gray-300/50 dark:hover:border-gray-600/50"
                     >
-                      <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 flex items-center justify-center text-white text-xs font-bold shadow-sm shrink-0">
+                      <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-cyan-500 via-sky-500 to-blue-600 flex items-center justify-center text-white text-xs font-bold shadow-sm shrink-0">
                         {initials}
                       </div>
                       <div className="hidden lg:flex flex-col items-start">
@@ -309,7 +309,7 @@ export default function Navbar() {
                 ) : (
                   <button
                     onClick={() => router.push("/auth/login")}
-                    className="px-5 py-2.5 text-sm font-semibold rounded-xl bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 text-white hover:from-indigo-700 hover:via-purple-700 hover:to-pink-700 transition-all duration-300 shadow-lg shadow-purple-500/25 hover:shadow-purple-500/40 hover:-translate-y-0.5"
+                    className="px-5 py-2.5 text-sm font-semibold rounded-xl bg-gradient-to-r from-cyan-600 via-sky-600 to-blue-700 text-white hover:from-cyan-700 hover:via-sky-700 hover:to-blue-800 transition-all duration-300 shadow-lg shadow-sky-500/25 hover:shadow-sky-500/40 hover:-translate-y-0.5"
                   >
                     Login
                   </button>
@@ -347,9 +347,9 @@ export default function Navbar() {
             <div className="flex flex-col h-full overflow-y-auto">
               {/* User Info */}
               {user && (
-                <div className="p-4 border-b border-gray-100 dark:border-gray-800 bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-900/20 dark:to-purple-900/20">
+                <div className="p-4 border-b border-gray-100 dark:border-gray-800 bg-gradient-to-r from-cyan-50 to-sky-50 dark:from-cyan-900/20 dark:to-sky-900/20">
                   <div className="flex items-center gap-3">
-                    <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 flex items-center justify-center text-white text-base font-bold shadow-md shrink-0">
+                    <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-cyan-500 via-sky-500 to-blue-600 flex items-center justify-center text-white text-base font-bold shadow-md shrink-0">
                       {initials}
                     </div>
                     <div className="min-w-0">
@@ -384,7 +384,7 @@ export default function Navbar() {
                         onClick={closeMobileMenu}
                         className={`flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-xl transition-colors ${
                           isActive
-                            ? "bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-900/20 dark:to-purple-900/20 text-purple-700 dark:text-purple-400 border border-purple-200 dark:border-purple-800"
+                            ? "bg-gradient-to-r from-cyan-50 to-sky-50 dark:from-cyan-900/20 dark:to-sky-900/20 text-sky-700 dark:text-sky-300 border border-sky-200 dark:border-sky-800"
                             : "text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800"
                         }`}
                       >
@@ -392,7 +392,7 @@ export default function Navbar() {
                           size={18}
                           className={
                             isActive
-                              ? "text-purple-600 dark:text-purple-400"
+                              ? "text-sky-600 dark:text-sky-400"
                               : "text-gray-400"
                           }
                         />

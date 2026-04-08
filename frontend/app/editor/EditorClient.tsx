@@ -1931,7 +1931,7 @@ int main() {
               onClick={handleStartExam}
               size="lg"
               disabled={loading}
-              className="w-full h-12 text-lg bg-indigo-600 hover:bg-indigo-700 text-white shadow-lg shadow-indigo-500/20 rounded-xl transition-all hover:scale-[1.02]"
+              className="w-full h-12 text-lg bg-indigo-600 hover:bg-indigo-700 text-white shadow-lg shadow-sky-500/20 rounded-xl transition-all hover:scale-[1.02]"
             >
               {loading ? "Starting..." : "I Agree & Start Exam"}
             </Button>
@@ -1989,8 +1989,8 @@ int main() {
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-3">
             <div className="relative">
-              <div className="absolute inset-0 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 rounded-xl blur-md opacity-60" />
-              <div className="relative w-10 h-10 bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 rounded-xl flex items-center justify-center shadow-lg">
+              <div className="absolute inset-0 bg-gradient-to-r from-cyan-500 via-sky-500 to-blue-600 rounded-xl blur-md opacity-60" />
+              <div className="relative w-10 h-10 bg-gradient-to-br from-cyan-500 via-sky-500 to-blue-600 rounded-xl flex items-center justify-center shadow-lg">
                 <svg
                   className="w-6 h-6 text-white"
                   fill="none"
@@ -2010,7 +2010,7 @@ int main() {
               <h1
                 role="heading"
                 aria-level={1}
-                className="select-none text-xl font-bold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 dark:from-indigo-400 dark:via-purple-400 dark:to-pink-400"
+                className="select-none text-xl font-bold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-cyan-600 via-sky-600 to-blue-700 dark:from-indigo-400 dark:via-sky-400 dark:to-blue-400"
               >
                 CodeGuard
               </h1>
@@ -2084,7 +2084,7 @@ int main() {
           {/* User Info */}
           {user && (
             <div className="hidden lg:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-indigo-50/50 dark:bg-indigo-900/20 border border-indigo-100/50 dark:border-indigo-800/30">
-              <div className="w-6 h-6 rounded-full bg-gradient-to-br from-indigo-500 to-purple-500 flex items-center justify-center text-white text-xs font-bold">
+              <div className="w-6 h-6 rounded-full bg-gradient-to-br from-cyan-500 to-sky-600 flex items-center justify-center text-white text-xs font-bold">
                 {user.email?.charAt(0).toUpperCase() || "U"}
               </div>
               <span className="text-xs font-medium text-indigo-700 dark:text-indigo-300 max-w-[120px] truncate">
@@ -2130,7 +2130,7 @@ int main() {
               {/* Header Section - Sticky */}
               <div className="sticky top-0 z-10 bg-white dark:bg-gray-900 border-b border-gray-100 dark:border-gray-800">
                 {/* Accent gradient bar */}
-                <div className="h-1 w-full bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500" />
+                <div className="h-1 w-full bg-gradient-to-r from-cyan-500 via-sky-500 to-blue-600" />
 
                 <div className="px-6 pt-5 pb-4">
                   {/* Title */}
@@ -2818,7 +2818,7 @@ int main() {
 
                     {/* Custom Test Cases Tab */}
                     {showUserTestCases && (
-                      <div className="h-full flex flex-col bg-gradient-to-br from-blue-50/50 to-purple-50/50 dark:from-gray-900/50 dark:to-gray-800/50">
+                      <div className="h-full flex flex-col bg-gradient-to-br from-cyan-50/70 to-sky-50/70 dark:from-gray-900/50 dark:to-gray-800/50">
                         {/* Fixed Header */}
                         <div className="flex-shrink-0 p-4 border-b border-blue-200 dark:border-gray-700">
                           <div className="flex justify-between items-center">

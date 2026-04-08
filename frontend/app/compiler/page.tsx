@@ -218,7 +218,7 @@ int main() {
     );
 
   return (
-    <div className="flex flex-col h-screen overflow-hidden bg-gradient-to-br from-slate-50 via-indigo-50/30 to-purple-50/30 dark:from-gray-950 dark:via-indigo-950/10 dark:to-purple-950/10">
+    <div className="flex flex-col h-screen overflow-hidden bg-gradient-to-br from-slate-100 via-cyan-50/70 to-amber-50/70 dark:from-slate-950 dark:via-slate-900 dark:to-cyan-950/25">
       <div className="flex-1 mt-16 p-4 h-[calc(100vh-4rem)] w-full">
         <motion.div
           initial={{ opacity: 0, y: 20 }}

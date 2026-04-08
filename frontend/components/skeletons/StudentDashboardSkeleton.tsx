@@ -7,7 +7,7 @@ export default function StudentDashboardSkeleton() {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 animate-pulse">
             {/* ===== WELCOME CARD - Large (2x1) ===== */}
             <div className="md:col-span-2 glass-card-premium rounded-3xl p-8 relative overflow-hidden">
-                <div className="absolute top-0 right-0 w-64 h-64 bg-gradient-to-bl from-indigo-500/10 via-purple-500/5 to-transparent rounded-full blur-3xl" />
+                <div className="absolute top-0 right-0 w-64 h-64 bg-gradient-to-bl from-indigo-500/10 via-sky-500/5 to-transparent rounded-full blur-3xl" />
                 <div className="relative z-10 space-y-4">
                     <Skeleton className="h-4 w-32 rounded" />
                     <Skeleton className="h-10 w-56 rounded-xl" />
@@ -24,7 +24,7 @@ export default function StudentDashboardSkeleton() {
             </div>
 
             {/* ===== SEMESTER INFO - Square ===== */}
-            <div className="glass-card rounded-3xl p-6 flex flex-col items-center justify-center text-center bg-gradient-to-br from-purple-50 to-indigo-50 dark:from-purple-950/20 dark:to-indigo-950/20">
+            <div className="glass-card rounded-3xl p-6 flex flex-col items-center justify-center text-center bg-gradient-to-br from-cyan-50 to-sky-50 dark:from-cyan-950/20 dark:to-sky-950/20">
                 <Skeleton className="w-14 h-14 rounded-2xl" />
                 <Skeleton className="h-8 w-20 rounded mt-3" />
                 <Skeleton className="h-4 w-28 rounded mt-2" />

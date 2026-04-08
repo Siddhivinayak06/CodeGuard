@@ -81,7 +81,7 @@ export default function SubmissionsSidebar({
             {/* Header */}
             <div className="p-5 border-b border-gray-100 dark:border-gray-800">
                 <div className="flex items-center gap-2 mb-4">
-                    <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-lg shadow-indigo-500/25">
+                    <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-cyan-500 to-sky-600 flex items-center justify-center shadow-lg shadow-sky-500/25">
                         <Sparkles className="w-4 h-4 text-white" />
                     </div>
                     <h2 className="text-sm font-bold text-gray-900 dark:text-white uppercase tracking-wider">Navigation</h2>
@@ -96,7 +96,7 @@ export default function SubmissionsSidebar({
                     className={cn(
                         "w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-300 text-sm font-semibold group",
                         !selectedSubjectId
-                            ? "bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 text-white shadow-lg shadow-indigo-500/30 scale-[1.02]"
+                            ? "bg-gradient-to-r from-cyan-500 via-sky-500 to-blue-600 text-white shadow-lg shadow-sky-500/30 scale-[1.02]"
                             : "bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 border border-gray-100 dark:border-gray-700 hover:shadow-md hover:scale-[1.01]"
                     )}
                 >
@@ -206,7 +206,7 @@ export default function SubmissionsSidebar({
                                                 className={cn(
                                                     "w-full text-left px-3 py-2.5 rounded-lg text-xs font-medium transition-all duration-200 flex items-center gap-2 group/item",
                                                     selectedPracticalId === practical.id
-                                                        ? "bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-md shadow-purple-500/20"
+                                                        ? "bg-gradient-to-r from-cyan-500 to-blue-600 text-white shadow-md shadow-sky-500/20"
                                                         : "text-gray-600 dark:text-gray-400 hover:bg-white dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-white hover:shadow-sm"
                                                 )}
                                             >

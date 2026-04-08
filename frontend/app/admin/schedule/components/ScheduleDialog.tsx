@@ -185,7 +185,7 @@ export function ScheduleDialog({
     <Dialog open={open} onOpenChange={setOpen}>
       {!isControlled && (
         <DialogTrigger asChild>
-          <Button className="gap-2 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 hover:from-indigo-600 hover:via-purple-600 hover:to-pink-600 text-white shadow-lg shadow-purple-500/30 hover:shadow-xl hover:shadow-purple-500/40 transition-all duration-300 hover:-translate-y-0.5">
+          <Button className="gap-2 bg-gradient-to-r from-cyan-500 via-sky-500 to-blue-600 hover:from-indigo-600 hover:via-sky-600 hover:to-blue-700 text-white shadow-lg shadow-sky-500/30 hover:shadow-xl hover:shadow-sky-500/40 transition-all duration-300 hover:-translate-y-0.5">
             <CalendarPlus className="w-4 h-4" />
             Schedule
           </Button>
@@ -194,7 +194,7 @@ export function ScheduleDialog({
       <DialogContent className="bg-white/95 dark:bg-gray-900/95 backdrop-blur-xl border-white/20 dark:border-gray-700/50 sm:max-w-[480px] shadow-2xl">
         <DialogHeader>
           <div className="flex items-center gap-3">
-            <div className="p-2 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl shadow-lg shadow-indigo-500/30">
+            <div className="p-2 bg-gradient-to-br from-cyan-500 to-sky-600 rounded-xl shadow-lg shadow-sky-500/30">
               <CalendarPlus className="w-5 h-5 text-white" />
             </div>
             <div>
@@ -347,7 +347,7 @@ export function ScheduleDialog({
             <Button
               type="submit"
               disabled={loading || conflict?.conflict}
-              className="bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white shadow-lg shadow-indigo-500/25"
+              className="bg-gradient-to-r from-cyan-500 to-sky-600 hover:from-cyan-600 hover:to-sky-700 text-white shadow-lg shadow-sky-500/25"
             >
               {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Confirm

@@ -99,7 +99,7 @@ export default function SubjectReportView({
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
             <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-6xl max-h-[90vh] overflow-hidden flex flex-col">
                 {/* Header */}
-                <div className="px-6 py-5 border-b border-gray-100 dark:border-gray-800 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500">
+                <div className="px-6 py-5 border-b border-gray-100 dark:border-gray-800 bg-gradient-to-r from-cyan-500 via-sky-500 to-blue-600">
                     <div className="flex items-start justify-between">
                         <div className="text-white">
                             <h2 className="text-2xl font-bold">{subjectName} Report</h2>

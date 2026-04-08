@@ -536,7 +536,7 @@ export default function FacultyDashboardPage() {
   }, [practicals, selected]);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50/30 to-purple-50/30 dark:from-gray-950 dark:via-indigo-950/10 dark:to-purple-950/10">
+    <div className="min-h-screen bg-gradient-to-br from-slate-100 via-cyan-50/70 to-amber-50/70 dark:from-slate-950 dark:via-slate-900 dark:to-cyan-950/25">
       <main className="pt-24 pb-12 px-4 sm:px-6 lg:px-8 xl:px-12 w-full mx-auto">
         {/* Header Section */}
         <motion.div
@@ -559,7 +559,7 @@ export default function FacultyDashboardPage() {
           </div>
           <button
             onClick={() => openCreate()}
-            className="inline-flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-medium rounded-xl shadow-lg shadow-indigo-500/25 hover:shadow-indigo-500/40 transition-all hover:-translate-y-0.5"
+            className="inline-flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-cyan-600 to-sky-700 hover:from-cyan-700 hover:to-sky-800 text-white font-medium rounded-xl shadow-lg shadow-sky-500/25 hover:shadow-sky-500/40 transition-all hover:-translate-y-0.5"
           >
             <Plus size={20} />
             Create Practical
@@ -590,7 +590,7 @@ export default function FacultyDashboardPage() {
                     {activePracticalsCount}
                   </p>
                 </div>
-                <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-500 flex items-center justify-center shadow-lg">
+                <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-cyan-500 to-sky-600 flex items-center justify-center shadow-lg">
                   <FileCheck className="w-6 h-6 text-white" />
                 </div>
               </div>
@@ -609,7 +609,7 @@ export default function FacultyDashboardPage() {
                     {submissions.length}
                   </p>
                 </div>
-                <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center shadow-lg">
+                <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center shadow-lg">
                   <TrendingUp className="w-6 h-6 text-white" />
                 </div>
               </div>
@@ -637,9 +637,9 @@ export default function FacultyDashboardPage() {
             <motion.div
               variants={itemVariants}
               onClick={() => router.push("/faculty/submissions")}
-              className="glass-card rounded-2xl p-5 flex items-center gap-4 hover-lift group bg-gradient-to-br from-indigo-50 to-purple-50 dark:from-indigo-950/20 dark:to-purple-950/20 cursor-pointer"
+              className="glass-card rounded-2xl p-5 flex items-center gap-4 hover-lift group bg-gradient-to-br from-cyan-50 to-sky-50 dark:from-cyan-950/20 dark:to-sky-950/20 cursor-pointer"
             >
-              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-lg">
+              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-cyan-500 to-sky-600 flex items-center justify-center shadow-lg">
                 <FileCheck className="w-6 h-6 text-white" />
               </div>
               <div className="flex-1">
@@ -739,12 +739,12 @@ export default function FacultyDashboardPage() {
               className="md:col-span-1 glass-card-premium rounded-3xl p-6 relative overflow-hidden"
             >
               {/* Gradient overlay */}
-              <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-bl from-indigo-500/10 via-purple-500/5 to-transparent rounded-full blur-2xl" />
+              <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-bl from-indigo-500/10 via-sky-500/5 to-transparent rounded-full blur-2xl" />
 
               <div className="relative z-10">
                 {/* Header with icon */}
                 <div className="flex items-center gap-3 mb-5">
-                  <div className="p-2.5 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 shadow-lg shadow-indigo-500/25">
+                  <div className="p-2.5 rounded-xl bg-gradient-to-br from-cyan-500 to-sky-600 shadow-lg shadow-sky-500/25">
                     <Clock size={18} className="text-white" />
                   </div>
                   <div>

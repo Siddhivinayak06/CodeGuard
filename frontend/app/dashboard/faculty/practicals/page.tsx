@@ -239,7 +239,7 @@ export default function AllPracticalsPage() {
             <div className="flex gap-3">
               <button
                 onClick={openCreate}
-                className="inline-flex items-center gap-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-xl shadow-lg shadow-indigo-500/20 transition-all hover:-translate-y-0.5"
+                className="inline-flex items-center gap-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-xl shadow-lg shadow-sky-500/20 transition-all hover:-translate-y-0.5"
               >
                 <Plus size={20} />
                 Create Practical

@@ -379,7 +379,7 @@ export default function FacultySubjects() {
   const practicalCount = practicals.length - examCount;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50 dark:from-gray-950 dark:via-purple-950/20 dark:to-blue-950/20">
+    <div className="min-h-screen bg-gradient-to-br from-cyan-50 via-sky-50 to-amber-50 dark:from-slate-950 dark:via-slate-900 dark:to-cyan-950/25">
       <main className="pt-24 px-4 sm:px-6 lg:px-8 xl:px-12 w-full mx-auto pb-12">
         {/* Header */}
         <div className="mb-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
@@ -420,7 +420,7 @@ export default function FacultySubjects() {
 
             <button
               onClick={openNewPractical}
-              className="inline-flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-medium rounded-xl shadow-lg shadow-indigo-500/25 hover:shadow-indigo-500/40 transition-all hover:-translate-y-0.5"
+              className="inline-flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-cyan-600 to-sky-700 hover:from-cyan-700 hover:to-sky-800 text-white font-medium rounded-xl shadow-lg shadow-sky-500/25 hover:shadow-sky-500/40 transition-all hover:-translate-y-0.5"
             >
               <Plus size={20} />
               New Practical
@@ -538,13 +538,13 @@ export default function FacultySubjects() {
                         key={s.id}
                         onClick={() => setSelected(s.id)}
                         className={`w-full text-left flex items-center gap-3 p-3 rounded-xl transition-all ${selected === s.id
-                          ? "bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-900/30 dark:to-purple-900/30 border border-indigo-200 dark:border-indigo-800"
+                          ? "bg-gradient-to-r from-cyan-50 to-sky-50 dark:from-cyan-900/30 dark:to-sky-900/30 border border-indigo-200 dark:border-indigo-800"
                           : "hover:bg-gray-50 dark:hover:bg-gray-800/50 border border-transparent"
                           }`}
                         aria-pressed={selected === s.id}
                       >
                         <div
-                          className={`p-2 rounded-lg ${selected === s.id ? "bg-gradient-to-br from-indigo-500 to-purple-500" : "bg-gray-100 dark:bg-gray-800"}`}
+                          className={`p-2 rounded-lg ${selected === s.id ? "bg-gradient-to-br from-cyan-500 to-sky-600" : "bg-gray-100 dark:bg-gray-800"}`}
                         >
                           <BookOpen
                             className={`w-5 h-5 ${selected === s.id ? "text-white" : "text-purple-600 dark:text-purple-400"}`}
@@ -611,7 +611,7 @@ export default function FacultySubjects() {
                   </div>
                 ) : practialsEmpty(practicals) ? (
                   <div className="p-12 text-center">
-                    <div className="inline-flex p-6 bg-gradient-to-br from-purple-500/20 to-pink-500/20 rounded-full mb-4">
+                    <div className="inline-flex p-6 bg-gradient-to-br from-cyan-500/20 to-blue-500/20 rounded-full mb-4">
                       <FileCheck className="w-12 h-12 text-gray-400" />
                     </div>
                     <p className="text-gray-600 dark:text-gray-300 font-medium">
@@ -623,7 +623,7 @@ export default function FacultySubjects() {
                     <div className="mt-4">
                       <button
                         onClick={openNewPractical}
-                        className="inline-flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-medium rounded-xl shadow-lg shadow-indigo-500/25 hover:shadow-indigo-500/40 transition-all hover:-translate-y-0.5"
+                        className="inline-flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-cyan-600 to-sky-700 hover:from-cyan-700 hover:to-sky-800 text-white font-medium rounded-xl shadow-lg shadow-sky-500/25 hover:shadow-sky-500/40 transition-all hover:-translate-y-0.5"
                       >
                         <Plus size={20} />
                         Create Practical
@@ -754,7 +754,7 @@ export default function FacultySubjects() {
           <div className="glass-card-premium rounded-3xl w-full max-w-5xl max-h-[90vh] overflow-hidden flex flex-col animate-scaleIn">
             <div className="flex items-center justify-between p-6 border-b border-gray-100 dark:border-gray-800 bg-white/50 dark:bg-gray-900/50 backdrop-blur-sm">
               <div className="flex items-center gap-4">
-                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 text-white flex items-center justify-center font-bold text-lg shadow-lg">
+                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-cyan-500 to-sky-600 text-white flex items-center justify-center font-bold text-lg shadow-lg">
                   <FileCheck className="w-6 h-6" />
                 </div>
                 <div>

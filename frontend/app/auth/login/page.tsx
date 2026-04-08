@@ -185,8 +185,8 @@ function LoginContent() {
   };
 
   return (
-    <div className="relative min-h-[100dvh] overflow-x-hidden bg-gradient-to-br from-slate-100 via-cyan-50 to-amber-50 text-slate-900 selection:bg-cyan-300/40 dark:from-slate-950 dark:via-slate-900 dark:to-cyan-950/30 dark:text-slate-100 lg:h-[100dvh] lg:overflow-hidden">
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(14,165,233,0.18),transparent_46%),radial-gradient(circle_at_bottom_left,rgba(245,158,11,0.16),transparent_42%)]" />
+    <div className="relative min-h-[100dvh] overflow-x-hidden bg-gradient-to-br from-slate-100 via-cyan-50 to-sky-50 text-slate-900 selection:bg-cyan-300/40 dark:from-slate-950 dark:via-slate-900 dark:to-cyan-950/30 dark:text-slate-100 lg:h-[100dvh] lg:overflow-hidden">
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(14,165,233,0.18),transparent_46%),radial-gradient(circle_at_bottom_left,rgba(59,130,246,0.14),transparent_42%)]" />
       <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(to_right,rgba(148,163,184,0.08)_1px,transparent_1px),linear-gradient(to_bottom,rgba(148,163,184,0.08)_1px,transparent_1px)] bg-[size:42px_42px] [mask-image:radial-gradient(circle_at_60%_40%,black,transparent_78%)]" />
 
       <div className="relative z-10 mx-auto w-full max-w-[1440px] px-3 py-3 sm:px-5 sm:py-5 lg:px-8 lg:py-7">
@@ -195,10 +195,10 @@ function LoginContent() {
           initial={{ opacity: 0, x: -36 }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
-          className="relative hidden h-full overflow-hidden bg-slate-900 px-8 py-9 text-slate-100 dark:bg-slate-950 lg:flex lg:flex-col lg:justify-center xl:px-12"
+          className="relative hidden h-full overflow-hidden bg-gradient-to-br from-cyan-100 via-sky-100 to-blue-50 px-8 py-9 text-slate-900 dark:from-slate-950 dark:via-slate-900 dark:to-slate-900 dark:text-slate-100 lg:flex lg:flex-col lg:justify-center xl:px-12"
         >
-          <div className="pointer-events-none absolute -left-20 -top-20 h-64 w-64 rounded-full bg-cyan-400/20 blur-3xl" />
-          <div className="pointer-events-none absolute -bottom-24 -right-24 h-72 w-72 rounded-full bg-blue-500/20 blur-3xl" />
+          <div className="pointer-events-none absolute -left-20 -top-20 h-64 w-64 rounded-full bg-cyan-500/18 blur-3xl dark:bg-cyan-400/20" />
+          <div className="pointer-events-none absolute -bottom-24 -right-24 h-72 w-72 rounded-full bg-sky-300/24 blur-3xl dark:bg-blue-500/20" />
           <motion.div
             variants={staggerContainer}
             initial="hidden"
@@ -206,17 +206,17 @@ function LoginContent() {
             className="relative z-10 mx-auto flex w-full max-w-lg flex-col gap-6"
           >
             <motion.div variants={fadeInUp} className="space-y-5">
-              <p className="inline-flex w-fit items-center gap-2 rounded-full border border-cyan-300/40 bg-cyan-400/10 px-4 py-1.5 text-xs font-semibold uppercase tracking-[0.16em] text-cyan-100 shadow-sm">
+              <p className="inline-flex w-fit items-center gap-2 rounded-full border border-cyan-500/30 bg-cyan-100/80 px-4 py-1.5 text-xs font-semibold uppercase tracking-[0.16em] text-cyan-800 shadow-sm dark:border-cyan-300/40 dark:bg-cyan-400/10 dark:text-cyan-100">
                 <Building2 className="h-3.5 w-3.5" />
                 Secure access workspace
               </p>
-              <h1 className="text-balance text-4xl font-black leading-tight text-white xl:text-5xl">
+              <h1 className="text-balance text-4xl font-black leading-tight text-slate-900 dark:text-white xl:text-5xl">
                 Professional sign-in for{" "}
-                <span className="bg-gradient-to-r from-cyan-200 via-sky-200 to-blue-200 bg-clip-text text-transparent">
+                <span className="bg-gradient-to-r from-cyan-600 via-sky-600 to-blue-700 bg-clip-text text-transparent dark:from-cyan-200 dark:via-sky-200 dark:to-blue-200">
                   CodeGuard
                 </span>
               </h1>
-              <p className="max-w-lg text-base leading-relaxed text-slate-300">
+              <p className="max-w-lg text-base leading-relaxed text-slate-700 dark:text-slate-300">
                 Access your practical environment with strong controls, predictable performance, and clear policy visibility.
               </p>
             </motion.div>
@@ -227,16 +227,16 @@ function LoginContent() {
                   key={feature.title}
                   variants={fadeInUp}
                   whileHover={{ y: -3, transition: { duration: 0.2 } }}
-                  className="rounded-2xl border border-slate-700/80 bg-slate-800/60 p-3.5 shadow-[0_16px_36px_-26px_rgba(2,6,23,0.9)] backdrop-blur-md transition hover:border-cyan-400/70"
+                  className="rounded-2xl border border-slate-200/80 bg-white/75 p-3.5 shadow-[0_16px_32px_-26px_rgba(15,23,42,0.45)] backdrop-blur-md transition hover:border-cyan-300/80 dark:border-slate-700/80 dark:bg-slate-800/60 dark:shadow-[0_16px_36px_-26px_rgba(2,6,23,0.9)] dark:hover:border-cyan-400/70"
                 >
                   <div className="mb-3 flex items-center justify-between">
-                    <span className="inline-flex items-center rounded-full bg-cyan-400/15 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.15em] text-cyan-200">
+                    <span className="inline-flex items-center rounded-full bg-cyan-100 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.15em] text-cyan-700 dark:bg-cyan-400/15 dark:text-cyan-200">
                       {feature.label}
                     </span>
-                    <feature.icon className="h-5 w-5 text-cyan-200" />
+                    <feature.icon className="h-5 w-5 text-cyan-700 dark:text-cyan-200" />
                   </div>
-                  <h3 className="text-base font-bold text-slate-100">{feature.title}</h3>
-                  <p className="mt-1 text-sm text-slate-300">{feature.description}</p>
+                  <h3 className="text-base font-bold text-slate-900 dark:text-slate-100">{feature.title}</h3>
+                  <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">{feature.description}</p>
                 </motion.article>
               ))}
             </div>
@@ -245,10 +245,10 @@ function LoginContent() {
               {authMetrics.map((item) => (
                 <div
                   key={item.label}
-                  className="rounded-xl border border-slate-700/80 bg-slate-800/55 px-3 py-2 text-center"
+                  className="rounded-xl border border-slate-200/80 bg-white/65 px-3 py-2 text-center dark:border-slate-700/80 dark:bg-slate-800/55"
                 >
-                  <p className="text-base font-black text-slate-100">{item.value}</p>
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-400">
+                  <p className="text-base font-black text-slate-900 dark:text-slate-100">{item.value}</p>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500 dark:text-slate-400">
                     {item.label}
                   </p>
                 </div>
@@ -289,7 +289,7 @@ function LoginContent() {
                   transition={{ duration: 0.4 }}
                   className="relative overflow-hidden rounded-2xl border border-slate-200/85 bg-white/90 shadow-[0_28px_70px_-42px_rgba(15,23,42,0.62)] backdrop-blur-2xl dark:border-slate-700 dark:bg-slate-900/80 sm:rounded-3xl"
                 >
-                  <div className="pointer-events-none absolute inset-x-0 top-0 h-16 bg-gradient-to-r from-cyan-400/25 via-white/10 to-amber-400/20" />
+                  <div className="pointer-events-none absolute inset-x-0 top-0 h-16 bg-gradient-to-r from-cyan-400/25 via-white/10 to-sky-400/20" />
                   <div className="relative p-6 sm:p-7">
                     <div className="mb-7 text-center">
                       <motion.div

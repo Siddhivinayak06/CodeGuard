@@ -67,13 +67,13 @@ function stringToColor(str: string): string {
   }
   const colors = [
     "from-blue-400 to-cyan-500",
-    "from-purple-400 to-pink-500",
+    "from-cyan-400 to-blue-500",
     "from-emerald-400 to-teal-500",
     "from-orange-400 to-amber-500",
-    "from-rose-400 to-pink-500",
-    "from-indigo-400 to-violet-500",
+    "from-amber-400 to-orange-500",
+    "from-cyan-400 to-sky-600",
     "from-sky-400 to-blue-500",
-    "from-fuchsia-400 to-purple-500",
+    "from-teal-400 to-cyan-500",
   ];
   return colors[Math.abs(hash) % colors.length];
 }
@@ -336,12 +336,12 @@ export default function AdminSubjects() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50/30 to-purple-50/30 dark:from-gray-950 dark:via-indigo-950/10 dark:to-purple-950/10">
+    <div className="min-h-screen bg-gradient-to-br from-slate-100 via-cyan-50/70 to-amber-50/70 dark:from-slate-950 dark:via-slate-900 dark:to-cyan-950/25">
       <div className="pt-24 pb-12 px-4 sm:px-6 lg:px-8 xl:px-12 w-full mx-auto">
         {/* Header */}
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 mb-8 animate-slideUp">
           <div className="flex items-center gap-4">
-            <div className="p-3 rounded-2xl bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 shadow-lg shadow-purple-500/25">
+            <div className="p-3 rounded-2xl bg-gradient-to-br from-cyan-500 via-sky-500 to-blue-600 shadow-lg shadow-sky-500/25">
               <BookOpen className="w-8 h-8 text-white" />
             </div>
             <div>
@@ -367,7 +367,7 @@ export default function AdminSubjects() {
               setIsEditing(false);
               setOpen(true);
             }}
-            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 text-white font-medium shadow-lg shadow-purple-500/25 hover:shadow-purple-500/40 hover:-translate-y-0.5 transition-all"
+            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-cyan-600 via-sky-600 to-blue-700 text-white font-medium shadow-lg shadow-sky-500/25 hover:shadow-sky-500/40 hover:-translate-y-0.5 transition-all"
           >
             <Plus className="w-4 h-4" />
             Add Subject
@@ -380,7 +380,7 @@ export default function AdminSubjects() {
           style={{ animationDelay: "100ms" }}
         >
           {/* Header with Search & Filter */}
-          <div className="px-6 py-4 border-b border-gray-200/50 dark:border-gray-700/50 bg-gradient-to-r from-indigo-50/50 to-purple-50/50 dark:from-indigo-900/20 dark:to-purple-900/20">
+          <div className="px-6 py-4 border-b border-gray-200/50 dark:border-gray-700/50 bg-gradient-to-r from-cyan-50/70 to-sky-50/70 dark:from-cyan-900/20 dark:to-sky-900/20">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
               <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
                 <BookOpen className="w-4 h-4 text-indigo-500" />
@@ -580,7 +580,7 @@ export default function AdminSubjects() {
           <div className="relative w-full max-w-2xl glass-card-premium rounded-3xl p-8 shadow-2xl animate-scaleIn max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-6">
               <div className="flex items-center gap-3">
-                <div className="p-2 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-500">
+                <div className="p-2 rounded-xl bg-gradient-to-br from-cyan-500 to-sky-600">
                   <BookOpen className="w-5 h-5 text-white" />
                 </div>
                 <h3 className="text-xl font-bold text-gray-900 dark:text-white">
@@ -725,7 +725,7 @@ export default function AdminSubjects() {
               </button>
               <button
                 onClick={handleSave}
-                className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-medium shadow-lg shadow-indigo-500/25 hover:shadow-indigo-500/40 transition-all"
+                className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-cyan-600 to-sky-700 text-white font-medium shadow-lg shadow-sky-500/25 hover:shadow-sky-500/40 transition-all"
                 disabled={busy}
               >
                 {busy

@@ -41,7 +41,7 @@ export function YearlyCalendar({
   return (
     <div className="glass-card-premium rounded-2xl overflow-hidden">
       {/* Header */}
-      <div className="bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 p-6">
+      <div className="bg-gradient-to-r from-cyan-500 via-sky-500 to-blue-600 p-6">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-white/20 rounded-xl backdrop-blur-sm">
@@ -145,7 +145,7 @@ function MonthGrid({
   return (
     <div
       className={`rounded-xl border transition-all duration-300 hover:shadow-lg h-full flex flex-col ${isCurrentMonth
-          ? "border-indigo-300/50 dark:border-indigo-700/50 bg-gradient-to-br from-indigo-50/80 to-purple-50/80 dark:from-indigo-950/30 dark:to-purple-950/30 shadow-lg shadow-purple-500/20"
+          ? "border-cyan-300/50 dark:border-cyan-700/50 bg-gradient-to-br from-cyan-50/80 to-sky-50/80 dark:from-cyan-950/30 dark:to-sky-950/30 shadow-lg shadow-sky-500/20"
           : "border-gray-200/70 dark:border-gray-700/50 bg-white/80 dark:bg-gray-800/80 hover:border-indigo-200 dark:hover:border-indigo-800"
         } p-5 backdrop-blur-sm`}
     >
@@ -194,7 +194,7 @@ function MonthGrid({
                 className={`
                                 w-7 h-7 rounded-full flex items-center justify-center transition-all relative text-xs font-medium
                                 ${isSelected
-                    ? "bg-gradient-to-br from-indigo-500 to-purple-600 text-white ring-2 ring-indigo-300 dark:ring-indigo-700 shadow-lg shadow-indigo-500/40"
+                    ? "bg-gradient-to-br from-cyan-500 to-sky-600 text-white ring-2 ring-indigo-300 dark:ring-indigo-700 shadow-lg shadow-sky-500/40"
                     : isToday
                       ? "ring-2 ring-indigo-400 dark:ring-indigo-500 text-indigo-700 dark:text-indigo-300 font-bold bg-indigo-50 dark:bg-indigo-900/20"
                       : "hover:bg-indigo-50 dark:hover:bg-indigo-900/30 text-gray-700 dark:text-gray-300 hover:text-indigo-600 dark:hover:text-indigo-400"

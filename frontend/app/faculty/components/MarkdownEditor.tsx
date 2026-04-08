@@ -119,7 +119,7 @@ export default function MarkdownEditor({
                   type="button"
                   onClick={onMagicFormat}
                   disabled={isFormatting || !value.trim()}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white rounded-lg text-xs font-bold shadow-md shadow-indigo-500/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed group/btn"
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-cyan-500 to-sky-600 hover:from-cyan-600 hover:to-sky-700 text-white rounded-lg text-xs font-bold shadow-md shadow-sky-500/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed group/btn"
                 >
                   {isFormatting ? (
                     <Loader2 size={14} className="animate-spin" />

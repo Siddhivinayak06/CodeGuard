@@ -479,7 +479,7 @@ export default function AdminDashboard() {
 
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50/30 to-purple-50/30 dark:from-gray-950 dark:via-indigo-950/10 dark:to-purple-950/10">
+    <div className="min-h-screen bg-gradient-to-br from-slate-100 via-cyan-50/70 to-amber-50/70 dark:from-slate-950 dark:via-slate-900 dark:to-cyan-950/25">
       <main className="pt-24 pb-12 px-4 sm:px-6 lg:px-8 xl:px-12 w-full mx-auto">
         {/* Header */}
         <motion.div
@@ -489,7 +489,7 @@ export default function AdminDashboard() {
           className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 mb-12"
         >
           <div className="flex items-center gap-4">
-            <div className="p-3 rounded-2xl bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 shadow-lg shadow-purple-500/25 animate-pulse-glow">
+            <div className="p-3 rounded-2xl bg-gradient-to-br from-cyan-500 via-sky-500 to-blue-600 shadow-lg shadow-sky-500/25 animate-pulse-glow">
               <Shield className="w-8 h-8 text-white" />
             </div>
             <div className="space-y-1">
@@ -509,7 +509,7 @@ export default function AdminDashboard() {
             <button
               onClick={openAddForm}
               disabled={busy}
-              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 text-white font-semibold shadow-lg shadow-purple-500/25 hover:shadow-purple-500/40 hover:-translate-y-0.5 transition-all disabled:opacity-60"
+              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-cyan-600 via-sky-600 to-blue-700 text-white font-semibold shadow-lg shadow-sky-500/25 hover:shadow-sky-500/40 hover:-translate-y-0.5 transition-all disabled:opacity-60"
             >
               <Plus className="w-4 h-4" />
               Add Subject
@@ -544,13 +544,13 @@ export default function AdminDashboard() {
             label="Faculty"
             value={stats.faculty ?? 0}
             icon={<Users className="w-6 h-6" />}
-            gradient="bg-gradient-to-br from-purple-500 to-pink-500"
+            gradient="bg-gradient-to-br from-cyan-500 to-blue-600"
           />
           <StatCard
             label="Subjects"
             value={stats.subjects ?? 0}
             icon={<BookOpen className="w-6 h-6" />}
-            gradient="bg-gradient-to-br from-indigo-500 to-purple-500"
+            gradient="bg-gradient-to-br from-cyan-500 to-sky-600"
           />
           <StatCard
             label="Practicals"
@@ -578,14 +578,14 @@ export default function AdminDashboard() {
             description="Add, edit, or remove users"
             icon={<UserCog className="w-6 h-6" />}
             href="/admin/users"
-            gradient="bg-gradient-to-br from-indigo-400 to-indigo-600"
+            gradient="bg-gradient-to-br from-cyan-400 to-sky-600"
           />
           <QuickActionCard
             title="Manage Subjects"
             description="Configure courses and subjects"
             icon={<BookOpen className="w-6 h-6" />}
             href="/admin/subjects"
-            gradient="bg-gradient-to-br from-purple-400 to-purple-600"
+            gradient="bg-gradient-to-br from-sky-400 to-blue-600"
           />
         </motion.section>
 
@@ -596,7 +596,7 @@ export default function AdminDashboard() {
           animate="visible"
           className="glass-card-premium rounded-3xl overflow-hidden"
         >
-          <div className="px-6 py-5 border-b border-gray-200/50 dark:border-gray-700/50 bg-gradient-to-r from-indigo-50/50 to-purple-50/50 dark:from-indigo-900/20 dark:to-purple-900/20">
+          <div className="px-6 py-5 border-b border-gray-200/50 dark:border-gray-700/50 bg-gradient-to-r from-cyan-50/70 to-sky-50/70 dark:from-cyan-900/20 dark:to-sky-900/20">
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
                 <BookOpen className="w-5 h-5 text-indigo-500" />
@@ -747,7 +747,7 @@ export default function AdminDashboard() {
             >
               <div className="flex items-center justify-between mb-6">
                 <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-500">
+                  <div className="p-2 rounded-xl bg-gradient-to-br from-cyan-500 to-sky-600">
                     <BookOpen className="w-5 h-5 text-white" />
                   </div>
                   <h3 className="text-xl font-bold text-gray-900 dark:text-white">
@@ -894,7 +894,7 @@ export default function AdminDashboard() {
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-medium shadow-lg shadow-indigo-500/25 hover:shadow-indigo-500/40 transition-all"
+                  className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-cyan-600 to-sky-700 text-white font-medium shadow-lg shadow-sky-500/25 hover:shadow-sky-500/40 transition-all"
                   disabled={busy}
                 >
                   {busy ? "Saving..." : "Save"}

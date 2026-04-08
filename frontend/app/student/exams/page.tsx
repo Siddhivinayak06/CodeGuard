@@ -100,7 +100,7 @@ function getLanguageColor(lang: string) {
     case "c": return "from-blue-500 to-cyan-500";
     case "cpp": return "from-blue-600 to-blue-400";
     case "javascript": return "from-yellow-300 to-yellow-500";
-    default: return "from-indigo-400 to-indigo-600";
+    default: return "from-cyan-400 to-sky-600";
   }
 }
 
@@ -645,7 +645,7 @@ export default function StudentExams() {
   }, [sequencedPracticals, activeFilter, debouncedSearch, selectedSubjectId]);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50/30 to-purple-50/30 dark:from-gray-950 dark:via-indigo-950/10 dark:to-purple-950/10">
+    <div className="min-h-screen bg-gradient-to-br from-slate-100 via-cyan-50/70 to-amber-50/70 dark:from-slate-950 dark:via-slate-900 dark:to-cyan-950/25">
       <div className="pt-24 pb-12 px-4 sm:px-6 lg:px-8 xl:px-12 w-full mx-auto space-y-8">
 
         {/* Header Section */}
@@ -927,7 +927,7 @@ export default function StudentExams() {
               <div className="flex items-center justify-between p-6 border-b border-gray-100 dark:border-gray-800 bg-white/50 dark:bg-gray-900/50 backdrop-blur-sm">
                 <div className="flex items-center gap-5">
                   <div
-                    className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${getLanguageColor(viewingSubmission.language)} text-white flex items-center justify-center font-bold shadow-lg shadow-indigo-500/20`}
+                    className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${getLanguageColor(viewingSubmission.language)} text-white flex items-center justify-center font-bold shadow-lg shadow-sky-500/20`}
                   >
                     <Code2 className="w-7 h-7" />
                   </div>

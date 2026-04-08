@@ -86,7 +86,7 @@ export default function BasicDetailsForm({
     cx(
       inputBaseClass,
       focusedField === fieldName
-        ? "border-indigo-500 dark:border-indigo-400 ring-4 ring-indigo-500/10 dark:ring-indigo-400/10 shadow-lg shadow-indigo-500/5"
+        ? "border-indigo-500 dark:border-indigo-400 ring-4 ring-indigo-500/10 dark:ring-indigo-400/10 shadow-lg shadow-sky-500/5"
         : "border-gray-200 dark:border-gray-700",
       disabled && "opacity-60 cursor-not-allowed bg-gray-50 dark:bg-gray-900/50",
     );
@@ -99,7 +99,7 @@ export default function BasicDetailsForm({
       className="relative overflow-hidden bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl rounded-2xl p-6 shadow-xl shadow-gray-200/50 dark:shadow-gray-900/50 border border-gray-100 dark:border-gray-800"
     >
       {/* Decorative gradient blob */}
-      <div className="absolute -top-24 -right-24 w-48 h-48 bg-gradient-to-br from-indigo-500/20 to-purple-500/20 rounded-full blur-3xl pointer-events-none" />
+      <div className="absolute -top-24 -right-24 w-48 h-48 bg-gradient-to-br from-cyan-500/20 to-sky-500/20 rounded-full blur-3xl pointer-events-none" />
 
       {/* Header */}
       <motion.div
@@ -110,7 +110,7 @@ export default function BasicDetailsForm({
       >
         <motion.div
           whileHover={{ scale: 1.05, rotate: 5 }}
-          className="p-2.5 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl text-white shadow-lg shadow-indigo-500/30"
+          className="p-2.5 bg-gradient-to-br from-cyan-500 to-sky-600 rounded-xl text-white shadow-lg shadow-sky-500/30"
         >
           <InfoIcon size={20} />
         </motion.div>

@@ -215,13 +215,13 @@ export const AssistantPanel = React.forwardRef<
   return (
     <div className="flex h-full w-full flex-col overflow-hidden border-l border-gray-200 dark:border-white/10 bg-gradient-to-b from-gray-50 via-white to-gray-50 dark:from-gray-900/95 dark:via-gray-900/98 dark:to-gray-950 backdrop-blur-xl shadow-2xl transition-colors duration-300">
       {/* Gradient overlay */}
-      <div className="absolute inset-0 bg-gradient-to-br from-purple-500/5 via-transparent to-blue-500/5 pointer-events-none" />
+      <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/5 via-transparent to-blue-500/5 pointer-events-none" />
 
       {/* Header */}
-      <div className="relative flex items-center justify-between border-b border-gray-200 dark:border-white/10 px-4 py-3 bg-gradient-to-r from-purple-500/5 via-transparent to-blue-500/5 dark:from-purple-500/10 dark:to-blue-500/10">
+      <div className="relative flex items-center justify-between border-b border-gray-200 dark:border-white/10 px-4 py-3 bg-gradient-to-r from-cyan-500/5 via-transparent to-blue-500/5 dark:from-cyan-500/10 dark:to-blue-500/10">
         <div className="flex items-center gap-3">
           <div className="relative">
-            <div className="p-2 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 shadow-lg shadow-purple-500/25">
+            <div className="p-2 rounded-xl bg-gradient-to-br from-cyan-500 to-blue-600 shadow-lg shadow-sky-500/25">
               <Sparkles className="h-4 w-4 text-white" />
             </div>
             <div className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-green-400 rounded-full border-2 border-white dark:border-gray-900 animate-pulse" />
@@ -261,7 +261,7 @@ export const AssistantPanel = React.forwardRef<
                   className={`flex gap-3 ${msg.role === "user" ? "justify-end" : "justify-start"}`}
                 >
                   {msg.role === "model" && (
-                    <div className="flex-shrink-0 w-7 h-7 rounded-lg bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center shadow-lg shadow-purple-500/20">
+                    <div className="flex-shrink-0 w-7 h-7 rounded-lg bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center shadow-lg shadow-sky-500/20">
                       <Bot className="h-4 w-4 text-white" />
                     </div>
                   )}
@@ -274,7 +274,7 @@ export const AssistantPanel = React.forwardRef<
                     {msg.role === "user" ? (
                       msg.text
                     ) : msg.text ? (
-                      <div className="prose prose-sm max-w-none dark:prose-invert prose-p:text-gray-700 dark:prose-p:text-gray-200 prose-headings:text-gray-900 dark:prose-headings:text-white prose-strong:text-gray-900 dark:prose-strong:text-white prose-code:text-purple-600 dark:prose-code:text-purple-300">
+                      <div className="prose prose-sm max-w-none dark:prose-invert prose-p:text-gray-700 dark:prose-p:text-gray-200 prose-headings:text-gray-900 dark:prose-headings:text-white prose-strong:text-gray-900 dark:prose-strong:text-white prose-code:text-sky-600 dark:prose-code:text-sky-300">
                         <ReactMarkdown
                           {...md}
                           components={{
@@ -292,7 +292,7 @@ export const AssistantPanel = React.forwardRef<
                               const text = extractText(children);
                               if (!inline && !lang && !text.includes("\n")) {
                                 return (
-                                  <span className="font-mono text-purple-600 dark:text-purple-300 bg-purple-100 dark:bg-purple-500/20 px-1.5 py-0.5 rounded">
+                                  <span className="font-mono text-sky-600 dark:text-sky-300 bg-sky-100 dark:bg-sky-500/20 px-1.5 py-0.5 rounded">
                                     {text}
                                   </span>
                                 );
@@ -347,15 +347,15 @@ export const AssistantPanel = React.forwardRef<
                     ) : (
                       <div className="flex items-center gap-1.5 py-0.5">
                         <div
-                          className="w-2 h-2 bg-purple-500 dark:bg-purple-400 rounded-full animate-bounce"
+                          className="w-2 h-2 bg-sky-500 dark:bg-sky-400 rounded-full animate-bounce"
                           style={{ animationDelay: "0ms" }}
                         />
                         <div
-                          className="w-2 h-2 bg-purple-500 dark:bg-purple-400 rounded-full animate-bounce"
+                          className="w-2 h-2 bg-sky-500 dark:bg-sky-400 rounded-full animate-bounce"
                           style={{ animationDelay: "150ms" }}
                         />
                         <div
-                          className="w-2 h-2 bg-purple-500 dark:bg-purple-400 rounded-full animate-bounce"
+                          className="w-2 h-2 bg-sky-500 dark:bg-sky-400 rounded-full animate-bounce"
                           style={{ animationDelay: "300ms" }}
                         />
                       </div>
@@ -396,14 +396,14 @@ export const AssistantPanel = React.forwardRef<
               }}
               placeholder="Ask anything about your code… (Shift+Enter for new line)"
               disabled={loading}
-              className="w-full min-h-[50px] max-h-[200px] resize-none bg-white dark:bg-white/5 border-gray-200 dark:border-white/10 text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-500 rounded-xl py-3 px-4 focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500/50 transition-all shadow-sm scrollbar-thin scrollbar-thumb-gray-200 dark:scrollbar-thumb-gray-700"
+              className="w-full min-h-[50px] max-h-[200px] resize-none bg-white dark:bg-white/5 border-gray-200 dark:border-white/10 text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-500 rounded-xl py-3 px-4 focus:ring-2 focus:ring-sky-500/50 focus:border-sky-500/50 transition-all shadow-sm scrollbar-thin scrollbar-thumb-gray-200 dark:scrollbar-thumb-gray-700"
             />
           </div>
           <Button
             type="submit"
             size="icon"
             disabled={loading || !input.trim()}
-            className="h-[42px] w-[42px] rounded-xl bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-purple-500/25 hover:shadow-purple-500/40 transition-all hover:-translate-y-0.5"
+            className="h-[42px] w-[42px] rounded-xl bg-gradient-to-r from-cyan-600 to-blue-700 hover:from-cyan-500 hover:to-blue-600 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-sky-500/25 hover:shadow-sky-500/40 transition-all hover:-translate-y-0.5"
           >
             <Send className="h-4 w-4 text-white" />
           </Button>
