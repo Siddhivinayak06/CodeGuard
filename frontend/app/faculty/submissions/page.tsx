@@ -12,9 +12,6 @@ import { useSearchParams, useRouter } from "next/navigation";
 import { generatePdfClient } from "@/lib/ClientPdf";
 import { generateSubjectReport } from "@/lib/SubjectReportPdf";
 import {
-  CheckCircle2,
-  XCircle,
-  Clock,
   Search as SearchIcon,
   LayoutGrid,
   BarChart3,
@@ -22,13 +19,9 @@ import {
   ChevronDown,
   ChevronRight,
   Layers,
-  Award,
-  TrendingUp,
-  AlertCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { motion } from "framer-motion";
-import StatCard from "@/components/dashboard/student/StatCard";
 import SubmissionsSidebar from "./SubmissionsSidebar";
 import GradingSheet, { ViewingSubmission } from "./GradingSheet";
 import SubjectReportView from "./SubjectReportView";
@@ -36,41 +29,17 @@ import { Checkbox } from "@/components/ui/checkbox";
 import {
   Sheet,
   SheetContent,
+  SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
 import { Menu } from "lucide-react";
 import { toast } from "sonner";
-
-// Animation Variants
-const containerVariants = {
-  hidden: { opacity: 0 },
-  visible: {
-    opacity: 1,
-    transition: {
-      staggerChildren: 0.1,
-      delayChildren: 0.2,
-    },
-  },
-} as const;
 
 const shellVariants = {
   hidden: { opacity: 0 },
   visible: {
     opacity: 1,
     transition: { duration: 0.3 },
-  },
-} as const;
-
-const itemVariants = {
-  hidden: { y: 20, opacity: 0 },
-  visible: {
-    y: 0,
-    opacity: 1,
-    transition: {
-      type: "spring",
-      stiffness: 260,
-      damping: 20,
-    },
   },
 } as const;
 
@@ -343,37 +312,152 @@ function FacultySubmissionsContentInner() {
 
     setReportLoading(true);
     try {
-      // 1. Get current faculty user
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error("No user");
+      // 1. Resolve subject semester for semester-wise student filtering.
+      const { data: subjectMeta, error: subjectMetaErr } = await supabase
+        .from("subjects")
+        .select("semester")
+        .eq("id", selectedSubjectId)
+        .maybeSingle();
 
-      // 2. Get batches assigned to this faculty for this subject
-      const { data: facultyBatches } = await supabase
-        .from("subject_faculty_batches")
-        .select("batch")
-        .eq("subject_id", selectedSubjectId)
-        .eq("faculty_id", user.id);
+      if (subjectMetaErr) throw subjectMetaErr;
 
-      const batches = [...new Set(((facultyBatches || []) as any[]).map(b => b.batch))];
-      const hasAllBatch = batches.includes("All");
+      const subjectSemester = String((subjectMeta as any)?.semester || "").trim();
+      if (!subjectSemester) {
+        toast.error("Selected subject has no semester configured.");
+        return;
+      }
 
-      // 3. Get all practicals for this subject
-      const practicalIds = subject.practicals.map((p: any) => p.id);
-      const practicalTitles = subject.practicals.map((p: any) => p.title);
-      // Fetch deadlines as well - deadline column removed, passing null
-      const practicalDeadlines = subject.practicals.map((p: any) => null);
+      // 2. Subject-wise report: include all practicals in the selected subject.
+      const scopedPracticals = (() => {
+        const available = (subject.practicals || []).filter(
+          (p: any) => Number.isFinite(Number(p?.id)) && Number(p.id) > 0,
+        );
+        return available;
+      })();
 
-      // 4. Fetch all submissions for these practicals
-      const { data: allSubmissions } = await supabase
-        .from("submissions")
-        .select("student_id, practical_id, marks_obtained")
+      if (scopedPracticals.length === 0) {
+        toast.error("No matching practical found for this subject.");
+        return;
+      }
+
+      const practicalIds = scopedPracticals.map((p: any) => Number(p.id));
+      const practicalTitles = scopedPracticals.map((p: any) => String(p.title || ""));
+      const practicalDeadlines = scopedPracticals.map(() => null);
+
+      // 3. Fetch submissions and practical level marks.
+      const [submissionsRes, practicalLevelsRes] = await Promise.all([
+        supabase
+          .from("submissions")
+          .select("student_id, practical_id, marks_obtained")
+          .in("practical_id", practicalIds),
+        supabase
+          .from("practical_levels")
+          .select("practical_id, max_marks")
+          .in("practical_id", practicalIds),
+      ]);
+
+      if (submissionsRes.error) throw submissionsRes.error;
+      if (practicalLevelsRes.error) throw practicalLevelsRes.error;
+
+      const allSubmissions = (submissionsRes.data || []) as any[];
+      const practicalLevels = (practicalLevelsRes.data || []) as any[];
+
+      // 4. Build report student scope:
+      // subject-semester students + students with submissions + students assigned to practical/exam.
+      const { data: semesterStudents, error: semesterStudentsErr } = await supabase
+        .from("users")
+        .select("uid, name, roll_no")
+        .eq("role", "student")
+        .eq("semester", subjectSemester);
+
+      if (semesterStudentsErr) throw semesterStudentsErr;
+
+      const { data: practicalAssignments, error: practicalAssignmentsErr } = await supabase
+        .from("student_practicals")
+        .select("student_id")
         .in("practical_id", practicalIds);
 
-      // Fetch practical levels to calculate max marks per practical
-      const { data: practicalLevels } = await supabase
-        .from("practical_levels")
-        .select("practical_id, max_marks")
+      if (practicalAssignmentsErr) throw practicalAssignmentsErr;
+
+      const { data: examsData, error: examsDataErr } = await (supabase.from("exams") as any)
+        .select("id, practical_id")
         .in("practical_id", practicalIds);
+
+      if (examsDataErr) throw examsDataErr;
+
+      const examIds = ((examsData || []) as any[]).map((e: any) => e.id);
+
+      let examAssignedStudentIds: string[] = [];
+      if (examIds.length > 0) {
+        const { data: examAssignedSessions, error: examAssignedSessionsErr } = await (supabase
+          .from("exam_sessions") as any)
+          .select("student_id")
+          .in("exam_id", examIds);
+
+        if (examAssignedSessionsErr) throw examAssignedSessionsErr;
+
+        examAssignedStudentIds = [
+          ...new Set(
+            ((examAssignedSessions || []) as any[])
+              .map((row: any) => String(row.student_id || ""))
+              .filter((id: string) => id.length > 0),
+          ),
+        ];
+      }
+
+      const submitterIds = [
+        ...new Set(
+          allSubmissions
+            .map((s: any) => String(s.student_id || ""))
+            .filter((id: string) => id.length > 0),
+        ),
+      ];
+
+      const practicalAssignedStudentIds = [
+        ...new Set(
+          ((practicalAssignments || []) as any[])
+            .map((row: any) => String(row.student_id || ""))
+            .filter((id: string) => id.length > 0),
+        ),
+      ];
+
+      let students = (semesterStudents || []) as any[];
+      const knownStudentIdSet = new Set(
+        students.map((s: any) => String(s.uid || "")),
+      );
+
+      const additionalStudentIds = [
+        ...new Set([
+          ...submitterIds,
+          ...practicalAssignedStudentIds,
+          ...examAssignedStudentIds,
+        ]),
+      ].filter(
+        (id: string) => id.length > 0 && !knownStudentIdSet.has(id),
+      );
+
+      if (additionalStudentIds.length > 0) {
+        const { data: additionalStudents, error: additionalStudentsErr } = await supabase
+          .from("users")
+          .select("uid, name, roll_no")
+          .eq("role", "student")
+          .in("uid", additionalStudentIds);
+
+        if (additionalStudentsErr) throw additionalStudentsErr;
+
+        students = [
+          ...students,
+          ...((additionalStudents || []) as any[]),
+        ];
+      }
+
+      const dedupedStudents = new Map<string, any>();
+      students.forEach((s: any) => {
+        const uid = String(s.uid || "");
+        if (!uid) return;
+        dedupedStudents.set(uid, s);
+      });
+      students = Array.from(dedupedStudents.values());
 
       const maxMarksByPractical = new Map<number, number>();
       practicalIds.forEach((pid: number) => {
@@ -385,15 +469,11 @@ function FacultySubmissionsContentInner() {
         }
       });
 
-      // Fetch per-student assigned exam sets for dynamic maxMarks calculation
-      const { data: examsData } = await (supabase.from("exams") as any)
-        .select("id, practical_id")
-        .in("practical_id", practicalIds);
-      
       const maxMarksBySession = new Map<string, number>(); // studentId_practicalId -> max_marks
 
-      if (examsData && examsData.length > 0) {
-        const examIds = examsData.map((e: any) => e.id);
+      const visibleStudentIds = new Set(students.map((s: any) => String(s.uid || "")));
+
+      if (examsData && examsData.length > 0 && visibleStudentIds.size > 0) {
         const examPracticalMap = new Map<string, number>(examsData.map((e: any) => [e.id, e.practical_id]));
 
         const { data: sessionsData } = await (supabase.from("exam_sessions") as any)
@@ -407,7 +487,8 @@ function FacultySubmissionsContentInner() {
               ) 
             )
           `)
-          .in("exam_id", examIds);
+          .in("exam_id", examIds)
+          .in("student_id", Array.from(visibleStudentIds));
 
         (sessionsData || []).forEach((sess: any) => {
           const practicalId = examPracticalMap.get(sess.exam_id);
@@ -421,47 +502,16 @@ function FacultySubmissionsContentInner() {
         });
       }
 
-      // Get unique student IDs from submissions
-      const submitterIds = [...new Set(((allSubmissions || []) as any[]).map(s => s.student_id).filter(id => id !== null))];
-
-      // 5. Fetch students (Both from batches AND from submissions to be safe)
-      const studentQuery = supabase
-        .from("users")
-        .select("uid, name, roll_no, batch")
-        .eq("role", "student");
-
-      const { data: allStudents } = await studentQuery; // Ensure variable usage if needed, but logic below handles it
-
-      // Filter in memory to avoid complex OR query
-      let students: any[] = [];
-
-      if (hasAllBatch) {
-        const { data } = await supabase.from("users").select("uid, name, roll_no").eq("role", "student");
-        students = data || [];
-      } else {
-        let batchStudents: any[] = [];
-        if (batches.length > 0) {
-          const { data } = await supabase.from("users").select("uid, name, roll_no").eq("role", "student").in("batch", batches);
-          batchStudents = data || [];
-        }
-
-        const missingSubmitters = submitterIds.filter(id => !batchStudents.some(s => s.uid === id));
-        let extraStudents: any[] = [];
-        if (missingSubmitters.length > 0) {
-          const { data } = await supabase.from("users").select("uid, name, roll_no").in("uid", missingSubmitters);
-          extraStudents = data || [];
-        }
-
-        students = [...batchStudents, ...extraStudents];
-        students = Array.from(new Map(students.map(s => [s.uid, s])).values());
-      }
-
       students.sort((a, b) => (a.roll_no || "").localeCompare(b.roll_no || ""));
+
+      const visibleSubmissions = allSubmissions.filter((sub: any) =>
+        visibleStudentIds.has(String(sub.student_id || "")),
+      );
 
       // 6. Build the report data structure
       const reportStudents = students.map(student => {
         const practicals = practicalIds.map((pid: number) => {
-          const studentSubs = ((allSubmissions || []) as any[]).filter(
+          const studentSubs = visibleSubmissions.filter(
             s => s.student_id === student.uid && s.practical_id === pid
           );
           
@@ -691,16 +741,6 @@ function FacultySubmissionsContentInner() {
   // Check if we have set-based exam data
   const hasSetData = groupedSubmissions.some(g => g.assigned_set_name);
 
-  const stats = {
-    total: groupedSubmissions.length,
-    excellent: groupedSubmissions.filter(g => g.overallStatus === 'excellent').length,
-    very_good: groupedSubmissions.filter(g => g.overallStatus === 'very_good').length,
-    good: groupedSubmissions.filter(g => g.overallStatus === 'good').length,
-    needs_improvement: groupedSubmissions.filter(g => g.overallStatus === 'needs_improvement').length,
-    poor: groupedSubmissions.filter(g => ['poor','failed'].includes(g.overallStatus)).length,
-    pending: groupedSubmissions.filter(g => g.overallStatus === 'pending').length,
-  };
-
   // Set-wise stats (computed from grouped submissions)
   const setStats = useMemo(() => {
     const setNames = new Set<string>();
@@ -778,6 +818,7 @@ function FacultySubmissionsContentInner() {
             </Button>
           </SheetTrigger>
           <SheetContent side="left" className="p-0 w-80 border-r-0 bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl">
+            <SheetTitle className="sr-only">Submissions Navigation</SheetTitle>
             <SubmissionsSidebar
               subjects={subjects}
               selectedSubjectId={selectedSubjectId}
@@ -849,21 +890,6 @@ function FacultySubmissionsContentInner() {
                 />
               </div>
             </div>
-          </motion.div>
-
-          {/* Stats Row */}
-          <motion.div
-            variants={containerVariants}
-            initial="hidden"
-            animate="visible"
-            className="grid gap-3 sm:gap-4 grid-cols-3 md:grid-cols-6"
-          >
-            <StatCard label="Excellent" value={stats.excellent} icon={Award} colorClass="text-emerald-600 dark:text-emerald-400" itemVariants={itemVariants} loading={loading} />
-            <StatCard label="Very Good" value={stats.very_good} icon={TrendingUp} colorClass="text-blue-600 dark:text-blue-400" itemVariants={itemVariants} loading={loading} />
-            <StatCard label="Good" value={stats.good} icon={CheckCircle2} colorClass="text-cyan-600 dark:text-cyan-400" itemVariants={itemVariants} loading={loading} />
-            <StatCard label="Needs Imp." value={stats.needs_improvement} icon={AlertCircle} colorClass="text-amber-600 dark:text-amber-400" itemVariants={itemVariants} loading={loading} />
-            <StatCard label="Poor" value={stats.poor} icon={XCircle} colorClass="text-red-600 dark:text-red-400" itemVariants={itemVariants} loading={loading} />
-            <StatCard label="Pending" value={stats.pending} icon={Clock} colorClass="text-gray-500 dark:text-gray-400" itemVariants={itemVariants} loading={loading} />
           </motion.div>
 
           {/* Submissions Table Card */}
@@ -1197,6 +1223,7 @@ function FacultySubmissionsContentInner() {
 
       <Sheet open={isSheetOpen} onOpenChange={setIsSheetOpen}>
         <SheetContent className="w-[90vw] sm:max-w-xl p-0 border-l border-gray-200 dark:border-gray-800">
+          <SheetTitle className="sr-only">Submission Grading</SheetTitle>
           {viewingSubmission && (
             <GradingSheet
               isOpen={isSheetOpen}

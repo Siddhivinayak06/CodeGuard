@@ -107,11 +107,19 @@ router.post(
         });
       }
 
+      const message = String(err?.message || '');
+      const isTemporaryAiOverload =
+        /high demand|service unavailable|temporarily unavailable|try again later/i.test(
+          message
+        );
+      const statusCode = isTemporaryAiOverload ? 503 : 500;
+
       logger.error('Fuzzer test case generation failed', {
         error: err.message,
+        statusCode,
       });
-      return res.status(500).json({
-        error: err.message || 'Failed to generate fuzz test cases',
+      return res.status(statusCode).json({
+        error: message || 'Failed to generate fuzz test cases',
       });
     }
   }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
@@ -107,6 +107,7 @@ const fadeInUp = {
 };
 
 export default function RegisterPage() {
+  const isProduction = process.env.NODE_ENV === "production";
   const router = useRouter();
   const supabase = createClient();
 
@@ -211,6 +212,16 @@ export default function RegisterPage() {
       setIsLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (isProduction) {
+      router.replace("/auth/login?reset=1");
+    }
+  }, [isProduction, router]);
+
+  if (isProduction) {
+    return null;
+  }
 
   return (
     <div className="relative min-h-[100dvh] overflow-x-hidden bg-gradient-to-br from-slate-100 via-cyan-50 to-sky-50 text-slate-900 selection:bg-cyan-300/40 dark:from-slate-950 dark:via-slate-900 dark:to-cyan-950/30 dark:text-slate-100 lg:h-[100dvh] lg:overflow-hidden">

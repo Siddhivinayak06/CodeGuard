@@ -147,7 +147,10 @@ export async function middleware(request: NextRequest) {
     return safeRedirect(request, "/maintenance")
   }
 
-  if (process.env.NODE_ENV === "production" && pathname === "/auth/register") {
+  if (
+    process.env.NODE_ENV === "production" &&
+    (pathname === "/auth/register" || pathname.startsWith("/auth/register/"))
+  ) {
     return safeRedirect(request, AUTH_REDIRECT)
   }
 

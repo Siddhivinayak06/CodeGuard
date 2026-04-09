@@ -886,6 +886,69 @@
   animation: auth-float 11s ease-in-out infinite;
 }
 
+@media (max-height: 860px) {
+  .auth-login-shell {
+    padding-top: 0.5rem;
+    padding-bottom: 0.5rem;
+  }
+
+  .auth-login-grid {
+    border-radius: 1.1rem;
+  }
+
+  .auth-login-aside,
+  .auth-login-main {
+    padding-top: 1rem;
+    padding-bottom: 1rem;
+  }
+
+  .auth-login-metrics {
+    display: none;
+  }
+
+  .auth-login-register > div:first-child {
+    margin-top: 0.75rem;
+    margin-bottom: 0.75rem;
+  }
+
+  .auth-login-footer {
+    margin-top: 0.75rem;
+  }
+}
+
+@media (max-height: 720px) {
+  .auth-login-shell {
+    padding-top: 0.25rem;
+    padding-bottom: 0.25rem;
+  }
+
+  .auth-login-aside,
+  .auth-login-main {
+    padding-top: 0.5rem;
+    padding-bottom: 0.5rem;
+  }
+
+  .auth-login-mobile-hero {
+    display: none;
+  }
+
+  .auth-login-register {
+    display: none;
+  }
+
+  .auth-login-form-card-body {
+    padding: 1rem;
+  }
+
+  .auth-login-form-fields {
+    row-gap: 0.625rem;
+  }
+
+  .auth-login-footer {
+    margin-top: 0.625rem;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .auth-orb,
   .auth-orb-one,

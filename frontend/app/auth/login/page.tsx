@@ -185,17 +185,17 @@ function LoginContent() {
   };
 
   return (
-    <div className="relative min-h-[100dvh] overflow-x-hidden bg-gradient-to-br from-slate-100 via-cyan-50 to-sky-50 text-slate-900 selection:bg-cyan-300/40 dark:from-slate-950 dark:via-slate-900 dark:to-cyan-950/30 dark:text-slate-100 lg:h-[100dvh] lg:overflow-hidden">
+    <div className="relative h-[100svh] overflow-hidden bg-gradient-to-br from-slate-100 via-cyan-50 to-sky-50 text-slate-900 selection:bg-cyan-300/40 dark:from-slate-950 dark:via-slate-900 dark:to-cyan-950/30 dark:text-slate-100">
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(14,165,233,0.18),transparent_46%),radial-gradient(circle_at_bottom_left,rgba(59,130,246,0.14),transparent_42%)]" />
       <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(to_right,rgba(148,163,184,0.08)_1px,transparent_1px),linear-gradient(to_bottom,rgba(148,163,184,0.08)_1px,transparent_1px)] bg-[size:42px_42px] [mask-image:radial-gradient(circle_at_60%_40%,black,transparent_78%)]" />
 
-      <div className="relative z-10 mx-auto w-full max-w-[1440px] px-3 py-3 sm:px-5 sm:py-5 lg:px-8 lg:py-7">
-        <div className="grid min-h-[calc(100dvh-1.5rem)] overflow-hidden rounded-[30px] border border-slate-200/80 bg-white/45 backdrop-blur-xl dark:border-slate-800/80 dark:bg-slate-950/35 lg:h-[calc(100dvh-3.5rem)] lg:min-h-0 lg:grid-cols-[1.02fr_0.98fr]">
+      <div className="auth-login-shell relative z-10 mx-auto flex h-full w-full max-w-[1440px] p-2 sm:p-4 lg:p-5">
+        <div className="auth-login-grid grid h-full min-h-0 w-full overflow-hidden rounded-[24px] border border-slate-200/80 bg-white/45 backdrop-blur-xl dark:border-slate-800/80 dark:bg-slate-950/35 lg:grid-cols-[1.02fr_0.98fr]">
         <motion.aside
           initial={{ opacity: 0, x: -36 }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
-          className="relative hidden h-full overflow-hidden bg-gradient-to-br from-cyan-100 via-sky-100 to-blue-50 px-8 py-9 text-slate-900 dark:from-slate-950 dark:via-slate-900 dark:to-slate-900 dark:text-slate-100 lg:flex lg:flex-col lg:justify-center xl:px-12"
+          className="auth-login-aside relative hidden h-full min-h-0 overflow-hidden bg-gradient-to-br from-cyan-100 via-sky-100 to-blue-50 px-6 py-6 text-slate-900 dark:from-slate-950 dark:via-slate-900 dark:to-slate-900 dark:text-slate-100 lg:flex lg:flex-col lg:justify-center xl:px-10"
         >
           <div className="pointer-events-none absolute -left-20 -top-20 h-64 w-64 rounded-full bg-cyan-500/18 blur-3xl dark:bg-cyan-400/20" />
           <div className="pointer-events-none absolute -bottom-24 -right-24 h-72 w-72 rounded-full bg-sky-300/24 blur-3xl dark:bg-blue-500/20" />
@@ -203,14 +203,14 @@ function LoginContent() {
             variants={staggerContainer}
             initial="hidden"
             animate="show"
-            className="relative z-10 mx-auto flex w-full max-w-lg flex-col gap-6"
+            className="auth-login-aside-content relative z-10 mx-auto flex w-full max-w-lg flex-col gap-4 lg:gap-5"
           >
-            <motion.div variants={fadeInUp} className="space-y-5">
+            <motion.div variants={fadeInUp} className="space-y-4">
               <p className="inline-flex w-fit items-center gap-2 rounded-full border border-cyan-500/30 bg-cyan-100/80 px-4 py-1.5 text-xs font-semibold uppercase tracking-[0.16em] text-cyan-800 shadow-sm dark:border-cyan-300/40 dark:bg-cyan-400/10 dark:text-cyan-100">
                 <Building2 className="h-3.5 w-3.5" />
                 Secure access workspace
               </p>
-              <h1 className="text-balance text-4xl font-black leading-tight text-slate-900 dark:text-white xl:text-5xl">
+              <h1 className="text-balance text-3xl font-black leading-tight text-slate-900 dark:text-white xl:text-4xl 2xl:text-5xl">
                 Professional sign-in for{" "}
                 <span className="bg-gradient-to-r from-cyan-600 via-sky-600 to-blue-700 bg-clip-text text-transparent dark:from-cyan-200 dark:via-sky-200 dark:to-blue-200">
                   CodeGuard
@@ -221,15 +221,15 @@ function LoginContent() {
               </p>
             </motion.div>
 
-            <div className="grid gap-3">
+            <div className="grid gap-2.5">
               {valueProps.map((feature) => (
                 <motion.article
                   key={feature.title}
                   variants={fadeInUp}
                   whileHover={{ y: -3, transition: { duration: 0.2 } }}
-                  className="rounded-2xl border border-slate-200/80 bg-white/75 p-3.5 shadow-[0_16px_32px_-26px_rgba(15,23,42,0.45)] backdrop-blur-md transition hover:border-cyan-300/80 dark:border-slate-700/80 dark:bg-slate-800/60 dark:shadow-[0_16px_36px_-26px_rgba(2,6,23,0.9)] dark:hover:border-cyan-400/70"
+                  className="rounded-2xl border border-slate-200/80 bg-white/75 p-3 shadow-[0_16px_32px_-26px_rgba(15,23,42,0.45)] backdrop-blur-md transition hover:border-cyan-300/80 dark:border-slate-700/80 dark:bg-slate-800/60 dark:shadow-[0_16px_36px_-26px_rgba(2,6,23,0.9)] dark:hover:border-cyan-400/70"
                 >
-                  <div className="mb-3 flex items-center justify-between">
+                  <div className="mb-2.5 flex items-center justify-between">
                     <span className="inline-flex items-center rounded-full bg-cyan-100 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.15em] text-cyan-700 dark:bg-cyan-400/15 dark:text-cyan-200">
                       {feature.label}
                     </span>
@@ -241,13 +241,13 @@ function LoginContent() {
               ))}
             </div>
 
-            <motion.div variants={fadeInUp} className="grid grid-cols-3 gap-3">
+            <motion.div variants={fadeInUp} className="auth-login-metrics grid grid-cols-3 gap-2.5">
               {authMetrics.map((item) => (
                 <div
                   key={item.label}
-                  className="rounded-xl border border-slate-200/80 bg-white/65 px-3 py-2 text-center dark:border-slate-700/80 dark:bg-slate-800/55"
+                  className="rounded-xl border border-slate-200/80 bg-white/65 px-2.5 py-2 text-center dark:border-slate-700/80 dark:bg-slate-800/55"
                 >
-                  <p className="text-base font-black text-slate-900 dark:text-slate-100">{item.value}</p>
+                  <p className="text-sm font-black text-slate-900 dark:text-slate-100 sm:text-base">{item.value}</p>
                   <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500 dark:text-slate-400">
                     {item.label}
                   </p>
@@ -261,14 +261,14 @@ function LoginContent() {
           initial={{ opacity: 0, x: 24 }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ duration: 0.65, delay: 0.12 }}
-          className="flex h-full items-center justify-center bg-slate-50/70 px-4 py-6 sm:px-8 sm:py-8 dark:bg-slate-950/40 lg:px-10 lg:py-10"
+          className="auth-login-main flex h-full min-h-0 items-center justify-center bg-slate-50/70 px-3 py-4 sm:px-6 sm:py-6 dark:bg-slate-950/40 lg:px-8 lg:py-7"
         >
-          <div className="w-full max-w-xl">
+          <div className="auth-login-form-wrap w-full max-w-xl">
             <motion.div
               initial={{ opacity: 0, y: -16 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.25 }}
-              className="mb-6 rounded-2xl border border-slate-200/80 bg-white/90 p-4 text-center shadow-[0_18px_40px_-30px_rgba(15,23,42,0.6)] backdrop-blur-xl dark:border-slate-700 dark:bg-slate-900/75 lg:hidden"
+              className="auth-login-mobile-hero mb-4 rounded-2xl border border-slate-200/80 bg-white/90 p-3 text-center shadow-[0_18px_40px_-30px_rgba(15,23,42,0.6)] backdrop-blur-xl dark:border-slate-700 dark:bg-slate-900/75 sm:p-4 lg:hidden"
             >
               <p className="text-[11px] font-semibold uppercase tracking-[0.15em] text-cyan-800 dark:text-cyan-300">
                 Secure Access
@@ -287,11 +287,11 @@ function LoginContent() {
                   animate={{ opacity: 1, scale: 1, y: 0 }}
                   exit={{ opacity: 0, scale: 1.02, y: -10, filter: "blur(8px)" }}
                   transition={{ duration: 0.4 }}
-                  className="relative overflow-hidden rounded-2xl border border-slate-200/85 bg-white/90 shadow-[0_28px_70px_-42px_rgba(15,23,42,0.62)] backdrop-blur-2xl dark:border-slate-700 dark:bg-slate-900/80 sm:rounded-3xl"
+                  className="auth-login-form-card relative overflow-hidden rounded-2xl border border-slate-200/85 bg-white/90 shadow-[0_28px_70px_-42px_rgba(15,23,42,0.62)] backdrop-blur-2xl dark:border-slate-700 dark:bg-slate-900/80 sm:rounded-3xl"
                 >
                   <div className="pointer-events-none absolute inset-x-0 top-0 h-16 bg-gradient-to-r from-cyan-400/25 via-white/10 to-sky-400/20" />
-                  <div className="relative p-6 sm:p-7">
-                    <div className="mb-7 text-center">
+                  <div className="auth-login-form-card-body relative p-5 sm:p-6">
+                    <div className="mb-5 text-center">
                       <motion.div
                         whileHover={{ rotate: 8, scale: 1.05 }}
                         transition={{ type: "spring", stiffness: 250, damping: 12 }}
@@ -322,7 +322,7 @@ function LoginContent() {
                       )}
                     </AnimatePresence>
 
-                    <form onSubmit={handleLogin} className="space-y-4">
+                    <form onSubmit={handleLogin} className="auth-login-form-fields space-y-3.5">
                       <label className="block space-y-2">
                         <span className="text-xs font-bold uppercase tracking-[0.12em] text-slate-600 dark:text-slate-300">
                           Email address
@@ -332,7 +332,7 @@ function LoginContent() {
                           <input
                             type="email"
                             placeholder="you@college.edu"
-                            className="h-12 w-full rounded-xl border border-slate-300 bg-white/95 pl-11 pr-4 text-sm font-medium text-slate-900 outline-none transition focus:border-sky-500 focus:ring-4 focus:ring-sky-500/20 dark:border-slate-700 dark:bg-slate-900/85 dark:text-slate-100"
+                            className="h-11 w-full rounded-xl border border-slate-300 bg-white/95 pl-11 pr-4 text-sm font-medium text-slate-900 outline-none transition focus:border-sky-500 focus:ring-4 focus:ring-sky-500/20 dark:border-slate-700 dark:bg-slate-900/85 dark:text-slate-100"
                             value={email}
                             onChange={(e) => setEmail(e.target.value)}
                             required
@@ -350,7 +350,7 @@ function LoginContent() {
                           <input
                             type={showPassword ? "text" : "password"}
                             placeholder="Enter your password"
-                            className="h-12 w-full rounded-xl border border-slate-300 bg-white/95 pl-11 pr-12 text-sm font-medium text-slate-900 outline-none transition focus:border-sky-500 focus:ring-4 focus:ring-sky-500/20 dark:border-slate-700 dark:bg-slate-900/85 dark:text-slate-100"
+                            className="h-11 w-full rounded-xl border border-slate-300 bg-white/95 pl-11 pr-12 text-sm font-medium text-slate-900 outline-none transition focus:border-sky-500 focus:ring-4 focus:ring-sky-500/20 dark:border-slate-700 dark:bg-slate-900/85 dark:text-slate-100"
                             value={password}
                             onChange={(e) => setPassword(e.target.value)}
                             required
@@ -372,7 +372,7 @@ function LoginContent() {
                         whileTap={{ scale: 0.98 }}
                         type="submit"
                         disabled={isLoading}
-                        className="group relative flex h-12 w-full items-center justify-center gap-2 overflow-hidden rounded-xl bg-gradient-to-r from-cyan-600 via-sky-600 to-blue-700 px-4 text-sm font-bold text-white shadow-lg shadow-cyan-900/25 transition disabled:cursor-not-allowed disabled:opacity-65"
+                        className="group relative flex h-11 w-full items-center justify-center gap-2 overflow-hidden rounded-xl bg-gradient-to-r from-cyan-600 via-sky-600 to-blue-700 px-4 text-sm font-bold text-white shadow-lg shadow-cyan-900/25 transition disabled:cursor-not-allowed disabled:opacity-65"
                       >
                         <span className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/35 to-transparent transition-transform duration-1000 group-hover:translate-x-full" />
                         {isLoading ? (
@@ -392,7 +392,7 @@ function LoginContent() {
                         )}
                       </motion.button>
 
-                      <div className="relative py-2">
+                      <div className="relative py-1.5">
                         <div className="absolute inset-0 flex items-center">
                           <div className="w-full border-t border-slate-200 dark:border-slate-800" />
                         </div>
@@ -420,7 +420,7 @@ function LoginContent() {
                           }
                         }}
                         disabled={isLoading}
-                        className="flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white text-sm font-semibold text-slate-700 transition hover:border-cyan-300 hover:bg-cyan-50/60 disabled:cursor-not-allowed disabled:opacity-65 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:border-cyan-900 dark:hover:bg-cyan-950/20"
+                        className="flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white text-sm font-semibold text-slate-700 transition hover:border-cyan-300 hover:bg-cyan-50/60 disabled:cursor-not-allowed disabled:opacity-65 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:border-cyan-900 dark:hover:bg-cyan-950/20"
                       >
                         <svg className="h-4.5 w-4.5" viewBox="0 0 21 21" xmlns="http://www.w3.org/2000/svg">
                           <rect x="1" y="1" width="9" height="9" fill="#F25022" />
@@ -433,7 +433,7 @@ function LoginContent() {
                     </form>
 
                     {!isProduction && (
-                      <>
+                      <div className="auth-login-register">
                         <div className="my-5 flex items-center gap-3">
                           <div className="h-px flex-1 bg-slate-200 dark:bg-slate-800" />
                           <span className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">
@@ -444,13 +444,14 @@ function LoginContent() {
                         <motion.div whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.99 }}>
                           <Link
                             href="/auth/register"
-                            className="flex h-11 items-center justify-center rounded-xl border border-slate-300 bg-white text-sm font-bold text-slate-700 transition hover:border-cyan-300 hover:bg-cyan-50/60 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:border-cyan-900 dark:hover:bg-cyan-950/20"
+                            className="flex h-10 items-center justify-center rounded-xl border border-slate-300 bg-white text-sm font-bold text-slate-700 transition hover:border-cyan-300 hover:bg-cyan-50/60 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:border-cyan-900 dark:hover:bg-cyan-950/20"
                           >
                             Create account
                           </Link>
                         </motion.div>
-                      </>
+                      </div>
                     )}
+
                   </div>
                 </motion.section>
               ) : (
@@ -486,7 +487,7 @@ function LoginContent() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ delay: 0.6 }}
-              className="mt-6 text-center text-xs font-semibold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400"
+              className="auth-login-footer mt-4 text-center text-xs font-semibold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400"
             >
               Protected by CodeGuard policy controls
             </motion.p>

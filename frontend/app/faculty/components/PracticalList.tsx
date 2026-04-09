@@ -187,7 +187,12 @@ function PracticalCard({
               config.text,
             )}
           >
-            {practical.title}
+            {!isExam && practical.practical_number !== null && practical.practical_number !== undefined && (
+              <span className="mr-2 inline-flex items-center rounded-md bg-indigo-50 px-2 py-0.5 text-sm font-extrabold text-indigo-700 border border-indigo-200 align-middle dark:bg-indigo-900/30 dark:text-indigo-300 dark:border-indigo-800">
+                #{practical.practical_number}
+              </span>
+            )}
+            <span className="align-middle">{practical.title}</span>
           </h3>
 
           {/* Badges */}

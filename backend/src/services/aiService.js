@@ -57,6 +57,73 @@ const normalizeMessages = (messages) =>
     content: m.parts?.[0]?.text || '',
   }));
 
+const RETRYABLE_STATUS_CODES = new Set([429, 500, 502, 503, 504]);
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const parseErrorStatusCode = (error) => {
+  const directStatus = Number(
+    error?.status || error?.statusCode || error?.response?.status
+  );
+  if (Number.isFinite(directStatus) && directStatus > 0) {
+    return directStatus;
+  }
+
+  const message = String(error?.message || '');
+  const statusMatch = message.match(/\[(\d{3})[^\]]*\]/);
+  if (statusMatch) {
+    return Number(statusMatch[1]);
+  }
+
+  return null;
+};
+
+const isRetryableGeminiError = (error) => {
+  const statusCode = parseErrorStatusCode(error);
+  if (statusCode && RETRYABLE_STATUS_CODES.has(statusCode)) {
+    return true;
+  }
+
+  const message = String(error?.message || '').toLowerCase();
+  const retryableHints = [
+    'high demand',
+    'service unavailable',
+    'temporarily unavailable',
+    'try again later',
+    'resource exhausted',
+    'rate limit',
+    'deadline exceeded',
+    'overloaded',
+    'socket hang up',
+    'econnreset',
+    'etimedout',
+    'fetch failed',
+  ];
+
+  return retryableHints.some((hint) => message.includes(hint));
+};
+
+const getGeminiModelCandidates = (primaryModel, configOverrides = {}) => {
+  const configuredFallbacks = Array.isArray(configOverrides?.fallbackModels)
+    ? configOverrides.fallbackModels
+    : typeof configOverrides?.fallbackModels === 'string'
+      ? configOverrides.fallbackModels.split(',')
+      : [];
+
+  const defaults = ['gemini-2.0-flash', 'gemini-1.5-flash'];
+
+  return [primaryModel, ...configuredFallbacks, ...defaults]
+    .map((model) => String(model || '').trim())
+    .filter(Boolean)
+    .filter((model, index, allModels) => allModels.indexOf(model) === index);
+};
+
+const computeBackoffMs = (attemptNumber) => {
+  const exponential = Math.min(10000, 800 * 2 ** Math.max(0, attemptNumber - 1));
+  const jitter = Math.floor(Math.random() * 350);
+  return exponential + jitter;
+};
+
 /* ----------------------------- GEMINI ----------------------------- */
 
 const chatWithGeminiStream = async (
@@ -67,39 +134,109 @@ const chatWithGeminiStream = async (
   abortSignal
 ) => {
   const apiKey = configOverrides?.apiKey || config.ai.apiKey;
-  const modelName =
+  const primaryModelName =
     configOverrides?.model || config.ai.model || 'gemini-1.5-flash';
+  const maxRetries =
+    Number.isFinite(Number(configOverrides?.maxRetries)) &&
+    Number(configOverrides?.maxRetries) > 0
+      ? Math.min(5, Math.floor(Number(configOverrides.maxRetries)))
+      : 3;
 
   if (!apiKey) throw new Error('Gemini API key missing');
 
   const genAI = new GoogleGenerativeAI(apiKey);
+  const modelCandidates = getGeminiModelCandidates(
+    primaryModelName,
+    configOverrides
+  );
   const generationConfig = {};
   if (configOverrides?.maxOutputTokens) {
     generationConfig.maxOutputTokens = configOverrides.maxOutputTokens;
   }
-  const model = genAI.getGenerativeModel({
-    model: modelName,
-    generationConfig,
-  });
-
-  const chat = model.startChat({
-    history: [
-      { role: 'user', parts: [{ text: systemPrompt }] },
-      { role: 'model', parts: [{ text: 'Ready.' }] },
-      ...messages.slice(0, -1),
-    ],
-  });
 
   const lastMessage = messages[messages.length - 1]?.parts?.[0]?.text;
   if (!lastMessage) return;
 
-  const result = await chat.sendMessageStream(lastMessage, {
-    signal: abortSignal,
-  });
+  let lastError = null;
 
-  for await (const chunk of result.stream) {
-    const text = chunk.text();
-    if (text) onChunk(text);
+  for (let modelIndex = 0; modelIndex < modelCandidates.length; modelIndex++) {
+    const modelName = modelCandidates[modelIndex];
+
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      let emittedChunks = 0;
+      try {
+        const model = genAI.getGenerativeModel({
+          model: modelName,
+          generationConfig,
+        });
+
+        const chat = model.startChat({
+          history: [
+            { role: 'user', parts: [{ text: systemPrompt }] },
+            { role: 'model', parts: [{ text: 'Ready.' }] },
+            ...messages.slice(0, -1),
+          ],
+        });
+
+        const result = await chat.sendMessageStream(lastMessage, {
+          signal: abortSignal,
+        });
+
+        for await (const chunk of result.stream) {
+          const text = chunk.text();
+          if (!text) continue;
+          emittedChunks += 1;
+          onChunk(text);
+        }
+
+        return;
+      } catch (error) {
+        lastError = error;
+
+        const statusCode = parseErrorStatusCode(error);
+        const retryable = isRetryableGeminiError(error);
+        const hasMoreModels = modelIndex < modelCandidates.length - 1;
+        const hasMoreAttemptsForModel = attempt < maxRetries;
+
+        logger.warn('Gemini stream attempt failed', {
+          model: modelName,
+          attempt,
+          maxRetries,
+          statusCode,
+          retryable,
+          emittedChunks,
+          error: error?.message,
+        });
+
+        // Avoid replaying partial output if streaming already started.
+        if (emittedChunks > 0) {
+          throw error;
+        }
+
+        if (!retryable) {
+          throw error;
+        }
+
+        if (!hasMoreAttemptsForModel && !hasMoreModels) {
+          break;
+        }
+
+        const backoffMs = hasMoreAttemptsForModel
+          ? computeBackoffMs(attempt)
+          : 300;
+        await sleep(backoffMs);
+      }
+    }
+  }
+
+  if (lastError && isRetryableGeminiError(lastError)) {
+    throw new Error(
+      'AI provider is currently under high demand. Please retry in a few moments.'
+    );
+  }
+
+  if (lastError) {
+    throw lastError;
   }
 };
 

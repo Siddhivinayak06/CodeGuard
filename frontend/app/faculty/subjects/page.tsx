@@ -219,7 +219,7 @@ export default function FacultySubjects() {
       try {
         const { data, error } = await supabase
           .from("practicals")
-          .select(`id, title, is_exam, created_at, submissions(id)`)
+          .select(`id, title, is_exam, practical_number, created_at, submissions(id)`)
           .eq("subject_id", Number(subjectId))
           .order("created_at", { ascending: false });
 
@@ -232,7 +232,7 @@ export default function FacultySubjects() {
           description: null,
           language: null,
           max_marks: 0,
-          practical_number: null,
+          practical_number: p.practical_number ?? null,
           created_at: p.created_at || new Date().toISOString(),
           updated_at: new Date().toISOString(),
           submitted: false,
@@ -240,7 +240,25 @@ export default function FacultySubjects() {
           subject_id: Number(subjectId),
           submission_count: p.submissions?.length || 0,
         }))
-          .sort((a, b) => Number(Boolean(b.is_exam)) - Number(Boolean(a.is_exam)));
+          .sort((a, b) => {
+            const aIsExam = Boolean(a.is_exam);
+            const bIsExam = Boolean(b.is_exam);
+
+            // Keep practicals first, then exams.
+            if (aIsExam !== bIsExam) {
+              return aIsExam ? 1 : -1;
+            }
+
+            // Primary sort: practical number ascending (null/undefined last).
+            const aNum = a.practical_number ?? Number.MAX_SAFE_INTEGER;
+            const bNum = b.practical_number ?? Number.MAX_SAFE_INTEGER;
+            if (aNum !== bNum) {
+              return aNum - bNum;
+            }
+
+            // Fallback to creation timestamp for deterministic ordering.
+            return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+          });
 
         setPracticals(formatted);
       } catch (err) {
@@ -647,6 +665,11 @@ export default function FacultySubjects() {
                           {/* Left: Title & Deadline */}
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 min-w-0">
+                              {p.practical_number !== null && p.practical_number !== undefined && (
+                                <span className="inline-flex items-center justify-center min-w-8 h-6 px-2 rounded-md bg-indigo-50 text-indigo-700 border border-indigo-200 text-xs font-bold dark:bg-indigo-900/30 dark:text-indigo-300 dark:border-indigo-800">
+                                  #{p.practical_number}
+                                </span>
+                              )}
                               <h4 className="font-semibold text-gray-900 dark:text-white truncate">
                                 {p.title}
                               </h4>
@@ -763,6 +786,14 @@ export default function FacultySubjects() {
                   </h3>
                   <div className="flex items-center gap-2 text-sm text-gray-500">
                     <span className="font-mono">ID: {viewingPractical.id}</span>
+                    {viewingPractical.practical_number !== null && viewingPractical.practical_number !== undefined && (
+                      <>
+                        <span>•</span>
+                        <span className="font-semibold text-indigo-600 dark:text-indigo-400">
+                          Practical #{viewingPractical.practical_number}
+                        </span>
+                      </>
+                    )}
                     <span>•</span>
                     <span className="text-indigo-600 dark:text-indigo-400 font-medium">
                       {selectedSubject?.subject_name}

@@ -11,6 +11,25 @@ import { ArrowLeft, Plus, Book, CheckCircle, Clock, AlertTriangle } from "lucide
 import PracticalsSkeleton from "@/components/skeletons/PracticalsSkeleton";
 import { motion } from "framer-motion";
 
+function sortPracticalsByNumber(rows: Practical[]): Practical[] {
+  return [...rows].sort((a, b) => {
+    const aNum = a.practical_number ?? Number.MAX_SAFE_INTEGER;
+    const bNum = b.practical_number ?? Number.MAX_SAFE_INTEGER;
+
+    if (aNum !== bNum) {
+      return aNum - bNum;
+    }
+
+    const aCreatedAt = new Date(a.created_at || 0).getTime();
+    const bCreatedAt = new Date(b.created_at || 0).getTime();
+    if (aCreatedAt !== bCreatedAt) {
+      return bCreatedAt - aCreatedAt;
+    }
+
+    return Number(a.id) - Number(b.id);
+  });
+}
+
 function StatCard({
   label,
   value,
@@ -105,7 +124,7 @@ export default function AllPracticalsPage() {
             .order("created_at", { ascending: false });
 
           if (pracData) {
-            setPracticals(pracData as Practical[]);
+            setPracticals(sortPracticalsByNumber(pracData as Practical[]));
           }
         }
       }
@@ -127,7 +146,7 @@ export default function AllPracticalsPage() {
       .eq("is_exam", false)
       .order("created_at", { ascending: false });
 
-    if (data) setPracticals(data as Practical[]);
+    if (data) setPracticals(sortPracticalsByNumber(data as Practical[]));
   };
 
   const openCreate = () => {

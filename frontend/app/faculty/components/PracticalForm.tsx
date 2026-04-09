@@ -221,6 +221,8 @@ export default function PracticalForm({
   const [isFormatting, setIsFormatting] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [practicalNumberConflictMessage, setPracticalNumberConflictMessage] = useState("");
+  const [isCheckingPracticalNumber, setIsCheckingPracticalNumber] = useState(false);
 
   const [filters, setFilters] = useState({
     query: "",
@@ -795,6 +797,79 @@ export default function PracticalForm({
     assignedStudentIdsLoaded,
     students,
     assignedStudentIds,
+  ]);
+
+  useEffect(() => {
+    if (isExam) {
+      setPracticalNumberConflictMessage("");
+      setIsCheckingPracticalNumber(false);
+      return;
+    }
+
+    const subjectId = Number(form.subject_id) || 0;
+    const practicalNumber = Number(form.practical_number) || 0;
+
+    if (!subjectId || !practicalNumber) {
+      setPracticalNumberConflictMessage("");
+      setIsCheckingPracticalNumber(false);
+      return;
+    }
+
+    let cancelled = false;
+    const timer = setTimeout(async () => {
+      try {
+        setIsCheckingPracticalNumber(true);
+
+        let query = supabase
+          .from("practicals")
+          .select("id")
+          .eq("subject_id", subjectId)
+          .eq("practical_number", practicalNumber);
+
+        const practicalId = Number(form.id) || 0;
+        if (practicalId > 0) {
+          query = query.neq("id", practicalId);
+        }
+
+        const { data, error } = await query.limit(1);
+
+        if (cancelled) return;
+
+        if (error) {
+          console.error("Failed to validate practical number:", error);
+          setPracticalNumberConflictMessage("");
+          return;
+        }
+
+        if (data && data.length > 0) {
+          setPracticalNumberConflictMessage(
+            `Practical Number ${practicalNumber} already exists for this subject.`,
+          );
+        } else {
+          setPracticalNumberConflictMessage("");
+        }
+      } catch (err) {
+        if (!cancelled) {
+          console.error("Practical number validation failed:", err);
+          setPracticalNumberConflictMessage("");
+        }
+      } finally {
+        if (!cancelled) {
+          setIsCheckingPracticalNumber(false);
+        }
+      }
+    }, 350);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [
+    isExam,
+    form.subject_id,
+    form.practical_number,
+    form.id,
+    supabase,
   ]);
 
   // ---------- handlers ----------
@@ -1580,6 +1655,9 @@ export default function PracticalForm({
       alert("Please enter a Practical Number");
       return false;
     }
+    if (!isExam && practicalNumberConflictMessage) {
+      return false;
+    }
     if (!form.title.trim()) {
       alert("Please enter a Practical Title");
       return false;
@@ -1638,7 +1716,7 @@ export default function PracticalForm({
     }
 
     return true;
-  }, [form, enableLevels, levels, testCases, isExam, step]);
+  }, [form, enableLevels, levels, testCases, isExam, step, practicalNumberConflictMessage]);
 
   const getSetValidationErrors = useCallback(() => {
     const errors: string[] = [];
@@ -1850,10 +1928,14 @@ export default function PracticalForm({
           if (checkError) throw checkError;
 
           if (existing && existing.length > 0) {
-            alert(`Practical Number ${resolvedPracticalNumber} already exists for this subject.`);
+            setPracticalNumberConflictMessage(
+              `Practical Number ${resolvedPracticalNumber} already exists for this subject.`,
+            );
             setSaving(false);
             return false;
           }
+
+          setPracticalNumberConflictMessage("");
         }
       }
 
@@ -2065,6 +2147,55 @@ export default function PracticalForm({
         };
       }
 
+      const resolvedPracticalNumbersByDraftId = new Map<string, number | null>();
+
+      // Validate practical numbers up-front so duplicates are blocked before any insert.
+      if (!isExam) {
+        const usedNumbersBySubject = new Map<number, Set<number>>();
+
+        for (const draft of draftsToSave) {
+          const draftForm = draft.form;
+          if (!draftForm.title?.trim() || !draftForm.subject_id) {
+            continue;
+          }
+
+          const subjectId = Number(draftForm.subject_id);
+          if (!usedNumbersBySubject.has(subjectId)) {
+            const { data: subjectPracticals, error: numErr } = await supabase
+              .from("practicals")
+              .select("practical_number")
+              .eq("subject_id", subjectId);
+
+            if (numErr) throw numErr;
+
+            const existingNumbers = new Set<number>(
+              ((subjectPracticals || []) as any[])
+                .map((p: any) => Number(p.practical_number) || 0)
+                .filter((n: number) => n > 0),
+            );
+
+            usedNumbersBySubject.set(subjectId, existingNumbers);
+          }
+
+          const usedNumbers = usedNumbersBySubject.get(subjectId)!;
+          const requestedPracticalNumber = Number(draftForm.practical_number) || 0;
+          const resolvedPracticalNumber =
+            requestedPracticalNumber > 0
+              ? requestedPracticalNumber
+              : Math.max(0, ...Array.from(usedNumbers)) + 1;
+
+          if (usedNumbers.has(resolvedPracticalNumber)) {
+            setPracticalNumberConflictMessage(
+              `Practical Number ${resolvedPracticalNumber} already exists for this subject.`,
+            );
+            return [];
+          }
+
+          usedNumbers.add(resolvedPracticalNumber);
+          resolvedPracticalNumbersByDraftId.set(draft.id, resolvedPracticalNumber);
+        }
+      }
+
       // Save each draft sequentially
       for (const draft of draftsToSave) {
         try {
@@ -2090,40 +2221,7 @@ export default function PracticalForm({
           let resolvedPracticalNumber: number | null = null;
 
           if (!isExam) {
-            resolvedPracticalNumber = Number(draftForm.practical_number) || 0;
-
-            if (!resolvedPracticalNumber && draftForm.subject_id) {
-              const { data: subjectPracticals, error: numErr } = await supabase
-                .from("practicals")
-                .select("practical_number")
-                .eq("subject_id", draftForm.subject_id);
-
-              if (numErr) throw numErr;
-
-              const maxExisting = Math.max(
-                0,
-                ...((subjectPracticals || [])
-                  .map((p: any) => Number(p.practical_number) || 0)
-                  .filter((n: number) => n > 0))
-              );
-              resolvedPracticalNumber = maxExisting + 1;
-            }
-
-            // Check for duplicate practical number
-            if (draftForm.subject_id && resolvedPracticalNumber) {
-              const { data: existing } = await supabase
-                .from("practicals")
-                .select("id")
-                .eq("subject_id", draftForm.subject_id)
-                .eq("practical_number", resolvedPracticalNumber);
-
-              if (existing && existing.length > 0) {
-                console.warn(`Skipping draft with duplicate practical_number: ${resolvedPracticalNumber}`);
-                failCount++;
-                if (!firstErrorMessage) firstErrorMessage = `Practical Number ${resolvedPracticalNumber} already exists.`;
-                continue;
-              }
-            }
+            resolvedPracticalNumber = resolvedPracticalNumbersByDraftId.get(draft.id) ?? null;
           }
 
           // Build payload
@@ -2802,7 +2900,9 @@ export default function PracticalForm({
                         // Original Practical Flow
                         if (isMultiDraftMode) {
                           const savedData = await handleSaveAll();
-                          // onSaved is called inside handleSaveAll for practicals
+                          if (savedData && savedData.length > 0) {
+                            onSaved(savedData[0]?.id);
+                          }
                         } else {
                           const savedPracticalId = await handleSave();
                           if (savedPracticalId) {
@@ -3053,6 +3153,8 @@ export default function PracticalForm({
                       isExam={isExam}
                       showAssessmentControls={true}
                       showNumberField={!isExam}
+                      practicalNumberConflictMessage={practicalNumberConflictMessage}
+                      isCheckingPracticalNumber={isCheckingPracticalNumber}
                       onMarkdownChange={(val) => setForm(prev => ({ ...prev, description: val }))}
                       onMagicFormat={async (text, callback) => {
                         setIsFormatting(true);

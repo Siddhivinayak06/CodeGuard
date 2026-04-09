@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { Info as InfoIcon, Sparkles, Calendar, Code2, BookOpen } from "lucide-react";
+import { Info as InfoIcon, Sparkles, Calendar, Code2, BookOpen, Loader2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Practical, Subject, Level } from "../types";
 import MarkdownEditor from "./MarkdownEditor";
@@ -21,6 +21,8 @@ interface BasicDetailsFormProps {
   isExam?: boolean;
   showAssessmentControls?: boolean;
   showNumberField?: boolean;
+  practicalNumberConflictMessage?: string;
+  isCheckingPracticalNumber?: boolean;
   onMarkdownChange?: (value: string) => void;
   onMagicFormat?: (text: string, callback: (formatted: string) => void) => Promise<void>;
   isFormatting?: boolean;
@@ -69,6 +71,8 @@ export default function BasicDetailsForm({
   isExam,
   showAssessmentControls = true,
   showNumberField = true,
+  practicalNumberConflictMessage = "",
+  isCheckingPracticalNumber = false,
   onMarkdownChange,
   onMagicFormat,
   isFormatting,
@@ -151,10 +155,38 @@ export default function BasicDetailsForm({
                     ? String(selectedSubject.practical_count + 1)
                     : "1";
                 })()}
-                className={cx(getInputClass("practical_number"), "text-center font-bold")}
+                className={cx(
+                  getInputClass("practical_number"),
+                  "text-center font-bold",
+                )}
                 min={1}
               />
             </FormInput>
+
+            <AnimatePresence>
+              {practicalNumberConflictMessage ? (
+                <motion.p
+                  initial={{ opacity: 0, y: -4 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -4 }}
+                  className="mt-1 text-[11px] font-medium text-red-500 dark:text-red-400"
+                >
+                  {practicalNumberConflictMessage}
+                </motion.p>
+              ) : (
+                isCheckingPracticalNumber && Number(form.practical_number) > 0 && Number(form.subject_id) > 0 && (
+                  <motion.p
+                    initial={{ opacity: 0, y: -4 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -4 }}
+                    className="mt-2 inline-flex items-center gap-1.5 text-xs font-medium text-gray-500 dark:text-gray-400"
+                  >
+                    <Loader2 size={12} className="animate-spin" />
+                    Checking practical number...
+                  </motion.p>
+                )
+              )}
+            </AnimatePresence>
           </div>
         )}
         <div className={showNumberField ? "flex-1" : "w-full"}>
