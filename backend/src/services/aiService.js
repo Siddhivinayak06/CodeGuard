@@ -119,7 +119,10 @@ const getGeminiModelCandidates = (primaryModel, configOverrides = {}) => {
 };
 
 const computeBackoffMs = (attemptNumber) => {
-  const exponential = Math.min(10000, 800 * 2 ** Math.max(0, attemptNumber - 1));
+  const exponential = Math.min(
+    10000,
+    800 * 2 ** Math.max(0, attemptNumber - 1)
+  );
   const jitter = Math.floor(Math.random() * 350);
   return exponential + jitter;
 };
