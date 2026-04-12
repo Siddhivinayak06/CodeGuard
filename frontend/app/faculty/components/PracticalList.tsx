@@ -114,6 +114,7 @@ function PracticalCard({
   onEdit,
   onDelete,
   onAssign,
+  onSchedule,
   onConfigureExam,
   isDeleting,
 }: {
@@ -122,6 +123,7 @@ function PracticalCard({
   onEdit?: (p: Practical) => void;
   onDelete?: (id: number) => void;
   onAssign?: (id: number) => void;
+  onSchedule?: (p: Practical) => void;
   onConfigureExam?: (p: Practical) => void;
   isDeleting?: boolean;
 }) {
@@ -298,6 +300,7 @@ function PracticalCard({
             onEdit={() => onEdit?.(practical)}
             onDelete={() => onDelete?.(practical.id)}
             onAssign={() => onAssign?.(practical.id)}
+            onSchedule={() => onSchedule?.(practical)}
             onConfigureExam={() => onConfigureExam?.(practical)}
             isExam={(practical as any).is_exam}
             isDeleting={isDeleting}
@@ -324,6 +327,7 @@ function ActionMenu({
   onEdit,
   onDelete,
   onAssign,
+  onSchedule,
   onConfigureExam,
   disabledAssign,
   isExam,
@@ -333,6 +337,7 @@ function ActionMenu({
   onEdit?: () => void;
   onDelete?: () => void;
   onAssign?: () => void;
+  onSchedule?: () => void;
   onConfigureExam?: () => void;
   disabledAssign?: boolean;
   isExam?: boolean;
@@ -361,6 +366,8 @@ function ActionMenu({
     if (open) window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [open]);
+
+  const showMiddleAction = isExam || Boolean(onSchedule);
 
   return (
     <div className="relative" ref={ref}>
@@ -427,22 +434,42 @@ function ActionMenu({
             {isExam ? "Assign Exam" : "Assign to Students"}
           </button>
 
-          <div className="h-px bg-gray-100 dark:bg-gray-800" />
+          {showMiddleAction && <div className="h-px bg-gray-100 dark:bg-gray-800" />}
 
-          <button
-            onClick={() => {
-              setOpen(false);
-              onConfigureExam?.();
-            }}
-            className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-orange-600 dark:text-orange-400 hover:bg-orange-50 dark:hover:bg-orange-900/20 transition-colors"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            {isExam ? "Edit Exam Settings" : "Configure as Exam"}
-          </button>
+          {isExam ? (
+            <button
+              onClick={() => {
+                setOpen(false);
+                onConfigureExam?.();
+              }}
+              className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-orange-600 dark:text-orange-400 hover:bg-orange-50 dark:hover:bg-orange-900/20 transition-colors"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              Edit Exam Settings
+            </button>
+          ) : onSchedule ? (
+            <button
+              onClick={() => {
+                setOpen(false);
+                onSchedule?.();
+              }}
+              className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-cyan-600 dark:text-cyan-400 hover:bg-cyan-50 dark:hover:bg-cyan-900/20 transition-colors"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+                />
+              </svg>
+              Schedule
+            </button>
+          ) : null}
 
-          <div className="h-px bg-gray-100 dark:bg-gray-800" />
+          {showMiddleAction && <div className="h-px bg-gray-100 dark:bg-gray-800" />}
 
           <button
             onClick={() => {
@@ -498,6 +525,7 @@ export default function PracticalList({
   onEdit,
   onAssign,
   onDelete,
+  onSchedule,
   onConfigureExam,
   subjects,
   isExamMode,
@@ -507,6 +535,7 @@ export default function PracticalList({
   onEdit?: (p: Practical) => void;
   onAssign?: (id: number) => void;
   onDelete?: (id: number) => void;
+  onSchedule?: (p: Practical) => void;
   onConfigureExam?: (p: Practical) => void;
   subjects?: Subject[] | null;
   isExamMode?: boolean;
@@ -651,6 +680,7 @@ export default function PracticalList({
               onEdit={onEdit}
               onAssign={onAssign}
               onDelete={onDelete}
+              onSchedule={onSchedule}
               onConfigureExam={onConfigureExam}
               isDeleting={deletingPracticalIds?.has(p.id)}
             />

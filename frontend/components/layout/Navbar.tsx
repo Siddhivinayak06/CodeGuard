@@ -83,6 +83,10 @@ export default function Navbar() {
   const [userName, setUserName] = useState<string>("");
   const [scrolled, setScrolled] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [authResolved, setAuthResolved] = useState(false);
+  const [isMobileViewport, setIsMobileViewport] = useState<boolean | null>(
+    null,
+  );
 
   // ── Scroll detection with passive listener for perf ──
   useEffect(() => {
@@ -100,6 +104,17 @@ export default function Navbar() {
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
+  // ── Track viewport to keep only one notification panel active ──
+  useEffect(() => {
+    const mediaQuery = window.matchMedia("(max-width: 767px)");
+    const syncViewport = () => setIsMobileViewport(mediaQuery.matches);
+
+    syncViewport();
+    mediaQuery.addEventListener("change", syncViewport);
+
+    return () => mediaQuery.removeEventListener("change", syncViewport);
+  }, []);
+
   // ── Close menus on route change ──
   useEffect(() => {
     setMobileMenuOpen(false);
@@ -109,22 +124,28 @@ export default function Navbar() {
   // ── Fetch user once ──
   useEffect(() => {
     const fetchUser = async () => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) return;
+      try {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
 
-      setUser(user);
-      setRole(user.user_metadata?.role || "student");
+        const authUser = session?.user || (await supabase.auth.getUser()).data.user;
+        if (!authUser) return;
 
-      const { data: userProfile } = await supabase
-        .from("users")
-        .select("name")
-        .eq("uid", user.id)
-        .single();
+        setUser(authUser);
+        setRole(authUser.user_metadata?.role || "student");
 
-      if ((userProfile as any)?.name) {
-        setUserName((userProfile as any).name);
+        const { data: userProfile } = await supabase
+          .from("users")
+          .select("name")
+          .eq("uid", authUser.id)
+          .single();
+
+        if ((userProfile as any)?.name) {
+          setUserName((userProfile as any).name);
+        }
+      } finally {
+        setAuthResolved(true);
       }
     };
     fetchUser();
@@ -209,6 +230,7 @@ export default function Navbar() {
                     <Link
                       key={link.href}
                       href={link.href}
+                      prefetch={false}
                       className={`relative flex items-center gap-2 px-3.5 py-2 text-sm font-medium rounded-xl whitespace-nowrap transition-all duration-200 ${
                         isActive
                           ? "bg-white dark:bg-gray-900 text-gray-900 dark:text-white shadow-sm"
@@ -232,7 +254,12 @@ export default function Navbar() {
               {/* Right Section */}
               <div className="flex items-center gap-1.5 ml-3 shrink-0">
                 <ModeToggle />
-                <NotificationPanel />
+                {isMobileViewport === false && (
+                  <NotificationPanel
+                    enabled={authResolved && Boolean(user?.id)}
+                    userId={user?.id ?? null}
+                  />
+                )}
 
                 {/* User Menu */}
                 {user ? (
@@ -320,7 +347,12 @@ export default function Navbar() {
             {/* Mobile: Right icons + hamburger */}
             <div className="flex md:hidden items-center gap-2">
               <ModeToggle />
-              <NotificationPanel />
+              {isMobileViewport === true && (
+                <NotificationPanel
+                  enabled={authResolved && Boolean(user?.id)}
+                  userId={user?.id ?? null}
+                />
+              )}
               <button
                 onClick={toggleMobileMenu}
                 className="p-2 rounded-xl bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
@@ -381,6 +413,7 @@ export default function Navbar() {
                       <Link
                         key={link.href}
                         href={link.href}
+                        prefetch={false}
                         onClick={closeMobileMenu}
                         className={`flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-xl transition-colors ${
                           isActive

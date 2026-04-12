@@ -9,11 +9,17 @@ const { z } = require('zod');
 const { determineVerdict, VERDICTS } = require('../utils/execution/verdicts');
 const { compareOutput } = require('../utils/execution/outputComparator');
 
+const MAX_CODE_LENGTH = 300000;
+const MAX_STDIN_LENGTH = 100000;
+const MAX_CASE_IO_LENGTH = 100000;
+const MAX_BATCH_CASES = 150;
+const MAX_PROBLEM_ID_LENGTH = 128;
+
 // Validation Schema
 const executeSchema = z.object({
-  code: z.string().optional(),
-  reference_code: z.string().optional(),
-  reference_lang: z.string().optional(),
+  code: z.string().max(MAX_CODE_LENGTH).optional(),
+  reference_code: z.string().max(MAX_CODE_LENGTH).optional(),
+  reference_lang: z.enum(['c', 'cpp', 'python', 'py', 'java']).optional(),
   mode: z.enum(['run', 'submit']).optional(),
   executionModel: z.enum(['stdin_legacy', 'wrapper_harness']).optional(),
   failFast: z.boolean().optional(),
@@ -22,18 +28,20 @@ const executeSchema = z.object({
     .array(
       z.object({
         id: z.string().or(z.number()),
-        stdinInput: z.string().optional(),
-        input: z.string().optional(),
-        expectedOutput: z.string().optional(),
+        stdinInput: z.string().max(MAX_CASE_IO_LENGTH).optional(),
+        input: z.string().max(MAX_CASE_IO_LENGTH).optional(),
+        expectedOutput: z.string().max(MAX_CASE_IO_LENGTH).optional(),
         is_hidden: z.boolean().optional(),
         time_limit_ms: z.number().int().positive().optional(),
         memory_limit_kb: z.number().int().positive().optional(),
       })
     )
+    .max(MAX_BATCH_CASES)
     .optional(),
-  stdinInput: z.string().optional(),
+  stdinInput: z.string().max(MAX_STDIN_LENGTH).optional(),
   problem: z
     .string()
+    .max(MAX_PROBLEM_ID_LENGTH)
     .regex(/^[a-zA-Z0-9_]*$/, 'Invalid problem ID')
     .optional(),
 });

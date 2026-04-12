@@ -10,6 +10,87 @@ const {
   generateFuzzTestCases,
 } = require('../services/testCaseGeneratorService');
 
+const MAX_CHAT_PAYLOAD_BYTES = 250000;
+const MAX_CODE_CONTEXT_BYTES = 150000;
+const MAX_CHAT_MESSAGES = 80;
+const MAX_CONFIG_JSON_BYTES = 20000;
+const MAX_EXPLAIN_CODE_LENGTH = 200000;
+const MAX_EXPLAIN_ERROR_LENGTH = 10000;
+const MAX_EXPLAIN_LANGUAGE_LENGTH = 32;
+const MAX_PDF_TEXT_LENGTH = 400000;
+const ALLOWED_BULK_LANGUAGES = new Set(['c', 'cpp', 'python', 'java']);
+const PDF_MAGIC_HEADER = '%PDF-';
+
+const chatMessageSchema = z
+  .object({
+    role: z.string().trim().min(1).max(32),
+  })
+  .passthrough();
+
+const chatRequestSchema = z.object({
+  messages: z.array(chatMessageSchema).min(1).max(MAX_CHAT_MESSAGES),
+  codeContext: z.unknown().optional(),
+  config: z.record(z.string(), z.unknown()).optional(),
+});
+
+const explainErrorSchema = z.object({
+  code: z.string().min(1).max(MAX_EXPLAIN_CODE_LENGTH),
+  error: z.string().min(1).max(MAX_EXPLAIN_ERROR_LENGTH),
+  language: z.string().trim().max(MAX_EXPLAIN_LANGUAGE_LENGTH).optional(),
+  config: z.record(z.string(), z.unknown()).optional(),
+});
+
+const estimatePayloadSizeBytes = (value) => {
+  try {
+    return Buffer.byteLength(JSON.stringify(value ?? {}), 'utf8');
+  } catch (_error) {
+    return Number.POSITIVE_INFINITY;
+  }
+};
+
+const setSseHeaders = (res) => {
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache, no-transform');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Accel-Buffering', 'no');
+};
+
+const parseOptionalJsonConfig = (rawConfig) => {
+  if (!rawConfig) return {};
+
+  if (typeof rawConfig === 'object') {
+    return rawConfig;
+  }
+
+  if (typeof rawConfig !== 'string') {
+    throw new Error('Invalid JSON config payload');
+  }
+
+  if (rawConfig.length > MAX_CONFIG_JSON_BYTES) {
+    throw new Error('Config payload too large');
+  }
+
+  let parsed;
+  try {
+    parsed = JSON.parse(rawConfig);
+  } catch (_error) {
+    throw new Error('Invalid JSON config payload');
+  }
+
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new Error('Config payload must be a JSON object');
+  }
+
+  return parsed;
+};
+
+const isLikelyPdfBuffer = (buffer) =>
+  Buffer.isBuffer(buffer) &&
+  buffer.length >= PDF_MAGIC_HEADER.length &&
+  buffer.subarray(0, PDF_MAGIC_HEADER.length).toString('utf8') ===
+    PDF_MAGIC_HEADER;
+
 // Configure multer for memory storage
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -26,25 +107,52 @@ const upload = multer({
 });
 
 router.post('/chat', async (req, res) => {
+  let keepAliveTimer;
   try {
-    const { messages, codeContext, config } = req.body;
-    if (!messages || !Array.isArray(messages)) {
-      return res.status(400).json({ error: 'Invalid messages format' });
+    if (!req.is('application/json')) {
+      return res
+        .status(415)
+        .json({ error: 'Content-Type must be application/json' });
+    }
+
+    if (estimatePayloadSizeBytes(req.body) > MAX_CHAT_PAYLOAD_BYTES) {
+      return res.status(413).json({ error: 'Payload too large' });
+    }
+
+    const parsed = chatRequestSchema.safeParse(req.body || {});
+    if (!parsed.success) {
+      return res.status(400).json({
+        error: 'Invalid messages format',
+        details: parsed.error.errors,
+      });
+    }
+
+    const { messages, codeContext, config } = parsed.data;
+
+    if (estimatePayloadSizeBytes(codeContext) > MAX_CODE_CONTEXT_BYTES) {
+      return res.status(413).json({ error: 'Code context is too large' });
     }
 
     // Set headers for SSE
-    res.setHeader('Content-Type', 'text/event-stream');
-    res.setHeader('Cache-Control', 'no-cache');
-    res.setHeader('Connection', 'keep-alive');
+    setSseHeaders(res);
+    keepAliveTimer = setInterval(() => {
+      if (!res.writableEnded) {
+        res.write(': ping\n\n');
+      }
+    }, 15000);
 
     await aiService.chat(messages, codeContext, config, (chunk) => {
-      res.write(`data: ${JSON.stringify({ text: chunk })}\n\n`);
+      if (!res.writableEnded) {
+        res.write(`data: ${JSON.stringify({ text: chunk })}\n\n`);
+      }
     });
 
-    res.write(`data: [DONE]\n\n`);
-    res.end();
+    if (!res.writableEnded) {
+      res.write(`data: [DONE]\n\n`);
+      res.end();
+    }
   } catch (err) {
-    logger.error('AI Chat Error:', err);
+    logger.error('AI Chat Error', { error: err.message });
     if (!res.headersSent) {
       res.status(500).json({ error: err.message || 'Internal AI Error' });
     } else {
@@ -53,20 +161,47 @@ router.post('/chat', async (req, res) => {
       );
       res.end();
     }
+  } finally {
+    if (keepAliveTimer) {
+      clearInterval(keepAliveTimer);
+    }
   }
 });
 
 router.post('/chat2', async (req, res) => {
+  let keepAliveTimer;
   try {
-    const { messages, codeContext, config } = req.body;
-    if (!messages || !Array.isArray(messages)) {
-      return res.status(400).json({ error: 'Invalid messages format' });
+    if (!req.is('application/json')) {
+      return res
+        .status(415)
+        .json({ error: 'Content-Type must be application/json' });
+    }
+
+    if (estimatePayloadSizeBytes(req.body) > MAX_CHAT_PAYLOAD_BYTES) {
+      return res.status(413).json({ error: 'Payload too large' });
+    }
+
+    const parsed = chatRequestSchema.safeParse(req.body || {});
+    if (!parsed.success) {
+      return res.status(400).json({
+        error: 'Invalid messages format',
+        details: parsed.error.errors,
+      });
+    }
+
+    const { messages, codeContext, config } = parsed.data;
+
+    if (estimatePayloadSizeBytes(codeContext) > MAX_CODE_CONTEXT_BYTES) {
+      return res.status(413).json({ error: 'Code context is too large' });
     }
 
     // Set headers for SSE
-    res.setHeader('Content-Type', 'text/event-stream');
-    res.setHeader('Cache-Control', 'no-cache');
-    res.setHeader('Connection', 'keep-alive');
+    setSseHeaders(res);
+    keepAliveTimer = setInterval(() => {
+      if (!res.writableEnded) {
+        res.write(': ping\n\n');
+      }
+    }, 15000);
 
     const configOverrides = { ...config };
     if (!configOverrides.provider || configOverrides.provider === 'gemini') {
@@ -74,13 +209,17 @@ router.post('/chat2', async (req, res) => {
     }
 
     await aiService.chat(messages, codeContext, configOverrides, (chunk) => {
-      res.write(`data: ${JSON.stringify({ text: chunk })}\n\n`);
+      if (!res.writableEnded) {
+        res.write(`data: ${JSON.stringify({ text: chunk })}\n\n`);
+      }
     });
 
-    res.write(`data: [DONE]\n\n`);
-    res.end();
+    if (!res.writableEnded) {
+      res.write(`data: [DONE]\n\n`);
+      res.end();
+    }
   } catch (err) {
-    logger.error('AI Chat 2 Error:', err);
+    logger.error('AI Chat 2 Error', { error: err.message });
     if (!res.headersSent) {
       res.status(500).json({ error: err.message || 'Internal AI Error' });
     } else {
@@ -88,6 +227,10 @@ router.post('/chat2', async (req, res) => {
         `data: ${JSON.stringify({ error: err.message || 'Internal AI Error' })}\n\n`
       );
       res.end();
+    }
+  } finally {
+    if (keepAliveTimer) {
+      clearInterval(keepAliveTimer);
     }
   }
 });
@@ -142,6 +285,10 @@ router.post(
         return res.status(400).json({ error: 'No PDF file uploaded' });
       }
 
+      if (!isLikelyPdfBuffer(req.file.buffer)) {
+        return res.status(400).json({ error: 'Invalid PDF file signature' });
+      }
+
       // 1. Extract text from PDF
       const pdfBuffer = req.file.buffer;
       let text = '';
@@ -162,6 +309,13 @@ router.post(
           .json({ error: 'Could not extract text from the PDF' });
       }
 
+      if (text.length > MAX_PDF_TEXT_LENGTH) {
+        return res.status(413).json({
+          error:
+            'Extracted PDF text is too large. Please upload a smaller file.',
+        });
+      }
+
       // 2. Chunking Strategy
       const CHUNK_SIZE = 8000;
       const OVERLAP = 2000;
@@ -174,9 +328,16 @@ router.post(
       logger.info(`Split PDF into ${chunks.length} chunks`);
 
       // 3. Process Chunks Concurrently
-      const config = req.body.config ? JSON.parse(req.body.config) : {};
+      const config = parseOptionalJsonConfig(req.body.config);
       const isExam = req.body.isExam === 'true' || req.body.isExam === true;
-      const language = (req.body.language || 'c').toLowerCase();
+      const rawLanguage = String(req.body.language || 'c').toLowerCase();
+      const language = rawLanguage === 'py' ? 'python' : rawLanguage;
+
+      if (!ALLOWED_BULK_LANGUAGES.has(language)) {
+        return res.status(400).json({
+          error: `Invalid language. Allowed values: ${Array.from(ALLOWED_BULK_LANGUAGES).join(', ')}`,
+        });
+      }
 
       const configOverrides = { ...config };
       if (!configOverrides.provider || configOverrides.provider === 'gemini') {
@@ -818,6 +979,15 @@ ${chunkText}
 
       return res.json({ practicals });
     } catch (err) {
+      const errMessage = String(err?.message || '');
+      if (
+        errMessage === 'Invalid JSON config payload' ||
+        errMessage === 'Config payload too large' ||
+        errMessage === 'Config payload must be a JSON object'
+      ) {
+        return res.status(400).json({ error: errMessage });
+      }
+
       logger.error('Bulk Generation Error:', err);
       res.status(500).json({ error: err.message || 'Internal Server Error' });
     }
@@ -825,18 +995,34 @@ ${chunkText}
 );
 
 router.post('/explain-error', async (req, res) => {
+  let keepAliveTimer;
   try {
-    const { code, error, language, config } = req.body;
-
-    if (!code || !error) {
+    if (!req.is('application/json')) {
       return res
-        .status(400)
-        .json({ error: 'Code and error message are required' });
+        .status(415)
+        .json({ error: 'Content-Type must be application/json' });
     }
 
-    res.setHeader('Content-Type', 'text/event-stream');
-    res.setHeader('Cache-Control', 'no-cache');
-    res.setHeader('Connection', 'keep-alive');
+    if (estimatePayloadSizeBytes(req.body) > MAX_CHAT_PAYLOAD_BYTES) {
+      return res.status(413).json({ error: 'Payload too large' });
+    }
+
+    const parsed = explainErrorSchema.safeParse(req.body || {});
+    if (!parsed.success) {
+      return res.status(400).json({
+        error: 'Code and error message are required',
+        details: parsed.error.errors,
+      });
+    }
+
+    const { code, error, language, config } = parsed.data;
+
+    setSseHeaders(res);
+    keepAliveTimer = setInterval(() => {
+      if (!res.writableEnded) {
+        res.write(': ping\n\n');
+      }
+    }, 15000);
 
     const prompt = `
 I encountered this error in my ${language || 'code'}:
@@ -867,11 +1053,15 @@ Please explain:
     }
 
     await aiService.chat(messages, null, configOverrides, (chunk) => {
-      res.write(`data: ${JSON.stringify({ text: chunk })}\n\n`);
+      if (!res.writableEnded) {
+        res.write(`data: ${JSON.stringify({ text: chunk })}\n\n`);
+      }
     });
 
-    res.write(`data: [DONE]\n\n`);
-    res.end();
+    if (!res.writableEnded) {
+      res.write(`data: [DONE]\n\n`);
+      res.end();
+    }
   } catch (err) {
     logger.error('Explain Error Failed:', err);
     if (!res.headersSent) {
@@ -882,7 +1072,26 @@ Please explain:
       );
       res.end();
     }
+  } finally {
+    if (keepAliveTimer) {
+      clearInterval(keepAliveTimer);
+    }
   }
+});
+
+router.use((err, _req, res, next) => {
+  if (err instanceof multer.MulterError) {
+    if (err.code === 'LIMIT_FILE_SIZE') {
+      return res.status(400).json({ error: 'PDF file exceeds 10MB limit' });
+    }
+    return res.status(400).json({ error: err.message });
+  }
+
+  if (err && err.message === 'Only PDF files are allowed!') {
+    return res.status(400).json({ error: 'Only PDF files are allowed' });
+  }
+
+  return next(err);
 });
 
 module.exports = router;

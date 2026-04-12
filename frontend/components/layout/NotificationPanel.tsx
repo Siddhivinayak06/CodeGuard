@@ -38,6 +38,11 @@ export interface Notification {
   metadata: Record<string, any> | null;
 }
 
+interface NotificationPanelProps {
+  enabled?: boolean;
+  userId?: string | null;
+}
+
 const notificationIcons: Record<string, React.ReactNode> = {
   exam_assigned: <GraduationCap className="w-5 h-5 text-violet-500" />,
   practical_assigned: <FileCode className="w-5 h-5 text-blue-500" />,
@@ -69,31 +74,52 @@ function isExamNotification(notification: Notification): boolean {
   return haystack.includes("exam");
 }
 
-export default function NotificationPanel() {
+export default function NotificationPanel({
+  enabled = true,
+  userId: externalUserId = null,
+}: NotificationPanelProps) {
   const router = useRouter();
   const supabase = useMemo(() => createClient(), []);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
   const [isOpen, setIsOpen] = useState(false);
-  const [userId, setUserId] = useState<string | null>(null);
+  const [resolvedUserId, setResolvedUserId] = useState<string | null>(
+    externalUserId,
+  );
   const [grantingId, setGrantingId] = useState<string | null>(null);
 
   const unreadCount = notifications.filter((n) => !n.is_read).length;
 
-  // Fetch user
   useEffect(() => {
+    setResolvedUserId(externalUserId || null);
+  }, [externalUserId]);
+
+  // Fetch user only when no external user id is provided.
+  useEffect(() => {
+    if (!enabled || externalUserId) return;
+
     const getUser = async () => {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (session?.user?.id) {
+        setResolvedUserId(session.user.id);
+        return;
+      }
+
       const { data } = await supabase.auth.getUser();
-      if (data?.user) {
-        setUserId(data.user.id);
+      if (data?.user?.id) {
+        setResolvedUserId(data.user.id);
       }
     };
+
     getUser();
-  }, [supabase]);
+  }, [enabled, externalUserId, supabase]);
 
   // Fetch notifications
   const fetchNotifications = useCallback(async () => {
-    if (!userId) return;
+    if (!enabled || !resolvedUserId) return;
 
     setLoading(true);
     try {
@@ -114,17 +140,23 @@ export default function NotificationPanel() {
     } finally {
       setLoading(false);
     }
-  }, [userId]);
+  }, [enabled, resolvedUserId]);
 
   useEffect(() => {
-    if (userId) {
+    if (!enabled) {
+      setLoading(false);
+      setNotifications([]);
+      return;
+    }
+
+    if (resolvedUserId) {
       fetchNotifications();
     }
-  }, [userId, fetchNotifications]);
+  }, [enabled, resolvedUserId, fetchNotifications]);
 
   // Real-time subscription
   useEffect(() => {
-    if (!userId) return;
+    if (!enabled || !resolvedUserId) return;
 
     const channel = supabase
       .channel("notifications")
@@ -134,9 +166,9 @@ export default function NotificationPanel() {
           event: "INSERT",
           schema: "public",
           table: "notifications",
-          filter: `user_id=eq.${userId}`,
+          filter: `user_id=eq.${resolvedUserId}`,
         },
-        (payload) => {
+        () => {
           // Re-fetch instead of blind append to respect server-side lock filtering & dedup
           fetchNotifications();
         },
@@ -146,7 +178,13 @@ export default function NotificationPanel() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [supabase, userId]);
+  }, [enabled, supabase, resolvedUserId, fetchNotifications]);
+
+  useEffect(() => {
+    if (!enabled && isOpen) {
+      setIsOpen(false);
+    }
+  }, [enabled, isOpen]);
 
   // Mark single notification as read
   const markAsRead = async (id: string) => {
@@ -168,13 +206,13 @@ export default function NotificationPanel() {
 
   // Mark all as read
   const markAllAsRead = async () => {
-    if (!userId) return;
+    if (!resolvedUserId) return;
 
     try {
       const { error } = await supabase
         .from("notifications")
         .update({ is_read: true } as never)
-        .eq("user_id", userId)
+        .eq("user_id", resolvedUserId)
         .eq("is_read", false);
 
       if (!error) {

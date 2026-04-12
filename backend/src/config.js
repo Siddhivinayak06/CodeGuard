@@ -19,8 +19,20 @@ const envSchema = z.object({
   DOCKER_JAVA_PIDS_LIMIT: z.string().default('512'),
   DOCKER_RUNTIME: z.string().default(''),
   RATE_LIMIT_MAX: z.string().transform(Number).default('500'),
+  RATE_LIMIT_AI_MAX: z.string().transform(Number).default('120'),
+  RATE_LIMIT_EXECUTE_MAX: z.string().transform(Number).default('300'),
   MAX_CONCURRENT_CONNECTIONS: z.string().transform(Number).default('200'),
+  MAX_CONCURRENT_JOBS: z.string().transform(Number).default('50'),
   CORS_ORIGIN: z.string().default('http://localhost:3000'),
+  TRUST_PROXY: z
+    .string()
+    .transform((val) => val === 'true')
+    .default('false'),
+  WS_MAX_PAYLOAD_BYTES: z.string().transform(Number).default('1048576'),
+  WS_REQUIRE_ORIGIN: z
+    .string()
+    .transform((val) => val === 'true')
+    .default('true'),
   AI_PROVIDER: z.enum(['gemini', 'ollama', 'mock']).default('ollama'),
   AI_API_KEY: z.string().optional(),
   AI_API_KEY_2: z.string().optional(),
@@ -70,6 +82,9 @@ if (!parsed.success) {
 }
 
 const env = parsed.data;
+const corsOriginList = env.CORS_ORIGIN.split(',')
+  .map((origin) => origin.trim())
+  .filter(Boolean);
 
 /**
  * Application configuration
@@ -107,10 +122,18 @@ module.exports = {
   rateLimit: {
     windowMs: 15 * 60 * 1000, // 15 minutes
     max: env.RATE_LIMIT_MAX,
+    aiMax: env.RATE_LIMIT_AI_MAX,
+    executeMax: env.RATE_LIMIT_EXECUTE_MAX,
     maxConcurrentConnections: env.MAX_CONCURRENT_CONNECTIONS,
   },
   cors: {
     origin: env.CORS_ORIGIN,
+    originList: corsOriginList,
+  },
+  security: {
+    trustProxy: env.TRUST_PROXY,
+    wsMaxPayloadBytes: env.WS_MAX_PAYLOAD_BYTES,
+    wsRequireOrigin: env.WS_REQUIRE_ORIGIN,
   },
   ai: {
     provider: env.AI_PROVIDER,

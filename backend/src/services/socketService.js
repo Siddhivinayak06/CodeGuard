@@ -14,6 +14,14 @@ const JAVA_PUBLIC_CLASS_PATTERN =
   /\bpublic\s+class\s+([A-Za-z_][A-Za-z0-9_]*)\b/;
 const JAVA_CLASS_PATTERN = /\bclass\s+([A-Za-z_][A-Za-z0-9_]*)\b/;
 
+const isAllowedWsOrigin = (originHeader) => {
+  if (!originHeader) {
+    return !config.security.wsRequireOrigin || config.isDevelopment;
+  }
+
+  return config.cors.originList.includes(originHeader);
+};
+
 const normalizeRelativeFilePath = (rawPath, fallbackName) => {
   const normalized = String(rawPath || '')
     .replace(/\\/g, '/')
@@ -130,12 +138,27 @@ const handleConnection = async (ws, req) => {
   }
 
   try {
+    const origin = req.headers.origin;
+    if (!isAllowedWsOrigin(origin)) {
+      logger.warn('WebSocket blocked due to disallowed origin', {
+        origin,
+      });
+      ws.close(1008, 'Forbidden origin');
+      return;
+    }
+
     const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
     const token = url.searchParams.get('token');
 
     if (!token) {
       logger.warn('WebSocket connection attempt without token');
       ws.close(1008, 'Unauthorized: Missing token');
+      return;
+    }
+
+    if (token.length > 4096 || /[\r\n]/.test(token)) {
+      logger.warn('WebSocket rejected malformed token');
+      ws.close(1008, 'Unauthorized: Invalid token format');
       return;
     }
 

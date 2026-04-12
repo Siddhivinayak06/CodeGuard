@@ -1,4 +1,27 @@
 /** @type {import('next').NextConfig} */
+import process from "node:process";
+
+const isProd = process.env.NODE_ENV === "production";
+
+const contentSecurityPolicy = [
+  "default-src 'self'",
+  "script-src 'self' 'unsafe-eval' 'unsafe-inline' blob: https://cdn.jsdelivr.net https://va.vercel-scripts.com",
+  "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net",
+  "img-src 'self' blob: data:",
+  "font-src 'self' data: https://cdn.jsdelivr.net",
+  isProd
+    ? "connect-src 'self' https: wss:"
+    : "connect-src 'self' ws: wss: http: https:",
+  "worker-src 'self' blob:",
+  "object-src 'none'",
+  "base-uri 'self'",
+  "frame-ancestors 'none'",
+  "form-action 'self'",
+  isProd ? "upgrade-insecure-requests" : "",
+]
+  .filter(Boolean)
+  .join("; ");
+
 const nextConfig = {
   typescript: {
     // strict build checks enabled
@@ -29,13 +52,17 @@ const nextConfig = {
             key: "X-DNS-Prefetch-Control",
             value: "on",
           },
-          // {
-          //   key: "Strict-Transport-Security",
-          //   value: "max-age=63072000; includeSubDomains; preload",
-          // },
+          ...(isProd
+            ? [
+                {
+                  key: "Strict-Transport-Security",
+                  value: "max-age=63072000; includeSubDomains; preload",
+                },
+              ]
+            : []),
           {
             key: "X-Frame-Options",
-            value: "SAMEORIGIN",
+            value: "DENY",
           },
           {
             key: "X-Content-Type-Options",
@@ -43,12 +70,15 @@ const nextConfig = {
           },
           {
             key: "Referrer-Policy",
-            value: "origin-when-cross-origin",
+            value: "strict-origin-when-cross-origin",
+          },
+          {
+            key: "Permissions-Policy",
+            value: "camera=(), microphone=(), geolocation=(), payment=(), usb=()",
           },
           {
             key: "Content-Security-Policy",
-            value:
-              "default-src 'self'; script-src 'self' 'unsafe-eval' 'unsafe-inline' blob: https://cdn.jsdelivr.net https://va.vercel-scripts.com; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; img-src 'self' blob: data:; font-src 'self' data: https://cdn.jsdelivr.net; connect-src 'self' ws: wss: http: https:; worker-src 'self' blob:;",
+            value: contentSecurityPolicy,
           },
         ],
       },

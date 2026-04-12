@@ -1,15 +1,31 @@
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
+import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Practical, Subject } from "../../../faculty/types";
 import PracticalList from "../../../faculty/components/PracticalList";
-import PracticalForm from "../../../faculty/components/PracticalForm";
-import ExamForm from "../../../faculty/components/ExamForm";
-import { ArrowLeft, Plus, Book, CheckCircle, Clock, AlertTriangle } from "lucide-react";
+import { ArrowLeft, Plus, Book } from "lucide-react";
 import PracticalsSkeleton from "@/components/skeletons/PracticalsSkeleton";
 import { motion } from "framer-motion";
+
+const PracticalForm = dynamic(
+  () => import("../../../faculty/components/PracticalForm"),
+  { ssr: false },
+);
+
+const ExamForm = dynamic(() => import("../../../faculty/components/ExamForm"), {
+  ssr: false,
+});
+
+const ScheduleDialog = dynamic(
+  () =>
+    import("@/app/admin/schedule/components/ScheduleDialog").then(
+      (mod) => mod.ScheduleDialog,
+    ),
+  { ssr: false },
+);
 
 function sortPracticalsByNumber(rows: Practical[]): Practical[] {
   return [...rows].sort((a, b) => {
@@ -81,6 +97,10 @@ export default function AllPracticalsPage() {
   const [starterCode, setStarterCode] = useState<string>("");
   const [sampleLanguage, setSampleLanguage] = useState<string>("c");
 
+  // Schedule dialog state
+  const [scheduleDialogOpen, setScheduleDialogOpen] = useState(false);
+  const [schedulePracticalId, setSchedulePracticalId] = useState<string>("");
+
   // Exam modal states
   const [examModalOpen, setExamModalOpen] = useState(false);
   const [examPractical, setExamPractical] = useState<any>(null);
@@ -88,56 +108,80 @@ export default function AllPracticalsPage() {
 
   // Fetch data
   useEffect(() => {
+    let cancelled = false;
+
     const init = async () => {
-      // 1. Get user
-      const { data: userData, error: userError } =
-        await supabase.auth.getUser();
-      if (userError || !userData.user) {
-        router.push("/auth/login");
-        return;
-      }
-      setUser(userData.user);
+      try {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
 
-      // 2. Fetch subjects via junction table
-      const { data: facultyBatches } = await supabase
-        .from("subject_faculty_batches")
-        .select("subject_id")
-        .eq("faculty_id", userData.user.id);
+        const authUser = session?.user || (await supabase.auth.getUser()).data.user;
 
-      const subjectIds = [...new Set(((facultyBatches as any[]) || []).map((fb) => fb.subject_id))];
+        if (!authUser) {
+          router.push("/auth/login");
+          return;
+        }
 
-      if (subjectIds.length > 0) {
-        const { data: subjData } = await supabase
-          .from("subjects")
-          .select("*")
-          .in("id", subjectIds);
+        if (cancelled) return;
+        setUser(authUser);
 
-        if (subjData) {
-          setSubjects(subjData as Subject[]);
+        const { data: facultyBatches } = await supabase
+          .from("subject_faculty_batches")
+          .select("subject_id")
+          .eq("faculty_id", authUser.id);
 
-          // 3. Fetch practicals
-          const { data: pracData } = await supabase
+        const subjectIds = [
+          ...new Set(
+            ((facultyBatches as any[]) || [])
+              .map((fb) => fb.subject_id)
+              .filter(Boolean),
+          ),
+        ];
+
+        if (subjectIds.length === 0) {
+          if (!cancelled) {
+            setSubjects([]);
+            setPracticals([]);
+          }
+          return;
+        }
+
+        const [{ data: subjData }, { data: pracData }] = await Promise.all([
+          supabase.from("subjects").select("*").in("id", subjectIds),
+          supabase
             .from("practicals")
             .select("*")
             .in("subject_id", subjectIds)
             .eq("is_exam", false)
-            .order("created_at", { ascending: false });
+            .order("created_at", { ascending: false }),
+        ]);
 
-          if (pracData) {
-            setPracticals(sortPracticalsByNumber(pracData as Practical[]));
-          }
+        if (!cancelled) {
+          setSubjects((subjData as Subject[]) || []);
+          setPracticals(sortPracticalsByNumber((pracData as Practical[]) || []));
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
         }
       }
-      setLoading(false);
     };
 
     init();
+
+    return () => {
+      cancelled = true;
+    };
   }, [supabase, router]);
 
   const fetchPracticals = async () => {
     if (!user) return;
     const subjectIds = subjects.map((s) => s.id);
-    if (subjectIds.length === 0) return;
+    if (subjectIds.length === 0) {
+      setPracticals([]);
+      return;
+    }
 
     const { data } = await supabase
       .from("practicals")
@@ -172,6 +216,11 @@ export default function AllPracticalsPage() {
       setSampleLanguage(refs[0].language || "c");
     }
     setModalOpen(true);
+  };
+
+  const openSchedule = (p: Practical) => {
+    setSchedulePracticalId(String(p.id));
+    setScheduleDialogOpen(true);
   };
 
   const deletePractical = async (id: number) => {
@@ -287,44 +336,64 @@ export default function AllPracticalsPage() {
               subjects={subjects}
               onEdit={openEdit}
               onDelete={deletePractical}
+              onSchedule={openSchedule}
               deletingPracticalIds={deletingPracticalIds}
             // onConfigureExam removed since exams are now separate
             />
           </motion.div>
         </div>
 
-        {/* Modal */}
-        <PracticalForm
-          isOpen={modalOpen}
-          practical={editingPractical}
-          subjects={subjects}
-          supabase={supabase}
-          sampleCode={sampleCode}
-          setSampleCode={setSampleCode}
-          starterCode={starterCode}
-          setStarterCode={setStarterCode}
-          sampleLanguage={sampleLanguage}
-          setSampleLanguage={setSampleLanguage}
-          isExam={creatingExamMode}
-          onClose={() => setModalOpen(false)}
-          onSaved={(newPracticalId?: number) => {
-            fetchPracticals();
-            setModalOpen(false);
+        {scheduleDialogOpen && (
+          <ScheduleDialog
+            open={scheduleDialogOpen}
+            onOpenChange={(open) => {
+              setScheduleDialogOpen(open);
+              if (!open) setSchedulePracticalId("");
+            }}
+            initialData={{
+              practical_id: schedulePracticalId || undefined,
+              faculty_id: user?.id ? String(user.id) : "",
+            }}
+            showExistingSchedules={true}
+            restrictFacultySelection={true}
+            onScheduleCreated={fetchPracticals}
+          />
+        )}
 
-            // Auto open ExamForm if we were creating an exam and got a new ID
-            if (creatingExamMode && newPracticalId) {
-              // We need the practical object/title for ExamForm header
-              // Let's create a minimal payload or fetch it
-              const minimalPractical = {
-                id: newPracticalId,
-                title: editingPractical ? editingPractical.title : "New Exam",
-              };
-              setExamPractical(minimalPractical);
-              setExistingExamConfig(null); // Fresh config
-              setExamModalOpen(true);
-            }
-          }}
-        />
+        {/* Modal */}
+        {modalOpen && (
+          <PracticalForm
+            isOpen={modalOpen}
+            practical={editingPractical}
+            subjects={subjects}
+            supabase={supabase}
+            sampleCode={sampleCode}
+            setSampleCode={setSampleCode}
+            starterCode={starterCode}
+            setStarterCode={setStarterCode}
+            sampleLanguage={sampleLanguage}
+            setSampleLanguage={setSampleLanguage}
+            isExam={creatingExamMode}
+            onClose={() => setModalOpen(false)}
+            onSaved={(newPracticalId?: number) => {
+              fetchPracticals();
+              setModalOpen(false);
+
+              // Auto open ExamForm if we were creating an exam and got a new ID
+              if (creatingExamMode && newPracticalId) {
+                // We need the practical object/title for ExamForm header
+                // Let's create a minimal payload or fetch it
+                const minimalPractical = {
+                  id: newPracticalId,
+                  title: editingPractical ? editingPractical.title : "New Exam",
+                };
+                setExamPractical(minimalPractical);
+                setExistingExamConfig(null); // Fresh config
+                setExamModalOpen(true);
+              }
+            }}
+          />
+        )}
 
         {/* Exam Settings Modal */}
         {examPractical && (

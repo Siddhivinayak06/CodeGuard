@@ -10,8 +10,22 @@ const poolManager = require('./services/poolManager');
 const PORT = config.port;
 const server = http.createServer(app);
 
+// Reduce slowloris/resource-exhaustion risk with bounded timeouts.
+server.requestTimeout = 30000;
+server.headersTimeout = 35000;
+server.keepAliveTimeout = 65000;
+
 // Attach a WebSocket server to the same HTTP server
-const wss = new WebSocket.Server({ server });
+const wss = new WebSocket.Server({
+  server,
+  maxPayload: config.security.wsMaxPayloadBytes,
+  perMessageDeflate: false,
+});
+
+server.on('clientError', (err, socket) => {
+  logger.warn('HTTP client connection error', { error: err.message });
+  socket.end('HTTP/1.1 400 Bad Request\r\n\r\n');
+});
 
 logger.info(`Initializing CodeGuard server`, {
   port: PORT,

@@ -11,6 +11,7 @@ import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
+import { ScheduleDialog } from "@/app/admin/schedule/components/ScheduleDialog";
 import type { User } from "@supabase/supabase-js";
 import {
   BookOpen,
@@ -28,6 +29,7 @@ import {
   CheckCircle2,
   ListFilter,
   Pencil,
+  CalendarPlus,
 } from "lucide-react";
 
 import { Practical, Subject, TestCase } from "../types";
@@ -67,10 +69,17 @@ export default function FacultySubjects() {
   const [sampleLanguage, setSampleLanguage] = useState<string>("c");
   const [showBulkImport, setShowBulkImport] = useState(false);
   const [importedPracticals, setImportedPracticals] = useState<any[]>([]);
+  const [showScheduleDialog, setShowScheduleDialog] = useState(false);
+  const [schedulePracticalId, setSchedulePracticalId] = useState<string>("");
 
   // View Modal state
   const [viewingPractical, setViewingPractical] = useState<Practical | null>(
     null,
+  );
+
+  const assignedSubjectIds = useMemo(
+    () => new Set(subjects.map((s) => Number(s.id))),
+    [subjects],
   );
 
   // helpers
@@ -143,7 +152,11 @@ export default function FacultySubjects() {
         const subjectIds = [...new Set(((facultySubjects as any[]) || []).map((fs) => fs.subject_id))];
 
         if (subjectIds.length === 0) {
-          if (isMounted) setSubjects([]);
+          if (isMounted) {
+            setSubjects([]);
+            setSelected(null);
+            setPracticals([]);
+          }
           return;
         }
 
@@ -189,11 +202,17 @@ export default function FacultySubjects() {
 
         if (isMounted) {
           setSubjects(formatted);
-          // Only auto-select if nothing is selected
-          const firstId = formatted[0]?.id;
-          if (firstId) {
-            setSelected((prev) => prev || firstId);
-          }
+          const firstId = formatted[0]?.id ?? null;
+
+          // Keep selection only if still assigned; otherwise fallback to first assigned subject.
+          setSelected((prev) => {
+            const prevNum = prev === null ? null : Number(prev);
+            const stillAssigned =
+              prevNum !== null && formatted.some((s) => Number(s.id) === prevNum);
+
+            if (stillAssigned) return prev;
+            return firstId;
+          });
         }
       } catch (err) {
         // Ignore AbortError behavior (shouldn't happen since we removed AbortController),
@@ -214,13 +233,19 @@ export default function FacultySubjects() {
   }, [user, supabase, refreshKey]);
 
   const loadPracticals = useCallback(
-    async (subjectId: number | string) => {
+    async (subjectId: number | string, allowedIds: Set<number>) => {
+      const sid = Number(subjectId);
+      if (!Number.isFinite(sid) || !allowedIds.has(sid)) {
+        setPracticals([]);
+        return;
+      }
+
       setPracticalsLoading(true);
       try {
         const { data, error } = await supabase
           .from("practicals")
           .select(`id, title, is_exam, practical_number, created_at, submissions(id)`)
-          .eq("subject_id", Number(subjectId))
+          .eq("subject_id", sid)
           .order("created_at", { ascending: false });
 
         if (error) throw error;
@@ -237,7 +262,7 @@ export default function FacultySubjects() {
           updated_at: new Date().toISOString(),
           submitted: false,
           is_exam: Boolean(p.is_exam),
-          subject_id: Number(subjectId),
+          subject_id: sid,
           submission_count: p.submissions?.length || 0,
         }))
           .sort((a, b) => {
@@ -273,9 +298,11 @@ export default function FacultySubjects() {
 
   useEffect(() => {
     if (selected) {
-      loadPracticals(selected);
+      loadPracticals(selected, assignedSubjectIds);
+    } else {
+      setPracticals([]);
     }
-  }, [selected, loadPracticals]);
+  }, [selected, loadPracticals, assignedSubjectIds]);
 
 
 
@@ -354,6 +381,11 @@ export default function FacultySubjects() {
     }
   };
 
+  const openScheduleFromHeader = () => {
+    setSchedulePracticalId("");
+    setShowScheduleDialog(true);
+  };
+
   const handleModalClose = () => {
     setShowPracticalModal(false);
     setEditingPractical(null);
@@ -366,7 +398,9 @@ export default function FacultySubjects() {
     // refresh subjects/practicals after create/update
     setRefreshKey((k) => k + 1);
     // if a subject is selected, reload its practicals after a small delay (ensures DB write finished)
-    if (selected) setTimeout(() => loadPracticals(selected), 400);
+    if (selected) {
+      setTimeout(() => loadPracticals(selected, assignedSubjectIds), 400);
+    }
     // Do not close modal automatically if there are more drafts, or if user wants to create more
     // But for now, we close it as per original logic. User can re-open.
     // If we support multi-save, we might want to keep it open.
@@ -392,7 +426,9 @@ export default function FacultySubjects() {
     (sum, s) => sum + (s.exam_count || 0),
     0,
   );
-  const selectedSubject = subjects.find((s) => s.id === selected);
+  const selectedSubject = subjects.find(
+    (s) => Number(s.id) === Number(selected),
+  );
   const examCount = practicals.filter((p) => Boolean((p as any).is_exam)).length;
   const practicalCount = practicals.length - examCount;
 
@@ -415,21 +451,21 @@ export default function FacultySubjects() {
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
-            <div className="flex items-center bg-white/60 dark:bg-white/5 p-2 rounded-xl border border-white/30 dark:border-white/10 shadow-sm">
+          <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
+            <div className="flex items-center bg-white/60 dark:bg-white/5 p-2 rounded-xl border border-white/30 dark:border-white/10 shadow-sm w-full sm:w-auto flex-1 sm:flex-none">
               <Search className="w-4 h-4 mr-2 text-gray-500" />
               <input
                 aria-label="Search subjects"
                 placeholder="Search subjects..."
                 onChange={() => { }}
-                className="bg-transparent outline-none text-sm w-56"
+                className="bg-transparent outline-none text-sm w-full sm:w-56"
               />
             </div>
 
             {selected && (
               <button
                 onClick={() => setShowBulkImport(true)}
-                className="inline-flex items-center gap-2 px-5 py-2.5 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 font-medium rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm transition-all"
+                className="inline-flex items-center gap-2 px-4 py-2.5 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 font-medium rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm transition-all"
               >
                 <FileCheck size={18} />
                 Import from PDF
@@ -438,7 +474,7 @@ export default function FacultySubjects() {
 
             <button
               onClick={openNewPractical}
-              className="inline-flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-cyan-600 to-sky-700 hover:from-cyan-700 hover:to-sky-800 text-white font-medium rounded-xl shadow-lg shadow-sky-500/25 hover:shadow-sky-500/40 transition-all hover:-translate-y-0.5"
+              className="inline-flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-cyan-600 to-sky-700 hover:from-cyan-700 hover:to-sky-800 text-white font-medium rounded-xl shadow-lg shadow-sky-500/25 hover:shadow-sky-500/40 transition-all hover:-translate-y-0.5"
             >
               <Plus size={20} />
               New Practical
@@ -555,17 +591,17 @@ export default function FacultySubjects() {
                       <button
                         key={s.id}
                         onClick={() => setSelected(s.id)}
-                        className={`w-full text-left flex items-center gap-3 p-3 rounded-xl transition-all ${selected === s.id
+                        className={`w-full text-left flex items-center gap-3 p-3 rounded-xl transition-all ${Number(selected) === Number(s.id)
                           ? "bg-gradient-to-r from-cyan-50 to-sky-50 dark:from-cyan-900/30 dark:to-sky-900/30 border border-indigo-200 dark:border-indigo-800"
                           : "hover:bg-gray-50 dark:hover:bg-gray-800/50 border border-transparent"
                           }`}
-                        aria-pressed={selected === s.id}
+                        aria-pressed={Number(selected) === Number(s.id)}
                       >
                         <div
-                          className={`p-2 rounded-lg ${selected === s.id ? "bg-gradient-to-br from-cyan-500 to-sky-600" : "bg-gray-100 dark:bg-gray-800"}`}
+                          className={`p-2 rounded-lg ${Number(selected) === Number(s.id) ? "bg-gradient-to-br from-cyan-500 to-sky-600" : "bg-gray-100 dark:bg-gray-800"}`}
                         >
                           <BookOpen
-                            className={`w-5 h-5 ${selected === s.id ? "text-white" : "text-purple-600 dark:text-purple-400"}`}
+                            className={`w-5 h-5 ${Number(selected) === Number(s.id) ? "text-white" : "text-purple-600 dark:text-purple-400"}`}
                           />
                         </div>
                         <div className="flex-1 min-w-0">
@@ -577,7 +613,7 @@ export default function FacultySubjects() {
                           </div>
                         </div>
                         <ChevronRight
-                          className={`w-4 h-4 shrink-0 transition-colors ${selected === s.id ? "text-indigo-500" : "text-gray-300 dark:text-gray-600"}`}
+                          className={`w-4 h-4 shrink-0 transition-colors ${Number(selected) === Number(s.id) ? "text-indigo-500" : "text-gray-300 dark:text-gray-600"}`}
                         />
                       </button>
                     ))
@@ -588,7 +624,7 @@ export default function FacultySubjects() {
 
             {/* Practicals column */}
             <section className="lg:col-span-8">
-              <div className="p-5 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between">
+              <div className="p-5 border-b border-gray-100 dark:border-gray-800 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <h2 className="text-xl font-bold text-gray-900 dark:text-white">
                     {selectedSubject?.subject_name || "Select a subject"}
@@ -607,13 +643,22 @@ export default function FacultySubjects() {
                   </div>
                 </div>
                 {selectedSubject && (
-                  <button
-                    onClick={openNewPractical}
-                    className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/30 rounded-lg hover:bg-indigo-100 dark:hover:bg-indigo-900/50 transition-colors"
-                  >
-                    <Plus className="w-4 h-4" />
-                    Add Practical
-                  </button>
+                  <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+                    <button
+                      onClick={openScheduleFromHeader}
+                      className="inline-flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-cyan-700 dark:text-cyan-300 bg-cyan-50 dark:bg-cyan-900/30 rounded-lg hover:bg-cyan-100 dark:hover:bg-cyan-900/50 transition-colors w-full sm:w-auto"
+                    >
+                      <CalendarPlus className="w-4 h-4" />
+                      Schedule
+                    </button>
+                    <button
+                      onClick={openNewPractical}
+                      className="inline-flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/30 rounded-lg hover:bg-indigo-100 dark:hover:bg-indigo-900/50 transition-colors w-full sm:w-auto"
+                    >
+                      <Plus className="w-4 h-4" />
+                      Add Practical
+                    </button>
+                  </div>
                 )}
               </div>
 
@@ -656,14 +701,14 @@ export default function FacultySubjects() {
                       return (
                         <div
                           key={p.id}
-                          className={`flex items-center justify-between p-4 border rounded-xl transition-all ${
+                          className={`flex flex-col gap-3 md:flex-row md:items-center md:justify-between p-4 border rounded-xl transition-all ${
                             isExam
                               ? "bg-orange-50/70 dark:bg-orange-900/10 border-orange-200 dark:border-orange-800/60 hover:shadow-md hover:border-orange-300 dark:hover:border-orange-700"
                               : "bg-white dark:bg-gray-800/60 border-gray-100 dark:border-gray-700/50 hover:shadow-md hover:border-indigo-200 dark:hover:border-indigo-800/50"
                           }`}
                         >
                           {/* Left: Title & Deadline */}
-                          <div className="flex-1 min-w-0">
+                          <div className="w-full md:flex-1 min-w-0">
                             <div className="flex items-center gap-2 min-w-0">
                               {p.practical_number !== null && p.practical_number !== undefined && (
                                 <span className="inline-flex items-center justify-center min-w-8 h-6 px-2 rounded-md bg-indigo-50 text-indigo-700 border border-indigo-200 text-xs font-bold dark:bg-indigo-900/30 dark:text-indigo-300 dark:border-indigo-800">
@@ -687,14 +732,14 @@ export default function FacultySubjects() {
                           </div>
 
                           {/* Middle: Submissions Badge (Clickable) */}
-                          <div className="px-4">
+                          <div className="w-full md:w-auto md:px-4">
                             <button
                               onClick={() =>
                                 router.push(
                                   `/faculty/submissions?practical=${p.id}`,
                                 )
                               }
-                              className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${p.submission_count && p.submission_count > 0
+                              className={`w-full md:w-auto justify-center md:justify-start flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${p.submission_count && p.submission_count > 0
                                 ? "bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/40"
                                 : "bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700"
                                 }`}
@@ -705,7 +750,7 @@ export default function FacultySubjects() {
                           </div>
 
                           {/* Right: Actions */}
-                          <div className="flex items-center gap-1">
+                          <div className="flex items-center gap-1 self-end md:self-auto">
                             <button
                               onClick={() => handleViewPractical(p)}
                               className="p-2 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-lg transition-colors"
@@ -769,6 +814,26 @@ export default function FacultySubjects() {
         onClose={() => setShowBulkImport(false)}
         onImport={handleBulkImport}
         subjectId={selected || ""}
+      />
+
+      <ScheduleDialog
+        open={showScheduleDialog}
+        onOpenChange={(open) => {
+          setShowScheduleDialog(open);
+          if (!open) setSchedulePracticalId("");
+        }}
+        initialSubjectId={selected || undefined}
+        initialData={{
+          practical_id: schedulePracticalId || undefined,
+          faculty_id: user?.id ? String(user.id) : "",
+        }}
+        showExistingSchedules={true}
+        restrictFacultySelection={true}
+        onScheduleCreated={() => {
+          if (selected) {
+            loadPracticals(selected, assignedSubjectIds);
+          }
+        }}
       />
 
       {/* View Practical Modal */}
